@@ -4,6 +4,7 @@
 #   make host-install [AGENT=backup|remote-control]   — агенты launchd (без AGENT — оба)
 #   make host-status                                  — что работает, последний бэкап и копия в облаке, ВНИМАНИЕ
 #   make host-uninstall [AGENT=backup|remote-control] — снять агенты
+#   make host-worktrees-clean                         — удалить рабочие копии завершённых сессий (с подтверждением)
 #   host.sh backup-job                                — задание агента бэкапов (каждый час): бэкап → копия в облако
 #
 # Makefile основной копии вызывает этот скрипт из рабочей копии стенда (код main), как scripts/pm.sh: агент бэкапов
@@ -20,6 +21,8 @@ LOG_DIR="${SELEN_LOG_DIR:-$HOME/Library/Logs/Selen}"
 STATE_FILE="${SELEN_STATE_FILE:-$HOME/.local/state/selen/backup.state}"
 CONFIG_DIR="$(dirname "$OFFSITE_ENV_FILE")"
 MAIN_DIR="${SELEN_MAIN_DIR:-$HOME/dev/selen}"
+# Рабочие копии сессий Remote Control (--spawn worktree): git worktree внутри основной копии
+WORKTREES_DIR="$MAIN_DIR/.claude/worktrees"
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 RC_NAME_PREFIX="${SELEN_RC_NAME_PREFIX:-Selen · Mac mini}"
 # Обёртка сервера Remote Control — копия scripts/remote-control.sh: агент не зависит от ветки основной копии
@@ -311,6 +314,147 @@ cmd_uninstall() {
 # Команда с ограничением по времени (сеть может не отвечать): perl есть в macOS
 with_timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
 
+# --- Рабочие копии сессий Remote Control ----------------------------------------------------------------------
+# Каждая сессия — git worktree в $WORKTREES_DIR; процесс сессии работает внутри копии (его текущий каталог там).
+# Копию блокирует сервер Remote Control: git worktree lock с причиной «claude agent … (pid N start <запуск>)», где
+# pid — сам сервер, а время запуска — в UTC. Копия считается занятой (не удаляется), пока внутри работает хоть один
+# процесс или жив процесс из блокировки. Под тем же pid после перезагрузки может оказаться другой процесс — тогда
+# время запуска не совпадёт, и блокировка считается брошенной.
+
+# Текущие каталоги процессов пользователя — строки «pid каталог» (один раз на запуск команды). В выводе всегда есть
+# хотя бы сам скрипт: пусто — lsof не сработал, и проверить, работают ли сессии, нельзя
+process_cwds() {
+  { lsof -nP -a -d cwd -Fpn 2> /dev/null || true; } | awk '/^p/ { pid = substr($0, 2) } /^n/ { print pid " " substr($0, 2) }'
+}
+
+# Файлы docker compose запущенных проектов: контейнеры работают в VM Colima, lsof их не видит, а стек, поднятый
+# из копии сессии, после её удаления остался бы с bind-mount на удалённый каталог
+compose_files() {
+  command -v docker > /dev/null 2>&1 || return 0
+  { with_timeout 10 docker compose ls --format json 2> /dev/null || true; } \
+    | { jq -r '.[].ConfigFiles // empty' 2> /dev/null || true; } | tr ',' '\n'
+}
+
+# Жив ли процесс с этим pid и тем же временем запуска, что в причине блокировки (в UTC или местном времени)
+lock_owner_alive() {
+  local lock pid="$2" started
+  lock="$(tr -s ' ' <<< "$1")"
+  for started in \
+    "$(TZ=UTC LC_ALL=C ps -o lstart= -p "$pid" 2> /dev/null | tr -s ' ' | sed 's/^ //; s/ $//')" \
+    "$(LC_ALL=C ps -o lstart= -p "$pid" 2> /dev/null | tr -s ' ' | sed 's/^ //; s/ $//')"; do
+    [[ -n "$started" && "$lock" == *"start $started)"* ]] && return 0
+  done
+  return 1
+}
+
+# Рабочие копии сессий — строки «путь|ветка|причина блокировки» (ветка пуста у отсоединённой HEAD, причина —
+# если копия не заблокирована; «-» — заблокирована без причины)
+session_worktrees() {
+  git -C "$MAIN_DIR" worktree list --porcelain 2> /dev/null | awk -v dir="$WORKTREES_DIR/" '
+    /^worktree / { path = substr($0, 10); branch = ""; lock = "" }
+    /^branch / { branch = substr($0, 8); sub(/^refs\/heads\//, "", branch) }
+    /^locked/ { lock = (length($0) > 7) ? substr($0, 8) : "-" }
+    /^$/ { if (index(path, dir) == 1) print path "|" branch "|" lock }'
+}
+
+# Игнорируемые git файлы, которые не жалко: зависимости и кеши (пересоздаются). Любой другой игнорируемый файл
+# (дамп в backups/, .env, .pm-bugs/…) — повод оставить копию: git worktree remove удалил бы его молча
+REGENERABLE_RE='(^|/)(node_modules|vendor|test-results|playwright-report|\.auth|\.attachments|dist|coverage|\.vite)/$|^backend/(storage/(framework|logs)|bootstrap/cache)/|(^|/)\.DS_Store$|\.phpunit\.(result\.)?cache'
+
+# Почему рабочую копию удалять нельзя; пусто — можно: внутри не работает ни один процесс и не запущен docker-стек,
+# блокировка брошена (или её нет), нет изменений и файлов вне git, кроме кешей, и нет коммитов, которых нет на GitHub.
+# Аргументы: путь, ветка, причина блокировки, вывод process_cwds, вывод compose_files. Любой сбой проверки — «оставить».
+worktree_keep_reason() {
+  local path="$1" lock="$3" cwds="$4" compose="$5" pid status extra unpushed
+  pid="$(awk -v dir="$path" '{ cwd = substr($0, index($0, " ") + 1) } cwd == dir || index(cwd, dir "/") == 1 { print $1; exit }' <<< "$cwds")"
+  [[ -z "$pid" ]] || { echo "сессия работает: внутри процесс $pid"; return; }
+  if grep -qF -- "$path/" <<< "$compose"; then echo "из копии запущен docker-стек — остановите его (docker compose ls)"; return; fi
+  if [[ -n "$lock" ]]; then
+    pid="$(sed -nE 's/.*\(pid ([0-9]+).*/\1/p' <<< "$lock")"
+    [[ -n "$pid" ]] || { echo "заблокирована: $lock"; return; }
+    if lock_owner_alive "$lock" "$pid"; then echo "заблокирована работающим сервером Remote Control (pid $pid)"; return; fi
+  fi
+  [[ -d "$path" ]] || { echo "каталога нет — git worktree prune"; return; }
+  status="$(git -C "$path" status --porcelain --ignored 2> /dev/null)" || { echo "не удалось проверить изменения (git status)"; return; }
+  if grep -q '^[^!]' <<< "$status"; then echo "есть незакоммиченные изменения"; return; fi
+  extra="$(sed -n 's/^!! //p' <<< "$status" | { grep -Ev "$REGENERABLE_RE" || true; } | head -n 1)"
+  [[ -z "$extra" ]] || { echo "есть файлы вне git (например, ${extra})"; return; }
+  unpushed="$(git -C "$path" log --oneline -1 HEAD --not --remotes 2> /dev/null)" \
+    || { echo "не удалось проверить коммиты (git log)"; return; }
+  [[ -z "$unpushed" ]] || { echo "есть коммиты, которых нет на GitHub"; return; }
+}
+
+# Для make host-status: «N, из них завершённых без изменений — M»
+worktrees_summary() {
+  local path branch lock cwds compose total=0 clean=0
+  cwds="$(process_cwds)"
+  compose="$(compose_files)"
+  if [[ -z "$cwds" ]]; then
+    echo "$(session_worktrees | grep -c . || true), не проверены: lsof не сработал"
+    return
+  fi
+  while IFS='|' read -r path branch lock; do
+    total=$((total + 1))
+    [[ -n "$(worktree_keep_reason "$path" "$branch" "$lock" "$cwds" "$compose")" ]] || clean=$((clean + 1))
+  done < <(session_worktrees)
+  if (( clean > 0 )); then echo "$total, из них завершённых без изменений — $clean: make host-worktrees-clean"
+  else echo "$total, завершённых без изменений нет"; fi
+}
+
+cmd_worktrees_clean() {
+  local path branch lock cwds compose reason name answer item removable=() kept=()
+  cwds="$(process_cwds)"
+  [[ -n "$cwds" ]] || die "Не удалось получить список процессов (lsof) — нельзя проверить, какие сессии работают. Ничего не удалено."
+  compose="$(compose_files)"
+  while IFS='|' read -r path branch lock; do
+    reason="$(worktree_keep_reason "$path" "$branch" "$lock" "$cwds" "$compose")"
+    if [[ -z "$reason" ]]; then removable+=("$path|$branch"); else kept+=("${path##*/} — ${reason}"); fi
+  done < <(session_worktrees)
+
+  printf 'Рабочие копии сессий Remote Control (%s)\n\n' "$WORKTREES_DIR"
+  if [[ ${#kept[@]} -gt 0 ]]; then
+    echo "Оставлены:"
+    printf '  %s\n' "${kept[@]}"
+    echo
+  fi
+  if [[ ${#removable[@]} -eq 0 ]]; then
+    echo "Удалять нечего: завершённых сессий без изменений нет."
+    return
+  fi
+  echo "Можно удалить (сессия завершена, изменений и файлов вне git нет, кроме кешей; все коммиты есть на GitHub):"
+  for item in "${removable[@]}"; do
+    path="${item%%|*}"
+    branch="${item#*|}"
+    printf '  %s — ветка %s, %s\n' "${path##*/}" "${branch:-(без ветки)}" \
+      "$(git -C "$path" log -1 --format='%cd · %s' --date=format:'%d.%m %H:%M' 2> /dev/null)"
+  done
+  echo
+  printf 'Удалить рабочих копий: %s? [y/N] ' "${#removable[@]}"
+  read -r answer || answer=""
+  case "$answer" in
+    y | Y | yes | д | Д | да) ;;
+    *) echo "Отменено, ничего не удалено."; return ;;
+  esac
+
+  for item in "${removable[@]}"; do
+    path="${item%%|*}"
+    branch="${item#*|}"
+    name="${path##*/}"
+    git -C "$MAIN_DIR" worktree unlock "$path" 2> /dev/null || true
+    # Без --force: если за это время в копии что-то появилось, git откажется удалять
+    if ! git -C "$MAIN_DIR" worktree remove "$path"; then
+      echo "  ${name}: НЕ удалена (git worktree remove отказался — см. сообщение выше)"
+      continue
+    fi
+    # Безопасное удаление ветки: git откажется, если её коммиты никуда не слиты, — тогда ветка остаётся
+    if [[ -n "$branch" ]] && ! git -C "$MAIN_DIR" branch -d "$branch" > /dev/null 2>&1; then
+      echo "  ${name}: удалена; ветка ${branch} оставлена (не слита — удалите сами, если она не нужна)"
+    else
+      echo "  ${name}: удалена"
+    fi
+  done
+}
+
 agent_state() {
   local info
   info="$(launchctl print "gui/$(id -u)/$1" 2> /dev/null)" || { echo "не установлен (make host-install)"; return; }
@@ -355,6 +499,7 @@ cmd_status() {
 
   echo "Remote Control:   $(agent_state "$LABEL_RC")"
   echo "Агент бэкапов:    $(agent_state "$LABEL_BACKUP")"
+  echo "Копии сессий:     $(worktrees_summary)"
   echo
 
   last_ok="$(state_get BACKUP_LAST_OK)"
@@ -401,6 +546,7 @@ case "$command" in
   install) cmd_install "$@" ;;
   uninstall) cmd_uninstall "$@" ;;
   status) cmd_status ;;
+  worktrees-clean) cmd_worktrees_clean ;;
   backup-job) cmd_backup_job ;;
-  *) die "Неизвестная команда: '$command'. Команды — make host-install | host-status | host-uninstall" ;;
+  *) die "Неизвестная команда: '$command'. Команды — make host-install | host-status | host-uninstall | host-worktrees-clean" ;;
 esac

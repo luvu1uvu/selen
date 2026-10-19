@@ -259,8 +259,12 @@ HOST_SH := $(PM_DIR)/scripts/host.sh
 host-install: pm-worktree ## Mac mini: агенты launchd — бэкап стенда каждый час и Remote Control (AGENT=backup|remote-control)
 	@SELEN_MAIN_DIR="$(CURDIR)" "$(HOST_SH)" install "$(or $(AGENT),all)"
 
-host-status: pm-worktree ## Mac mini: что работает, последний бэкап и копия в облаке, строки ВНИМАНИЕ
-	@"$(HOST_SH)" status
+host-status: pm-worktree ## Mac mini: что работает, последний бэкап и копия в облаке, копии сессий, строки ВНИМАНИЕ
+	@SELEN_MAIN_DIR="$(CURDIR)" "$(HOST_SH)" status
+
+.PHONY: host-worktrees-clean
+host-worktrees-clean: pm-worktree ## Mac mini: удалить рабочие копии завершённых сессий Remote Control без изменений (с подтверждением)
+	@SELEN_MAIN_DIR="$(CURDIR)" "$(HOST_SH)" worktrees-clean
 
 host-uninstall: pm-worktree ## Mac mini: снять агенты launchd (AGENT=backup|remote-control)
 	@"$(HOST_SH)" uninstall "$(or $(AGENT),all)"
