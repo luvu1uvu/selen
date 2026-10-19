@@ -177,7 +177,10 @@ export const SortableCardTile = memo(function SortableCardTile({
       className={cn(
         'focus-visible:ring-ring rounded-md outline-none focus-visible:ring-2',
         draggable && 'cursor-grab active:cursor-grabbing',
-        isDragging && 'opacity-40',
+        // Место, куда упадёт карточка, — пунктирная рамка её размера (на белой доске без серых ячеек полупрозрачная
+        // карточка терялась); outline, а не border, — размер не меняется
+        isDragging &&
+          'bg-muted-foreground/10 outline-muted-foreground/50 outline-2 -outline-offset-2 outline-dashed [&>*]:invisible',
       )}
       onClick={() => onOpen(card.key)}
       onKeyDown={(event) => {

@@ -51,8 +51,9 @@ export function LaneRow({
     <div
       ref={rowRef}
       className={cn(
-        'flex h-10 items-center justify-between gap-2 px-3',
-        collapsed && 'hover:bg-muted/40 cursor-pointer',
+        // Полоса во всю ширину блока, со своим лёгким фоном: линии колонок через неё не идут
+        'bg-muted/40 flex h-10 items-center justify-between gap-2 px-3',
+        collapsed && 'hover:bg-muted cursor-pointer',
         className,
       )}
       onClick={collapsed ? expandOnClick : undefined}

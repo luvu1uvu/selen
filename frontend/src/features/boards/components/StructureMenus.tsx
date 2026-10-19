@@ -64,12 +64,8 @@ export function ColumnHeader({
   const next = siblings[index + 1]
 
   return (
-    <div
-      className={cn(
-        'flex min-h-9 items-center justify-between gap-2 rounded-md px-2',
-        isTopLevel ? 'bg-muted/60' : 'bg-muted/30',
-      )}
-    >
+    // Без своей плашки: колонки разделены тонкими линиями (как в Kaiten); отступ слева — как у карточек в ячейке
+    <div className="flex min-h-9 items-center justify-between gap-2 px-2">
       <div className="flex min-w-0 items-center gap-2">
         <span className={cn('truncate text-sm', isTopLevel ? 'font-semibold' : 'font-medium')}>
           {column.name}

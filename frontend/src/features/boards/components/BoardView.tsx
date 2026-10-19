@@ -20,7 +20,7 @@ import { buildLayout, buildLookups, cellId, countCards, parseCellId } from '../m
 import { boardKeyboardCoordinates, useBoardDnd } from '../useBoardDnd'
 import { useCardMove } from '../useCardMove'
 import { useLaneCollapse } from '../useLaneCollapse'
-import { BoardCell, type TopCardForm } from './BoardCell'
+import { BoardCell, COLUMN_DIVIDER, SUBCOLUMN_DIVIDER, type TopCardForm } from './BoardCell'
 import { CardTileView } from './CardTile'
 import { LaneRow } from './LaneRow'
 import { ColumnHeader } from './StructureMenus'
@@ -73,6 +73,10 @@ export function BoardView({
     isOverCollapsedLane,
   )
   const openCard = useMemo(() => guardClick(onOpenCard), [guardClick, onOpenCard])
+  // Ячейка, где сейчас переносимая карточка, — туда она и упадёт (подсветка)
+  const targetCell = activeCard
+    ? Object.keys(cells).find((key) => cells[key].includes(activeCard.id))
+    : undefined
   const canEdit = board.permissions.edit_cards
   const canManage = board.permissions.manage
   const topLevel = layout.groups.map((group) => group.column)
@@ -164,9 +168,10 @@ export function BoardView({
         <div ref={headerRef} className="overflow-hidden" data-board-columns>
           {/* Отступы слева и справа — как у шапки доски: колонки не касаются края блока ни в начале, ни в конце
               прокрутки (LATER-65); у строки заголовков и тела одинаковые, иначе заголовки разъедутся с колонками */}
-          <div className="inline-flex min-w-full gap-2 px-3 py-2">
+          {/* Вертикальные отступы — у колонок, а не у строки: линии между колонками — на всю её высоту */}
+          <div className="inline-flex min-w-full gap-2 px-3">
             {layout.groups.map((group) => (
-              <div key={group.column.id} className="flex flex-col gap-1">
+              <div key={group.column.id} className={cn('flex flex-col gap-1 py-2', COLUMN_DIVIDER)}>
                 <div className={group.children.length ? 'w-full' : 'w-68'}>
                   <ColumnHeader
                     column={group.column}
@@ -181,7 +186,7 @@ export function BoardView({
                 {group.children.length > 0 && (
                   <div className="flex gap-2">
                     {group.children.map((child) => (
-                      <div key={child.id} className="w-68">
+                      <div key={child.id} className={cn('w-68', SUBCOLUMN_DIVIDER)}>
                         <ColumnHeader
                           column={child}
                           siblings={group.children}
@@ -241,8 +246,9 @@ export function BoardView({
                     onToggle={() => setLaneCollapsed(lane.id, !isCollapsed)}
                   />
                 )}
+                {/* Без вертикальных отступов: линии между колонками — от строки заголовков до низа дорожки */}
                 {!isCollapsed && (
-                  <div className="flex flex-1 items-stretch gap-2 py-2">
+                  <div className="flex flex-1 items-stretch gap-2">
                     {layout.leaves.map((column) => {
                       const id = cellId(column.id, lane.id)
                       return (
@@ -259,6 +265,7 @@ export function BoardView({
                           lookups={lookups}
                           canEdit={canEdit}
                           dragging={activeCard !== undefined}
+                          highlighted={id === targetCell}
                           topForm={
                             topFormColumn === column.id && lane.id === firstLaneId
                               ? topForm(column.id)
