@@ -28,3 +28,6 @@ e2e/.auth/
 # Карточки и скриншоты багов стенда PM (make pm-bug-show)
 /.pm-bugs/
 /.env.before-db-roles
+
+# Рабочие копии сессий Claude Code (Remote Control, --spawn worktree)
+/.claude/worktrees/

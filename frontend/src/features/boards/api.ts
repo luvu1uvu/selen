@@ -34,7 +34,7 @@ export async function fetchBoard(boardId: string): Promise<BoardDetail> {
 
 export async function updateBoard(
   boardId: string,
-  payload: { name?: string; auto_assign_on_move?: boolean },
+  payload: { name?: string; description?: string | null; auto_assign_on_move?: boolean },
 ): Promise<void> {
   await api.patch(`/boards/${boardId}`, payload)
 }

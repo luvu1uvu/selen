@@ -1,31 +1,21 @@
-import { useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
-import { Archive, MoreHorizontal } from 'lucide-react'
-import { toast } from 'sonner'
 import { CardPanel } from '@/features/cards/components/CardPanel'
 import { useCard } from '@/features/cards/queries'
-import { getErrorMessage, getErrorStatus } from '@/shared/api/errors'
-import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
+import { getErrorStatus } from '@/shared/api/errors'
 import { NotFoundState } from '@/shared/components/NotFoundState'
+import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import { Alert } from '@/shared/ui/alert'
-import { Button } from '@/shared/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
-import { ArchivedCardsDialog } from './components/ArchivedCardsDialog'
-import { BoardView } from './components/BoardView'
-import { StructureDialogs, type StructureAction } from './components/StructureDialogs'
-import { useBoard, useSetAutoAssign } from './queries'
+import { BoardBlock } from './components/BoardBlock'
+import { useBoard } from './queries'
 
 /**
  * Доска (/boards/:boardId) и та же доска с открытой карточкой (/cards/:cardKey).
  * Чужая или несуществующая доска/карточка — «не найдено».
+ *
+ * Страница — холст (ADR-0019): верхняя панель приложения на месте, холст прокручивается по вертикали, доска
+ * занимает его до низа; шапка доски и заголовки колонок закреплены вверху холста.
  */
 export function BoardPage() {
   const { t } = useTranslation('boards')
@@ -33,127 +23,100 @@ export function BoardPage() {
   const { boardId: boardParam, cardKey } = useParams()
   const navigate = useNavigate()
   const cardQuery = useCard(cardKey)
-  const boardId = boardParam ?? cardQuery.data?.board.id
+  const resolvedBoardId = boardParam ?? cardQuery.data?.board.id
+  // Пока грузится карточка, открытая поверх доски, доска остаётся на месте (с прежней прокруткой), а не
+  // сменяется «Загрузкой»: id доски — от прежнего адреса, пока не придёт карточка
+  const [shownBoardId, setShownBoardId] = useState(resolvedBoardId)
+  if (resolvedBoardId && resolvedBoardId !== shownBoardId) setShownBoardId(resolvedBoardId)
+  const boardId = resolvedBoardId ?? (cardKey ? shownBoardId : undefined)
   const boardQuery = useBoard(boardId)
-  const [action, setAction] = useState<StructureAction>(null)
-  const [archiveOpen, setArchiveOpen] = useState(false)
-  const setAutoAssign = useSetAutoAssign(boardId ?? '')
+  const canvasRef = useRef<HTMLDivElement>(null)
+  // Неудачное фоновое обновление уже показанной доски её не прячет; «не найдено» (доску удалили) — прячет
+  const boardMissing = boardQuery.isError && getErrorStatus(boardQuery.error) === 404
+  const board = boardMissing ? undefined : boardQuery.data
+  const cardMissing = !!cardKey && cardQuery.isError
+  // Открытая поверх карточка — та же страница: прокрутка доски под ней не сбрасывается
+  useScrollMemory(canvasRef, {
+    name: 'canvas',
+    page: `board:${board?.id}`,
+    ready: !!board && !cardMissing,
+  })
 
-  if (cardKey && cardQuery.isError) {
+  if (cardMissing) {
     return getErrorStatus(cardQuery.error) === 404 ? (
-      <NotFoundState title={t('card.notFound')} text={t('card.notFoundText')} />
+      <PageMessage>
+        <NotFoundState title={t('card.notFound')} text={t('card.notFoundText')} />
+      </PageMessage>
     ) : (
-      <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
+      <PageMessage>
+        <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
+      </PageMessage>
     )
   }
 
-  if (boardQuery.isError) {
-    return getErrorStatus(boardQuery.error) === 404 ? (
-      <NotFoundState title={t('board.notFound')} text={t('board.notFoundText')} />
+  if (boardQuery.isError && !board) {
+    return boardMissing ? (
+      <PageMessage>
+        <NotFoundState title={t('board.notFound')} text={t('board.notFoundText')} />
+      </PageMessage>
     ) : (
-      <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
+      <PageMessage>
+        <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
+      </PageMessage>
     )
   }
 
-  if (!boardQuery.data) {
-    return <p className="text-muted-foreground text-sm">{tc('states.loading')}</p>
+  if (!board) {
+    return (
+      <PageMessage>
+        <p className="text-muted-foreground text-sm">{tc('states.loading')}</p>
+      </PageMessage>
+    )
   }
-
-  const board = boardQuery.data
 
   return (
-    <div className="grid min-w-0 gap-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <Link
-            to={`/spaces/${board.space.key}`}
-            className="text-muted-foreground text-sm hover:underline"
-          >
-            {board.space.name}
-          </Link>
-          <h1 className="truncate text-2xl font-semibold">{board.name}</h1>
-          {/* Описание доски (например, шаблон бага на «Багах приёмки» стенда PM) — с переносами строк */}
-          {board.description && (
-            <p className="text-muted-foreground mt-1 max-w-3xl text-sm whitespace-pre-line">
-              {board.description}
-            </p>
-          )}
-        </div>
-        <div className="flex shrink-0 gap-2">
-          {board.permissions.edit_cards && (
-            <Button variant="outline" onClick={() => setArchiveOpen(true)}>
-              <Archive />
-              {t('archive.open')}
-            </Button>
-          )}
-          {board.permissions.manage && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" aria-label={t('board.menu')}>
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setAction({ kind: 'addColumn' })}>
-                  {t('board.addColumn')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setAction({ kind: 'addLane' })}>
-                  {t('board.addLane')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => setAction({ kind: 'renameBoard', name: board.name })}
+    <>
+      {/* Холст: вертикальная прокрутка страницы досок. Отступ под закреплённые шапку доски и заголовки колонок
+          при прокрутке к элементу задаёт сама доска (scroll-margin, её высота шапок своя) */}
+      <div
+        ref={canvasRef}
+        className="bg-canvas relative min-h-0 flex-1 scroll-pb-6 overflow-x-hidden overflow-y-auto"
+        data-board-canvas
+      >
+        <div className="flex min-h-full flex-col gap-3 p-3 md:p-4">
+          {board.archived_at && <Alert>{t('board.archived')}</Alert>}
+          {!board.has_done_column && <Alert>{t('board.noDoneColumn')}</Alert>}
+          {/* Другая доска — новый блок: состояние прокрутки, перетаскивания и полосы внизу не переходит с доски на доску
+              (LATER-66); карточка поверх той же доски блок не пересоздаёт */}
+          <BoardBlock
+            key={board.id}
+            board={board}
+            heading="h1"
+            breadcrumb={
+              <>
+                {/* На узком экране — только название доски: ссылка на пространство съела бы его целиком */}
+                <Link
+                  to={`/spaces/${board.space.key}`}
+                  className="text-muted-foreground hidden max-w-48 shrink-0 truncate text-sm hover:underline sm:block"
                 >
-                  {t('board.rename')}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={board.auto_assign_on_move}
-                  title={t('board.autoAssignHint')}
-                  onCheckedChange={async (checked) => {
-                    try {
-                      await setAutoAssign.mutateAsync(checked)
-                      toast.success(checked ? t('board.autoAssignOn') : t('board.autoAssignOff'))
-                    } catch (error) {
-                      toast.error(getErrorMessage(error, tc('errors.generic')))
-                    }
-                  }}
-                >
-                  {t('board.autoAssign')}
-                </DropdownMenuCheckboxItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                  {board.space.name}
+                </Link>
+                <span aria-hidden className="text-muted-foreground hidden text-sm sm:inline">
+                  /
+                </span>
+              </>
+            }
+            onOpenCard={(key) => navigate(`/cards/${key}`)}
+          />
         </div>
       </div>
 
-      {board.archived_at && <Alert>{t('board.archived')}</Alert>}
-      {!board.has_done_column && <Alert>{t('board.noDoneColumn')}</Alert>}
-
-      {board.columns.length === 0 ? (
-        <div className="text-muted-foreground rounded-xl border border-dashed p-12 text-center">
-          {t('board.noColumns')}
-        </div>
-      ) : (
-        // Сбой доски не уносит шапку страницы и остальное приложение
-        <ErrorBoundary>
-          <BoardView
-            board={board}
-            onOpenCard={(key) => navigate(`/cards/${key}`)}
-            onAction={setAction}
-          />
-        </ErrorBoundary>
-      )}
-
-      <StructureDialogs boardId={board.id} action={action} onClose={() => setAction(null)} />
-      {archiveOpen && (
-        <ArchivedCardsDialog
-          boardId={board.id}
-          canDelete={board.permissions.delete_cards}
-          onClose={() => setArchiveOpen(false)}
-        />
-      )}
-
       {cardKey && <CardPanel cardKey={cardKey} onClose={() => navigate(`/boards/${board.id}`)} />}
-    </div>
+    </>
   )
+}
+
+/** Сообщение вместо доски: страница-холст без отступов каркаса — отступы свои. */
+function PageMessage({ children }: { children: ReactNode }) {
+  return <div className="overflow-y-auto p-4 md:p-8">{children}</div>
 }

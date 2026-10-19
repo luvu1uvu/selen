@@ -29,13 +29,28 @@ describe('Доска', () => {
     expect(screen.queryByText(/нет колонки типа «Готово»/)).not.toBeInTheDocument()
   })
 
-  it('описание доски показывается под названием с переносами строк', async () => {
+  it('описание доски — за значком ⓘ в шапке, во всплывающем окне с переносами строк', async () => {
     serveBoard(makeBoardDetail({ description: 'Как завести баг:\nГде — экран и путь к нему.' }))
     renderApp('/boards/board-1')
 
+    await screen.findByRole('heading', { name: 'Продукт' })
+    expect(screen.queryByText(/Как завести баг:/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Описание доски' }))
     const description = await screen.findByText(/Как завести баг:/)
     expect(description).toHaveTextContent('Где — экран и путь к нему.')
     expect(description).toHaveClass('whitespace-pre-line')
+  })
+
+  it.each([
+    ['без описания', null],
+    ['пустое описание', ''],
+    ['описание из одних пробелов', '  \n  '],
+  ])('%s — значка ⓘ нет (LATER-64)', async (_, description) => {
+    serveBoard(makeBoardDetail({ description }))
+    renderApp('/boards/board-1')
+
+    await screen.findByRole('heading', { name: 'Продукт' })
+    expect(screen.queryByRole('button', { name: 'Описание доски' })).not.toBeInTheDocument()
   })
 
   it('с несколькими дорожками показывает их заголовки; без «Готово» — предупреждение', async () => {
@@ -152,7 +167,7 @@ describe('Доска', () => {
     expect(await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Добавить карточку/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Действия с колонкой/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Настройки доски' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Действия с доской' })).not.toBeInTheDocument()
   })
 
   it('смена типа колонки предупреждает, сколько карточек затронет', async () => {
@@ -195,7 +210,7 @@ describe('Доска', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить подколонку' }))
     await screen.findByText('Сохранено')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Настройки доски' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Действия с доской' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить колонку' }))
     await userEvent.type(screen.getByLabelText('Название'), 'Релиз')
     await userEvent.selectOptions(screen.getByLabelText('Тип'), 'done')

@@ -25,7 +25,8 @@ it('показывает администратору список пользо�
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.name', 'Вера');
 
-    $this->actingAs($admin)->getJson('/api/v1/admin/users?search=BORIS')
+    // Поиск без учёта регистра; с доменом — случайный email Faker (borisova@example.org) не совпадёт
+    $this->actingAs($admin)->getJson('/api/v1/admin/users?search=BORIS@SELEN')
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.email', 'boris@selen.test');
 
