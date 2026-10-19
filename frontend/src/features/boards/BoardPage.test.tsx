@@ -41,8 +41,12 @@ describe('Доска', () => {
     expect(description).toHaveClass('whitespace-pre-line')
   })
 
-  it('без описания значка ⓘ нет', async () => {
-    serveBoard()
+  it.each([
+    ['без описания', null],
+    ['пустое описание', ''],
+    ['описание из одних пробелов', '  \n  '],
+  ])('%s — значка ⓘ нет (LATER-64)', async (_, description) => {
+    serveBoard(makeBoardDetail({ description }))
     renderApp('/boards/board-1')
 
     await screen.findByRole('heading', { name: 'Продукт' })

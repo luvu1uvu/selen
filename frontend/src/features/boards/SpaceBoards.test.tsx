@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { BoardSummary } from '@/shared/types/api'
@@ -58,6 +58,34 @@ describe('Доски пространства', () => {
 
     expect(await screen.findByRole('heading', { name: 'Продукт' })).toBeInTheDocument()
     expect(body).toEqual({ name: 'Маркетинг', description: null, template: 'simple' })
+  })
+
+  it('описание доски — при создании, с переносами строк (LATER-64); пустое — без описания', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      http.post('*/api/v1/spaces/DEV/boards', async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ data: boards[0] }, { status: 201 })
+      }),
+      http.get('*/api/v1/boards/board-1', () => HttpResponse.json({ data: makeBoardDetail() })),
+    )
+    renderApp('/spaces/DEV')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Создать доску' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Новая доска' })
+    await userEvent.type(within(dialog).getByLabelText('Название'), 'Баги приёмки')
+    await userEvent.type(
+      within(dialog).getByLabelText('Описание'),
+      '  Как завести баг:{Enter}шаги и ожидаемый результат  ',
+    )
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Создать' }))
+    await vi.waitFor(() =>
+      expect(bodies[0]).toEqual({
+        name: 'Баги приёмки',
+        description: 'Как завести баг:\nшаги и ожидаемый результат',
+        template: 'development',
+      }),
+    )
   })
 
   it('редактор не создаёт и не архивирует доски', async () => {

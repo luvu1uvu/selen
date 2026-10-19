@@ -20,6 +20,7 @@ import {
 } from '../api'
 import { useStructureMutation } from '../queries'
 import { CategorySelect } from './CategorySelect'
+import { DescriptionDialog } from './DescriptionDialog'
 import { NameDialog } from './NameDialog'
 
 /** Какое действие со структурой доски сейчас открыто. */
@@ -33,6 +34,7 @@ export type StructureAction =
   | { kind: 'renameLane'; lane: Lane }
   | { kind: 'archiveLane'; lane: Lane }
   | { kind: 'renameBoard'; name: string }
+  | { kind: 'boardDescription'; description: string | null }
   | null
 
 function useNotify() {
@@ -138,6 +140,19 @@ export function StructureDialogs({
         pending={mutation.isPending}
         onClose={onClose}
         onSubmit={(name) => run(() => updateBoard(boardId, { name }))}
+      />
+
+      <DescriptionDialog
+        open={action?.kind === 'boardDescription'}
+        initialDescription={action?.kind === 'boardDescription' ? action.description : null}
+        pending={mutation.isPending}
+        onClose={onClose}
+        onSubmit={(description) =>
+          run(
+            () => updateBoard(boardId, { description }),
+            description ? t('board.descriptionSaved') : t('board.descriptionRemoved'),
+          )
+        }
       />
 
       {action?.kind === 'changeType' && (

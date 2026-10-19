@@ -63,7 +63,8 @@ export function BoardBlock({
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {breadcrumb}
           <Heading className="truncate text-base font-semibold">{board.name}</Heading>
-          {board.description && <BoardDescription text={board.description} />}
+          {/* ⓘ — только когда описание есть: пустое и из одних пробелов — значка нет (LATER-64) */}
+          {board.description?.trim() && <BoardDescription text={board.description.trim()} />}
         </div>
         <BoardMenu board={board} onAction={setAction} onOpenArchive={() => setArchiveOpen(true)} />
       </header>
@@ -184,6 +185,13 @@ function BoardMenu({
               onSelect={dialog(() => onAction({ kind: 'renameBoard', name: board.name }))}
             >
               {t('board.rename')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={dialog(() =>
+                onAction({ kind: 'boardDescription', description: board.description }),
+              )}
+            >
+              {t('board.editDescription')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuCheckboxItem

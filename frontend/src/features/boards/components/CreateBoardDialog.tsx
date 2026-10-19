@@ -19,6 +19,7 @@ import {
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
+import { Textarea } from '@/shared/ui/textarea'
 import { useCreateBoard } from '../queries'
 
 const TEMPLATES: BoardTemplate[] = ['development', 'simple', 'empty']
@@ -43,8 +44,13 @@ export function CreateBoardDialog({
   const [template, setTemplate] = useState<BoardTemplate>('development')
   const createBoard = useCreateBoard(spaceKey)
 
+  // Описание (LATER-64) — необязательное, до 2000 символов, как на сервере; показывается за значком ⓘ в шапке доски
   const schema = useMemo(
-    () => z.object({ name: z.string().trim().min(1, t('create.nameRequired')).max(100) }),
+    () =>
+      z.object({
+        name: z.string().trim().min(1, t('create.nameRequired')).max(100),
+        description: z.string().trim().max(2000, t('create.descriptionTooLong')),
+      }),
     [t],
   )
   type FormValues = z.infer<typeof schema>
@@ -54,13 +60,16 @@ export function CreateBoardDialog({
     setError,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { name: '' } })
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: '', description: '' },
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     try {
       const board = await createBoard.mutateAsync({
         name: values.name,
-        description: null,
+        description: values.description || null,
         template,
       })
       toast.success(t('create.created'))
@@ -88,6 +97,19 @@ export function CreateBoardDialog({
         <form onSubmit={onSubmit} className="grid gap-4" noValidate>
           <FormField id="board-name" label={t('create.name')} error={errors.name?.message}>
             <Input id="board-name" aria-invalid={!!errors.name} {...register('name')} />
+          </FormField>
+          <FormField
+            id="board-description"
+            label={t('create.description')}
+            hint={t('create.descriptionHint')}
+            error={errors.description?.message}
+          >
+            <Textarea
+              id="board-description"
+              rows={3}
+              aria-invalid={!!errors.description}
+              {...register('description')}
+            />
           </FormField>
           <fieldset className="grid gap-2">
             <legend className="mb-2 text-sm font-medium">{t('create.template')}</legend>
