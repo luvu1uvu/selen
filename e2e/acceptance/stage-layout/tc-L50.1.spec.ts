@@ -74,7 +74,10 @@ test('ТК-L50.1. Верхняя панель всегда на месте @tc-L
   for (const section of ['Структура', 'Пользователи', 'Корзина', 'Журнал событий']) {
     await sections.getByRole('link', { name: section, exact: true }).click()
     await expect(admin.getByRole('heading', { name: section, level: 1 })).toBeVisible()
-    await admin.waitForLoadState('networkidle')
+    // Данные страница запрашивает уже после перехода внутри приложения: waitForLoadState('networkidle') к этому
+    // моменту давно выполнен и запросов не ждёт. Журнал (он длиннее окна) крутим, когда пришли строки, иначе колесо
+    // крутит пустую таблицу и прокрутка 0 (LATER-68, CI)
+    if (section === 'Журнал событий') await expect(admin.getByRole('main').getByRole('row').nth(1)).toBeVisible()
     scrolled = Math.max(scrolled, await scrollMainToEnd(admin))
     await expectTopBarInPlace(admin, 'Администрирование')
   }
