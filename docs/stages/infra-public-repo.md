@@ -45,8 +45,30 @@
 - `git config user.email` основной копии — `316593925+luvu1uvu@users.noreply.github.com` (рабочие копии и стенд
   наследуют).
 
-## Дальше
+## Публикация и переезд (19.10)
 
-1. «Ок» PM на список проверки → шаги PM на GitHub → пуш начального коммита в новый репозиторий.
-2. Основная копия и стенд — на новую историю, старые рабочие копии сессий — убрать, `make pm-update`.
-3. `layout-1` → новый PR, #29 архива — закрыть со ссылкой.
+- **Новый `luvu1uvu/selen`** (публичный): `main` — начальный коммит `016ee9d`, автор — noreply-адрес; обычный пуш
+  в пустой репозиторий (без force). Перед пушем — повторный gitleaks по начальному коммиту и коммитам PR #1: чисто.
+  Старый репозиторий подключён как remote `archive` (`selen-archive`, приватный).
+- **CI на `main`:** Security — зелёный, Backend и E2E — зелёные. Frontend упал на таймауте теста:
+  `BoardStructure.test.tsx` → «переименование колонки и доски, добавление дорожки» — 5,1 с при лимите Vitest 5 с
+  (локально 0,9 с; длинные сценарии `userEvent.type` под покрытием на раннере GitHub в разы медленнее). Исправление —
+  `testTimeout: 15_000` в `frontend/vite.config.ts` (PR с этим журналом).
+- **Стенд:** `make pm-backup` → `git reset --hard origin/main` в `~/dev/selen-pm` (меняются только файлы кода; `.env`,
+  вложения, база и бэкапы не тронуты) → `make pm-up` (пересборка на `016ee9d`, миграций нет) → `make pm-update`:
+  «Код стенда уже свежий (016ee9d, origin/main)». Стенд отвечает, Владелец и вложения на месте. Дальше `pm-update`
+  снова работает fast-forward от нового `main`.
+- **Рабочие копии сессий:** сессии хотфиксов LATER-61 и LATER-62 архивированы; копии `security-audit`,
+  `hotfix-later-61-…`, `hotfix-later-62-…` удалены без `--force` (незакоммиченного и неотправленного нет, `backend/.env` —
+  копии основного). Копия `bridge-cse_…` (сессия Remote Control от 16.10) — после того как PM закроет сессию:
+  `git worktree unlock` + `git worktree remove`, ветка `worktree-bridge-…` — `git branch -D` (код PR #22 есть в архиве).
+- **Ветки основной копии:** `main` — новая история; старые `layout-1`, `claude/hotfix-later-61-…`, `claude/hotfix-later-62-…`
+  удалены (целиком есть в архиве), вспомогательные ветки подготовки — тоже (их дерево — это `main`).
+- **`layout-1`:** заново от нового `main` — 4 коммита (perf, host, доска, документы), код байт в байт как в #29, без снимков
+  Kaiten; [#1](https://github.com/luvu1uvu/selen/pull/1). #29 архива закрыт со ссылкой на #1, #28 (Dependabot) — тоже.
+
+## Осталось
+
+1. PM: Settings → Advanced Security — Dependabot alerts, Dependabot security updates, push protection.
+2. PM: закрыть сессию Remote Control от 16.10 → удалить её рабочую копию (см. выше).
+3. «Принято» по PR с этим журналом и по #1 (раскладка) → мёрж → `make pm-update`.
