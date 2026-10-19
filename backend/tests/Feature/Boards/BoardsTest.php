@@ -84,6 +84,38 @@ it('переименовывает доску', function () {
         ->toEqual(['fields' => ['description', 'name']]);
 });
 
+it('описание доски: задать при создании, изменить, стереть; из одних пробелов — без описания (LATER-64)', function () {
+    $id = $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/boards', [
+        'name' => 'Баги', 'description' => "  Как завести баг:\nшаги и ожидаемый результат  ", 'template' => 'simple',
+    ])->assertCreated()->assertJsonPath('data.description', "Как завести баг:\nшаги и ожидаемый результат")->json('data.id');
+
+    $this->actingAs($this->owner)->patchJson("/api/v1/boards/{$id}", ['description' => 'Новые правила'])
+        ->assertOk()->assertJsonPath('data.description', 'Новые правила');
+    $this->actingAs($this->owner)->patchJson("/api/v1/boards/{$id}", ['description' => '   '])
+        ->assertOk()->assertJsonPath('data.description', null);
+    $this->actingAs($this->owner)->getJson("/api/v1/boards/{$id}")->assertJsonPath('data.description', null);
+
+    $blank = $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/boards', [
+        'name' => 'Пустая', 'description' => " \n ", 'template' => 'empty',
+    ])->assertCreated()->json('data');
+    expect($blank['description'])->toBeNull();
+
+    // Текст описания в журнал не пишется — только имя поля
+    expect(EventLogEntry::query()->where('event_type', 'board.updated')->pluck('payload')->all())
+        ->toEqual([['fields' => ['description']], ['fields' => ['description']]]);
+});
+
+it('описание доски меняет только администратор пространства (LATER-64)', function () {
+    $board = makeBoard($this->space, $this->owner);
+    $editor = member();
+    addToSpace($this->space, $editor, SpaceRole::Editor);
+
+    $this->actingAs($editor)->patchJson("/api/v1/boards/{$board->id}", ['description' => 'Чужое'])->assertForbidden();
+    $this->actingAs(member())->patchJson("/api/v1/boards/{$board->id}", ['description' => 'Чужое'])->assertNotFound();
+    $this->actingAs($this->owner)->patchJson("/api/v1/boards/{$board->id}", ['description' => str_repeat('а', 2001)])
+        ->assertUnprocessable()->assertJsonValidationErrors('description');
+});
+
 it('переставляет доски внутри пространства, порядок в БД совпадает с ключами', function () {
     $a = makeBoard($this->space, $this->owner, name: 'A');
     $b = makeBoard($this->space, $this->owner, name: 'B');
