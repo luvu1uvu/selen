@@ -34,6 +34,7 @@ use App\Actions\Spaces\CreateSpaceAction;
 use App\Actions\Spaces\GrantSpaceGroupAction;
 use App\Actions\Spaces\SetSpaceMemberRestrictionAction;
 use App\Enums\BoardTemplate;
+use App\Enums\ColumnCategory;
 use App\Enums\SpaceRole;
 use App\Enums\UserStatus;
 use App\Models\Board;
@@ -91,13 +92,22 @@ class BoardsDemoSeeder extends Seeder
 
         $product = $this->board($dev, 'Продукт', BoardTemplate::Development, 'anna');
         $urgent = app(CreateLaneAction::class)->handle($this->people['anna'], $product, 'Срочные', null, null);
-        $infra = $this->board($dev, 'Инфраструктура', BoardTemplate::Simple, 'anna');
+        // Описание — за значком ⓘ в шапке доски (приёмка LATER-50, ТК-L50.11)
+        $infra = $this->board($dev, 'Инфраструктура', BoardTemplate::Simple, 'anna',
+            "Серверы, CI и мониторинг.\nСрочное — с флажком «Срочно», плановое — в To Do.");
         $requests = $this->board($ops, 'Заявки', BoardTemplate::Simple, 'egor');
         $planned = app(CreateLaneAction::class)->handle($this->people['egor'], $requests, 'Плановые', null, null);
         $content = $this->board($mkt, 'Контент', BoardTemplate::Simple, 'dina');
         $progress = $this->column($content, 'In Progress');
         foreach (['Текст', 'Дизайн'] as $name) {
             app(CreateColumnAction::class)->handle($this->people['dina'], $content, $name, null, $progress, null, null);
+        }
+        // Широкая доска без карточек (приёмка LATER-50, поправка PM 19.10): 14 колонок — шире любого экрана, доска
+        // занимает всю ширину и прокручивается внутри своего блока; узкая для сравнения — «Инфраструктура» (4 колонки)
+        $wide = $this->board($dev, 'Широкая доска', BoardTemplate::Development, 'anna');
+        $wideDone = $this->column($wide, 'Done');
+        foreach (['Аналитика', 'Дизайн', 'Ревью дизайна', 'Документация', 'Подготовка релиза', 'Мониторинг'] as $name) {
+            app(CreateColumnAction::class)->handle($this->people['anna'], $wide, $name, ColumnCategory::InProgress, null, null, $wideDone->id);
         }
 
         $editorsDev = ['anna', 'boris', 'grigory', 'demo'];
@@ -185,9 +195,9 @@ class BoardsDemoSeeder extends Seeder
         return [$dev, $ops, $mkt];
     }
 
-    private function board(Space $space, string $name, BoardTemplate $template, string $owner): Board
+    private function board(Space $space, string $name, BoardTemplate $template, string $owner, ?string $description = null): Board
     {
-        return app(CreateBoardAction::class)->handle($this->people[$owner], $space, ['name' => $name], $template);
+        return app(CreateBoardAction::class)->handle($this->people[$owner], $space, ['name' => $name, 'description' => $description], $template);
     }
 
     private function column(Board $board, string $name): BoardColumn

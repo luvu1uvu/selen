@@ -43,7 +43,9 @@ test('блокировка карточкой снимается автомат�
   await expect(page.getByRole('button', { name: /^Открыть QA-1:/ })).not.toContainText('Заблокирована')
 
   // Архив: найти по номеру и восстановить
-  await page.getByRole('button', { name: 'Архив карточек' }).click()
+  // Архив карточек — в меню «⋯» доски (ADR-0019)
+  await page.getByRole('button', { name: 'Действия с доской' }).click()
+  await page.getByRole('menuitem', { name: 'Архив карточек' }).click()
   const archive = page.getByRole('dialog', { name: 'Архив карточек' })
   await archive.getByLabel('Поиск по номеру или названию').fill('QA-4')
   await expect(archive.getByText('Устаревшая задача')).toBeVisible()

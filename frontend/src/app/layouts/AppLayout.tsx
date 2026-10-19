@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useMatches, useNavigate } from 'react-router'
 import {
   Building2,
   FolderTree,
@@ -23,6 +23,7 @@ import { TreePanel } from '@/features/navigation/components/TreePanel'
 import { isSystemAdmin } from '@/shared/lib/roles'
 import { cn } from '@/shared/lib/utils'
 import { usePersistentState } from '@/shared/lib/usePersistentState'
+import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
@@ -32,6 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
+import type { RouteHandle } from '../routeHandle'
 
 /**
  * Разделы полосы слева (как в Kaiten, docs/ui-reference/kaiten/README.md, раздел 01). Сейчас — «Дерево»
@@ -146,6 +148,9 @@ function AdminPanel({
  * Каркас приложения в стиле Kaiten: узкая полоса разделов, панель выбранного раздела (сворачивается,
  * состояние запоминается в браузере), шапка и содержимое страницы. На телефоне полоса и панель —
  * выезжающее меню.
+ *
+ * Окно не прокручивается (ADR-0019): шапка и дерево всегда на месте, прокручивается содержимое — `main`
+ * обычной страницы или холст страницы досок (маршрут с `handle.canvas` получает всю высоту без отступов).
  */
 export function AppLayout() {
   const { t } = useTranslation()
@@ -163,6 +168,11 @@ export function AppLayout() {
   const [panelCollapsed, setPanelCollapsed] = usePersistentState('selen.sidebar.collapsed', false)
   const closeMenu = () => setMenuOpen(false)
   const activeSection: Section = isAdmin && section === 'admin' ? 'admin' : 'tree'
+  const canvas = useMatches().some((match) => (match.handle as RouteHandle | undefined)?.canvas)
+  const mainRef = useRef<HTMLElement>(null)
+  const { pathname } = useLocation()
+  // Обычная страница: новая — с начала, «Назад» — на прежнее место (холст досок запоминает себя сам)
+  useScrollMemory(mainRef, { name: 'main', page: pathname, ready: !canvas })
 
   // Повторный клик по открытому разделу сворачивает панель, по другому — открывает его
   const selectSection = (next: Section) => {
@@ -180,7 +190,7 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-svh">
+    <div className="flex h-svh overflow-hidden">
       {menuOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={closeMenu} />}
       <aside
         className={cn(
@@ -234,7 +244,7 @@ export function AppLayout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between gap-2 border-b px-4">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
           <Button
             variant="ghost"
             size="icon"
@@ -273,7 +283,13 @@ export function AppLayout() {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <main className="min-w-0 flex-1 p-4 md:p-8">
+        <main
+          ref={mainRef}
+          className={cn(
+            'min-h-0 min-w-0 flex-1',
+            canvas ? 'flex flex-col overflow-hidden' : 'overflow-y-auto p-4 md:p-8',
+          )}
+        >
           <Outlet />
         </main>
       </div>

@@ -15,6 +15,12 @@ const archived = (key: string, title: string): CardSummary => ({
   archived_at: '2026-10-02T09:00:00Z',
 })
 
+/** Архив карточек — пункт меню «⋯» доски (ADR-0019: шапка доски в одну строку). */
+async function openArchive() {
+  await userEvent.click(await screen.findByRole('button', { name: 'Действия с доской' }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Архив карточек' }))
+}
+
 describe('Доска: архив карточек и блокировка на фасаде', () => {
   beforeEach(() => signedInAs(makeUser({ role: 'member', timezone: 'Europe/Moscow' })))
 
@@ -63,7 +69,7 @@ describe('Доска: архив карточек и блокировка на �
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Архив карточек' }))
+    await openArchive()
     const dialog = await screen.findByRole('dialog', { name: 'Архив карточек' })
     expect(await within(dialog).findByText('Старый отчёт')).toBeInTheDocument()
     expect(within(dialog).getByRole('link', { name: 'DEV-3' })).toHaveAttribute(
@@ -92,7 +98,7 @@ describe('Доска: архив карточек и блокировка на �
     expect(await within(dialog).findByText('Ничего не найдено')).toBeInTheDocument()
   })
 
-  it('без права правки карточек кнопки архива нет', async () => {
+  it('без права правки карточек архива нет: меню доски не показывается', async () => {
     server.use(
       http.get('*/api/v1/boards/board-1', () =>
         HttpResponse.json({
@@ -105,7 +111,45 @@ describe('Доска: архив карточек и блокировка на �
     renderApp('/boards/board-1')
 
     expect(await screen.findByRole('heading', { name: 'Продукт' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Архив карточек' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Действия с доской' })).not.toBeInTheDocument()
+  })
+
+  it('окно архива из меню «⋯»: фокус внутри окна, Esc закрывает окно', async () => {
+    server.use(
+      http.get('*/api/v1/boards/board-1', () => HttpResponse.json({ data: makeBoardDetail() })),
+      http.get('*/api/v1/boards/board-1/archived-cards', () =>
+        HttpResponse.json({
+          data: [],
+          meta: { current_page: 1, last_page: 1, per_page: 20, total: 0 },
+        }),
+      ),
+    )
+    renderApp('/boards/board-1')
+
+    await openArchive()
+    const dialog = await screen.findByRole('dialog', { name: 'Архив карточек' })
+    // Меню не возвращает фокус на «⋯»: иначе там открывается подсказка, и Esc закрывает её, а не окно.
+    // jsdom подсказку по фокусу не открывает — саму ошибку ловит E2E (blocks.spec, архив карточек)
+    await vi.waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement))
+    await userEvent.keyboard('{Escape}')
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('редактору в меню доски — только архив карточек, без структуры', async () => {
+    server.use(
+      http.get('*/api/v1/boards/board-1', () =>
+        HttpResponse.json({
+          data: makeBoardDetail({
+            permissions: { manage: false, edit_cards: true, delete_cards: false },
+          }),
+        }),
+      ),
+    )
+    renderApp('/boards/board-1')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Действия с доской' }))
+    expect(await screen.findByRole('menuitem', { name: 'Архив карточек' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Добавить колонку' })).not.toBeInTheDocument()
   })
 
   it('системный администратор удаляет архивную карточку в корзину после подтверждения', async () => {
@@ -129,7 +173,7 @@ describe('Доска: архив карточек и блокировка на �
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Архив карточек' }))
+    await openArchive()
     const dialog = await screen.findByRole('dialog', { name: 'Архив карточек' })
     await userEvent.click(
       await within(dialog).findByRole('button', { name: 'Удалить DEV-7 в корзину' }),
@@ -162,7 +206,7 @@ describe('Доска: архив карточек и блокировка на �
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Архив карточек' }))
+    await openArchive()
     const dialog = await screen.findByRole('dialog', { name: 'Архив карточек' })
     expect(await within(dialog).findByText('Старый отчёт')).toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: /в корзину/ })).not.toBeInTheDocument()

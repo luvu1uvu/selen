@@ -10,6 +10,7 @@ import { RequireAdmin, RequireAuth, RequireGuest } from './guards'
 import { RouteError } from './RouteError'
 import { AppLayout } from './layouts/AppLayout'
 import { AuthLayout } from './layouts/AuthLayout'
+import type { RouteHandle } from './routeHandle'
 
 /**
  * Тяжёлые разделы грузятся отдельными чанками при первом переходе (React Router lazy):
@@ -19,6 +20,9 @@ import { AuthLayout } from './layouts/AuthLayout'
 const boardPage = async () => ({
   Component: (await import('@/features/boards/BoardPage')).BoardPage,
 })
+
+/** Страницы досок прокручиваются своим холстом (ADR-0019). */
+const canvas: RouteHandle = { canvas: true }
 
 /**
  * Карта маршрутов SPA. Ссылки из писем (приглашение, сброс пароля) формирует backend —
@@ -63,8 +67,8 @@ export const routes: RouteObject[] = [
                 }),
               },
               // Карточка открывается поверх своей доски, у неё свой адрес — ссылку можно переслать
-              { path: '/boards/:boardId', lazy: boardPage },
-              { path: '/cards/:cardKey', lazy: boardPage },
+              { path: '/boards/:boardId', lazy: boardPage, handle: canvas },
+              { path: '/cards/:cardKey', lazy: boardPage, handle: canvas },
               {
                 element: <RequireAdmin />,
                 children: [

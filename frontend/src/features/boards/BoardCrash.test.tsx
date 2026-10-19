@@ -21,7 +21,7 @@ describe('Сбой доски', () => {
 
     expect(await screen.findByRole('heading', { name: 'Что-то пошло не так' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Продукт' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Архив карточек' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Действия с доской' })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Дерево' })).toBeInTheDocument()
     expect(screen.queryByText('Maximum update depth exceeded')).not.toBeInTheDocument()
     expect(consoleError).toHaveBeenCalled()

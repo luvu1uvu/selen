@@ -182,7 +182,12 @@ export const SortableCardTile = memo(function SortableCardTile({
       onClick={() => onOpen(card.key)}
       onKeyDown={(event) => {
         listeners?.onKeyDown?.(event)
-        if (event.key === 'Enter' && !isDragging) onOpen(card.key)
+        if (event.key === 'Enter' && !isDragging) {
+          // Нажатие использовано: иначе его продолжение (keypress) получит кнопка «Закрыть» окна карточки, куда
+          // уже перешёл фокус, — окно тут же закроется (доска под окном теперь не исчезает на время загрузки)
+          event.preventDefault()
+          onOpen(card.key)
+        }
       }}
     >
       <CardTileView card={card} lookups={lookups} />

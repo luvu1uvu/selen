@@ -25,6 +25,8 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --sidebar: oklch(0.985 0 0);
+  /* Холст страницы досок: свободное место вокруг блоков досок заметно темнее самих досок (как в Kaiten) */
+  --canvas: oklch(0.945 0.003 265);
 }
 
 @theme inline {
@@ -51,6 +53,15 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
+  --color-canvas: var(--canvas);
+}
+
+/* Контейнер прокрутки без своей полосы: тело доски прокручивается вбок полосой внизу окна (ADR-0019) */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {

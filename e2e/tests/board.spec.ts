@@ -75,6 +75,8 @@ async function expectOnlyBoardScrolls(page: Page) {
       boardLeft: area.left,
       boardRight: area.right,
       lastColumnRight: cell.getBoundingClientRect().right,
+      // Отступ блока доски справа от последней колонки (LATER-65) — как слева
+      endPadding: parseFloat(getComputedStyle(board.firstElementChild!).paddingRight),
       panelRight: document.querySelector('aside')!.getBoundingClientRect().right,
     }
   })
@@ -84,14 +86,15 @@ async function expectOnlyBoardScrolls(page: Page) {
   expect(m.pageScrollWidth).toBe(m.windowWidth)
   expect(m.pageScrollX).toBe(0)
   expect(m.boardScrolled).toBeGreaterThan(0)
-  // Прокрутка заканчивается на последней колонке, без пустого хвоста справа
-  expect(Math.abs(m.lastColumnRight - m.boardRight)).toBeLessThanOrEqual(1)
+  // Прокрутка заканчивается на последней колонке и отступе блока (LATER-65), без пустого хвоста справа
+  expect(m.endPadding).toBeLessThanOrEqual(16)
+  expect(Math.abs(m.boardRight - m.lastColumnRight - m.endPadding)).toBeLessThanOrEqual(1)
   // Панель дерева не перекрывает область доски
   expect(m.boardLeft).toBeGreaterThanOrEqual(m.panelRight)
 
   // Шапка и панель доски остались на месте
   await expect(page.getByRole('button', { name: 'Меню пользователя' })).toBeInViewport()
-  await expect(page.getByRole('button', { name: 'Архив карточек' })).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'Действия с доской' })).toBeInViewport()
   await expect(page.getByRole('button', { name: /^Открыть QA-5:/ })).toBeInViewport()
 }
 
@@ -154,7 +157,7 @@ test('быстрое перетаскивание туда-обратно меж
   const rightX = right.x + right.width / 2
   const border = (left.x + left.width + right.x) / 2
 
-  // Указатель — вне полос автопрокрутки у краёв окна (20 % высоты): страница не должна уезжать во время серий
+  // Указатель — вне полос автопрокрутки у краёв холста (20 % его высоты): холст не должен уезжать во время серий
   const safeY = (y: number) => Math.min(Math.max(y, 260), 600)
 
   // Серии махов: разные карточки и высоты указателя; широкие махи и дрожь у границы колонок, без пауз.
@@ -180,7 +183,8 @@ test('быстрое перетаскивание туда-обратно меж
   }
 
   // Финал: махи и отпускание над In Progress — карточка встаёт в колонку под курсором
-  await page.evaluate(() => window.scrollTo(0, 0))
+  // Холст страницы доски — в начало (окно не прокручивается, ADR-0019)
+  await page.evaluate(() => (document.querySelector('[data-board-canvas]')!.scrollTop = 0))
   const card = todo.getByRole('button', { name: /^Открыть QA-/ }).nth(2)
   const name = (await card.getAttribute('aria-label'))!
   const from = (await card.boundingBox())!

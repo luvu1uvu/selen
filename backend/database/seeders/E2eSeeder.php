@@ -16,6 +16,7 @@ use App\Actions\Spaces\CreateSpaceAction;
 use App\Actions\Spaces\GrantSpaceGroupAction;
 use App\Actions\Spaces\SetSpaceMemberRestrictionAction;
 use App\Enums\BoardTemplate;
+use App\Enums\ColumnCategory;
 use App\Enums\SpaceRole;
 use App\Models\BoardColumn;
 use App\Models\Lane;
@@ -39,6 +40,11 @@ use Illuminate\Database\Seeder;
  * QA-3 «Блокирующая задача» и QA-4 «Устаревшая задача» (в архиве). Доска шире окна; QA-5 «Релиз со сроком»
  * в предпоследней колонке Ready for Merge — со сроком, т. е. со скрытой подписью для скринридеров (board.spec).
  * «Плотная доска» (шаблон «Простой»): в To Do и In Progress по 8 карточек разной высоты (board.spec, перетаскивание).
+ * Пространство LAYOUT «Раскладка» (e2e-editor — editor), доска «Длинная доска» (шаблон «Разработка»): шире и выше
+ * окна — 30 карточек в To Do (board-layout.spec: закреплённые шапка и заголовки колонок, прокрутка вбок,
+ * автопрокрутка; приёмка LATER-4/LATER-50). Там же для приёмочных тестов PR 1 (acceptance/stage-layout): «Доска
+ * переносов» (по 30 карточек в Backlog и To Do — их переносят и добавляют), «Широкая доска» (14 колонок без карточек)
+ * и «С описанием» (описание в две строки — ТК-L50.11).
  * «Дорожки» (шаблон «Простой», без карточек): дорожки «Основная» и с длинным названием, у In Progress — подколонки
  * «Разработка» и «Ревью» (add-card.spec — форма «+» в заголовке колонки).
  *
@@ -97,6 +103,46 @@ class E2eSeeder extends Seeder
                 app(CreateCardAction::class)->handle($editor, $dense, ['title' => $title], $column, $denseLane);
             }
         }
+
+        // Длинная доска (board-layout.spec, приёмка LATER-4/LATER-50): шире окна (8 колонок) и выше его — 30 карточек
+        // в To Do; закреплённые шапка и заголовки колонок, прокрутка вбок, автопрокрутка при перетаскивании. Своё
+        // пространство: номера карточек не пересекаются с QA (поиск «QA-3» в тестах не находит QA-30…)
+        $layout = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Раскладка', 'key' => 'LAYOUT'], [$admin]);
+        app(AddSpaceMemberAction::class)->handle($admin, $layout, $editor, SpaceRole::Editor);
+        $long = app(CreateBoardAction::class)->handle($admin, $layout, ['name' => 'Длинная доска'], BoardTemplate::Development);
+        $longLane = Lane::query()->where('board_id', $long->id)->sole();
+        $longTodo = BoardColumn::query()->where('board_id', $long->id)->where('name', 'To Do')->sole();
+        foreach (range(1, 30) as $i) {
+            app(CreateCardAction::class)->handle($editor, $long, ['title' => "Карточка длинной доски {$i}"], $longTodo, $longLane);
+        }
+
+        // Приёмка PR 1 пакета «Раскладка» (e2e/acceptance/stage-layout). «Доска переносов» — как доска «Продукт»
+        // демо-данных из тест-кейсов: длинные колонки Backlog и To Do рядом, по 30 карточек. Её карточки тесты переносят
+        // и добавляют (ТК-L50.4 — перетаскивание из Backlog с автопрокруткой, ТК-L50.5 — перенос с клавиатуры из низа
+        // Backlog в To Do на той же высоте, ТК-L50.6 — «+» и «+ Карточка» в To Do): «Длинную доску» board-layout.spec
+        // ждёт нетронутой
+        $moves = app(CreateBoardAction::class)->handle($admin, $layout, ['name' => 'Доска переносов'], BoardTemplate::Development);
+        $movesLane = Lane::query()->where('board_id', $moves->id)->sole();
+        foreach (['Backlog' => 'Карточка переноса', 'To Do' => 'Задача колонки To Do'] as $columnName => $title) {
+            $column = BoardColumn::query()->where('board_id', $moves->id)->where('name', $columnName)->sole();
+            foreach (range(1, 30) as $i) {
+                app(CreateCardAction::class)->handle($editor, $moves, ['title' => "{$title} {$i}"], $column, $movesLane);
+            }
+        }
+        // «Широкая доска» (ТК-L50.13): 14 колонок без карточек — шире экрана, но невысокая; прокручивается вбок
+        // внутри своего блока, под ней — фон холста (как «Широкая доска» демо-данных)
+        $wide = app(CreateBoardAction::class)->handle($admin, $layout, ['name' => 'Широкая доска'], BoardTemplate::Development);
+        $wideDone = BoardColumn::query()->where('board_id', $wide->id)->where('name', 'Done')->sole();
+        foreach (['Аналитика', 'Дизайн', 'Ревью дизайна', 'Документация', 'Подготовка релиза', 'Мониторинг'] as $name) {
+            app(CreateColumnAction::class)->handle($admin, $wide, $name, ColumnCategory::InProgress, null, null, $wideDone->id);
+        }
+
+        // «С описанием» (ТК-L50.11): описание в две строки — за значком ⓘ в шапке доски. Поля описания в интерфейсе нет,
+        // оно задаётся при создании через API (так описание есть у досок стенда PM)
+        app(CreateBoardAction::class)->handle($admin, $layout, [
+            'name' => 'С описанием',
+            'description' => "Первая строка описания\nВторая строка описания",
+        ], BoardTemplate::Simple);
 
         // Форма «+» в заголовке колонки (add-card.spec, LATER-49): две дорожки, у второй — длинное название
         // (многоточие), у In Progress — подколонки
