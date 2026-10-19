@@ -15,7 +15,7 @@ test -d frontend/node_modules || "${E2E[@]}" run --rm --no-deps -T builder npm c
 "${E2E[@]}" run --rm --no-deps -T builder npm run build
 
 "${E2E[@]}" up -d --build --wait postgres redis php nginx
-"${E2E[@]}" exec -T php php artisan migrate:fresh --force
+"${E2E[@]}" exec -T php php artisan migrate:fresh --force --database=pgsql_owner
 "${E2E[@]}" exec -T php php artisan db:seed --class=DemoSeeder --force
 "${E2E[@]}" exec -T php php artisan db:seed --class=BoardsDemoSeeder --force
 

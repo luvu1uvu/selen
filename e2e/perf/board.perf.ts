@@ -60,9 +60,13 @@ async function instrument(page: Page) {
 
 /** Сколько активных карточек на доске «Продукт» — столько должно появиться на экране. */
 async function expectedCards(page: Page): Promise<number> {
-  // Запрос из страницы: Sanctum узнаёт SPA по заголовку Referer
+  // Запрос из страницы: Sanctum узнаёт SPA по заголовку Referer; X-Selen-User — пользователь вкладки, без него
+  // сервер запрос не выполнит (ADR-0002, LATER-57)
   return page.evaluate(async () => {
-    const get = async (url: string) => (await fetch(url, { headers: { Accept: 'application/json' } })).json()
+    const json = async (url: string, headers: Record<string, string>) =>
+      (await fetch(url, { headers: { Accept: 'application/json', ...headers } })).json()
+    const me = await json('/api/v1/auth/me', {})
+    const get = (url: string) => json(url, { 'X-Selen-User': me.data.id })
     const boards = await get('/api/v1/spaces/DEV/boards')
     const board = boards.data.find((b: { name: string }) => b.name === 'Продукт')
     return (await get(`/api/v1/boards/${board.id}`)).data.cards.length as number

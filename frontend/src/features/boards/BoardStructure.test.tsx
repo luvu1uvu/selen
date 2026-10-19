@@ -113,13 +113,13 @@ describe('Структура доски через меню', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
     await screen.findByText('Сохранено')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Настройки доски' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Действия с доской' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать доску' }))
     await userEvent.clear(screen.getByLabelText('Название'))
     await userEvent.type(screen.getByLabelText('Название'), 'Продукт 2')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Настройки доски' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Действия с доской' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить дорожку' }))
     await userEvent.type(screen.getByLabelText('Название'), 'Баги')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить дорожку' }))
@@ -143,7 +143,7 @@ describe('Структура доски через меню', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Настройки доски' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Действия с доской' }))
     const toggle = await screen.findByRole('menuitemcheckbox', {
       name: 'Автоназначение при переходе в работу',
     })

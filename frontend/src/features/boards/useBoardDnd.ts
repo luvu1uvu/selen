@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   closestCenter,
-  closestCorners,
   type Collision,
   type CollisionDetection,
+  type KeyboardCoordinateGetter,
   type UniqueIdentifier,
 } from '@dnd-kit/core'
-import { arrayMove } from '@dnd-kit/sortable'
+import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import type { BoardCard } from '@/shared/types/api'
 import { cellId, groupCardIds, isCellId, neighboursAt, parseCellId } from './model'
 import type { CardMoveTarget } from './useCardMove'
@@ -44,8 +44,9 @@ function insertBefore(ids: string[], cardId: string, overId: string): string[] {
  * пока React не падал (Maximum update depth exceeded). Положение указателя от сдвигов раскладки не зависит:
  * колонка — та, в чьей вертикальной полосе указатель (и над карточками, и над заголовком), дорожка — ближайшая
  * по вертикали; перенос карточки эти границы не сдвигает в сторону другой цели. Внутри ячейки — ближайшая
- * карточка этой ячейки, в зазоре между колонками — последняя найденная цель. С клавиатуры указателя нет —
- * ближайшие углы, как раньше.
+ * карточка этой ячейки, в зазоре между колонками — последняя найденная цель. С клавиатуры указателя нет — его роль
+ * играет центр переносимой карточки: по «ближайшим углам» высокая пустая ячейка соседней колонки проигрывала
+ * карточкам своей, и карточка из низа длинной колонки не переносилась вбок.
  */
 export function useBoardDnd(
   cards: BoardCard[],
@@ -54,14 +55,22 @@ export function useBoardDnd(
   const cardsById = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards])
   const serverCells = useMemo(() => groupCardIds(cards), [cards])
   const [dragCells, setDragCells] = useState<Cells | null>(null)
+  // Раскладка сразу после броска — пока в доску не пришли новые данные. Кеш TanStack Query меняется синхронно, но
+  // компонент узнаёт об этом на следующем такте: без неё карточка на кадр рисовалась на старом месте, и анимация
+  // броска dnd-kit прокручивала доску к нему, за край экрана (LATER-63)
+  const [dropped, setDropped] = useState<{ cells: Cells; server: Cells } | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const justDragged = useRef(false)
   const lastTarget = useRef<Collision[]>([])
-  const cells = dragCells ?? serverCells
+  const cells =
+    dragCells ?? (dropped && dropped.server === serverCells ? dropped.cells : serverCells)
 
   const collisionDetection = useCallback<CollisionDetection>((args) => {
-    const pointer = args.pointerCoordinates
-    if (!pointer) return closestCorners(args)
+    const box = args.collisionRect
+    const pointer = args.pointerCoordinates ?? {
+      x: box.left + box.width / 2,
+      y: box.top + box.height / 2,
+    }
 
     // Ячейки, в чьей вертикальной полосе указатель; из них — ближайшая по вертикали (0 — указатель внутри)
     const [cell] = args.droppableContainers
@@ -85,6 +94,7 @@ export function useBoardDnd(
   const onDragStart = ({ active }: Pick<DragEvent, 'active'>) => {
     lastTarget.current = []
     setActiveId(String(active.id))
+    setDropped(null)
     setDragCells(serverCells)
   }
 
@@ -132,6 +142,14 @@ export function useBoardDnd(
 
     if (!unchanged && index >= 0) {
       const { columnId, laneId } = parseCellId(to)
+      setDropped({
+        cells: {
+          ...current,
+          [from]: (current[from] ?? []).filter((id) => id !== card.id),
+          [to]: ids,
+        },
+        server: serverCells,
+      })
       onMove(card, { column_id: columnId, lane_id: laneId, ...neighboursAt(ids, index) })
     }
     finish()
@@ -153,4 +171,53 @@ export function useBoardDnd(
     collisionDetection,
     handlers: { onDragStart, onDragOver, onDragEnd, onDragCancel: finish },
   }
+}
+
+/** Расстояние по вертикали от точки до прямоугольника (0 — точка на его высоте). */
+function verticalDistance(rect: { top: number; bottom: number }, y: number) {
+  return Math.max(rect.top - y, 0, y - rect.bottom)
+}
+
+/**
+ * Перенос с клавиатуры (стрелки). Вверх и вниз — как в dnd-kit (`sortableKeyboardCoordinates`). Влево и вправо —
+ * в соседнюю колонку по полосам колонок, на той же высоте: к ближайшей по вертикали карточке ячейки, а в пустой
+ * ячейке — на текущей высоте. Стандартный расчёт выбирал цель «правее» по левому краю наложения, а наложение
+ * повёрнуто (rotate-2) и чуть левее карточки — первое нажатие уводило к соседней карточке своей же колонки;
+ * в пустую высокую ячейку карточка прыгала к началу колонки, за край экрана.
+ */
+export const boardKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
+  const right = event.code === 'ArrowRight'
+  if (!right && event.code !== 'ArrowLeft') return sortableKeyboardCoordinates(event, args)
+  event.preventDefault()
+
+  const { active, collisionRect, droppableRects, droppableContainers } = args.context
+  if (!active || !collisionRect) return undefined
+  const x = collisionRect.left + collisionRect.width / 2
+  const y = collisionRect.top + collisionRect.height / 2
+  const enabled = droppableContainers.getEnabled()
+
+  // Ячейки по ту сторону от центра карточки; из них — ближайшая колонка, в ней — ближайшая по вертикали дорожка
+  const cells = enabled.flatMap((container) => {
+    const rect = droppableRects.get(container.id)
+    if (!rect || !isCellId(String(container.id))) return []
+    const gap = right ? rect.left - x : x - rect.right
+    return gap > 0 ? [{ id: container.id, rect, gap }] : []
+  })
+  if (cells.length === 0) return undefined
+  const nearestGap = Math.min(...cells.map((cell) => cell.gap))
+  const [cell] = cells
+    .filter((candidate) => candidate.gap === nearestGap)
+    .sort((a, b) => verticalDistance(a.rect, y) - verticalDistance(b.rect, y))
+
+  const [card] = enabled
+    .flatMap((container) => {
+      const rect = droppableRects.get(container.id)
+      const inCell = container.data.current?.sortable?.containerId === cell.id
+      return rect && inCell && container.id !== active.id ? [rect] : []
+    })
+    .sort((a, b) => verticalDistance(a, y) - verticalDistance(b, y))
+  if (card) return { x: card.left, y: card.top }
+
+  const lowest = Math.max(cell.rect.top, cell.rect.bottom - collisionRect.height)
+  return { x: cell.rect.left, y: Math.min(Math.max(collisionRect.top, cell.rect.top), lowest) }
 }

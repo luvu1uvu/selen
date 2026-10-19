@@ -5,7 +5,8 @@ test('вход в систему: видны свои пространства',
   await login(page, 'e2e-editor@selen.test')
 
   await expect(page.getByRole('navigation', { name: 'Дерево' }).getByRole('link', { name: /Сквозные тесты/ })).toBeVisible()
-  await expect(page.getByText('Ваша роль: Редактор')).toBeVisible()
+  // Роль — в карточке пространства QA на главной (у редактора есть и другие пространства с той же ролью)
+  await expect(page.getByRole('link', { name: /Сквозные тесты/ }).getByText('Ваша роль: Редактор')).toBeVisible()
 })
 
 test('неверный пароль — понятная ошибка', async ({ page }) => {

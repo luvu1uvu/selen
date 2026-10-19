@@ -9,6 +9,12 @@ vi.mock('@/features/profile/ProfilePage', () => ({
   },
 }))
 
+vi.mock('@/features/boards/BoardPage', () => ({
+  BoardPage: () => {
+    throw new Error('Сбой доски')
+  },
+}))
+
 describe('Непойманная ошибка на странице', () => {
   it('показывает понятный экран на месте страницы, полоса разделов и дерево остаются', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -27,6 +33,17 @@ describe('Непойманная ошибка на странице', () => {
     expect(consoleError).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('Сбой отрисовки') }),
     )
+    consoleError.mockRestore()
+  })
+
+  it('на странице-холсте (доска) экран ошибки — со своими отступами и прокруткой', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    signedInAs(makeUser())
+    renderApp('/boards/board-1')
+
+    const heading = await screen.findByRole('heading', { name: 'Что-то пошло не так' })
+    expect(heading.closest('.overflow-y-auto')).toHaveClass('p-4')
+    expect(screen.getByRole('button', { name: 'Меню пользователя' })).toBeInTheDocument()
     consoleError.mockRestore()
   })
 })
