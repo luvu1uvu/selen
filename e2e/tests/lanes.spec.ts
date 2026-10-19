@@ -4,8 +4,8 @@ import { authFile, openBoard, openHome, pageAs } from './helpers'
 /**
  * Дорожки внутри доски и их личное сворачивание (LATER-55, ADR-0019). «Доска с дорожками» пространства «Раскладка»
  * (E2eSeeder): шаблон «Разработка» (шире окна), дорожки «Основная» (3 карточки в To Do), «Срочные» (2 в To Do,
- * 1 в In Progress), «Плановые» (1 в Backlog). Сворачивание хранится на сервере — каждый тест возвращает дорожки
- * развёрнутыми.
+ * 1 в In Progress), «Плановые» (1 в Backlog). Сворачивание хранится на сервере — перед каждым тестом все дорожки
+ * разворачиваются (упавший посреди тест не оставляет их свёрнутыми следующим).
  */
 test.use({ storageState: authFile('e2e-editor@selen.test') })
 
@@ -14,7 +14,26 @@ const BOARD = 'Доска с дорожками'
 test.beforeEach(async ({ page }) => {
   await openHome(page)
   await openBoard(page, 'Раскладка', BOARD)
+  await expect(page.locator('[data-lane-row]')).toHaveCount(3)
+  // По одной: каждый раз первая из оставшихся, следующая — когда эта развернулась (иначе щелчок попал бы в неё же)
+  const expand = page.getByRole('button', { name: /^Развернуть дорожку/ })
+  for (let left = await expand.count(); left > 0; left--) {
+    await expand.first().click()
+    await expect(expand).toHaveCount(left - 1)
+  }
 })
+
+const center = (box: { x: number; y: number; width: number; height: number }) => ({
+  x: box.x + box.width / 2,
+  y: box.y + box.height / 2,
+})
+
+/** Плавное движение мыши с зажатой кнопкой — так dnd-kit видит перенос, как от человека. */
+async function glide(page: Page, from: { x: number; y: number }, to: { x: number; y: number }, steps = 15) {
+  for (let step = 1; step <= steps; step++) {
+    await page.mouse.move(from.x + ((to.x - from.x) * step) / steps, from.y + ((to.y - from.y) * step) / steps)
+  }
+}
 
 const lane = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
 const toggle = (page: Page, name: string, action: 'Свернуть' | 'Развернуть') =>
@@ -118,4 +137,50 @@ test('название дорожки слева и счётчик с шевро
   })
   expect(overflow).toBeGreaterThan(200)
   await inside()
+})
+
+/**
+ * Регрессия ревью PR 2: перенос вбок по своей дорожке сжимает её (To Do была самой высокой колонкой), строка свёрнутой
+ * дорожки ниже поднимается. Над строкой карточка возвращается на своё место — дорожка снова растёт и уводит строку
+ * из-под указателя. Цель не должна зависеть от этого сдвига: иначе карточка металась между «местом» и In Progress
+ * каждый кадр, даже при неподвижной мыши (ловушка dnd-kit, CLAUDE.md).
+ */
+test('над свёрнутой дорожкой место карточки не мечется, когда её дорожка выше сжалась от переноса', async ({ page }) => {
+  await toggle(page, 'Срочные', 'Свернуть').click()
+  const origin = cell(page, 'To Do / Основная')
+  const progress = cell(page, 'In Progress / Основная')
+  const card = (where: typeof origin) => where.getByRole('button', { name: /Дорожная основная 1$/ })
+
+  const start = center((await card(origin).boundingBox())!)
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  const right = { x: center((await progress.boundingBox())!).x, y: start.y }
+  await glide(page, start, right)
+  await expect(card(progress)).toHaveCount(1)
+
+  // Строка «Срочные» поднялась вместе с дорожкой — указатель на неё и задержать
+  const row = center((await lane(page, 'Срочные').boundingBox())!)
+  await glide(page, right, { x: right.x, y: row.y })
+  for (let sample = 0; sample < 8; sample++) {
+    await page.waitForTimeout(80)
+    expect(await card(origin).count(), `замер ${sample}`).toBe(1)
+    expect(await card(progress).count(), `замер ${sample}`).toBe(0)
+  }
+
+  await page.mouse.up()
+  await expect(card(origin)).toBeVisible()
+  await page.reload()
+  await expect(card(origin)).toBeVisible()
+})
+
+test('свёрнуты все дорожки широкой доски — доска всё равно прокручивается вбок до последней колонки', async ({ page }) => {
+  for (const name of ['Основная', 'Срочные', 'Плановые']) await toggle(page, name, 'Свернуть').click()
+  await expect(page.locator('[data-board-body] [role="group"]')).toHaveCount(0)
+
+  const overflow = await page.locator('[data-board-body]').evaluate((body) => {
+    body.scrollLeft = body.scrollWidth
+    return body.scrollWidth - body.clientWidth
+  })
+  expect(overflow).toBeGreaterThan(200)
+  await expect(page.getByRole('button', { name: 'Добавить карточку в начало Done' })).toBeInViewport()
 })

@@ -51,19 +51,21 @@ export function LaneRow({
     <div
       ref={rowRef}
       className={cn(
-        // Полоса во всю ширину блока, со своим лёгким фоном: линии колонок через неё не идут
-        'bg-muted/40 flex h-10 items-center justify-between gap-2 px-3',
+        // Полоса во всю ширину блока, со своим лёгким фоном: линии колонок через неё не идут. Фон непрозрачный
+        // (muted 40 % поверх фона доски), его наследуют закреплённые части: на узкой видимой части доски счётчик
+        // и шеврон закрывают конец названия, а не ложатся поверх текста
+        'flex h-10 items-center justify-between gap-2 bg-[color-mix(in_oklab,var(--color-muted)_40%,var(--color-background))] px-3',
         collapsed && 'hover:bg-muted cursor-pointer',
         className,
       )}
       onClick={collapsed ? expandOnClick : undefined}
       data-lane-row={collapsed ? 'collapsed' : 'expanded'}
     >
-      <div className="sticky left-3 flex max-w-96 min-w-0 items-center gap-1">
+      <div className="sticky left-3 flex max-w-96 min-w-0 items-center gap-1 bg-inherit">
         <span className="truncate text-sm font-semibold">{lane.name}</span>
         {canManage && <LaneMenu lane={lane} lanes={lanes} onAction={onAction} />}
       </div>
-      <div className="sticky right-3 flex shrink-0 items-center gap-1">
+      <div className="sticky right-3 flex shrink-0 items-center gap-1 bg-inherit pl-2">
         <span className="text-muted-foreground text-xs tabular-nums" aria-hidden>
           {count}
         </span>

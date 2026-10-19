@@ -177,4 +177,82 @@ describe('Доска: дорожки', () => {
     expect(cell('To Do / Срочные')).not.toBeInTheDocument()
     expect(requests).toEqual(['DELETE main'])
   })
+
+  it('быстрые переключения идут по очереди; ошибка откатывает только свою дорожку', async () => {
+    const requests: string[] = []
+    // Сервер помнит свёрнутые дорожки: перечитанная после ошибки доска показывает то, что на сервере
+    const onServer = new Set<string>()
+    let releaseFirst = () => {}
+    const firstDone = new Promise<void>((resolve) => (releaseFirst = resolve))
+    server.use(
+      http.get('*/api/v1/boards/board-1', () =>
+        HttpResponse.json({ data: boardWithLanes({ collapsed_lane_ids: [...onServer] }) }),
+      ),
+      // Первый запрос (свернуть «Основную») отвечает ошибкой, но не сразу
+      http.put('*/api/v1/lanes/main/collapsed', async () => {
+        requests.push('PUT main: начат')
+        await firstDone
+        requests.push('PUT main: ошибка')
+        return HttpResponse.json({ message: 'Ошибка сервера' }, { status: 500 })
+      }),
+      http.put('*/api/v1/lanes/urgent/collapsed', () => {
+        requests.push('PUT urgent')
+        onServer.add('urgent')
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    renderApp('/boards/board-1')
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Свернуть дорожку «Основная»' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Свернуть дорожку «Срочные»' }))
+    // Обе свёрнуты сразу, второй запрос ждёт ответа на первый
+    expect(
+      screen.getByRole('button', { name: 'Развернуть дорожку «Основная»' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Развернуть дорожку «Срочные»' })).toBeInTheDocument()
+    expect(requests).toEqual(['PUT main: начат'])
+
+    releaseFirst()
+    expect(
+      await screen.findByRole('button', { name: 'Свернуть дорожку «Основная»' }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    await vi.waitFor(() =>
+      expect(requests).toEqual(['PUT main: начат', 'PUT main: ошибка', 'PUT urgent']),
+    )
+    // Доска перечитана после всей очереди: «Срочные» свёрнуты и на сервере, и на экране
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Развернуть дорожку «Срочные»' }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: 'Свернуть дорожку «Основная»' })).toBeInTheDocument()
+  })
+
+  it('форма «+» привязана к дорожке: свернули её дорожку — форма закрылась, а не переехала', async () => {
+    serve(boardWithLanes())
+    renderApp('/boards/board-1')
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Добавить карточку в начало To Do' }),
+    )
+    expect(
+      within(cell('To Do / Основная')!).getByRole('textbox', {
+        name: 'Добавить карточку в начало To Do',
+      }),
+    ).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Свернуть дорожку «Основная»' }))
+    expect(
+      screen.queryByRole('textbox', { name: 'Добавить карточку в начало To Do' }),
+    ).not.toBeInTheDocument()
+
+    // Развернули снова — формы нет, пока её не откроют
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть дорожку «Основная»' }))
+    expect(await screen.findByRole('group', { name: 'To Do / Основная' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('textbox', { name: 'Добавить карточку в начало To Do' }),
+    ).not.toBeInTheDocument()
+  })
 })

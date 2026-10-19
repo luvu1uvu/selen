@@ -17,7 +17,7 @@ import { useSyncedScrollLeft } from '@/shared/lib/useSyncedScrollLeft'
 import type { BoardDetail } from '@/shared/types/api'
 import { useCurrentUser } from '@/features/auth/queries'
 import { buildLayout, buildLookups, cellId, countCards, parseCellId } from '../model'
-import { boardKeyboardCoordinates, useBoardDnd } from '../useBoardDnd'
+import { boardKeyboardCoordinates, useBoardDnd, type CollapsedLaneProbe } from '../useBoardDnd'
 import { useCardMove } from '../useCardMove'
 import { useLaneCollapse } from '../useLaneCollapse'
 import { BoardCell, COLUMN_DIVIDER, SUBCOLUMN_DIVIDER, type TopCardForm } from './BoardCell'
@@ -57,20 +57,36 @@ export function BoardView({
   const lookups = useMemo(() => buildLookups(board, me?.timezone), [board, me?.timezone])
   const moveCard = useCardMove(board.id)
   const setLaneCollapsed = useLaneCollapse(board.id)
-  // Строки свёрнутых дорожек — над ними перетаскиваемая карточка цели не находит
+
+  const headerRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+  const stickyRef = useRef<HTMLDivElement>(null)
+  // Строки свёрнутых дорожек — над ними перетаскиваемая карточка цели не находит (useBoardDnd). Считаются только в
+  // видимой части тела доски ниже закреплённых заголовков: строка тянется на всю ширину прокрутки, а уехавшая под
+  // заголовки — не перехватывает указатель над ними. Вертикаль — в координатах содержимого холста
   const collapsedRows = useRef(new Map<string, HTMLElement>())
-  const isOverCollapsedLane = useCallback(
-    ({ x, y }: { x: number; y: number }) =>
-      [...collapsedRows.current.values()].some((row) => {
-        const rect = row.getBoundingClientRect()
-        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-      }),
-    [],
-  )
+  const collapsedLaneAt = useCallback(({ x, y }: { x: number; y: number }) => {
+    const body = bodyRef.current
+    if (!body || collapsedRows.current.size === 0) return null
+    const scroll = body.closest('[data-board-canvas]')?.scrollTop ?? 0
+    const visible = body.getBoundingClientRect()
+    const top = stickyRef.current?.getBoundingClientRect().bottom ?? visible.top
+    const probe: CollapsedLaneProbe = { y: y + scroll, band: null }
+    if (x < visible.left || x > visible.right || y < top || y > visible.bottom) return probe
+    for (const row of collapsedRows.current.values()) {
+      const rect = row.getBoundingClientRect()
+      if (y >= rect.top && y <= rect.bottom) {
+        probe.band = { top: rect.top + scroll, bottom: rect.bottom + scroll }
+        break
+      }
+    }
+    return probe
+  }, [])
   const { cells, cardsById, activeCard, guardClick, collisionDetection, handlers } = useBoardDnd(
     board.cards,
     moveCard,
-    isOverCollapsedLane,
+    collapsedLaneAt,
   )
   const openCard = useMemo(() => guardClick(onOpenCard), [guardClick, onOpenCard])
   // Ячейка, где сейчас переносимая карточка, — туда она и упадёт (подсветка)
@@ -92,27 +108,32 @@ export function BoardView({
     return result
   }, [board.cards])
   // «+» в заголовке листовой колонки: форма в её ячейке первой развёрнутой дорожки, карточка — в начало (LATER-44).
-  // Свёрнуты все — «+» разворачивает первую дорожку и открывает форму в ней (решение PM 4)
-  const [topFormColumn, setTopFormColumn] = useState<string | null>(null)
+  // Свёрнуты все — «+» разворачивает первую дорожку и открывает форму в ней (решение PM 4). Форма привязана к своей
+  // дорожке: её свернули (или не удалось развернуть) — форма закрывается, а не переезжает в другую дорожку
+  const [topForm, setTopForm] = useState<{ columnId: string; laneId: string } | null>(null)
+  const [seenCollapsed, setSeenCollapsed] = useState(collapsed)
+  if (seenCollapsed !== collapsed) {
+    setSeenCollapsed(collapsed)
+    if (topForm && collapsed.has(topForm.laneId) && !seenCollapsed.has(topForm.laneId))
+      setTopForm(null)
+  }
   const firstLaneId = board.lanes.find((lane) => !collapsed.has(lane.id))?.id
   const addCardAtTop = (columnId: string) =>
     canEdit
       ? () => {
-          if (!firstLaneId && board.lanes[0]) setLaneCollapsed(board.lanes[0].id, false)
-          setTopFormColumn(columnId)
+          const laneId = firstLaneId ?? board.lanes[0]?.id
+          if (!laneId) return
+          if (!firstLaneId) setLaneCollapsed(laneId, false)
+          setTopForm({ columnId, laneId })
         }
       : undefined
-  const topForm = (columnId: string): TopCardForm => ({
+  const topFormProps = (columnId: string): TopCardForm => ({
     lanes: board.lanes,
     cellCardIds: (laneId) => cells[cellId(columnId, laneId)] ?? EMPTY,
-    onClose: () => setTopFormColumn(null),
+    onClose: () => setTopForm(null),
   })
 
-  const headerRef = useRef<HTMLDivElement>(null)
-  const bodyRef = useRef<HTMLDivElement>(null)
-  const barRef = useRef<HTMLDivElement>(null)
   useSyncedScrollLeft({ body: bodyRef, header: headerRef, bar: barRef })
-  const stickyRef = useRef<HTMLDivElement>(null)
   useStickyOffset(stickyRef, bodyRef)
   // «Назад» возвращает и прокрутку доски вбок
   useScrollMemory(bodyRef, { name: `board:${board.id}`, page: board.id, axis: 'x' })
@@ -217,6 +238,13 @@ export function BoardView({
         {/* Отступы слева и справа — у контейнера (как у строки заголовков, LATER-65); строка дорожки растянута на всю
             ширину блока отрицательными полями */}
         <div className="flex min-w-full flex-1 flex-col self-start px-3">
+          {/* Линейка нулевой высоты по колонкам: ширину тела задают не только ячейки — свёрнуты все дорожки, а доска
+              всё равно прокручивается вбок до последней колонки (вместе с заголовками) */}
+          <div aria-hidden className="flex h-0 gap-2">
+            {layout.leaves.map((column) => (
+              <div key={column.id} className="w-68 shrink-0" />
+            ))}
+          </div>
           {board.lanes.map((lane, index) => {
             const isCollapsed = collapsed.has(lane.id)
             return (
@@ -267,8 +295,8 @@ export function BoardView({
                           dragging={activeCard !== undefined}
                           highlighted={id === targetCell}
                           topForm={
-                            topFormColumn === column.id && lane.id === firstLaneId
-                              ? topForm(column.id)
+                            topForm?.columnId === column.id && topForm.laneId === lane.id
+                              ? topFormProps(column.id)
                               : undefined
                           }
                           onOpen={openCard}
