@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -19,9 +19,11 @@ import { useCurrentUser } from '@/features/auth/queries'
 import { buildLayout, buildLookups, cellId, countCards, parseCellId } from '../model'
 import { boardKeyboardCoordinates, useBoardDnd } from '../useBoardDnd'
 import { useCardMove } from '../useCardMove'
+import { useLaneCollapse } from '../useLaneCollapse'
 import { BoardCell, type TopCardForm } from './BoardCell'
 import { CardTileView } from './CardTile'
-import { ColumnHeader, LaneHeader } from './StructureMenus'
+import { LaneRow } from './LaneRow'
+import { ColumnHeader } from './StructureMenus'
 import type { StructureAction } from './StructureDialogs'
 
 /**
@@ -34,6 +36,10 @@ import type { StructureAction } from './StructureDialogs'
  * привязался бы к нему, а не к холсту) и повторяет его горизонтальную прокрутку; родная полоса прокрутки тела
  * скрыта, вместо неё — полоса внизу окна. Автопрокрутка при перетаскивании: у края доски едет тело, у верхнего
  * и нижнего края окна — холст.
+ *
+ * Дорожки — строки внутри блока доски (LATER-55): строка дорожки (название, счётчик, свернуть) и под ней ячейки по
+ * колонкам; одна дорожка — без строки. Свёрнутая пользователем дорожка — одна строка: ячеек нет, «+ Карточка» нет,
+ * бросок не принимает; «+» в заголовке колонки открывает форму в первой развёрнутой дорожке.
  */
 export function BoardView({
   board,
@@ -50,20 +56,48 @@ export function BoardView({
   const { data: me } = useCurrentUser()
   const lookups = useMemo(() => buildLookups(board, me?.timezone), [board, me?.timezone])
   const moveCard = useCardMove(board.id)
+  const setLaneCollapsed = useLaneCollapse(board.id)
+  // Строки свёрнутых дорожек — над ними перетаскиваемая карточка цели не находит
+  const collapsedRows = useRef(new Map<string, HTMLElement>())
+  const isOverCollapsedLane = useCallback(
+    ({ x, y }: { x: number; y: number }) =>
+      [...collapsedRows.current.values()].some((row) => {
+        const rect = row.getBoundingClientRect()
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+      }),
+    [],
+  )
   const { cells, cardsById, activeCard, guardClick, collisionDetection, handlers } = useBoardDnd(
     board.cards,
     moveCard,
+    isOverCollapsedLane,
   )
   const openCard = useMemo(() => guardClick(onOpenCard), [guardClick, onOpenCard])
   const canEdit = board.permissions.edit_cards
   const canManage = board.permissions.manage
   const topLevel = layout.groups.map((group) => group.column)
   const showLaneHeaders = board.lanes.length > 1
-  // «+» в заголовке листовой колонки: форма в её ячейке первой дорожки, карточка — в начало (LATER-44)
+  // Одна дорожка — строки нет, свернуть её нельзя (даже если свернули, пока дорожек было больше)
+  const collapsed = useMemo(
+    () => new Set(showLaneHeaders ? board.collapsed_lane_ids : []),
+    [showLaneHeaders, board.collapsed_lane_ids],
+  )
+  const laneCounts = useMemo(() => {
+    const result: Record<string, number> = {}
+    for (const card of board.cards) result[card.lane_id] = (result[card.lane_id] ?? 0) + 1
+    return result
+  }, [board.cards])
+  // «+» в заголовке листовой колонки: форма в её ячейке первой развёрнутой дорожки, карточка — в начало (LATER-44).
+  // Свёрнуты все — «+» разворачивает первую дорожку и открывает форму в ней (решение PM 4)
   const [topFormColumn, setTopFormColumn] = useState<string | null>(null)
-  const firstLaneId = board.lanes[0]?.id
+  const firstLaneId = board.lanes.find((lane) => !collapsed.has(lane.id))?.id
   const addCardAtTop = (columnId: string) =>
-    canEdit ? () => setTopFormColumn(columnId) : undefined
+    canEdit
+      ? () => {
+          if (!firstLaneId && board.lanes[0]) setLaneCollapsed(board.lanes[0].id, false)
+          setTopFormColumn(columnId)
+        }
+      : undefined
   const topForm = (columnId: string): TopCardForm => ({
     lanes: board.lanes,
     cellCardIds: (laneId) => cells[cellId(columnId, laneId)] ?? EMPTY,
@@ -175,51 +209,70 @@ export function BoardView({
         className="relative flex flex-1 scrollbar-none flex-col overflow-x-auto [&_*]:scroll-mt-(--board-sticky)"
         data-board-body
       >
-        <div className="flex min-w-full flex-1 flex-col gap-2 self-start px-3 py-2">
-          {board.lanes.map((lane, index) => (
-            <section
-              key={lane.id}
-              aria-label={lane.name}
-              // Последняя дорожка тянется до низа доски — фон колонок доходит до низа окна
-              className={cn('flex flex-col', index === board.lanes.length - 1 && 'flex-1')}
-            >
-              {showLaneHeaders && (
-                <LaneHeader
-                  lane={lane}
-                  lanes={board.lanes}
-                  canManage={canManage}
-                  onAction={onAction}
-                />
-              )}
-              <div className="flex flex-1 items-stretch gap-2">
-                {layout.leaves.map((column) => {
-                  const id = cellId(column.id, lane.id)
-                  return (
-                    <BoardCell
-                      key={id}
-                      id={id}
-                      label={showLaneHeaders ? `${column.name} / ${lane.name}` : column.name}
-                      boardId={board.id}
-                      columnId={column.id}
-                      columnName={column.name}
-                      laneId={lane.id}
-                      cardIds={cells[id] ?? EMPTY}
-                      cardsById={cardsById}
-                      lookups={lookups}
-                      canEdit={canEdit}
-                      dragging={activeCard !== undefined}
-                      topForm={
-                        topFormColumn === column.id && lane.id === firstLaneId
-                          ? topForm(column.id)
-                          : undefined
-                      }
-                      onOpen={openCard}
-                    />
-                  )
-                })}
-              </div>
-            </section>
-          ))}
+        {/* Отступы слева и справа — у контейнера (как у строки заголовков, LATER-65); строка дорожки растянута на всю
+            ширину блока отрицательными полями */}
+        <div className="flex min-w-full flex-1 flex-col self-start px-3">
+          {board.lanes.map((lane, index) => {
+            const isCollapsed = collapsed.has(lane.id)
+            return (
+              <section
+                key={lane.id}
+                aria-label={lane.name}
+                // Последняя дорожка тянется до низа доски — фон колонок доходит до низа блока
+                className={cn(
+                  'flex flex-col',
+                  !isCollapsed && index === board.lanes.length - 1 && 'flex-1',
+                )}
+              >
+                {showLaneHeaders && (
+                  <LaneRow
+                    lane={lane}
+                    lanes={board.lanes}
+                    count={laneCounts[lane.id] ?? 0}
+                    collapsed={isCollapsed}
+                    canManage={canManage}
+                    // Дорожки разделены тонкой линией; над первой — нижняя граница заголовков колонок
+                    className={cn('-mx-3', index > 0 && 'border-t')}
+                    rowRef={(row) => {
+                      if (row && isCollapsed) collapsedRows.current.set(lane.id, row)
+                      else collapsedRows.current.delete(lane.id)
+                    }}
+                    onAction={onAction}
+                    onToggle={() => setLaneCollapsed(lane.id, !isCollapsed)}
+                  />
+                )}
+                {!isCollapsed && (
+                  <div className="flex flex-1 items-stretch gap-2 py-2">
+                    {layout.leaves.map((column) => {
+                      const id = cellId(column.id, lane.id)
+                      return (
+                        <BoardCell
+                          key={id}
+                          id={id}
+                          label={showLaneHeaders ? `${column.name} / ${lane.name}` : column.name}
+                          boardId={board.id}
+                          columnId={column.id}
+                          columnName={column.name}
+                          laneId={lane.id}
+                          cardIds={cells[id] ?? EMPTY}
+                          cardsById={cardsById}
+                          lookups={lookups}
+                          canEdit={canEdit}
+                          dragging={activeCard !== undefined}
+                          topForm={
+                            topFormColumn === column.id && lane.id === firstLaneId
+                              ? topForm(column.id)
+                              : undefined
+                          }
+                          onOpen={openCard}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+            )
+          })}
         </div>
       </div>
 

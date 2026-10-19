@@ -120,6 +120,22 @@ describe('Перетаскивание карточек (логика доски
     expect(hook.result.current.cells['todo:main']).toEqual(['c1', 'c3'])
   })
 
+  it('над свёрнутой дорожкой (цели нет) карточка возвращается на своё место, отпускание ничего не меняет', () => {
+    const { hook, onMove, handlers } = setup()
+
+    act(() => handlers().onDragStart({ active: { id: 'c1' } }))
+    act(() => handlers().onDragOver({ active: { id: 'c1' }, over: { id: 'c2' } }))
+    expect(hook.result.current.cells['dev:main']).toEqual(['c1', 'c2'])
+
+    act(() => handlers().onDragOver({ active: { id: 'c1' }, over: null }))
+    expect(hook.result.current.cells['todo:main']).toEqual(['c1', 'c3'])
+    expect(hook.result.current.cells['dev:main']).toEqual(['c2'])
+
+    act(() => handlers().onDragEnd({ active: { id: 'c1' }, over: null }))
+    expect(onMove).not.toHaveBeenCalled()
+    expect(hook.result.current.cells['todo:main']).toEqual(['c1', 'c3'])
+  })
+
   it('клик сразу после перетаскивания карточку не открывает', () => {
     vi.useFakeTimers()
     const { hook, handlers } = setup()
@@ -222,6 +238,20 @@ describe('Цель перетаскивания (collisionDetection)', () => {
 
     const empty = { ...args({ x: 100, y: 300 }), droppableContainers: [container('todo:main')] }
     expect(detect(empty).map((c) => c.id)).toEqual(['todo:main'])
+  })
+
+  it('над строкой свёрнутой дорожки цели нет; дальше, вне колонок, — тоже нет (ADR-0019)', () => {
+    // Свёрнутая дорожка — полоса по y 600–640 под ячейками основной
+    const overCollapsed = ({ y }: { x: number; y: number }) => y >= 600 && y <= 640
+    const hook = renderHook(() => useBoardDnd([], vi.fn(), overCollapsed)).result.current
+    const detect = (pointer: { x: number; y: number }) =>
+      hook.collisionDetection(args(pointer)).map((c) => c.id)
+
+    expect(detect({ x: 400, y: 40 })).toEqual(['c2'])
+    // Не в соседнюю по вертикали дорожку, а «никуда»: такого droppable нет, dnd-kit отдаёт over = null
+    expect(detect({ x: 400, y: 620 })).toEqual(['collapsed-lane'])
+    expect(detect({ x: 275, y: 700 })).toEqual(['collapsed-lane'])
+    expect(detect({ x: 100, y: 40 })).toEqual(['c3'])
   })
 
   it('с клавиатуры (без указателя) — по центру переносимой карточки', () => {

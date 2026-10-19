@@ -92,3 +92,9 @@ export async function moveLane(laneId: string, neighbours: Neighbours): Promise<
 export async function archiveLane(laneId: string): Promise<void> {
   await api.post(`/lanes/${laneId}/archive`)
 }
+
+/** Свернуть или развернуть дорожку у себя (личный вид, ADR-0019). */
+export async function setLaneCollapsed(laneId: string, collapsed: boolean): Promise<void> {
+  if (collapsed) await api.put(`/lanes/${laneId}/collapsed`)
+  else await api.delete(`/lanes/${laneId}/collapsed`)
+}
