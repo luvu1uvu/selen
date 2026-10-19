@@ -34,6 +34,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // Длинные сценарии с userEvent.type под покрытием на раннере GitHub идут ~5 с — впритык к лимиту Vitest
+    // по умолчанию (5 с): «переименование колонки и доски» в BoardStructure.test.tsx упал на 5,1 с
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
