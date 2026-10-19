@@ -1,0 +1,11 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - config
+        - database
+        - routes
+    # Уровень 6+ — требование проекта (CLAUDE.md). Повышать можно, понижать нельзя.
+    level: 6

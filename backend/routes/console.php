@@ -1,0 +1,16 @@
+<?php
+
+use App\Models\Attachment;
+use App\Models\AuthAuditEntry;
+use Illuminate\Support\Facades\Schedule;
+
+// Удаление просроченных токенов сброса пароля.
+// Приглашения НЕ удаляются никогда: просроченные остаются в истории со статусом «истекло».
+Schedule::command('auth:clear-resets')->everyFifteenMinutes();
+
+// Удаление записей auth_audit (IP, user agent) старше срока хранения — config selen.auth_audit.
+// Журнал событий (event_log) не очищается никогда: в нём нет персональных данных.
+Schedule::command('model:prune', ['--model' => [AuthAuditEntry::class]])->dailyAt('03:30');
+
+// Файлы удалённых вложений стираются через Attachment::PURGE_AFTER_DAYS (строка остаётся) — ADR-0010
+Schedule::command('model:prune', ['--model' => [Attachment::class]])->dailyAt('03:40');

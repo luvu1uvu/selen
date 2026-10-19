@@ -1,0 +1,30 @@
+# Окружение и секреты
+.env
+.env.*
+!.env.example
+# Шаблон окружения стенда PM (рабочий .env стенда — в его каталоге, тоже под правилом .env)
+!.env.pm.example
+# Шаблон настроек копии бэкапов стенда в облако (рабочий файл — ~/.config/selen/offsite.env, вне репозитория)
+!.env.offsite.example
+
+# Бэкапы БД — никогда не коммитим
+/backups/
+
+# ОС и редакторы
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Логи
+*.log
+
+# E2E (Playwright)
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/.attachments/
+e2e/.auth/
+# Карточки и скриншоты багов стенда PM (make pm-bug-show)
+/.pm-bugs/
+/.env.before-db-roles

@@ -1,0 +1,83 @@
+# Dependabot (docs/adr/0020-security-audit.md, решение PM 2026-10-19).
+# - Обновления безопасности — сразу, отдельными PR. Их включают в настройках репозитория: Settings → Code security
+#   (Advanced Security) → Dependabot alerts и Dependabot security updates (этот файл их не включает).
+# - Обычные обновления — только minor и patch, все экосистемы одним PR раз в неделю (группа weekly).
+# - Major не предлагаются (ignore ниже действует только на обычные обновления, не на обновления безопасности).
+# PR Dependabot мёржатся как любые: зелёный CI и «принято» PM.
+#
+# Multi-ecosystem группа (LATER-62): расписание, лимит открытых PR (open-pull-requests-limit) и префикс коммитов
+# (commit-message) — только на группе weekly; у экосистемы GitHub их не принимает («should only be set on the
+# associated multi-ecosystem group»), а вместе с ними и весь файл. У экосистем — только package-ecosystem,
+# directory, multi-ecosystem-group, patterns, ignore. Документация:
+# https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/configuring-multi-ecosystem-updates
+# Проверка после мёржа в main: Insights → Dependency graph → Dependabot — 6 экосистем без ошибки.
+version: 2
+
+multi-ecosystem-groups:
+  weekly:
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Europe/Moscow
+    # На обновления безопасности не действует: у них свой встроенный лимит GitHub — 10 открытых PR
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'chore(deps)'
+
+updates:
+  - package-ecosystem: composer
+    directory: /backend
+    multi-ecosystem-group: weekly
+    patterns: ['*']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: npm
+    directory: /frontend
+    multi-ecosystem-group: weekly
+    patterns: ['*']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: npm
+    directory: /e2e
+    multi-ecosystem-group: weekly
+    patterns: ['*']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    multi-ecosystem-group: weekly
+    patterns: ['*']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # Образ PHP (docker/php/Dockerfile)
+  - package-ecosystem: docker
+    directory: /docker/php
+    multi-ecosystem-group: weekly
+    patterns: ['*']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+      # Версия PHP (8.4 → 8.5) — решение стека: меняется осознанно, вместе с CI (setup-php) и CLAUDE.md
+      - dependency-name: 'php'
+        update-types: ['version-update:semver-minor']
+
+  # Образы сервисов в docker-compose*.yml (dev, стенд PM, E2E)
+  - package-ecosystem: docker-compose
+    directory: /
+    multi-ecosystem-group: weekly
+    patterns: ['*']
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+      # nginx: чётные minor — стабильная ветка (1.28), нечётные — mainline; переход — осознанно
+      - dependency-name: 'nginx'
+        update-types: ['version-update:semver-minor']

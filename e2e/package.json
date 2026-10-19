@@ -1,0 +1,14 @@
+{
+  "name": "selen-e2e",
+  "private": true,
+  "description": "E2E-тесты Selen в браузере. Запуск: make e2e (из корня репозитория).",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2"
+  }
+}

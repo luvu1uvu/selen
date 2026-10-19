@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <!--
+            В docker-контейнере переменные из .env уже заданы в окружении процесса
+            (и попадают в $_SERVER, который Laravel читает первым). Поэтому каждая переменная
+            задаётся и как <env>, и как <server>, с force="true" — иначе тесты пойдут в рабочую базу.
+            Дополнительная защита — проверка в tests/TestCase.php.
+            Тесты работают на настоящем PostgreSQL (нужны JSONB и триггеры), база — selen_testing.
+        -->
+        <env name="APP_NAME" value="Selen" force="true"/>
+        <server name="APP_NAME" value="Selen" force="true"/>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <server name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_KEY" value="base64:c2VsZW4tdGVzdGluZy1rZXktbm90LWEtc2VjcmV0ISE=" force="true"/>
+        <server name="APP_KEY" value="base64:c2VsZW4tdGVzdGluZy1rZXktbm90LWEtc2VjcmV0ISE=" force="true"/>
+        <env name="APP_DEBUG" value="true" force="true"/>
+        <server name="APP_DEBUG" value="true" force="true"/>
+        <env name="APP_URL" value="http://localhost" force="true"/>
+        <server name="APP_URL" value="http://localhost" force="true"/>
+        <env name="FRONTEND_URL" value="http://localhost" force="true"/>
+        <server name="FRONTEND_URL" value="http://localhost" force="true"/>
+        <env name="APP_LOCALE" value="ru" force="true"/>
+        <server name="APP_LOCALE" value="ru" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <server name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <server name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <server name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <server name="CACHE_STORE" value="array" force="true"/>
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <server name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_DATABASE" value="selen_testing" force="true"/>
+        <server name="DB_DATABASE" value="selen_testing" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
+        <server name="DB_URL" value="" force="true"/>
+        <env name="DB_OWNER_URL" value="" force="true"/>
+        <server name="DB_OWNER_URL" value="" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <server name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <server name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <!-- database: тесты проверяют завершение сессий при деактивации -->
+        <env name="SESSION_DRIVER" value="database" force="true"/>
+        <server name="SESSION_DRIVER" value="database" force="true"/>
+        <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost" force="true"/>
+        <server name="SANCTUM_STATEFUL_DOMAINS" value="localhost" force="true"/>
+        <!-- Никому не доверять X-Forwarded-*, даже если TRUSTED_PROXIES задан в .env (ADR-0021) -->
+        <env name="TRUSTED_PROXIES" value="" force="true"/>
+        <server name="TRUSTED_PROXIES" value="" force="true"/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <server name="PULSE_ENABLED" value="false" force="true"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <server name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
+        <server name="NIGHTWATCH_ENABLED" value="false" force="true"/>
+    </php>
+</phpunit>

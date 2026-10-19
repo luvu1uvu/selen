@@ -1,0 +1,80 @@
+<?php
+
+namespace App\Actions\Invitations;
+
+use App\Actions\Users\UserLock;
+use App\Enums\EventType;
+use App\Enums\InvitationState;
+use App\Enums\UserStatus;
+use App\Models\Invitation;
+use App\Models\User;
+use App\Notifications\InvitationNotification;
+use App\Services\EventLog\EventRecorder;
+use App\Services\Invitations\InvitationIssuer;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Повторная отправка приглашения: выпускается новое приглашение с новым токеном и сроком,
+ * прежнее помечается как заменённое (его ссылка перестаёт работать).
+ *
+ * Работает и для отозванного приглашения: пользователь снова получает статус invited.
+ */
+class ResendInvitationAction
+{
+    public function __construct(
+        private readonly EventRecorder $events,
+        private readonly InvitationIssuer $issuer,
+        private readonly UserLock $lock,
+    ) {}
+
+    public function handle(User $actor, Invitation $previous): Invitation
+    {
+        // Роль приглашённого — та, по которой политика пустила (приглашённым админом управляет только Владелец)
+        $authorized = $previous->user;
+
+        $issued = DB::transaction(function () use ($actor, $previous, $authorized) {
+            $previous = Invitation::query()->lockForUpdate()->findOrFail($previous->id);
+            $user = $this->lock->lock($actor, $authorized);
+
+            $this->ensureCanResend($previous, $user);
+            $previousState = $previous->state();
+
+            $issued = $this->issuer->issue($user, $actor);
+
+            $previous->forceFill([
+                'superseded_by_id' => $issued->invitation->id,
+                'revoked_at' => $previous->revoked_at ?? Date::now(),
+            ])->save();
+
+            if ($user->status !== UserStatus::Invited) {
+                $user->forceFill(['status' => UserStatus::Invited, 'deactivated_at' => null])->save();
+            }
+
+            $this->events->record(EventType::InvitationResent, $actor, $issued->invitation, [
+                'user_id' => $user->id,
+                'previous_invitation_id' => $previous->id,
+                'previous_state' => $previousState->value,
+                'expires_at' => $issued->invitation->expires_at->toIso8601ZuluString(),
+            ]);
+
+            return $issued;
+        });
+
+        $issued->invitation->user->notify(new InvitationNotification($issued->invitation, $issued->token));
+
+        return $issued->invitation;
+    }
+
+    private function ensureCanResend(Invitation $invitation, User $user): void
+    {
+        $isLatest = $user->latestInvitation?->is($invitation) ?? false;
+
+        if (! $isLatest || $user->hasActivated() || $invitation->state() === InvitationState::Accepted) {
+            throw ValidationException::withMessages([
+                'invitation' => __('selen.invitations.cannot_resend'),
+            ]);
+        }
+    }
+}

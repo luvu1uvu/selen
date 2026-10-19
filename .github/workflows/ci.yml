@@ -1,0 +1,149 @@
+# CI: линтеры и тесты на каждый push и pull request.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Pint, Larastan, Pest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: selen_testing
+          POSTGRES_USER: selen
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U selen -d selen_testing"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+
+    # Роли базы — как в dev и на сервере (docs/adr/0016-db-roles.md): тесты под ролью приложения selen_app,
+    # миграции (RefreshDatabase) — под владельцем схемы selen_owner; selen — суперпользователь сервиса
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USERNAME: selen_app
+      DB_PASSWORD: secret
+      DB_OWNER_USERNAME: selen_owner
+      DB_OWNER_PASSWORD: secret
+      REDIS_HOST: 127.0.0.1
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pgsql, redis, intl, bcmath, zip, pcntl
+          coverage: pcov
+          tools: composer:v2
+
+      - name: Кеш Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-
+
+      - run: composer install --no-interaction --no-progress --prefer-dist
+
+      # Переменные задаются окружением CI и phpunit.xml; пустой .env — чтобы Laravel не искал файл
+      - run: touch .env
+
+      - name: Роли базы (selen_owner, selen_app)
+        working-directory: docker/postgres/sql
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: selen
+          PGPASSWORD: secret
+        run: |
+          psql -v ON_ERROR_STOP=1 -q -d selen_testing -v owner=selen_owner -v owner_password=secret \
+            -v app=selen_app -v app_password=secret -f roles.sql
+          psql -v ON_ERROR_STOP=1 -q -d selen_testing -v owner=selen_owner -f ownership.sql
+          psql -v ON_ERROR_STOP=1 -q -d selen_testing -v owner=selen_owner -v app=selen_app -f grants.sql
+
+      - name: Shell-скрипты (bash 3.2 на macOS)
+        run: ../scripts/check-scripts.sh
+
+      - name: Pint
+        run: vendor/bin/pint --test
+
+      - name: Larastan
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+      - name: Pest
+        run: vendor/bin/pest --coverage --min=80
+
+  frontend:
+    name: Frontend (ESLint, Prettier, tsc, Vitest, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier
+        run: npm run format:check
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Vitest
+        run: npm run test:coverage
+
+      - name: Сборка
+        run: npm run build
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Тот же сценарий, что локально: изолированный стек docker-compose.e2e.yml,
+      # production-сборка фронтенда, данные E2eSeeder
+      - name: E2E-тесты
+        run: make e2e
+
+      - name: Отчёт Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7

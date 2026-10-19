@@ -1,0 +1,99 @@
+import { http, HttpResponse } from 'msw'
+import { setupServer } from 'msw/node'
+import type { AdminUser, AdminUserPermissions, NavTreeSpace, Space, User } from '@/shared/types/api'
+
+/** Фабрика пользователя для тестов. */
+export function makeUser(overrides: Partial<User> = {}): User {
+  return {
+    id: '01JTESTUSER0000000000000000',
+    name: 'Анна Админова',
+    email: 'admin@selen.test',
+    role: 'admin',
+    status: 'active',
+    timezone: 'Europe/Moscow',
+    last_login_at: null,
+    deactivated_at: null,
+    created_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+/** Права строки админки «Пользователи» глазами Владельца на участника (UserPolicy, ADR-0017). */
+export const ALL_USER_PERMISSIONS: AdminUserPermissions = {
+  update_role: true,
+  deactivate: true,
+  reactivate: true,
+  manage_invitation: true,
+  transfer_ownership: true,
+}
+
+export const NO_USER_PERMISSIONS: AdminUserPermissions = {
+  update_role: false,
+  deactivate: false,
+  reactivate: false,
+  manage_invitation: false,
+  transfer_ownership: false,
+}
+
+/** Пользователь в админском списке (AdminUserResource): по умолчанию — со всеми действиями. */
+export function makeAdminUser(overrides: Partial<AdminUser> = {}): AdminUser {
+  return { ...makeUser(), permissions: ALL_USER_PERMISSIONS, ...overrides }
+}
+
+/** Фабрика пространства (глазами участника) для тестов. */
+export function makeSpace(overrides: Partial<Space> = {}): Space {
+  return {
+    id: '01JTESTSPACE000000000000000',
+    key: 'DEV',
+    name: 'Разработка',
+    description: null,
+    archived_at: null,
+    my_role: 'admin',
+    permissions: { manage: true, edit_cards: true, view_access_sources: true },
+    ...overrides,
+  }
+}
+
+/** Узел пространства в дереве навигации (GET /navigation) для тестов. */
+export function makeNavSpace(space: Space, overrides: Partial<NavTreeSpace> = {}): NavTreeSpace {
+  return {
+    type: 'space',
+    id: `node-${space.key}`,
+    icon: null,
+    everyone: false,
+    space: { id: space.id, key: space.key, name: space.name },
+    can_manage: space.permissions.manage,
+    boards: [],
+    ...overrides,
+  }
+}
+
+/**
+ * Обработчики по умолчанию: CSRF-cookie всегда доступна, пользователь не вошёл,
+ * пространств, досок, сотрудников, комментариев, участников и меток нет (их запрашивают сайдбар,
+ * страницы, диалоги и панель карточки).
+ */
+export const defaultHandlers = [
+  http.get('*/sanctum/csrf-cookie', () => new HttpResponse(null, { status: 204 })),
+  http.get('*/api/v1/auth/me', () =>
+    HttpResponse.json({ message: 'Unauthenticated.' }, { status: 401 }),
+  ),
+  http.get('*/api/v1/spaces', () => HttpResponse.json({ data: [] })),
+  http.get('*/api/v1/navigation', () => HttpResponse.json({ data: [] })),
+  http.get('*/api/v1/admin/navigation', () =>
+    HttpResponse.json({ data: [], meta: { max_depth: 4 } }),
+  ),
+  http.get('*/api/v1/spaces/:key/boards', () => HttpResponse.json({ data: [] })),
+  http.get('*/api/v1/users/directory', () => HttpResponse.json({ data: [] })),
+  // Панель карточки: комментарии, участники и метки пространства — пусто, если тест не задал своё
+  http.get('*/api/v1/cards/:key/comments', () => HttpResponse.json({ data: [], users: {} })),
+  http.get('*/api/v1/spaces/:key/members', () => HttpResponse.json({ data: [] })),
+  http.get('*/api/v1/spaces/:key/labels', () => HttpResponse.json({ data: [] })),
+]
+
+export const server = setupServer(...defaultHandlers)
+
+/** Подменить /auth/me: вернуть указанного пользователя. */
+export function signedInAs(user: User) {
+  server.use(http.get('*/api/v1/auth/me', () => HttpResponse.json({ data: user })))
+}
