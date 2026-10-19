@@ -34,6 +34,7 @@ use Illuminate\Support\Carbon;
  * @property-read Invitation|null $latestInvitation
  * @property-read Collection<int, SpaceMember> $spaceMemberships
  * @property-read Collection<int, Group> $groups
+ * @property-read Collection<int, Lane> $collapsedLanes
  */
 #[Fillable(['name', 'email', 'password', 'role', 'status', 'timezone'])]
 #[Hidden(['password', 'remember_token'])]
@@ -103,6 +104,16 @@ class User extends Authenticatable
     public function groups(): BelongsToMany
     {
         return $this->belongsToMany(Group::class, 'group_members')->withPivot(['added_by', 'created_at']);
+    }
+
+    /**
+     * Дорожки, которые пользователь у себя свернул (личный вид, ADR-0019; права и выборки карточек не меняет).
+     *
+     * @return BelongsToMany<Lane, $this>
+     */
+    public function collapsedLanes(): BelongsToMany
+    {
+        return $this->belongsToMany(Lane::class, 'collapsed_lanes');
     }
 
     /**

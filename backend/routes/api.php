@@ -118,6 +118,9 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
     Route::patch('lanes/{lane}', [LaneController::class, 'update'])->name('lanes.update');
     Route::post('lanes/{lane}/move', [LaneController::class, 'move'])->name('lanes.move');
     Route::post('lanes/{lane}/archive', [LaneController::class, 'archive'])->name('lanes.archive');
+    // Личное сворачивание дорожки (вид, не доступ, ADR-0019): строка есть — свёрнута
+    Route::put('lanes/{lane}/collapsed', [LaneController::class, 'collapse'])->name('lanes.collapse');
+    Route::delete('lanes/{lane}/collapsed', [LaneController::class, 'expand'])->name('lanes.expand');
 
     // Карточка адресуется номером: cards/DEV-123
     Route::post('boards/{board}/cards', [CardController::class, 'store'])->name('cards.store');

@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\Gate;
  * видимые пользователю активные карточки в компактном виде (фасад) и справочники: типы, метки и люди
  * с фасадов. Ожидает загруженные space, columns, lanes, cards.labels, cards.responsible и счётчики cards
  * (checklist_total, checklist_done, comments_count, attachments_count, is_blocked).
+ * Плюс личный вид пользователя: какие дорожки он у себя свернул (collapsed_lane_ids, ADR-0019) — карточки, счётчики
+ * и права от этого не зависят.
  *
  * @mixin Board
  */
@@ -44,6 +46,8 @@ class BoardDetailResource extends JsonResource
             }
         }
 
+        $lanes = $this->lanes->sortBy('position', SORT_STRING)->values();
+        $collapsed = $user->collapsedLanes()->whereIn('lanes.id', $lanes->modelKeys())->pluck('lanes.id')->flip();
         $editCards = Gate::forUser($user)->allows('createCard', $this->resource);
         $access = $space->accessOf($user);
 
@@ -63,11 +67,13 @@ class BoardDetailResource extends JsonResource
             // Без колонки «готово» метрики lead/cycle time по доске не посчитаются
             'has_done_column' => $topLevel->contains(fn (BoardColumn $c) => $c->category === ColumnCategory::Done),
             'columns' => $columns,
-            'lanes' => $this->lanes->sortBy('position', SORT_STRING)->values()->map(fn (Lane $lane) => [
+            'lanes' => $lanes->map(fn (Lane $lane) => [
                 'id' => $lane->id,
                 'name' => $lane->name,
                 'position' => $lane->position,
             ]),
+            // Свёрнутые пользователем дорожки — в порядке дорожек доски
+            'collapsed_lane_ids' => $lanes->filter(fn (Lane $lane) => $collapsed->has($lane->id))->pluck('id')->values(),
             'cards' => $this->cards->sortBy('position', SORT_STRING)->values()->map(fn (Card $card) => [
                 'id' => $card->id,
                 'key' => $space->key.'-'.$card->number,
