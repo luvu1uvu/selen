@@ -70,7 +70,7 @@ e2e/                     Playwright: tests/*.spec.ts, acceptance/stage-N/ (те�
                          стек — docker-compose.e2e.yml, данные — E2eSeeder
 docker/                  Dockerfile php, конфиги nginx, init-скрипты postgres, docker/e2e (окружение E2E)
 scripts/                 backup.sh, restore.sh, backup-verify.sh, deps-audit.sh (make audit-deps)
-docs/                    roadmap.md (дорожная карта), architecture.md, runbook.md, adr/, stages/, ui-reference/ (референсы Kaiten),
+docs/                    architecture.md, runbook.md, adr/, stages/, ui-reference/ (референсы Kaiten),
                          pm/deferred.yaml (отложенные задачи PM → доска «Бэклог» стенда), security/ (отчёты аудитов)
 .claude/agents/          агент security-auditor (аудит безопасности, только чтение); .claude/hooks/ — его белый список
 ```

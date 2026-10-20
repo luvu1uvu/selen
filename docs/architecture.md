@@ -19,7 +19,7 @@
 
 - **Один домен для SPA и API.** Поэтому аутентификация — cookie-сессии Sanctum без токенов и без CORS.
 - **nginx** — единая точка входа; в dev проксирует SPA на Vite (с WebSocket для hot reload),
-  в prod будет раздавать собранную статику (пример — `docker/nginx/prod.conf.example`; доводится на этапе деплоя).
+  в prod будет раздавать собранную статику (пример — `docker/nginx/prod.conf.example`; доводится к пилоту).
 - **php-fpm, queue, scheduler** — один Docker-образ (`docker/php/Dockerfile`), разные команды.
 - **Конфигурация** — единый корневой `.env` (шаблон `.env.example`): его читают и docker compose,
   и Laravel (смонтирован в контейнер как `backend/.env`).
