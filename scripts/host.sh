@@ -332,24 +332,25 @@ process_cwds() {
 }
 
 # Файлы docker compose запущенных проектов: контейнеры работают в VM Colima, lsof их не видит, а стек, поднятый
-# из копии сессии, после её удаления остался бы с bind-mount на удалённый каталог. docker не ответил (Colima
-# остановлена, таймаут) — код 1: проверить нельзя. docker не установлен — стеков нет
+# из копии сессии, после её удаления остался бы с bind-mount на удалённый каталог. docker не найден или не ответил
+# (Colima остановлена, таймаут) — код 1: проверить нельзя (на Mac mini docker есть всегда)
 compose_files() {
   local out
-  command -v docker > /dev/null 2>&1 || return 0
+  command -v docker > /dev/null 2>&1 || return 1
   out="$(with_timeout 10 docker compose ls --format json 2> /dev/null)" || return 1
   jq -r '.[].ConfigFiles // empty' <<< "$out" 2> /dev/null | tr ',' '\n'
 }
 
-# Жив ли процесс с этим pid и тем же временем запуска, что в причине блокировки (в UTC или местном времени)
+# Жив ли процесс с этим pid и тем же временем запуска, что в причине блокировки (в UTC или местном времени).
+# Процесс с этим pid есть, а время его запуска ps не показал, — сверить нельзя: считаем живым
 lock_owner_alive() {
-  local lock pid="$2" started
+  local lock pid="$2" utc local_time
   lock="$(tr -s ' ' <<< "$1")"
-  for started in \
-    "$(TZ=UTC LC_ALL=C ps -o lstart= -p "$pid" 2> /dev/null | tr -s ' ' | sed 's/^ //; s/ $//')" \
-    "$(LC_ALL=C ps -o lstart= -p "$pid" 2> /dev/null | tr -s ' ' | sed 's/^ //; s/ $//')"; do
-    [[ -n "$started" && "$lock" == *"start $started)"* ]] && return 0
-  done
+  utc="$(TZ=UTC LC_ALL=C ps -o lstart= -p "$pid" 2> /dev/null | tr -s ' ' | sed 's/^ //; s/ $//')"
+  local_time="$(LC_ALL=C ps -o lstart= -p "$pid" 2> /dev/null | tr -s ' ' | sed 's/^ //; s/ $//')"
+  [[ -n "$utc" && "$lock" == *"start $utc)"* ]] && return 0
+  [[ -n "$local_time" && "$lock" == *"start $local_time)"* ]] && return 0
+  [[ -z "$utc" && -z "$local_time" ]] && kill -0 "$pid" 2> /dev/null && return 0
   return 1
 }
 
@@ -377,10 +378,11 @@ worktree_git_status() {
     --ignore-submodules=none
 }
 
-# Почему рабочую копию удалять нельзя; пусто — можно: это копия сессии Remote Control, внутри не работает ни один
+# Почему рабочую копию удалять нельзя; «ok» — можно: это копия сессии Remote Control, внутри не работает ни один
 # процесс и не запущен docker-стек, блокировка — сервера Remote Control и брошена (или её нет), нет изменений и
-# файлов вне git, кроме кешей, и нет коммитов, которых нет на GitHub.
-# Аргументы: путь, ветка, причина блокировки, вывод process_cwds, вывод compose_files. Любой сбой проверки — «оставить».
+# файлов вне git, кроме кешей, и нет коммитов, которых нет на GitHub. Удалять разрешает только «ok» в конце: проверка,
+# оборванная ошибкой (пустой вывод), — «оставить», как и любой сбой.
+# Аргументы: путь, ветка, причина блокировки, вывод process_cwds, вывод compose_files.
 worktree_keep_reason() {
   local path="$1" lock="$3" cwds="$4" compose="$5" name lock_re pid status extra unpushed
   name="${path##*/}"
@@ -405,6 +407,7 @@ worktree_keep_reason() {
   unpushed="$(git -C "$path" rev-list -n 1 HEAD --not --remotes 2> /dev/null)" \
     || { echo "не удалось проверить коммиты (git rev-list)"; return; }
   [[ -z "$unpushed" ]] || { echo "есть коммиты, которых нет на GitHub"; return; }
+  echo ok
 }
 
 # Для make host-status: «N, из них завершённых без изменений — M»
@@ -421,14 +424,15 @@ worktrees_summary() {
   fi
   while IFS='|' read -r path head branch lock; do
     total=$((total + 1))
-    [[ -n "$(worktree_keep_reason "$path" "$branch" "$lock" "$cwds" "$compose")" ]] || clean=$((clean + 1))
+    [[ "$(worktree_keep_reason "$path" "$branch" "$lock" "$cwds" "$compose")" != ok ]] || clean=$((clean + 1))
   done < <(session_worktrees)
   if (( clean > 0 )); then echo "$total, из них завершённых без изменений — $clean: make host-worktrees-clean"
   else echo "$total, завершённых без изменений нет"; fi
 }
 
-# Подтверждение удаления — только человеком в терминале: «echo y | make host-worktrees-clean» (в том числе от
-# агента) ничего не удаляет. Код 0 — удалять
+# Подтверждение удаления — только с клавиатуры: «echo y | make host-worktrees-clean» ничего не удаляет. Это защита от
+# случайного ответа из конвейера, а не граница для агента (терминал можно получить и программой) — её задают права
+# Claude Code. Код 0 — удалять
 confirm_removal() {
   local answer
   if [[ ! -t 0 ]]; then
@@ -444,7 +448,7 @@ confirm_removal() {
 }
 
 # Перед удалением каждой копии — все проверки заново (LATER-69): пока PM отвечал на вопрос, в копии могла начаться
-# работа. Аргументы — путь, коммит, ветка и блокировка на момент вопроса; вывод — почему не удалять (пусто — удалять)
+# работа. Аргументы — путь, коммит, ветка и блокировка на момент вопроса; вывод — «ok» или почему не удалять
 worktree_recheck() {
   local path="$1" cwds compose line now_path now_head now_branch now_lock reason
   cwds="$(process_cwds)"
@@ -454,9 +458,10 @@ worktree_recheck() {
   [[ -n "$line" ]] || { echo "копии уже нет в списке git worktree"; return; }
   IFS='|' read -r now_path now_head now_branch now_lock <<< "$line"
   reason="$(worktree_keep_reason "$path" "$now_branch" "$now_lock" "$cwds" "$compose")"
-  if [[ -n "$reason" ]]; then echo "$reason"
+  if [[ "$reason" != ok ]]; then echo "${reason:-проверка оборвалась (см. ошибку выше)}"
   elif [[ "$now_head|$now_branch" != "$2|$3" ]]; then echo "после вопроса в копии новый коммит или другая ветка"
-  elif [[ "$now_lock" != "$4" ]]; then echo "после вопроса изменилась блокировка"; fi
+  elif [[ "$now_lock" != "$4" ]]; then echo "после вопроса изменилась блокировка"
+  else echo ok; fi
 }
 
 # Удалить копию, которую worktree_recheck только что признал завершённой. Блокировку снимаем только здесь — после
@@ -474,8 +479,13 @@ worktree_remove() {
     echo "  ${name}: НЕ удалена (git worktree remove отказался — см. сообщение выше)"
     return
   fi
-  # Безопасное удаление ветки: git откажется, если её коммиты никуда не слиты, — тогда ветка остаётся
-  if [[ -n "$branch" ]] && ! git -C "$MAIN_DIR" branch -d "$branch" > /dev/null 2>&1; then
+  # Удаляется только ветка самой сессии (worktree-<имя копии>): на другую ветку сессия переключилась сама — она
+  # остаётся. Удаление безопасное: git откажется, если коммиты ветки никуда не слиты, — тогда ветка тоже остаётся
+  if [[ -z "$branch" ]]; then
+    echo "  ${name}: удалена"
+  elif [[ "$branch" != "worktree-$name" ]]; then
+    echo "  ${name}: удалена; ветка ${branch} оставлена (не ветка сессии Remote Control)"
+  elif ! git -C "$MAIN_DIR" branch -d "$branch" > /dev/null 2>&1; then
     echo "  ${name}: удалена; ветка ${branch} оставлена (не слита — удалите сами, если она не нужна)"
   else
     echo "  ${name}: удалена"
@@ -490,7 +500,8 @@ cmd_worktrees_clean() {
     || die "docker не ответил (docker compose ls) — нельзя проверить, не запущен ли стек из копии. Работает ли Colima — make host-status. Ничего не удалено."
   while IFS='|' read -r path head branch lock; do
     reason="$(worktree_keep_reason "$path" "$branch" "$lock" "$cwds" "$compose")"
-    if [[ -z "$reason" ]]; then removable+=("$path|$head|$branch|$lock"); else kept+=("${path##*/} — ${reason}"); fi
+    if [[ "$reason" == ok ]]; then removable+=("$path|$head|$branch|$lock")
+    else kept+=("${path##*/} — ${reason:-проверка оборвалась (см. ошибку выше)}"); fi
   done < <(session_worktrees)
 
   printf 'Рабочие копии сессий (%s); удаляются только копии Remote Control\n\n' "$WORKTREES_DIR"
@@ -515,8 +526,8 @@ cmd_worktrees_clean() {
   for item in "${removable[@]}"; do
     IFS='|' read -r path head branch lock <<< "$item"
     reason="$(worktree_recheck "$path" "$head" "$branch" "$lock")"
-    if [[ -n "$reason" ]]; then
-      echo "  ${path##*/}: НЕ удалена — ${reason}"
+    if [[ "$reason" != ok ]]; then
+      echo "  ${path##*/}: НЕ удалена — ${reason:-перепроверка оборвалась (см. ошибку выше)}"
       continue
     fi
     worktree_remove "$path" "$branch" "$lock"
