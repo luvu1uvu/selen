@@ -70,7 +70,7 @@ e2e/                     Playwright: tests/*.spec.ts, acceptance/stage-N/ (те�
                          стек — docker-compose.e2e.yml, данные — E2eSeeder
 docker/                  Dockerfile php, конфиги nginx, init-скрипты postgres, docker/e2e (окружение E2E)
 scripts/                 backup.sh, restore.sh, backup-verify.sh, deps-audit.sh (make audit-deps)
-docs/                    architecture.md, runbook.md, adr/, stages/, ui-reference/ (референсы Kaiten),
+docs/                    roadmap.md (дорожная карта), architecture.md, runbook.md, adr/, stages/, ui-reference/ (референсы Kaiten),
                          pm/deferred.yaml (отложенные задачи PM → доска «Бэклог» стенда), security/ (отчёты аудитов)
 .claude/agents/          агент security-auditor (аудит безопасности, только чтение); .claude/hooks/ — его белый список
 ```
@@ -256,6 +256,8 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
   Скриншоты в карточках стенда (`.pm-bugs/`, в `.gitignore`) — можно, но в git их не копировать.
 - Значимые решения — ADR в `docs/adr/` (следующий номер, формат как у существующих).
 - Ход этапа — `docs/stages/stage-N.md` (что сделано / дальше / проблемы), итог — `stage-N-report.md`.
+- **Дорожная карта — `docs/roadmap.md`** (этап → что входит → статус → ссылки). При закрытии этапа или подэтапа —
+  обновить в ней статус и ссылки.
 - **Ручная проверка для PM — только тест-кейсами** (раздел «Как проверить руками» в отчётах, короткие отчёты
   подэтапов, описания PR). Шаблон:
 
