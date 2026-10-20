@@ -24,8 +24,10 @@ Git не даёт одну ветку двум рабочим копиям, по
 **Окружение** — отдельный compose-проект `selen-pm` (`docker-compose.pm.yml`): свои тома PostgreSQL и Redis,
 свой тег образа php, вложения — в `backend/storage` рабочей копии стенда. Фронтенд — production-сборка, nginx —
 production-конфиг `docker/nginx/prod.conf.example` (стенд проверяет его раньше сервера). Порты 8081/8026 только
-на 127.0.0.1. Адрес — `http://127.0.0.1:8081`, не `localhost`: cookie браузера общие для всех портов хоста,
-и вход в dev выкидывал бы со стенда (плюс своё имя cookie сессии).
+на 127.0.0.1. Адрес — `http://127.0.0.1:8081`, не `localhost`: cookie браузера общие для всех портов хоста.
+Своё имя cookie сессии (`selen_pm_session`) защищает сессию стенда от входа в dev, но cookie `XSRF-TOKEN` у
+`localhost:8080` и `localhost:8081` была бы общей: любой ответ dev подменяет её, и сохранение на стенде получает 419
+(уточнено 2026-10-20, ADR-0023, «Изменения»).
 
 **APP_ENV=production.** Демо-сиды загружаются только в `local` (`DatabaseSeeder`); в production включён
 стандартный `DB::prohibitDestructiveCommands()` — `migrate:fresh`, `db:wipe`, `migrate:rollback` отказывают,
