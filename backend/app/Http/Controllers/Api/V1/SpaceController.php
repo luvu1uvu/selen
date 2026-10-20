@@ -24,7 +24,7 @@ class SpaceController extends Controller
         $spaces = Space::query()
             ->whereIn('id', $accesses->keys())
             ->active()
-            ->with(['boards' => fn ($q) => $q->active()->orderBy('position')])
+            ->with(['boards' => fn ($q) => $q->active()->inLayoutOrder()])
             ->orderBy('name')
             ->get()
             ->each(fn (Space $space) => $space->rememberAccess($user, $accesses[$space->id]));

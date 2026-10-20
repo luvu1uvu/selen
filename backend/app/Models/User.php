@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, SpaceMember> $spaceMemberships
  * @property-read Collection<int, Group> $groups
  * @property-read Collection<int, Lane> $collapsedLanes
+ * @property-read Collection<int, Board> $collapsedBoards
  */
 #[Fillable(['name', 'email', 'password', 'role', 'status', 'timezone'])]
 #[Hidden(['password', 'remember_token'])]
@@ -114,6 +115,16 @@ class User extends Authenticatable
     public function collapsedLanes(): BelongsToMany
     {
         return $this->belongsToMany(Lane::class, 'collapsed_lanes');
+    }
+
+    /**
+     * Доски, которые пользователь у себя свернул на странице пространства (личный вид, ADR-0019).
+     *
+     * @return BelongsToMany<Board, $this>
+     */
+    public function collapsedBoards(): BelongsToMany
+    {
+        return $this->belongsToMany(Board::class, 'collapsed_boards');
     }
 
     /**

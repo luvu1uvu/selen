@@ -50,7 +50,7 @@ class NavigationTree
         $boards = Board::query()
             ->whereIn('space_id', $visible)
             ->active()
-            ->orderBy('position')
+            ->inLayoutOrder()
             ->get(['id', 'space_id', 'name'])
             ->groupBy('space_id');
 

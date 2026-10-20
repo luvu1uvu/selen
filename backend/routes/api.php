@@ -106,6 +106,8 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
     Route::post('boards/{board}/move', [BoardController::class, 'move'])->name('boards.move');
     Route::post('boards/{board}/archive', [BoardController::class, 'archive'])->name('boards.archive');
     Route::post('boards/{board}/restore', [BoardController::class, 'restore'])->name('boards.restore');
+    Route::put('boards/{board}/collapsed', [BoardController::class, 'collapse'])->name('boards.collapse');
+    Route::delete('boards/{board}/collapsed', [BoardController::class, 'expand'])->name('boards.expand');
     Route::get('boards/{board}/archived-cards', [BoardController::class, 'archivedCards'])->name('boards.archived-cards');
 
     Route::post('boards/{board}/columns', [BoardColumnController::class, 'store'])->name('columns.store');

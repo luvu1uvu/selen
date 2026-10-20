@@ -124,7 +124,8 @@ it('переставляет доски внутри пространства, �
     $this->actingAs($this->owner)->postJson("/api/v1/boards/{$c->id}/move", ['before_id' => $a->id])->assertOk();
     $this->actingAs($this->owner)->postJson("/api/v1/boards/{$a->id}/move", ['after_id' => $b->id])->assertOk();
 
-    expect(Board::query()->where('space_id', $this->space->id)->orderBy('position')->pluck('name')->all())->toBe(['C', 'B', 'A']);
+    // Запрос без рядов (как до них, ADR-0019): доска встаёт в ряд соседа рядом с ним
+    expect(Board::query()->where('space_id', $this->space->id)->inLayoutOrder()->pluck('name')->all())->toBe(['C', 'B', 'A']);
     expect(loggedEventTypes())->toContain('board.moved');
 });
 
@@ -138,7 +139,7 @@ it('перестановка не переносит доску в другое 
         ->assertOk();
 
     expect($mine->fresh()->space_id)->toBe($this->space->id)
-        ->and(Board::query()->where('space_id', $this->space->id)->orderBy('position')->pluck('name')->all())->toBe(['Вторая', 'Моя']);
+        ->and(Board::query()->where('space_id', $this->space->id)->inLayoutOrder()->pluck('name')->all())->toBe(['Вторая', 'Моя']);
 });
 
 it('архивная доска доступна только для чтения и восстанавливается', function () {

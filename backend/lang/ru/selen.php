@@ -88,6 +88,7 @@ return [
         'already_archived' => 'Доска уже в архиве.',
         'not_archived' => 'Доска не в архиве.',
         'default_lane' => 'Основная',
+        'row_not_found' => 'Ряд досок не найден — обновите страницу.',
     ],
 
     'columns' => [
