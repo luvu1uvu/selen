@@ -5,7 +5,8 @@ import { cell, LAPTOP, lane, laneRow, LANES_BOARD, openLanesBoard, toggle } from
 /**
  * ТК-L55.3 (LATER-55, шаг 2): свернуть дорожку стрелкой ˄ — подсказка «Свернуть дорожку «Срочные»»; от дорожки
  * остаётся одна полоса (название, то же число карточек, стрелка ˅), карточек не видно; после обновления страницы
- * дорожка по-прежнему свёрнута; щелчок по названию в свёрнутой полосе её разворачивает, карточки на месте.
+ * дорожка по-прежнему свёрнута; щелчок по названию в свёрнутой полосе её разворачивает, карточки на месте. После
+ * щелчка мышью вокруг стрелки нет рамки фокуса (дополнение PM 20.10).
  * «Продукт» → «Дорожки приёмки» (E2eSeeder): «Срочные» — 3 карточки.
  */
 test.use({ storageState: authFile('e2e-editor@selen.test'), viewport: LAPTOP })
@@ -32,6 +33,9 @@ test('ТК-L55.3. Свернуть дорожку — после обновле�
   // От «Срочных» — одна полоса: название, то же число карточек, стрелка ˅; карточек дорожки не видно
   const expand = toggle(page, 'Срочные', 'Развернуть')
   await expect(expand).toHaveAttribute('aria-expanded', 'false')
+  // После щелчка мышью вокруг стрелки нет рамки фокуса (рамка — только с клавиатуры, дополнение PM 20.10)
+  expect(await expand.evaluate((el) => el.matches(':focus-visible'))).toBe(false)
+  await expect(expand).toHaveCSS('box-shadow', 'none')
   const row = laneRow(page, 'Срочные')
   await expect(row).toHaveAttribute('data-lane-row', 'collapsed')
   await expect(row.getByText('Срочные', { exact: true })).toBeVisible()

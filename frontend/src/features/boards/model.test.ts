@@ -3,6 +3,7 @@ import { makeBoardCard } from '@/test/boards'
 import {
   allLanesCollapsed,
   buildLayout,
+  lastLaneCollapsed,
   cellId,
   groupCardIds,
   moveCardLocally,
@@ -109,5 +110,19 @@ describe('allLanesCollapsed', () => {
     expect(allLanesCollapsed({ lanes, collapsed_lane_ids: ['main', 'urgent'] })).toBe(true)
     expect(allLanesCollapsed({ lanes, collapsed_lane_ids: ['urgent'] })).toBe(false)
     expect(allLanesCollapsed({ lanes: [lanes[0]], collapsed_lane_ids: ['main'] })).toBe(false)
+  })
+})
+
+describe('lastLaneCollapsed', () => {
+  const lanes = [
+    { id: 'main', name: 'Основная', position: 'a0' },
+    { id: 'urgent', name: 'Срочные', position: 'a1' },
+  ]
+
+  it('свёрнута последняя — да (и при развёрнутых верхних); свёрнута только верхняя — нет; одна дорожка — нет (LATER-70)', () => {
+    expect(lastLaneCollapsed({ lanes, collapsed_lane_ids: ['urgent'] })).toBe(true)
+    expect(lastLaneCollapsed({ lanes, collapsed_lane_ids: ['main', 'urgent'] })).toBe(true)
+    expect(lastLaneCollapsed({ lanes, collapsed_lane_ids: ['main'] })).toBe(false)
+    expect(lastLaneCollapsed({ lanes: [lanes[0]], collapsed_lane_ids: ['main'] })).toBe(false)
   })
 })

@@ -78,6 +78,9 @@ export function LaneRow({
               className="size-7"
               aria-label={label}
               aria-expanded={!collapsed}
+              // Щелчок мышью не переводит фокус на стрелку: рамка фокуса — только с клавиатуры (Tab, замечание PM),
+              // а фокус мышью на кнопке, прилипшей к правому краю, прокручивал доску вбок к её месту в конце строки
+              onMouseDown={(event) => event.preventDefault()}
               onClick={onToggle}
             >
               {collapsed ? <ChevronDown /> : <ChevronUp />}

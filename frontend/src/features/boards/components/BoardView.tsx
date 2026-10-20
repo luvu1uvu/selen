@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/shared/lib/utils'
 import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import { useSyncedScrollLeft } from '@/shared/lib/useSyncedScrollLeft'
-import type { BoardDetail } from '@/shared/types/api'
+import type { BoardDetail, Lane } from '@/shared/types/api'
 import { useCurrentUser } from '@/features/auth/queries'
 import {
   allLanesCollapsed,
@@ -88,8 +88,10 @@ export function BoardView({
     const scroll = body.closest('[data-board-canvas]')?.scrollTop ?? 0
     const visible = body.getBoundingClientRect()
     const top = stickyRef.current?.getBoundingClientRect().bottom ?? visible.top
+    // Свёрнутые дорожки в конце доски — ниже тела, под полосой прокрутки: по вертикали — до низа блока
+    const bottom = body.parentElement?.getBoundingClientRect().bottom ?? visible.bottom
     const probe: CollapsedLaneProbe = { y: y + scroll, band: null }
-    if (x < visible.left || x > visible.right || y < top || y > visible.bottom) return probe
+    if (x < visible.left || x > visible.right || y < top || y > bottom) return probe
     for (const row of collapsedRows.current.values()) {
       const rect = row.getBoundingClientRect()
       if (y >= rect.top && y <= rect.bottom) {
@@ -118,6 +120,12 @@ export function BoardView({
     () => new Set(showLaneHeaders ? board.collapsed_lane_ids : []),
     [showLaneHeaders, board.collapsed_lane_ids],
   )
+  // Свёрнутые дорожки в конце доски (идут подряд до последней) под развёрнутыми — после полосы прокрутки вбок, вне
+  // тела (renderLane). Свёрнуты все — остаются в теле: полосы прокрутки тогда нет, а пустое тело (одна линейка нулевой
+  // высоты) браузер вбок не прокручивает
+  let tail = board.lanes.length
+  while (showLaneHeaders && tail > 0 && collapsed.has(board.lanes[tail - 1].id)) tail--
+  if (tail === 0) tail = board.lanes.length
   const laneCounts = useMemo(() => {
     const result: Record<string, number> = {}
     for (const card of board.cards) result[card.lane_id] = (result[card.lane_id] ?? 0) + 1
@@ -157,7 +165,9 @@ export function BoardView({
   // на этой дорожке, а не уезжает к следующим (её карточки пропали) или к началу (замечание PM к PR 2)
   const toggleAnchor = useRef<{ laneId: string; top: number } | null>(null)
   const laneRowOf = (laneId: string) =>
-    bodyRef.current?.querySelector<HTMLElement>(`[data-lane-section="${laneId}"] [data-lane-row]`)
+    bodyRef.current?.parentElement?.querySelector<HTMLElement>(
+      `[data-lane-section="${laneId}"] [data-lane-row]`,
+    )
   const toggleLane = (laneId: string, collapse: boolean) => {
     const row = laneRowOf(laneId)
     if (row) toggleAnchor.current = { laneId, top: row.getBoundingClientRect().top }
@@ -214,6 +224,79 @@ export function BoardView({
       onDragCancel: ({ active }: { active: { id: string | number } }) =>
         t('dnd.cancelled', { card: cardName(active.id) }),
     },
+  }
+
+  /**
+   * Дорожка: полоса (если дорожек больше одной) и ячейки по колонкам. trailing — свёрнутая дорожка в конце доски: она
+   * вне тела, после полосы прокрутки вбок (у неё нет ячеек, прокручивать вбок нечего), — так блок кончается её полосой,
+   * а полоса прокрутки остаётся под развёрнутыми дорожками выше (LATER-70, LATER-4).
+   */
+  const renderLane = (lane: Lane, index: number, trailing: boolean) => {
+    const isCollapsed = collapsed.has(lane.id)
+    return (
+      <section
+        key={lane.id}
+        aria-label={lane.name}
+        data-lane-section={lane.id}
+        // Последняя дорожка тянется до низа доски — фон колонок доходит до низа блока
+        className={cn(
+          'flex flex-col',
+          !isCollapsed && index === board.lanes.length - 1 && 'flex-1',
+        )}
+      >
+        {/* Обёртка держит место полосы в потоке, когда сама полоса закреплена под заголовками колонок */}
+        {showLaneHeaders && (
+          <div className={cn('h-10', !trailing && '-mx-3')}>
+            <LaneRow
+              lane={lane}
+              lanes={board.lanes}
+              count={laneCounts[lane.id] ?? 0}
+              collapsed={isCollapsed}
+              canManage={canManage}
+              // Дорожки разделены тонкой линией; над первой — нижняя граница заголовков колонок
+              className={cn(index > 0 && 'border-t')}
+              rowRef={(row) => {
+                if (row && isCollapsed) collapsedRows.current.set(lane.id, row)
+                else collapsedRows.current.delete(lane.id)
+              }}
+              onAction={onAction}
+              onToggle={() => toggleLane(lane.id, !isCollapsed)}
+            />
+          </div>
+        )}
+        {/* Без вертикальных отступов: линии между колонками — от строки заголовков до низа дорожки */}
+        {!isCollapsed && (
+          <div className="flex flex-1 items-stretch gap-2">
+            {layout.leaves.map((column) => {
+              const id = cellId(column.id, lane.id)
+              return (
+                <BoardCell
+                  key={id}
+                  id={id}
+                  label={showLaneHeaders ? `${column.name} / ${lane.name}` : column.name}
+                  boardId={board.id}
+                  columnId={column.id}
+                  columnName={column.name}
+                  laneId={lane.id}
+                  cardIds={cells[id] ?? EMPTY}
+                  cardsById={cardsById}
+                  lookups={lookups}
+                  canEdit={canEdit}
+                  dragging={activeCard !== undefined}
+                  highlighted={id === targetCell}
+                  topForm={
+                    topForm?.columnId === column.id && topForm.laneId === lane.id
+                      ? topFormProps(column.id)
+                      : undefined
+                  }
+                  onOpen={openCard}
+                />
+              )
+            })}
+          </div>
+        )}
+      </section>
+    )
   }
 
   return (
@@ -284,79 +367,15 @@ export function BoardView({
               <div key={column.id} className="w-68 shrink-0" />
             ))}
           </div>
-          {board.lanes.map((lane, index) => {
-            const isCollapsed = collapsed.has(lane.id)
-            return (
-              <section
-                key={lane.id}
-                aria-label={lane.name}
-                data-lane-section={lane.id}
-                // Последняя дорожка тянется до низа доски — фон колонок доходит до низа блока
-                className={cn(
-                  'flex flex-col',
-                  !isCollapsed && index === board.lanes.length - 1 && 'flex-1',
-                )}
-              >
-                {/* Обёртка держит место полосы в потоке, когда сама полоса закреплена под заголовками колонок */}
-                {showLaneHeaders && (
-                  <div className="-mx-3 h-10">
-                    <LaneRow
-                      lane={lane}
-                      lanes={board.lanes}
-                      count={laneCounts[lane.id] ?? 0}
-                      collapsed={isCollapsed}
-                      canManage={canManage}
-                      // Дорожки разделены тонкой линией; над первой — нижняя граница заголовков колонок
-                      className={cn(index > 0 && 'border-t')}
-                      rowRef={(row) => {
-                        if (row && isCollapsed) collapsedRows.current.set(lane.id, row)
-                        else collapsedRows.current.delete(lane.id)
-                      }}
-                      onAction={onAction}
-                      onToggle={() => toggleLane(lane.id, !isCollapsed)}
-                    />
-                  </div>
-                )}
-                {/* Без вертикальных отступов: линии между колонками — от строки заголовков до низа дорожки */}
-                {!isCollapsed && (
-                  <div className="flex flex-1 items-stretch gap-2">
-                    {layout.leaves.map((column) => {
-                      const id = cellId(column.id, lane.id)
-                      return (
-                        <BoardCell
-                          key={id}
-                          id={id}
-                          label={showLaneHeaders ? `${column.name} / ${lane.name}` : column.name}
-                          boardId={board.id}
-                          columnId={column.id}
-                          columnName={column.name}
-                          laneId={lane.id}
-                          cardIds={cells[id] ?? EMPTY}
-                          cardsById={cardsById}
-                          lookups={lookups}
-                          canEdit={canEdit}
-                          dragging={activeCard !== undefined}
-                          highlighted={id === targetCell}
-                          topForm={
-                            topForm?.columnId === column.id && topForm.laneId === lane.id
-                              ? topFormProps(column.id)
-                              : undefined
-                          }
-                          onOpen={openCard}
-                        />
-                      )
-                    })}
-                  </div>
-                )}
-              </section>
-            )
-          })}
+          {board.lanes.slice(0, tail).map((lane, index) => renderLane(lane, index, false))}
         </div>
       </div>
 
-      {/* Свёрнуты все дорожки — блок кончается последней полосой, без полосы прокрутки под ней (LATER-70): вбок доска
-          прокручивается тачпадом, Shift+колесом над заголовками и с клавиатуры */}
+      {/* Свёрнуты все дорожки — полосы прокрутки вбок нет (иначе она стояла бы между заголовками и полосами): вбок доска
+          прокручивается тачпадом, Shift+колесом над заголовками и с клавиатуры (LATER-70) */}
       <BoardScrollbar barRef={barRef} bodyRef={bodyRef} hidden={allLanesCollapsed(board)} />
+      {/* Свёрнутые дорожки в конце — под полосой прокрутки: блок кончается последней полосой (LATER-70) */}
+      {board.lanes.slice(tail).map((lane, index) => renderLane(lane, tail + index, true))}
       <DragOverlay>
         {activeCard && (
           <CardTileView card={activeCard} lookups={lookups} className="w-64 rotate-2 shadow-lg" />

@@ -218,3 +218,49 @@ test('свёрнуты все дорожки — блок доски конча�
   await toggle(page, 'Плановые', 'Развернуть').click()
   await expect(page.locator('[data-board-scrollbar]')).toBeVisible()
 })
+
+/**
+ * LATER-70, общее правило (PM 20.10): под свёрнутой ПОСЛЕДНЕЙ дорожкой — ни пустоты, ни отступа, даже если верхние
+ * развёрнуты. Полоса прокрутки вбок (LATER-4) у широкой доски остаётся — над свёрнутыми дорожками в конце, под ячейками.
+ */
+test('свёрнута только последняя дорожка — блок кончается её полосой, полоса прокрутки вбок — над ней (LATER-70)', async ({ page }) => {
+  await toggle(page, 'Плановые', 'Свернуть').click()
+  await expect(page.getByRole('group', { name: 'Backlog / Плановые', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('group', { name: 'To Do / Основная', exact: true })).toBeVisible()
+
+  const m = await page.locator(`section[aria-label="${BOARD}"]`).evaluate((block) => {
+    const style = getComputedStyle(block)
+    const last = [...block.querySelectorAll('[data-lane-row]')].at(-1)!.getBoundingClientRect()
+    const bar = block.querySelector('[data-board-scrollbar]')!.getBoundingClientRect()
+    return {
+      gapBelow: block.getBoundingClientRect().bottom - parseFloat(style.borderBottomWidth) - last.bottom,
+      barHeight: bar.height,
+      barBottomToBand: last.top - bar.bottom,
+    }
+  })
+  expect(Math.abs(m.gapBelow), JSON.stringify(m)).toBeLessThanOrEqual(1)
+  // Доска шире окна — полоса прокрутки вбок есть, и она выше свёрнутой полосы
+  expect(m.barHeight, JSON.stringify(m)).toBeGreaterThan(0)
+  expect(m.barBottomToBand, JSON.stringify(m)).toBeGreaterThanOrEqual(-1)
+})
+
+test('щелчок мышью по стрелке дорожки — без рамки фокуса и без прокрутки доски вбок; с клавиатуры рамка есть', async ({ page }) => {
+  const body = page.locator('[data-board-body]')
+  await body.evaluate((b) => (b.scrollLeft = 0))
+  const chevron = toggle(page, 'Срочные', 'Свернуть')
+  const at = (await chevron.boundingBox())!
+  await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2)
+  const collapsed = toggle(page, 'Срочные', 'Развернуть')
+  await expect(collapsed).toBeVisible()
+  expect(await collapsed.evaluate((el) => el.matches(':focus-visible'))).toBe(false)
+  await expect(collapsed).toHaveCSS('box-shadow', 'none')
+  expect(await body.evaluate((b) => b.scrollLeft)).toBe(0)
+
+  // С клавиатуры: фокус на стрелку — рамка видна
+  await collapsed.focus()
+  await page.keyboard.press('Enter')
+  const expanded = toggle(page, 'Срочные', 'Свернуть')
+  await expect(expanded).toBeFocused()
+  expect(await expanded.evaluate((el) => el.matches(':focus-visible'))).toBe(true)
+  await expect(expanded).not.toHaveCSS('box-shadow', 'none')
+})
