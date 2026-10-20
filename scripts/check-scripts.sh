@@ -11,5 +11,8 @@ perl -ne 'if (!/^\s*#/ && /\$[A-Za-z_][A-Za-z0-9_]*(?=[^\x00-\x7F])/) { print "$
 # Hook агента security-auditor: белый список команд и защита секретов (ADR-0020)
 ./scripts/test-auditor-hook.sh
 
+# Hook агента ux-reviewer: только своя вкладка встроенного браузера, только dev, JS без сети и переходов (ADR-0023)
+./scripts/test-ux-reviewer-hook.sh
+
 # Очистка рабочих копий сессий (make host-worktrees-clean): перепроверка после «y», только копии Remote Control (LATER-69)
 ./scripts/test-host-worktrees.sh
