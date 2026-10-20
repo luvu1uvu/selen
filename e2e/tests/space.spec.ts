@@ -214,11 +214,15 @@ test('доска из дерева: страница пространства п
 test('«Назад» и перезагрузка — на то же место, хотя доски выше грузятся заново и растут', async ({ page }) => {
   // «Средняя» — на 100 px ниже верха холста; «Высокая» — дальше экрана выше неё, и её заглушка намного ниже настоящей
   // доски: по пикселям прокрутки после перезагрузки у верха оказалась бы другая доска
-  await block(page, 'Средняя').evaluate((section) => {
-    const canvas = section.closest('[data-board-canvas]')!
-    canvas.scrollTop += section.getBoundingClientRect().top - canvas.getBoundingClientRect().top - 100
-  })
-  await loaded(page, 'Средняя')
+  const place = () =>
+    block(page, 'Средняя').evaluate((section) => {
+      const canvas = section.closest('[data-board-canvas]')!
+      canvas.scrollTop += section.getBoundingClientRect().top - canvas.getBoundingClientRect().top - 100
+    })
+  // Доски вокруг цели догружаются и меняют высоту — ставим заново, когда загрузились
+  await place()
+  for (const name of ['Промежуточная', 'Средняя', 'Последняя']) await loaded(page, name)
+  await place()
   const offset = async () => (await rect(page, 'Средняя')).top - (await canvasRect(page)).top
   await expect.poll(async () => Math.abs((await offset()) - 100)).toBeLessThanOrEqual(2)
 
