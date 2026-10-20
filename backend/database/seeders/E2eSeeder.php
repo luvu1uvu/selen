@@ -59,6 +59,8 @@ use Illuminate\Database\Seeder;
  * [«Нижняя»], [«Промежуточная»], [«Средняя»], [«Последняя»] (40, 20 и 40 карточек поровну по колонкам); space.spec только
  * смотрит (сворачивание возвращает). ARRANGE «Перестановка» — «Первая», «Вторая»,
  * «Третья» по одной в ряду: их переставляет board-rows.spec (перетаскивание и меню), раскладка меняется по ходу файла.
+ * Приёмочные тесты PR 3 (ТК-L55.12–L55.23) — свои пространства RACC, RFOLD, RDRAG, RNEWROW, RKEYS, RARCH, устроенные как
+ * «Разработка» демо-данных (acceptanceRows).
  *
  * Дерево (tree.spec): папка «E2E Мобильные» с пространством MOB «Мобильные приложения» (доска «Релизы»,
  * e2e-editor — commenter); QA и MOVE «E2E Перенос» (только администратор) — в корне.
@@ -264,6 +266,70 @@ class E2eSeeder extends Seeder
         foreach (['Первая', 'Вторая', 'Третья'] as $name) {
             $board = $create->handle($admin, $arrange, ['name' => $name], BoardTemplate::Simple);
             $card->handle($editor, $board, ['title' => "{$name}: карточка"], $column($board->id, 'To Do'), $lane($board->id));
+        }
+
+        // Приёмка PR 3 (acceptance/stage-layout, ТК-L55.12–L55.23): пространства как «Разработка» демо-данных. Раскладка
+        // общая, сворачивание — личное: у тестов, которые их меняют, — свои пространства (каждый тест возвращает как было)
+        $this->acceptanceRows($admin, $editor, $restricted, 'Приёмка рядов', 'RACC', 40); // ТК-L55.12, .13, .17, .20, .21 — только смотрят
+        // У «Инфраструктуры» здесь ещё 12 карточек: доска из дерева встаёт к верху холста, только если она не короче экрана
+        // (последняя доска — холсту дальше некуда прокручиваться), как в демо-данных — ТК-L55.18
+        $this->acceptanceRows($admin, $editor, $restricted, 'Сворачивание приёмки', 'RFOLD', 40, 12); // ТК-L55.14, .18, .23
+        $this->acceptanceRows($admin, $editor, $restricted, 'Перенос досок приёмки', 'RDRAG', 2); // ТК-L55.15
+        $this->acceptanceRows($admin, $editor, $restricted, 'Новый ряд приёмки', 'RNEWROW', 2); // ТК-L55.16
+        $this->acceptanceRows($admin, $editor, $restricted, 'Клавиатура приёмки', 'RKEYS', 2); // ТК-L55.22
+        $this->acceptanceRows($admin, $editor, $restricted, 'Архивные доски приёмки', 'RARCH', 2); // ТК-L55.19
+    }
+
+    /**
+     * Пространство для приёмочных тестов ТК-L55.12–L55.23 — как «Разработка» демо-данных: ряды [«Дежурства» (две колонки
+     * «Сейчас» и «Готово», 6 карточек в «Готово»), «Широкая доска» (14 колонок без карточек)], [«Продукт» (шаблон
+     * «Разработка» — шире окна; $productCards карточек в To Do и 2 карточки подрядчика в Backlog)], [«Инфраструктура»
+     * (4 колонки, по карточке в To Do, In Progress, Done и ещё $infraCards в To Do)]. e2e-admin — администратор
+     * пространства (Анна в тест-кейсах), e2e-editor — editor (Борис), e2e-restricted — editor «только свои карточки»
+     * (Жанна): видит только 2 свои карточки «Продукта».
+     */
+    private function acceptanceRows(User $admin, User $editor, User $restricted, string $name, string $key, int $productCards, int $infraCards = 0): void
+    {
+        $create = app(CreateBoardAction::class);
+        $card = app(CreateCardAction::class);
+        $columns = app(CreateColumnAction::class);
+        $column = fn (string $boardId, string $name) => BoardColumn::query()->where('board_id', $boardId)->where('name', $name)->sole();
+        $lane = fn (string $boardId) => Lane::query()->where('board_id', $boardId)->sole();
+
+        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => $name, 'key' => $key], [$admin]);
+        app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
+        app(AddSpaceMemberAction::class)->handle($admin, $space, $restricted, SpaceRole::Editor);
+        app(SetSpaceMemberRestrictionAction::class)->handle($admin, $space, $restricted, true);
+
+        $duty = $create->handle($admin, $space, ['name' => 'Дежурства'], BoardTemplate::Empty);
+        $now = $columns->handle($admin, $duty, 'Сейчас', ColumnCategory::InProgress, null, null, null);
+        $done = $columns->handle($admin, $duty, 'Готово', ColumnCategory::Done, null, $now->id, null);
+        foreach (range(1, 6) as $i) {
+            $card->handle($editor, $duty, ['title' => "Дежурство {$i}"], $done, $lane($duty->id));
+        }
+
+        $wide = $create->handle($admin, $space, ['name' => 'Широкая доска'], BoardTemplate::Development);
+        $wideDone = $column($wide->id, 'Done');
+        foreach (['Аналитика', 'Дизайн', 'Ревью дизайна', 'Документация', 'Подготовка релиза', 'Мониторинг'] as $columnName) {
+            $columns->handle($admin, $wide, $columnName, ColumnCategory::InProgress, null, null, $wideDone->id);
+        }
+        app(MoveBoardAction::class)->handle($admin, $wide, $duty->id, null, rowId: $duty->row_id);
+
+        $product = $create->handle($admin, $space, ['name' => 'Продукт'], BoardTemplate::Development);
+        foreach (range(1, $productCards) as $i) {
+            $card->handle($editor, $product, ['title' => "Задача продукта {$i}"], $column($product->id, 'To Do'), $lane($product->id));
+        }
+        foreach (range(1, 2) as $i) {
+            $own = $card->handle($editor, $product, ['title' => "Задача подрядчика {$i}"], $column($product->id, 'Backlog'), $lane($product->id));
+            app(UpdateCardAction::class)->handle($editor, $own, ['responsible_id' => $restricted->id]);
+        }
+
+        $infra = $create->handle($admin, $space, ['name' => 'Инфраструктура'], BoardTemplate::Simple);
+        foreach (['To Do', 'In Progress', 'Done'] as $columnName) {
+            $card->handle($editor, $infra, ['title' => "Инфраструктура: {$columnName}"], $column($infra->id, $columnName), $lane($infra->id));
+        }
+        for ($i = 1; $i <= $infraCards; $i++) {
+            $card->handle($editor, $infra, ['title' => "Инфраструктура: задача {$i}"], $column($infra->id, 'To Do'), $lane($infra->id));
         }
     }
 }
