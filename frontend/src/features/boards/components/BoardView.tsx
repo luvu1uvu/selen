@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -27,6 +35,7 @@ import {
 import { boardKeyboardCoordinates, useBoardDnd, type CollapsedLaneProbe } from '../useBoardDnd'
 import { useCardMove } from '../useCardMove'
 import { useLaneCollapse } from '../useLaneCollapse'
+import { useStickyLaneRows } from '../useStickyLaneRows'
 import { BoardCell, COLUMN_DIVIDER, SUBCOLUMN_DIVIDER, type TopCardForm } from './BoardCell'
 import { CardTileView } from './CardTile'
 import { LaneRow } from './LaneRow'
@@ -141,7 +150,30 @@ export function BoardView({
   })
 
   useSyncedScrollLeft({ body: bodyRef, header: headerRef, bar: barRef })
-  useStickyOffset(stickyRef, bodyRef)
+  // Закреплённая полоса дорожки (useStickyLaneRows) — тоже над элементом, к которому прокручивают
+  useStickyOffset(stickyRef, bodyRef, showLaneHeaders ? LANE_ROW_PX : 0)
+  const updateStickyBands = useStickyLaneRows(bodyRef, stickyRef)
+  // Свернули или развернули дорожку — полоса остаётся там же на экране: свёрнутая из закреплённой полосы доска остаётся
+  // на этой дорожке, а не уезжает к следующим (её карточки пропали) или к началу (замечание PM к PR 2)
+  const toggleAnchor = useRef<{ laneId: string; top: number } | null>(null)
+  const laneRowOf = (laneId: string) =>
+    bodyRef.current?.querySelector<HTMLElement>(`[data-lane-section="${laneId}"] [data-lane-row]`)
+  const toggleLane = (laneId: string, collapse: boolean) => {
+    const row = laneRowOf(laneId)
+    if (row) toggleAnchor.current = { laneId, top: row.getBoundingClientRect().top }
+    setLaneCollapsed(laneId, collapse)
+  }
+  useLayoutEffect(() => {
+    updateStickyBands()
+    const anchor = toggleAnchor.current
+    toggleAnchor.current = null
+    const row = anchor && laneRowOf(anchor.laneId)
+    const canvas = bodyRef.current?.closest('[data-board-canvas]')
+    if (!anchor || !row || !canvas) return
+    // Полоса снова в потоке (пересчёт выше) — холст сдвигается так, чтобы она стояла, где была
+    canvas.scrollTop += row.getBoundingClientRect().top - anchor.top
+    updateStickyBands()
+  }, [collapsed, updateStickyBands])
   // «Назад» возвращает и прокрутку доски вбок
   useScrollMemory(bodyRef, { name: `board:${board.id}`, page: board.id, axis: 'x' })
 
@@ -258,28 +290,32 @@ export function BoardView({
               <section
                 key={lane.id}
                 aria-label={lane.name}
+                data-lane-section={lane.id}
                 // Последняя дорожка тянется до низа доски — фон колонок доходит до низа блока
                 className={cn(
                   'flex flex-col',
                   !isCollapsed && index === board.lanes.length - 1 && 'flex-1',
                 )}
               >
+                {/* Обёртка держит место полосы в потоке, когда сама полоса закреплена под заголовками колонок */}
                 {showLaneHeaders && (
-                  <LaneRow
-                    lane={lane}
-                    lanes={board.lanes}
-                    count={laneCounts[lane.id] ?? 0}
-                    collapsed={isCollapsed}
-                    canManage={canManage}
-                    // Дорожки разделены тонкой линией; над первой — нижняя граница заголовков колонок
-                    className={cn('-mx-3', index > 0 && 'border-t')}
-                    rowRef={(row) => {
-                      if (row && isCollapsed) collapsedRows.current.set(lane.id, row)
-                      else collapsedRows.current.delete(lane.id)
-                    }}
-                    onAction={onAction}
-                    onToggle={() => setLaneCollapsed(lane.id, !isCollapsed)}
-                  />
+                  <div className="-mx-3 h-10">
+                    <LaneRow
+                      lane={lane}
+                      lanes={board.lanes}
+                      count={laneCounts[lane.id] ?? 0}
+                      collapsed={isCollapsed}
+                      canManage={canManage}
+                      // Дорожки разделены тонкой линией; над первой — нижняя граница заголовков колонок
+                      className={cn(index > 0 && 'border-t')}
+                      rowRef={(row) => {
+                        if (row && isCollapsed) collapsedRows.current.set(lane.id, row)
+                        else collapsedRows.current.delete(lane.id)
+                      }}
+                      onAction={onAction}
+                      onToggle={() => toggleLane(lane.id, !isCollapsed)}
+                    />
+                  </div>
                 )}
                 {/* Без вертикальных отступов: линии между колонками — от строки заголовков до низа дорожки */}
                 {!isCollapsed && (
@@ -334,26 +370,32 @@ const EMPTY: string[] = []
 
 /** Шапка доски (h-12) над закреплёнными заголовками колонок — их высота разная (подколонки). */
 const BOARD_HEADER_PX = 48
+/** Полоса дорожки (h-10, LaneRow). */
+const LANE_ROW_PX = 40
 
 /**
- * Высота закреплённых шапки и заголовков колонок — в CSS-переменную `--board-sticky` тела доски: от неё
- * отступ при прокрутке к элементу (scroll-margin), чтобы он не оказался под заголовками.
+ * Высота закреплённых шапки и заголовков колонок (и полосы дорожки — extra) — в CSS-переменную `--board-sticky` тела
+ * доски: от неё отступ при прокрутке к элементу (scroll-margin), чтобы он не оказался под заголовками.
  */
 function useStickyOffset(
   stickyRef: RefObject<HTMLDivElement | null>,
   bodyRef: RefObject<HTMLDivElement | null>,
+  extra: number,
 ) {
   useEffect(() => {
     const sticky = stickyRef.current
     const body = bodyRef.current
     if (!sticky || !body) return
     const measure = () =>
-      body.style.setProperty('--board-sticky', `${BOARD_HEADER_PX + sticky.offsetHeight + 8}px`)
+      body.style.setProperty(
+        '--board-sticky',
+        `${BOARD_HEADER_PX + sticky.offsetHeight + extra + 8}px`,
+      )
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(sticky)
     return () => observer.disconnect()
-  }, [stickyRef, bodyRef])
+  }, [stickyRef, bodyRef, extra])
 }
 
 /**
