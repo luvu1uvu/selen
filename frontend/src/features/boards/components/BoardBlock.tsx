@@ -17,6 +17,7 @@ import {
 } from '@/shared/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import { allLanesCollapsed } from '../model'
 import { useSetAutoAssign } from '../queries'
 import { ArchivedCardsDialog } from './ArchivedCardsDialog'
 import { BoardView } from './BoardView'
@@ -45,11 +46,9 @@ export function BoardBlock({
   const { t } = useTranslation('boards')
   const [action, setAction] = useState<StructureAction>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
-  // Свёрнуты все дорожки (их больше одной — одну не свернуть) — доска из шапки, заголовков и полос: минимальная высота
-  // оставила бы под полосами пустую область (замечание PM к PR 2)
-  const collapsed = new Set(board.collapsed_lane_ids)
-  const allLanesCollapsed =
-    board.lanes.length > 1 && board.lanes.every((lane) => collapsed.has(lane.id))
+  // Свёрнуты все дорожки — доска из шапки, заголовков и полос: минимальная высота оставила бы под полосами пустую
+  // область (LATER-70)
+  const collapsedAll = allLanesCollapsed(board)
 
   return (
     <section
@@ -62,7 +61,7 @@ export function BoardBlock({
       // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста
       className={cn(
         'bg-background flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
-        !allLanesCollapsed && 'min-h-60',
+        !collapsedAll && 'min-h-60',
         className,
       )}
     >

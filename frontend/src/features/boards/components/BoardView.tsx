@@ -16,7 +16,14 @@ import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import { useSyncedScrollLeft } from '@/shared/lib/useSyncedScrollLeft'
 import type { BoardDetail } from '@/shared/types/api'
 import { useCurrentUser } from '@/features/auth/queries'
-import { buildLayout, buildLookups, cellId, countCards, parseCellId } from '../model'
+import {
+  allLanesCollapsed,
+  buildLayout,
+  buildLookups,
+  cellId,
+  countCards,
+  parseCellId,
+} from '../model'
 import { boardKeyboardCoordinates, useBoardDnd, type CollapsedLaneProbe } from '../useBoardDnd'
 import { useCardMove } from '../useCardMove'
 import { useLaneCollapse } from '../useLaneCollapse'
@@ -311,7 +318,9 @@ export function BoardView({
         </div>
       </div>
 
-      <BoardScrollbar barRef={barRef} bodyRef={bodyRef} />
+      {/* Свёрнуты все дорожки — блок кончается последней полосой, без полосы прокрутки под ней (LATER-70): вбок доска
+          прокручивается тачпадом, Shift+колесом над заголовками и с клавиатуры */}
+      <BoardScrollbar barRef={barRef} bodyRef={bodyRef} hidden={allLanesCollapsed(board)} />
       <DragOverlay>
         {activeCard && (
           <CardTileView card={activeCard} lookups={lookups} className="w-64 rotate-2 shadow-lg" />
@@ -354,11 +363,19 @@ function useStickyOffset(
 function BoardScrollbar({
   barRef,
   bodyRef,
+  hidden,
 }: {
   barRef: RefObject<HTMLDivElement | null>
   bodyRef: RefObject<HTMLDivElement | null>
+  hidden: boolean
 }) {
   const [size, setSize] = useState({ content: 0, overflows: false })
+
+  // Скрытая полоса прокрутку не повторяет (у неё нет размеров) — показали снова: на место тела
+  useEffect(() => {
+    if (!hidden && barRef.current && bodyRef.current)
+      barRef.current.scrollLeft = bodyRef.current.scrollLeft
+  }, [hidden, barRef, bodyRef])
 
   useEffect(() => {
     const body = bodyRef.current
@@ -385,7 +402,7 @@ function BoardScrollbar({
       // хоть раз ставший шире колонок, сам держал эту ширину через полосу (LATER-66)
       className={cn(
         'bg-background/90 sticky bottom-0 z-10 [scrollbar-width:thin] overflow-x-auto overflow-y-hidden [contain:inline-size]',
-        size.overflows ? 'min-h-3' : 'invisible h-0',
+        hidden ? 'hidden' : size.overflows ? 'min-h-3' : 'invisible h-0',
       )}
       data-board-scrollbar
     >

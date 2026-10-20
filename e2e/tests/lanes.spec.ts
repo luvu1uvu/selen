@@ -186,10 +186,11 @@ test('свёрнуты все дорожки широкой доски — до�
 })
 
 /**
- * Замечание PM к PR 2: свёрнуты все дорожки — блок доски не держит минимальную высоту (15rem), под полосами нет пустой
- * области: высота блока — шапка, заголовки колонок, полосы дорожек и полоса прокрутки вбок внизу (у широкой доски).
+ * LATER-70 (замечание PM к PR 2): свёрнуты все дорожки — блок доски кончается последней полосой дорожки: ни минимальной
+ * высоты (15rem), ни нижнего отступа или полоски прокрутки вбок под ней. «Доска с дорожками» шире окна — у развёрнутой
+ * под дорожками была бы полоса прокрутки вбок.
  */
-test('свёрнуты все дорожки — блок доски по высоте без пустоты под полосами', async ({ page }) => {
+test('свёрнуты все дорожки — блок доски кончается последней полосой, без пустоты и полоски под ней (LATER-70)', async ({ page }) => {
   for (const name of ['Основная', 'Срочные', 'Плановые']) await toggle(page, name, 'Свернуть').click()
   await expect(page.locator('[data-board-body] [role="group"]')).toHaveCount(0)
 
@@ -197,24 +198,23 @@ test('свёрнуты все дорожки — блок доски по выс
     const height = (el: Element | null) => (el ? el.getBoundingClientRect().height : 0)
     const style = getComputedStyle(block)
     const bands = [...block.querySelectorAll('[data-lane-row]')]
-    const scrollbar = block.querySelector('[data-board-scrollbar]')!
     return {
       block: height(block),
       parts:
         height(block.querySelector('header')) +
         height(block.querySelector('[data-board-columns]')!.parentElement) +
         bands.reduce((sum, band) => sum + height(band), 0) +
-        height(scrollbar) +
         parseFloat(style.borderTopWidth) +
         parseFloat(style.borderBottomWidth),
-      // Под последней полосой — только полоса прокрутки вбок (у широкой доски) и нижняя граница блока
+      // Низ блока (без нижней границы) — низ последней полосы
       gapBelow:
-        block.getBoundingClientRect().bottom -
-        parseFloat(style.borderBottomWidth) -
-        height(scrollbar) -
-        bands.at(-1)!.getBoundingClientRect().bottom,
+        block.getBoundingClientRect().bottom - parseFloat(style.borderBottomWidth) - bands.at(-1)!.getBoundingClientRect().bottom,
     }
   })
-  expect(Math.abs(m.block - m.parts), JSON.stringify(m)).toBeLessThanOrEqual(1)
   expect(Math.abs(m.gapBelow), JSON.stringify(m)).toBeLessThanOrEqual(1)
+  expect(Math.abs(m.block - m.parts), JSON.stringify(m)).toBeLessThanOrEqual(1)
+
+  // Развернули одну — под дорожками снова полоса прокрутки вбок (доска шире окна), как раньше
+  await toggle(page, 'Плановые', 'Развернуть').click()
+  await expect(page.locator('[data-board-scrollbar]')).toBeVisible()
 })
