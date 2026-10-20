@@ -17,13 +17,15 @@ async function createBoard(page: Page, name: string, description: string) {
   await dialog.getByRole('button', { name: 'Создать' }).click()
   await expect(page.getByRole('heading', { name })).toBeVisible()
   // Новая доска открывается на странице пространства, холст доезжает до неё (ADR-0019): ждём, пока блок встанет
+  // (заглушка доски сменяется загруженным блоком — ждём его тело)
   const block = page.getByRole('region', { name, exact: true })
-  await expect(block).toBeInViewport()
+  await expect(block.locator('[data-board-body]')).toBeInViewport()
+  const top = async () => (await block.boundingBox())?.y ?? Number.NaN
   await expect
     .poll(async () => {
-      const before = (await block.boundingBox())!.y
+      const before = await top()
       await page.waitForTimeout(150)
-      return Math.abs((await block.boundingBox())!.y - before)
+      return Math.abs((await top()) - before)
     })
     .toBe(0)
 }
