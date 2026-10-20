@@ -16,6 +16,16 @@ async function createBoard(page: Page, name: string, description: string) {
   await dialog.getByLabel('Описание').fill(description)
   await dialog.getByRole('button', { name: 'Создать' }).click()
   await expect(page.getByRole('heading', { name })).toBeVisible()
+  // Новая доска открывается на странице пространства, холст доезжает до неё (ADR-0019): ждём, пока блок встанет
+  const block = page.getByRole('region', { name, exact: true })
+  await expect(block).toBeInViewport()
+  await expect
+    .poll(async () => {
+      const before = (await block.boundingBox())!.y
+      await page.waitForTimeout(150)
+      return Math.abs((await block.boundingBox())!.y - before)
+    })
+    .toBe(0)
 }
 
 // Новая доска открывается на странице пространства среди других досок (ADR-0019, PR 3): ⓘ и «⋯» — этой доски
