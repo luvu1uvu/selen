@@ -212,7 +212,8 @@ describe('Доска', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /^Действия с доской «/ }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить колонку' }))
-    await userEvent.type(screen.getByLabelText('Название'), 'Релиз')
+    // Окно из «⋯» доски открывается после того, как меню вернуло фокус на «⋯»
+    await userEvent.type(await screen.findByLabelText('Название'), 'Релиз')
     await userEvent.selectOptions(screen.getByLabelText('Тип'), 'done')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить колонку' }))
 

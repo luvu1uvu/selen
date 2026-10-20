@@ -21,6 +21,7 @@ import { useLocation, useNavigationType, useSearchParams } from 'react-router'
 import { GripVertical, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { cn } from '@/shared/lib/utils'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import type { Space, SpaceBoard } from '@/shared/types/api'
@@ -36,6 +37,7 @@ import { useSpaceBoards, useStructureMutation } from '../queries'
 import { useBoardCollapse } from '../useBoardCollapse'
 import { useMoveBoard } from '../useMoveBoard'
 import { anchorOf, currentAnchor, pinBoard, rememberAnchor, takeFocus } from '../canvasAnchor'
+import { CreateBoardDialog } from './CreateBoardDialog'
 import { SpaceBoardSlot } from './SpaceBoardSlot'
 
 /** У досок нет целей-droppable: куда упадёт доска, решает указатель (layoutDropAt). */
@@ -89,7 +91,8 @@ export function SpaceBoardsCanvas({
   // он сообщит о них только после первой отрисовки — на кадр позже
   const [params] = useSearchParams()
   const focusId = params.get('board')
-  const eagerRow = (rows.find((row) => row.boards.some((b) => b.id === focusId)) ?? rows[0])?.id
+  const eagerRow = rows.find((row) => row.boards.some((b) => b.id === focusId)) ?? rows[0]
+  const revealed = useFirstScreenReveal(boardsQuery.isSuccess, eagerRow)
 
   const onArchive = useCallback((board: SpaceBoard) => setToArchive(board), [])
   const { activeBoard, drop, dndProps } = useBoardLayoutDnd(contentRef, boards, move)
@@ -110,17 +113,21 @@ export function SpaceBoardsCanvas({
             <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
           )}
           {boardsQuery.isSuccess && rows.length === 0 && (
-            <div className="text-muted-foreground bg-background flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
+            <div className="text-muted-foreground bg-background flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center text-sm">
               <LayoutGrid className="size-8" />
               <p>{t('list.empty')}</p>
-              {canManage && <p className="text-sm">{t('layout.emptyHint')}</p>}
+              <p>{canManage ? t('layout.emptyHint') : t('layout.emptyMember')}</p>
+              {canManage && <CreateBoardDialog spaceKey={space.key} />}
             </div>
           )}
           {rows.map((row) => (
             // Ряд — сетка: ширины досок раздаёт rowTemplate; на узком экране — колонка во всю ширину
             <div
               key={row.id}
-              className="flex flex-col gap-3 md:grid md:items-start md:justify-start"
+              className={cn(
+                'flex flex-col gap-3 md:grid md:items-start md:justify-start',
+                !revealed.ready && row.id !== eagerRow?.id && 'invisible',
+              )}
               style={{ gridTemplateColumns: rowTemplate(row, metrics.width, metrics.collapsed) }}
               data-board-row={row.id}
             >
@@ -130,7 +137,8 @@ export function SpaceBoardsCanvas({
                   board={board}
                   rows={rows}
                   canManage={canManage}
-                  eager={row.id === eagerRow}
+                  eager={row.id === eagerRow?.id}
+                  onSettled={revealed.onSettled}
                   moving={moving}
                   dragging={activeBoard?.id === board.id}
                   onMove={move}
@@ -344,11 +352,16 @@ function useRowMetrics(
       const width = Math.floor(
         content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
       )
+      // Нужная ширина шапки, а не текущая: если название уже обрезано, текущая закрепила бы обрезку (U-4 UX-ревью PR 3)
       const collapsed = new Map(
-        [...content.querySelectorAll<HTMLElement>('[data-board-collapsed]')].map((section) => [
-          section.dataset.boardBlock!,
-          Math.ceil(section.getBoundingClientRect().width),
-        ]),
+        [...content.querySelectorAll<HTMLElement>('[data-board-collapsed]')].map((section) => {
+          const title = section.querySelector('h2')
+          const cut = title ? title.scrollWidth - title.clientWidth : 0
+          return [
+            section.dataset.boardBlock!,
+            Math.ceil(section.getBoundingClientRect().width + cut),
+          ]
+        }),
       )
       setMetrics((previous) =>
         previous.width === width &&
@@ -366,6 +379,34 @@ function useRowMetrics(
     return () => observer.disconnect()
   }, [contentRef, boards])
   return metrics
+}
+
+/**
+ * Ряды, кроме ряда первого экрана, скрыты, пока его доски не загрузились: их заглушки ниже настоящих досок, и ряды ниже
+ * были бы видны на экране, а потом уехали бы вниз («прыжок» при загрузке, U-5 UX-ревью PR 3). Показались — больше не
+ * скрываются; на случай зависшей загрузки — не дольше 3 с.
+ */
+function useFirstScreenReveal(
+  listed: boolean,
+  row: ReturnType<typeof groupRows>[number] | undefined,
+) {
+  const [settled, setSettled] = useState<ReadonlySet<string>>(() => new Set())
+  const [ready, setReady] = useState(false)
+  const onSettled = useCallback(
+    (boardId: string) =>
+      setSettled((previous) => (previous.has(boardId) ? previous : new Set(previous).add(boardId))),
+    [],
+  )
+  // Пока нет списка досок, рядов ещё нет — это не «загрузилось»
+  const loaded =
+    listed && (!row || row.boards.every((board) => board.collapsed || settled.has(board.id)))
+  if (loaded && !ready) setReady(true)
+  useEffect(() => {
+    if (ready) return
+    const timer = window.setTimeout(() => setReady(true), 3000)
+    return () => window.clearTimeout(timer)
+  }, [ready])
+  return { ready: ready || loaded, onSettled }
 }
 
 /**
@@ -458,6 +499,10 @@ function useCanvasPlacement(
       const content = canvas.firstElementChild
       const padding = content ? parseFloat(getComputedStyle(content).paddingTop) || 0 : 0
       hold(canvas, board.id, padding)
+      // Фокус — на доску: следующий Tab ведёт в неё, а не к первой доске пространства (U-3 UX-ревью PR 3)
+      canvas
+        .querySelector<HTMLElement>(`[data-board-slot="${CSS.escape(board.id)}"]`)
+        ?.focus({ preventScroll: true })
     })
   }, [canvasRef, boards, fetching, focusId, location.key, navigationType, page, setCollapsed, hold])
 

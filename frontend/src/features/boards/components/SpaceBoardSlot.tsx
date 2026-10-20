@@ -25,6 +25,8 @@ export interface SpaceBoardSlotProps {
   onToggleCollapsed: (boardId: string, collapsed: boolean) => void
   onArchive: (board: SpaceBoard) => void
   onOpenCard: (key: string) => void
+  /** Доска загрузилась (или не смогла) — для показа рядов ниже первого экрана без «прыжка». */
+  onSettled: (boardId: string) => void
 }
 
 /**
@@ -43,10 +45,14 @@ export const SpaceBoardSlot = memo(function SpaceBoardSlot(props: SpaceBoardSlot
   const near = useNearViewport(slotRef, !board.collapsed, props.eager || cached)
   useScrollAnchorFallback(slotRef)
 
+  useKeepCollapseFocus(slotRef)
+
   return (
+    // tabIndex −1: доска из дерева получает фокус (без рамки) — следующий Tab ведёт в неё (U-3 UX-ревью PR 3)
     <div
       ref={slotRef}
-      className={cn('min-w-0', dragging && 'opacity-50')}
+      tabIndex={-1}
+      className={cn('min-w-0 outline-none', dragging && 'opacity-50')}
       data-board-slot={board.id}
     >
       {board.collapsed ? (
@@ -201,9 +207,13 @@ function BoardPlaceholder(props: SpaceBoardSlotProps & { failed?: boolean }) {
 }
 
 function LoadedBoard(props: SpaceBoardSlotProps) {
-  const { board: summary, onOpenCard } = props
+  const { board: summary, onOpenCard, onSettled } = props
   const query = useBoard(summary.id)
   const slots = useLayoutSlots(props)
+  const settled = query.data !== undefined || query.isError
+  useEffect(() => {
+    if (settled) onSettled(summary.id)
+  }, [settled, summary.id, onSettled])
   // Неудачное фоновое обновление уже показанной доски её не прячет
   if (!query.data) return <BoardPlaceholder {...props} failed={query.isError} />
   return (
@@ -214,6 +224,41 @@ function LoadedBoard(props: SpaceBoardSlotProps) {
       onOpenCard={onOpenCard}
     />
   )
+}
+
+/**
+ * Свернули или развернули доску с клавиатуры — фокус остаётся на шевроне. Свёрнутая, ещё грузящаяся и загруженная
+ * доска — разные элементы, и шеврон каждый раз новый: без этого фокус уходил в body (U-1 UX-ревью PR 3). Был фокус на
+ * шевроне этой доски и пропал вместе с ним (не ушёл на другой элемент) — ставим его на новый шеврон.
+ */
+function useKeepCollapseFocus(ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const slot = ref.current
+    if (!slot) return
+    let held = false
+    const onFocusIn = (event: FocusEvent) => {
+      held = (event.target as Element).matches('[data-board-collapse]')
+    }
+    const onFocusOut = (event: FocusEvent) => {
+      const button = event.target as Element
+      // Фокус ушёл сам (Tab, щелчок) — отпускаем; кнопку убрали со страницы — держим
+      setTimeout(() => {
+        if (button.isConnected) held = false
+      })
+    }
+    const observer = new MutationObserver(() => {
+      if (!held || slot.contains(document.activeElement)) return
+      slot.querySelector<HTMLElement>('[data-board-collapse]')?.focus({ preventScroll: true })
+    })
+    slot.addEventListener('focusin', onFocusIn)
+    slot.addEventListener('focusout', onFocusOut)
+    observer.observe(slot, { childList: true, subtree: true })
+    return () => {
+      slot.removeEventListener('focusin', onFocusIn)
+      slot.removeEventListener('focusout', onFocusOut)
+      observer.disconnect()
+    }
+  }, [ref])
 }
 
 /**

@@ -340,3 +340,77 @@ test('полоса дорожки закреплена и на странице 
   const canvas = await canvasRect(page)
   expect(Math.abs((await board.locator('header').first().boundingBox())!.y - canvas.top)).toBeLessThanOrEqual(1)
 })
+
+/** Подпись элемента с фокусом (кнопка, ссылка, место доски). */
+const focused = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null
+    return el?.getAttribute('aria-label') ?? el?.dataset.boardSlot ?? el?.tagName ?? null
+  })
+
+test('с клавиатуры: свернуть и развернуть доску — фокус остаётся на шевроне', async ({ page }) => {
+  await block(page, 'Узкая').getByRole('button', { name: 'Свернуть доску «Узкая»' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(block(page, 'Узкая')).toContainText('· 3 карточки')
+  await expect.poll(() => focused(page)).toBe('Развернуть доску «Узкая»')
+  await page.keyboard.press('Enter')
+  await loaded(page, 'Узкая')
+  await expect.poll(() => focused(page)).toBe('Свернуть доску «Узкая»')
+})
+
+test('с клавиатуры: после панели Tab ведёт в первую доску, панель вкладки — не остановка Tab', async ({ page }) => {
+  await page.getByRole('button', { name: 'Архив досок' }).focus()
+  await page.keyboard.press('Tab')
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('role'))).not.toBe('tabpanel')
+  expect(await page.evaluate(() => !!document.activeElement?.closest('[data-board-slot]'))).toBe(true)
+})
+
+test('доска из дерева получает фокус: следующий Tab — в неё, холст не прыгает к первой доске', async ({ page }) => {
+  await openHome(page)
+  await openSpaceBoard(page, 'Ряды', 'Нижняя')
+  await loaded(page, 'Нижняя')
+  await expect.poll(() => focused(page)).not.toBeNull()
+  const before = (await canvasRect(page)).scrollTop
+  await page.keyboard.press('Tab')
+  expect(await page.evaluate(() => document.activeElement?.closest('section[data-board-block]')?.getAttribute('aria-label'))).toBe('Нижняя')
+  expect(Math.abs((await canvasRect(page)).scrollTop - before)).toBeLessThan(5)
+})
+
+test('окно карточки, открытое с клавиатуры, при закрытии возвращает фокус на карточку', async ({ page }) => {
+  const card = block(page, 'Узкая').getByRole('button', { name: /^Открыть ROWS-\d+: Узкая карточка 1$/ })
+  await card.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Узкая карточка 1' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Узкая карточка 1' })).toBeHidden()
+  await expect(card).toBeFocused()
+})
+
+test('загрузка страницы пространства без видимых «прыжков»: ряд на экране не сдвигается, пока грузятся доски выше', async ({ page }) => {
+  // С начала загрузки — каждый кадр: видимые ряды на экране и где их верх; сдвиг после первого показа — «прыжок»
+  await page.addInitScript(() => {
+    const first = new Map<Element, number>()
+    const jumps: number[] = []
+    ;(window as unknown as { __jumps: number[] }).__jumps = jumps
+    const tick = () => {
+      // Верх ряда — от начала содержимого холста: прокрутка (в том числе возврат на запомненное место) — не «прыжок»
+      const content = document.querySelector('[data-board-canvas]')?.firstElementChild
+      for (const row of document.querySelectorAll('[data-board-row]')) {
+        const rect = row.getBoundingClientRect()
+        const shown = getComputedStyle(row).visibility === 'visible' && rect.top < window.innerHeight
+        if (!shown || !content) continue
+        const top = rect.top - content.getBoundingClientRect().top
+        if (!first.has(row)) first.set(row, top)
+        else if (Math.abs(top - first.get(row)!) > 1) jumps.push(top - first.get(row)!)
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  await page.reload()
+  await loaded(page, 'Узкая')
+  await loaded(page, 'Широкая')
+  await loaded(page, 'Высокая')
+  await page.waitForTimeout(500)
+  expect(await page.evaluate(() => (window as unknown as { __jumps: number[] }).__jumps)).toEqual([])
+})

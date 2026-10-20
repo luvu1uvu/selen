@@ -347,7 +347,9 @@ describe('Страница пространства: доски рядами', (
     renderApp('/spaces/DEV')
 
     expect(await screen.findByText('Досок пока нет')).toBeInTheDocument()
-    expect(screen.getByText('Создайте первую доску кнопкой «Создать доску».')).toBeInTheDocument()
+    expect(screen.getByText('Создайте первую доску — по шаблону или пустую.')).toBeInTheDocument()
+    // Кнопка — и на панели, и в пустом состоянии
+    expect(screen.getAllByRole('button', { name: 'Создать доску' })).toHaveLength(2)
   })
 
   it('создаёт доску из шаблона и открывает её на странице пространства', async () => {

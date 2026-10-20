@@ -105,17 +105,28 @@ export function SpacePage() {
         )}
 
         {/* Холст не размонтируется на других вкладках: загруженные доски и прокрутка остаются */}
+        {/* tabIndex — без остановки Tab на самой панели (Radix ставит 0): внутри есть свои элементы с фокусом, а невидимая
+            остановка на весь холст уводила Tab к первой доске (U-2 UX-ревью PR 3) */}
         <TabsContent
           value="boards"
           forceMount
+          tabIndex={undefined}
           className="flex min-h-0 flex-col data-[state=inactive]:hidden"
         >
           <SpaceBoardsCanvas space={space} active={tab === 'boards'} onOpenCard={openCard} />
         </TabsContent>
-        <TabsContent value="members" className="min-h-0 overflow-y-auto p-4 md:p-8">
+        <TabsContent
+          value="members"
+          tabIndex={undefined}
+          className="min-h-0 overflow-y-auto p-3 md:p-4"
+        >
           <MembersPanel space={space} />
         </TabsContent>
-        <TabsContent value="labels" className="min-h-0 overflow-y-auto p-4 md:p-8">
+        <TabsContent
+          value="labels"
+          tabIndex={undefined}
+          className="min-h-0 overflow-y-auto p-3 md:p-4"
+        >
           <SpaceLabelsPanel space={space} />
         </TabsContent>
       </Tabs>

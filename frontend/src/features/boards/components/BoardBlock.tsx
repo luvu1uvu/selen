@@ -1,6 +1,6 @@
 import { useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Archive, Info, MoreHorizontal } from 'lucide-react'
+import { Archive, Columns3, FileText, Info, MoreHorizontal, Pencil, Rows3 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
@@ -40,8 +40,9 @@ export interface BoardHeaderSlots {
 export type OpensDialog = (open: () => void) => () => void
 
 /**
- * Меню «⋯» в шапке доски. Пункт открывает окно — меню не возвращает фокус на «⋯»: иначе фокус вне модального окна, на
- * «⋯» открывается подсказка, и Esc закрывает её, а не окно.
+ * Меню «⋯» в шапке доски. Пункт, который открывает окно, открывает его после того, как меню вернуло фокус на «⋯»: окно
+ * забирает фокус (подсказка «⋯» закрывается — Esc закрывает окно, а не её), а закрытое окно возвращает фокус на «⋯»
+ * (useRestoreFocus; раньше фокус уходил в body — U-6 UX-ревью PR 3).
  */
 export function BoardMenuShell({
   name,
@@ -53,10 +54,9 @@ export function BoardMenuShell({
 }) {
   const { t } = useTranslation('boards')
   const label = t('board.menu', { name })
-  const opensDialog = useRef(false)
+  const pending = useRef<(() => void) | null>(null)
   const dialog: OpensDialog = (open) => () => {
-    opensDialog.current = true
-    open()
+    pending.current = open
   }
   return (
     <DropdownMenu>
@@ -72,9 +72,11 @@ export function BoardMenuShell({
       </Tooltip>
       <DropdownMenuContent
         align="end"
-        onCloseAutoFocus={(event) => {
-          if (opensDialog.current) event.preventDefault()
-          opensDialog.current = false
+        onCloseAutoFocus={() => {
+          const open = pending.current
+          pending.current = null
+          // Фокус сейчас вернётся на «⋯» — окно откроется кадром позже
+          if (open) requestAnimationFrame(open)
         }}
       >
         {children(dialog)}
@@ -281,14 +283,17 @@ function BoardMenu({
           {canManage && (
             <>
               <DropdownMenuItem onSelect={dialog(() => onAction({ kind: 'addColumn' }))}>
+                <Columns3 />
                 {t('board.addColumn')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={dialog(() => onAction({ kind: 'addLane' }))}>
+                <Rows3 />
                 {t('board.addLane')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={dialog(() => onAction({ kind: 'renameBoard', name: board.name }))}
               >
+                <Pencil />
                 {t('board.rename')}
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -296,6 +301,7 @@ function BoardMenu({
                   onAction({ kind: 'boardDescription', description: board.description }),
                 )}
               >
+                <FileText />
                 {t('board.editDescription')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />

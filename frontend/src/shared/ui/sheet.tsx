@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { cn } from '@/shared/lib/utils'
+import { useRestoreFocus } from './restore-focus'
 import { XIcon } from 'lucide-react'
 import { Dialog as SheetPrimitive } from 'radix-ui'
 
@@ -41,6 +42,7 @@ function SheetContent({
   side = 'right',
   showCloseButton = true,
   closeLabel = 'Close',
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   /** Подпись кнопки закрытия для скринридеров — передаётся из i18n. */
@@ -48,6 +50,7 @@ function SheetContent({
   side?: 'top' | 'right' | 'bottom' | 'left'
   showCloseButton?: boolean
 }) {
+  const restoreFocus = useRestoreFocus(onCloseAutoFocus)
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -65,6 +68,7 @@ function SheetContent({
             'data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t',
           className,
         )}
+        {...restoreFocus}
         {...props}
       >
         {children}

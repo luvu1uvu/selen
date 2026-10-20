@@ -124,6 +124,24 @@ test('отпустили над деревом — вне холста доск�
   expect(await layout(page)).toEqual(before)
 })
 
+test('окно из меню «⋯» доски при закрытии возвращает фокус на «⋯»', async ({ page }) => {
+  const menu = page.getByRole('region', { name: 'Первая' }).getByRole('button', { name: 'Действия с доской «Первая»' })
+  await menu.click()
+  await page.getByRole('menuitem', { name: 'Архивировать доску…' }).click()
+  const confirm = page.getByRole('dialog', { name: 'Архивировать доску?' })
+  await expect(confirm).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(confirm).toBeHidden()
+  await expect(menu).toBeFocused()
+
+  await menu.click()
+  await page.getByRole('menuitem', { name: 'Переименовать доску' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(menu).toBeFocused()
+})
+
 test('у участника без прав администратора нет ни ручки ⠿, ни пунктов перестановки', async ({ browser }) => {
   const editor = await pageAs(browser, 'e2e-editor@selen.test')
   await openArrange(editor)
