@@ -26,13 +26,7 @@ import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import type { Space, SpaceBoard } from '@/shared/types/api'
 import { setBoardArchived, type BoardMoveTarget } from '../api'
-import {
-  groupRows,
-  layoutDropAt,
-  rowTemplate,
-  type LayoutDrop,
-  type LayoutGeometry,
-} from '../layout'
+import { groupRows, layoutDropAt, rowWidths, type LayoutDrop, type LayoutGeometry } from '../layout'
 import { useSpaceBoards, useStructureMutation } from '../queries'
 import { useBoardCollapse } from '../useBoardCollapse'
 import { useMoveBoard } from '../useMoveBoard'
@@ -120,35 +114,39 @@ export function SpaceBoardsCanvas({
               {canManage && <CreateBoardDialog spaceKey={space.key} />}
             </div>
           )}
-          {rows.map((row) => (
-            // Ряд — сетка: ширины досок раздаёт rowTemplate; на узком экране — колонка во всю ширину
-            <div
-              key={row.id}
-              className={cn(
-                'flex flex-col gap-3 md:grid md:items-start md:justify-start',
-                !revealed.ready && row.id !== eagerRow?.id && 'invisible',
-              )}
-              style={{ gridTemplateColumns: rowTemplate(row, metrics.width, metrics.collapsed) }}
-              data-board-row={row.id}
-            >
-              {row.boards.map((board) => (
-                <SpaceBoardSlot
-                  key={board.id}
-                  board={board}
-                  rows={rows}
-                  canManage={canManage}
-                  eager={row.id === eagerRow?.id}
-                  onSettled={revealed.onSettled}
-                  moving={moving}
-                  dragging={activeBoard?.id === board.id}
-                  onMove={move}
-                  onToggleCollapsed={setCollapsed}
-                  onArchive={onArchive}
-                  onOpenCard={onOpenCard}
-                />
-              ))}
-            </div>
-          ))}
+          {rows.map((row) => {
+            // Ширины досок ряда — rowWidths: не уже 20rem, не поместились — на следующую строку ряда (LATER-81).
+            // На экране 768 px и уже — колонка во всю ширину (брейкпоинт rows — с 769 px, index.css)
+            const widths = rowWidths(row, metrics.width, metrics.collapsed)
+            return (
+              <div
+                key={row.id}
+                className={cn(
+                  'rows:flex-row rows:flex-wrap rows:items-start flex flex-col gap-3',
+                  !revealed.ready && row.id !== eagerRow?.id && 'invisible',
+                )}
+                data-board-row={row.id}
+              >
+                {row.boards.map((board) => (
+                  <SpaceBoardSlot
+                    key={board.id}
+                    board={board}
+                    width={widths.get(board.id)}
+                    rows={rows}
+                    canManage={canManage}
+                    eager={row.id === eagerRow?.id}
+                    onSettled={revealed.onSettled}
+                    moving={moving}
+                    dragging={activeBoard?.id === board.id}
+                    onMove={move}
+                    onToggleCollapsed={setCollapsed}
+                    onArchive={onArchive}
+                    onOpenCard={onOpenCard}
+                  />
+                ))}
+              </div>
+            )
+          })}
           {drop && <DropLine drop={drop} />}
         </div>
         <DragOverlay dropAnimation={null}>
@@ -246,7 +244,13 @@ function measure(content: HTMLElement): LayoutGeometry {
           // Блок доски бывает уже своего места в ряду (w-fit) — линия у его края, а не у края места
           const block = (slot.firstElementChild as HTMLElement | null) ?? slot
           const box = block.getBoundingClientRect()
-          return { id: slot.dataset.boardSlot!, left: box.left, right: box.right }
+          return {
+            id: slot.dataset.boardSlot!,
+            left: box.left,
+            right: box.right,
+            top: box.top,
+            bottom: box.bottom,
+          }
         }),
       }
     }),
@@ -336,7 +340,7 @@ interface RowMetrics {
 }
 
 /**
- * Ширина рядов и свёрнутых досок — для раздачи ширин развёрнутым доскам (rowTemplate, LATER-79). Меряется
+ * Ширина рядов и свёрнутых досок — для раздачи ширин развёрнутым доскам (rowWidths; LATER-79, LATER-81). Меряется
  * ResizeObserver: при изменении окна, дерева, сворачивании и разворачивании.
  */
 function useRowMetrics(

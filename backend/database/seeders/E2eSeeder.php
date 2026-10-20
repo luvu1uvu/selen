@@ -19,9 +19,11 @@ use App\Actions\Spaces\SetSpaceMemberRestrictionAction;
 use App\Enums\BoardTemplate;
 use App\Enums\ColumnCategory;
 use App\Enums\SpaceRole;
+use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Lane;
 use App\Models\NavNode;
+use App\Models\Space;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -59,8 +61,8 @@ use Illuminate\Database\Seeder;
  * [«Нижняя»], [«Промежуточная»], [«Средняя»], [«Последняя»] (40, 20 и 40 карточек поровну по колонкам); space.spec только
  * смотрит (сворачивание возвращает). ARRANGE «Перестановка» — «Первая», «Вторая»,
  * «Третья» по одной в ряду: их переставляет board-rows.spec (перетаскивание и меню), раскладка меняется по ходу файла.
- * Приёмочные тесты PR 3 (ТК-L55.12–L55.23) — свои пространства RACC, RFOLD, RDRAG, RNEWROW, RKEYS, RARCH, устроенные как
- * «Разработка» демо-данных (acceptanceRows).
+ * Приёмочные тесты PR 3 (ТК-L55.12–L55.24) — свои пространства RACC, RFOLD, RDRAG, RNEWROW, RKEYS, RARCH, RFOUR, устроенные
+ * как «Разработка» демо-данных (acceptanceRows); в RFOUR все четыре доски — в первом ряду.
  *
  * Дерево (tree.spec): папка «E2E Мобильные» с пространством MOB «Мобильные приложения» (доска «Релизы»,
  * e2e-editor — commenter); QA и MOVE «E2E Перенос» (только администратор) — в корне.
@@ -278,6 +280,11 @@ class E2eSeeder extends Seeder
         $this->acceptanceRows($admin, $editor, $restricted, 'Новый ряд приёмки', 'RNEWROW', 2); // ТК-L55.16
         $this->acceptanceRows($admin, $editor, $restricted, 'Клавиатура приёмки', 'RKEYS', 2); // ТК-L55.22
         $this->acceptanceRows($admin, $editor, $restricted, 'Архивные доски приёмки', 'RARCH', 2); // ТК-L55.19
+        // ТК-L55.24 (LATER-81): все четыре доски — в первом ряду, как после перестановки PM
+        $four = $this->acceptanceRows($admin, $editor, $restricted, 'Четыре в ряд приёмки', 'RFOUR', 2);
+        $boards = Board::query()->where('space_id', $four->id)->get()->keyBy('name');
+        $move->handle($admin, $boards['Продукт'], $boards['Широкая доска']->id, null, rowId: $boards['Дежурства']->row_id);
+        $move->handle($admin, $boards['Инфраструктура'], $boards['Продукт']->id, null, rowId: $boards['Дежурства']->row_id);
     }
 
     /**
@@ -288,7 +295,7 @@ class E2eSeeder extends Seeder
      * пространства (Анна в тест-кейсах), e2e-editor — editor (Борис), e2e-restricted — editor «только свои карточки»
      * (Жанна): видит только 2 свои карточки «Продукта».
      */
-    private function acceptanceRows(User $admin, User $editor, User $restricted, string $name, string $key, int $productCards, int $infraCards = 0): void
+    private function acceptanceRows(User $admin, User $editor, User $restricted, string $name, string $key, int $productCards, int $infraCards = 0): Space
     {
         $create = app(CreateBoardAction::class);
         $card = app(CreateCardAction::class);
@@ -331,5 +338,7 @@ class E2eSeeder extends Seeder
         for ($i = 1; $i <= $infraCards; $i++) {
             $card->handle($editor, $infra, ['title' => "Инфраструктура: задача {$i}"], $column($infra->id, 'To Do'), $lane($infra->id));
         }
+
+        return $space;
     }
 }

@@ -90,11 +90,8 @@ describe('Страница пространства: доски рядами', (
         .getAllByRole('heading')
         .map((h) => h.textContent),
     ).toEqual(['Продукт', 'Узкая'])
-    // Узкая — по своим колонкам, широкая — остаток ряда; свёрнутая — по своей шапке
-    expect((rows[0] as HTMLElement).style.gridTemplateColumns).toBe(
-      'minmax(min(1138px, 20rem, calc((100% - 12px) / 2)), 1138px) minmax(min(320px, 20rem, calc((100% - 12px) / 2)), 320px)',
-    )
-    expect((rows[1] as HTMLElement).style.gridTemplateColumns).toBe('fit-content(100%)')
+    // Ширины мест в ряду считает rowWidths (layout.test.ts): jsdom раскладку не считает, ширина холста — 0
+    expect(within(rows[1] as HTMLElement).getByRole('region')).toBe(infra)
     await waitFor(() => expect(fetched.sort()).toEqual(['b-narrow', 'b-product']))
   })
 

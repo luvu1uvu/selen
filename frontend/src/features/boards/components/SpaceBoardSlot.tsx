@@ -1,4 +1,12 @@
-import { memo, useEffect, useMemo, useRef, type MouseEvent, type RefObject } from 'react'
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type MouseEvent,
+  type RefObject,
+} from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/shared/lib/utils'
@@ -12,6 +20,8 @@ import { BoardCollapseButton, BoardDragHandle, BoardLayoutMenuItems } from './Bo
 
 export interface SpaceBoardSlotProps {
   board: SpaceBoard
+  /** Ширина развёрнутой доски в ряду (rowWidths); нет — ряд ещё не измерен или доска свёрнута. */
+  width?: number
   rows: BoardRowView[]
   /** Администратор пространства: ручка ⠿, пункты «Переставить» и «Архивировать доску…». */
   canManage: boolean
@@ -30,9 +40,10 @@ export interface SpaceBoardSlotProps {
 }
 
 /**
- * Место доски в ряду на странице пространства (ADR-0019). Ширину места задаёт сетка ряда (rowTemplate): узкая доска —
- * по своим колонкам, широкая — остаток ряда, прокручивается вбок внутри блока; свёрнутая — по своей шапке «Название ·
- * N карточек», соседи справа сдвигаются (ответ PM 19.10). На узком экране — во всю ширину.
+ * Место доски в ряду на странице пространства (ADR-0019). Ширину места задаёт ряд (rowWidths): узкая доска — по своим
+ * колонкам, широкие делят остаток ряда и прокручиваются вбок внутри блока, но не уже 20rem — не поместились, переходят на
+ * следующую строку ряда (LATER-81); свёрнутая — по своей шапке «Название · N карточек», соседи справа сдвигаются (ответ
+ * PM 19.10). На экране 768 px и уже — во всю ширину.
  *
  * Развёрнутая доска загружается, когда подходит к видимой части холста (до этого — заглушка той же ширины);
  * свёрнутая не загружается вовсе — счётчик приходит в списке досок.
@@ -52,7 +63,12 @@ export const SpaceBoardSlot = memo(function SpaceBoardSlot(props: SpaceBoardSlot
     <div
       ref={slotRef}
       tabIndex={-1}
-      className={cn('min-w-0 outline-none', dragging && 'opacity-50')}
+      className={cn(
+        'max-rows:w-full rows:max-w-full rows:flex-none min-w-0 outline-none',
+        board.collapsed ? 'rows:w-fit' : 'rows:w-(--slot-w)',
+        dragging && 'opacity-50',
+      )}
+      style={props.width ? ({ '--slot-w': `${props.width}px` } as CSSProperties) : undefined}
       data-board-slot={board.id}
     >
       {board.collapsed ? (
@@ -146,7 +162,7 @@ function CollapsedBoard(props: SpaceBoardSlotProps) {
   return (
     <section
       aria-label={board.name}
-      className="bg-background w-fit max-w-full overflow-clip rounded-xl border max-md:w-full"
+      className="bg-background max-rows:w-full w-fit max-w-full overflow-clip rounded-xl border"
       data-board-block={board.id}
       data-board-collapsed
     >
@@ -220,7 +236,7 @@ function LoadedBoard(props: SpaceBoardSlotProps) {
     <BoardBlock
       board={query.data}
       slots={slots}
-      className="max-md:w-full"
+      className="max-rows:w-full"
       onOpenCard={onOpenCard}
     />
   )

@@ -7,7 +7,7 @@ import {
   groupRows,
   layoutDropAt,
   pendingRowId,
-  rowTemplate,
+  rowWidths,
   type LayoutGeometry,
 } from './layout'
 
@@ -79,7 +79,7 @@ describe('ширины досок в ряду (LATER-79)', () => {
     expect(allocateWidths([320, 3000, 400, 3000], 1200)).toEqual([300, 300, 300, 300])
   })
 
-  it('шаблон ряда: ширины за вычетом зазоров и свёрнутых досок; до измерения — запасной вариант на CSS', () => {
+  it('ширины ряда: за вычетом зазоров и свёрнутых досок; до измерения — пусто', () => {
     const row = {
       id: 'r',
       boards: [
@@ -88,14 +88,48 @@ describe('ширины досок в ряду (LATER-79)', () => {
         board('W', 'r', { leaf_columns_count: 14 }),
       ],
     }
-    // 1096 − 2 зазора − 200 (свёрнутая) = 872: узкая 578, широкая 294 — меньше 20rem, поэтому поровну
-    expect(rowTemplate(row, 1096, new Map([['C', 200]]))).toBe('436px fit-content(100%) 436px')
-    expect(rowTemplate(row, 1400, new Map([['C', 200]]))).toBe('578px fit-content(100%) 598px')
-    // Шапка свёрнутой ещё не измерена — запасной вариант
-    expect(rowTemplate(row, 1096)).toBe(rowTemplate(row))
-    expect(rowTemplate(row)).toBe(
-      'minmax(min(578px, 20rem, calc((100% - 24px) / 3)), 578px) fit-content(100%) minmax(min(3938px, 20rem, calc((100% - 24px) / 3)), 3938px)',
-    )
+    // 1400 − 2 зазора − 200 (свёрнутая) = 1176: узкая 578, широкая — остаток 598
+    expect([...rowWidths(row, 1400, new Map([['C', 200]]))]).toEqual([
+      ['N', 578],
+      ['W', 598],
+    ])
+    expect(rowWidths(row, 0).size).toBe(0)
+  })
+})
+
+describe('ряд не помещается — доски переносятся на следующую строку ряда (LATER-81)', () => {
+  const four = {
+    id: 'r',
+    boards: ['A', 'B', 'C', 'D'].map((id) => board(id, 'r', { leaf_columns_count: 4 })),
+  }
+
+  it('ни одна доска не уже 20rem: на 680 px — по две в строке, каждая на половину', () => {
+    // 1024 с деревом: 2 × 320 + 12 = 652 ≤ 680 < 3 × 320 + 24
+    const widths = rowWidths(four, 680)
+    expect([...widths.values()]).toEqual([334, 334, 334, 334])
+  })
+
+  it('на 1280 (ряд 936 px) — тоже по две; на 1920 (1576 px) — все четыре в строке', () => {
+    expect([...rowWidths(four, 936).values()]).toEqual([462, 462, 462, 462])
+    // 4 × 320 + 36 = 1316 ≤ 1576: одна строка, поровну
+    expect([...rowWidths(four, 1576).values()]).toEqual([385, 385, 385, 385])
+    // Узкая — целиком, если остальным хватает 20rem: на 1576 + узкая в 2 колонки
+    const mixed = { id: 'r', boards: [board('N', 'r', { leaf_columns_count: 2 }), ...four.boards] }
+    // Пять по 20rem не помещаются: «D» — на вторую строку; в первой узкая 578, остальные делят 962 px
+    expect([...rowWidths(mixed, 1576).values()]).toEqual([578, 320, 321, 321, 1138])
+  })
+
+  it('свёрнутая доска остаётся в строке, если её шапка помещается', () => {
+    const row = {
+      id: 'r',
+      boards: [
+        board('A', 'r', { leaf_columns_count: 4 }),
+        board('C', 'r', { collapsed: true }),
+        board('B', 'r', { leaf_columns_count: 4 }),
+      ],
+    }
+    // 320 + 12 + 200 + 12 + 320 = 864 ≤ 900: одна строка, развёрнутым — (900 − 24 − 200) / 2
+    expect([...rowWidths(row, 900, new Map([['C', 200]])).values()]).toEqual([338, 338])
   })
 })
 
@@ -159,11 +193,16 @@ describe('цель переноса доски', () => {
         top: 100,
         bottom: 600,
         boards: [
-          { id: 'A', left: 0, right: 400 },
-          { id: 'B', left: 412, right: 800 },
+          { id: 'A', left: 0, right: 400, top: 100, bottom: 600 },
+          { id: 'B', left: 412, right: 800, top: 100, bottom: 400 },
         ],
       },
-      { id: 'r2', top: 612, bottom: 700, boards: [{ id: 'C', left: 0, right: 1000 }] },
+      {
+        id: 'r2',
+        top: 612,
+        bottom: 700,
+        boards: [{ id: 'C', left: 0, right: 1000, top: 612, bottom: 700 }],
+      },
     ],
   }
 
@@ -214,6 +253,42 @@ describe('цель переноса доски', () => {
     expect(layoutDropAt({ x: 50, y: 105 }, geometry, 'C')?.target).toEqual({
       new_row_after_id: null,
       new_row_before_id: 'r1',
+    })
+  })
+
+  it('ряд в две строки: место — в строке под указателем, порядок досок — сквозной', () => {
+    // r1: строка 1 — A [0–400], B [412–800] (верх 100); строка 2 — C [0–400], D [412–800] (верх 412)
+    const wrapped: LayoutGeometry = {
+      rows: [
+        {
+          id: 'r1',
+          top: 100,
+          bottom: 700,
+          boards: [
+            { id: 'A', left: 0, right: 400, top: 100, bottom: 400 },
+            { id: 'B', left: 412, right: 800, top: 100, bottom: 400 },
+            { id: 'C', left: 0, right: 400, top: 412, bottom: 700 },
+            { id: 'D', left: 412, right: 800, top: 412, bottom: 700 },
+          ],
+        },
+      ],
+    }
+    // Над правой половиной C во второй строке — между C и D (не между A и B первой строки)
+    expect(layoutDropAt({ x: 300, y: 500 }, wrapped, 'A')).toMatchObject({
+      target: { row_id: 'r1', after_id: 'C', before_id: 'D' },
+      line: { x: 406, top: 412, bottom: 700 },
+    })
+    // Над левой половиной C — после B (конец первой строки) и перед C
+    expect(layoutDropAt({ x: 100, y: 500 }, wrapped, 'D')?.target).toEqual({
+      row_id: 'r1',
+      after_id: 'B',
+      before_id: 'C',
+    })
+    // Правее D — в конец ряда
+    expect(layoutDropAt({ x: 790, y: 500 }, wrapped, 'A')?.target).toEqual({
+      row_id: 'r1',
+      after_id: 'D',
+      before_id: null,
     })
   })
 })

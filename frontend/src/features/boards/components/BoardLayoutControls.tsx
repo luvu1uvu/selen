@@ -16,7 +16,7 @@ import type { BoardLayoutMoves } from '../layout'
 /**
  * Ручка ⠿ перетаскивания доски на странице пространства (администратор пространства, ADR-0019) — только мышью: с
  * клавиатуры доску переставляют пункты меню «⋯» → «Переставить» (решение PM 6), поэтому ручка не получает фокус, а
- * подсказка говорит, где это сделать с клавиатуры. На узком экране ряды — в колонку, ручки нет (там тоже — меню).
+ * подсказка говорит, где это сделать с клавиатуры. На экране 768 px и уже ряды — в колонку, ручки нет (там тоже — меню).
  */
 export function BoardDragHandle({
   boardId,
@@ -37,7 +37,7 @@ export function BoardDragHandle({
           {...listeners}
           aria-hidden
           className={cn(
-            'text-muted-foreground hover:bg-accent hover:text-foreground -ml-1 hidden size-7 shrink-0 touch-none items-center justify-center rounded-md md:flex',
+            'text-muted-foreground hover:bg-accent hover:text-foreground rows:flex -ml-1 hidden size-7 shrink-0 touch-none items-center justify-center rounded-md',
             disabled ? 'cursor-default opacity-50' : 'cursor-grab',
           )}
           data-board-handle={boardId}

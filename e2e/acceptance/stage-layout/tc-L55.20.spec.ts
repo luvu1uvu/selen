@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
 import { authFile, openHome } from '../../tests/helpers'
-import { block, canvas, DUTY, INFRA, loaded, overflowX, PRODUCT, rect, scrollToBoard, WIDE } from './rows'
+import { block, canvas, DUTY, INFRA, loaded, openSpace, overflowX, PRODUCT, rect, scrollToBoard, WIDE } from './rows'
 
 /**
- * ТК-L55.20 (LATER-55): на узком экране (телефон, окно уже 768 px) доски — одна под другой, каждая во всю ширину окна:
- * «Дежурства», «Широкая доска», «Продукт», «Инфраструктура»; страница вбок не сдвигается, вбок прокручиваются только
- * колонки внутри доски; ручки ⠿ нет. «Разработка» демо-данных → RACC «Приёмка рядов» (E2eSeeder), Анна → e2e-admin.
+ * ТК-L55.20 (LATER-55): на узком экране (телефон, окно 768 px или уже) доски — одна под другой, каждая во всю ширину
+ * окна: «Дежурства», «Широкая доска», «Продукт», «Инфраструктура»; страница вбок не сдвигается, вбок прокручиваются
+ * только колонки внутри доски; ручки ⠿ нет. «Разработка» демо-данных → RACC «Приёмка рядов» (E2eSeeder), Анна →
+ * e2e-admin. Второй тест — окно ровно 768 px с деревом слева (LATER-81: там доски стояли рядом и сжимались).
  */
 const PHONE = { width: 375, height: 812 }
 test.use({ storageState: authFile('e2e-admin@selen.test'), viewport: PHONE })
@@ -63,4 +64,21 @@ test('ТК-L55.20. Узкий экран — доски в колонку @tc-L5
   await expect.poll(() => wideBody.evaluate((body) => body.scrollLeft)).toBeGreaterThan(100)
   expect((await rect(page, WIDE)).left).toBe(boxes[1].left)
   expect(await page.evaluate(() => window.scrollX)).toBe(0)
+})
+
+// Граница — 768 px включительно (LATER-81): у Tailwind `md` начинается с 768, ряды — с 769 (брейкпоинт `rows`)
+test('ТК-L55.20. Окно 768 px — тоже в колонку @tc-L55.20', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 })
+  await openSpace(page, 'RACC', 'Приёмка рядов')
+  await loaded(page, DUTY)
+
+  const space = await canvas(page)
+  const boxes: Awaited<ReturnType<typeof rect>>[] = []
+  for (const name of BOARDS) boxes.push(await rect(page, name))
+  for (const [i, box] of boxes.entries()) {
+    expect(box.left - space.left, BOARDS[i]).toBeLessThanOrEqual(17)
+    expect(space.right - box.right, BOARDS[i]).toBeLessThanOrEqual(17)
+    if (i > 0) expect(box.top, BOARDS[i]).toBeGreaterThan(boxes[i - 1].bottom)
+  }
+  expect(await page.locator('[data-board-handle]:visible').count()).toBe(0)
 })

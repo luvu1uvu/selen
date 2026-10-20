@@ -80,41 +80,54 @@ export function allocateWidths(naturals: number[], available: number): number[] 
 }
 
 /**
- * Колонки сетки ряда. Известна ширина ряда — у развёрнутых досок ширины из allocateWidths (за вычетом зазоров и
- * свёрнутых досок — по их шапке, `collapsedWidths`). Пока ширины не измерены (первая отрисовка, только что свёрнутая
- * доска), — запасной вариант на
- * CSS: от минимума (20rem, но не больше равной доли ряда) до ширины по колонкам, свободное место — поровну. Свёрнутая
- * доска — по своей шапке, но не шире ряда (длинное название — с многоточием).
+ * Ширины развёрнутых досок ряда (px) при ширине ряда `rowWidth` (ADR-0019; LATER-79, LATER-81). Доска не уже минимальной
+ * ширины блока (20rem) — шапка с названием и заголовки колонок читаемы: доски, которым не хватает места, переходят на
+ * следующую строку того же ряда (flex-wrap, по порядку досок); в каждой строке — allocateWidths: узкие целиком, широкие
+ * делят остаток и прокручиваются вбок внутри блока. Вбок ряд не прокручивается — холст по горизонтали не прокручивается
+ * никогда, и доски за краем было бы не видно. Свёрнутая доска занимает ширину своей шапки (`collapsedWidths`; ещё не
+ * измерена — с запасом в 20rem). Ширина ряда не измерена (0) — пустая карта: доски по своим колонкам, но не шире ряда.
  */
-export function rowTemplate(
+export function rowWidths(
   row: BoardRowView,
-  rowWidth = 0,
+  rowWidth: number,
   collapsedWidths: ReadonlyMap<string, number> = new Map(),
-): string {
-  const n = row.boards.length
-  const gaps = (n - 1) * BOARD_GAP_PX
-  const expanded = row.boards.filter((board) => !board.collapsed)
-  const fixed = row.boards
-    .filter((board) => board.collapsed)
-    .reduce((sum, board) => sum + (collapsedWidths.get(board.id) ?? 0), 0)
-  // Свёрнутую только что — её шапку ещё не измерили: пока запасной вариант (та же раскладка, без переполнения на кадр)
-  const measured = row.boards.every((board) => !board.collapsed || collapsedWidths.has(board.id))
-  const widths =
-    rowWidth > 0 && measured
-      ? allocateWidths(
-          expanded.map((board) => boardNaturalWidth(board.leaf_columns_count)),
-          rowWidth - gaps - fixed,
-        )
-      : null
-  const share = `calc((100% - ${gaps}px) / ${n})`
-  return row.boards
-    .map((board) => {
-      if (board.collapsed) return 'fit-content(100%)'
-      if (widths) return `${widths[expanded.indexOf(board)]}px`
-      const width = boardNaturalWidth(board.leaf_columns_count)
-      return `minmax(min(${width}px, 20rem, ${share}), ${width}px)`
-    })
-    .join(' ')
+): Map<string, number> {
+  const result = new Map<string, number>()
+  if (rowWidth <= 0) return result
+  const minimum = (board: SpaceBoard) =>
+    Math.min(
+      board.collapsed
+        ? (collapsedWidths.get(board.id) ?? BOARD_MIN_WIDTH_PX)
+        : Math.min(boardNaturalWidth(board.leaf_columns_count), BOARD_MIN_WIDTH_PX),
+      rowWidth,
+    )
+
+  const lines: SpaceBoard[][] = []
+  let used = 0
+  for (const board of row.boards) {
+    const line = lines.at(-1)
+    const need = minimum(board) + (line?.length ? BOARD_GAP_PX : 0)
+    if (!line || used + need > rowWidth) {
+      lines.push([board])
+      used = minimum(board)
+    } else {
+      line.push(board)
+      used += need
+    }
+  }
+
+  for (const line of lines) {
+    const expanded = line.filter((board) => !board.collapsed)
+    const fixed = line
+      .filter((board) => board.collapsed)
+      .reduce((sum, board) => sum + minimum(board), 0)
+    const widths = allocateWidths(
+      expanded.map((board) => boardNaturalWidth(board.leaf_columns_count)),
+      rowWidth - (line.length - 1) * BOARD_GAP_PX - fixed,
+    )
+    expanded.forEach((board, i) => result.set(board.id, widths[i]))
+  }
+  return result
 }
 
 /** Блок доски не ниже 15rem (ADR-0019). */
@@ -211,13 +224,16 @@ export function applyBoardMove(
   return rows.flatMap((row) => row.boards)
 }
 
-/** Где доски на экране во время переноса (координаты окна): ряды сверху вниз, в ряду — доски слева направо. */
+/**
+ * Где доски на экране во время переноса (координаты окна): ряды сверху вниз, в ряду — доски по порядку; ряд, который
+ * не поместился по ширине, занимает несколько строк (LATER-81) — у досок одной строки один верх.
+ */
 export interface LayoutGeometry {
   rows: {
     id: string
     top: number
     bottom: number
-    boards: { id: string; left: number; right: number }[]
+    boards: { id: string; left: number; right: number; top: number; bottom: number }[]
   }[]
 }
 
@@ -284,21 +300,45 @@ export function layoutDropAt(
       continue
     }
 
+    // Строка ряда под указателем (ряд, который не поместился, — в несколько строк), иначе ближайшая по вертикали
+    const lines: (typeof row.boards)[] = []
+    for (const board of row.boards) {
+      const line = lines.at(-1)
+      if (line && Math.abs(line[0].top - board.top) < 2) line.push(board)
+      else lines.push([board])
+    }
+    const span = (line: typeof row.boards) => ({
+      top: line[0].top,
+      bottom: Math.max(...line.map((board) => board.bottom)),
+    })
+    const distance = (line: typeof row.boards) => {
+      const { top, bottom } = span(line)
+      return Math.max(top - point.y, 0, point.y - bottom)
+    }
+    const line = [...lines].sort((a, b) => distance(a) - distance(b))[0]
     const others = row.boards.filter((board) => board.id !== boardId)
-    const at = others.filter((board) => (board.left + board.right) / 2 < point.x).length
-    const after = others[at - 1]
-    const before = others[at]
-    // Своё же место: слева тот же сосед, что и сейчас (одна в ряду — соседей нет вовсе)
+    const lineOthers = line.filter((board) => board.id !== boardId)
+    // В строке только сама доска — её же место
+    if (lineOthers.length === 0) return null
+    const k = lineOthers.filter((board) => (board.left + board.right) / 2 < point.x).length
+    const before = lineOthers[k] ?? others[others.indexOf(lineOthers[k - 1]) + 1]
+    const after = lineOthers[k - 1] ?? others[others.indexOf(lineOthers[k]) - 1]
+    // Своё же место: слева тот же сосед, что и сейчас
     if (r === own) {
       const ids = row.boards.map((board) => board.id)
       if ((ids[ids.indexOf(boardId) - 1] ?? null) === (after?.id ?? null)) return null
     }
-    if (!after && !before) return null
-    const x = after && before ? (after.right + before.left) / 2 : after ? after.right : before!.left
+    const x =
+      k > 0 && k < lineOthers.length
+        ? (lineOthers[k - 1].right + lineOthers[k].left) / 2
+        : k === 0
+          ? lineOthers[0].left
+          : lineOthers[k - 1].right
+    const { top, bottom } = span(line)
     return {
       kind: 'row',
       target: { row_id: row.id, after_id: after?.id ?? null, before_id: before?.id ?? null },
-      line: { x, top: row.top, bottom: row.bottom },
+      line: { x, top, bottom },
     }
   }
   return null

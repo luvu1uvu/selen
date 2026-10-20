@@ -30,6 +30,9 @@
 }
 
 @theme inline {
+  /* Страница пространства: доски рядами — с 769 px (rows:), на 768 px и уже — в колонку (max-rows:; LATER-81). Брейкпоинт
+     md Tailwind начинается с самих 768 px, а 768 — уже узкий экран */
+  --breakpoint-rows: 48.0625rem;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
