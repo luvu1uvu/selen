@@ -52,19 +52,65 @@ export function boardNaturalWidth(leafColumns: number): number {
 const BOARD_GAP_PX = 12
 
 /**
- * Колонки сетки ряда (CSS grid): у каждой доски — от своей минимальной ширины до ширины по колонкам. Сетка раздаёт
- * свободное место поровну, пока доска не дорастёт до своей ширины (алгоритм grid «maximize tracks»): узкие доски — целиком,
- * широкие делят остаток ряда поровну и прокручиваются вбок внутри блока. Минимум — 20rem, но не больше равной доли
- * ряда: много досок в ряду не вылезают за край холста. Свёрнутая — по своей шапке, но не шире ряда. С `flex: 0 1 ширина` (первый
- * вариант плана) сжимались все доски ряда пропорционально, и двухколоночная рядом с широкой уходила в 20rem.
+ * Ширины развёрнутых досок ряда в пределах `available` px (ADR-0019; LATER-79): узкие — по своим колонкам, широкие делят
+ * остаток поровну и прокручиваются вбок внутри блока. Доски идут от узкой к широкой: доска получает свою ширину, если
+ * остальным остаётся хотя бы их минимум (20rem или их ширина, если она меньше); дальше оставшиеся делят место поровну
+ * (доска уже своей доли — своя ширина, её излишек — остальным). Раньше сетка раздавала место поровну всем сразу, и
+ * узкая доска рядом с широкой не получала своей ширины, если та больше половины ряда (LATER-79).
  */
-export function rowTemplate(row: BoardRowView): string {
+export function allocateWidths(naturals: number[], available: number): number[] {
+  const result = naturals.map(() => 0)
+  const order = naturals.map((_, i) => i).sort((a, b) => naturals[a] - naturals[b])
+  let remaining = available
+  let k = 0
+  for (; k < order.length; k++) {
+    const reserve = order
+      .slice(k + 1)
+      .reduce((sum, j) => sum + Math.min(naturals[j], BOARD_MIN_WIDTH_PX), 0)
+    if (naturals[order[k]] + reserve > remaining) break
+    result[order[k]] = naturals[order[k]]
+    remaining -= naturals[order[k]]
+  }
+  for (; k < order.length; k++) {
+    const share = Math.max(Math.floor(remaining / (order.length - k)), 0)
+    result[order[k]] = Math.min(naturals[order[k]], share)
+    remaining -= result[order[k]]
+  }
+  return result
+}
+
+/**
+ * Колонки сетки ряда. Известна ширина ряда — у развёрнутых досок ширины из allocateWidths (за вычетом зазоров и
+ * свёрнутых досок — по их шапке, `collapsedWidths`). Пока ширины не измерены (первая отрисовка, только что свёрнутая
+ * доска), — запасной вариант на
+ * CSS: от минимума (20rem, но не больше равной доли ряда) до ширины по колонкам, свободное место — поровну. Свёрнутая
+ * доска — по своей шапке, но не шире ряда (длинное название — с многоточием).
+ */
+export function rowTemplate(
+  row: BoardRowView,
+  rowWidth = 0,
+  collapsedWidths: ReadonlyMap<string, number> = new Map(),
+): string {
   const n = row.boards.length
-  const share = `calc((100% - ${(n - 1) * BOARD_GAP_PX}px) / ${n})`
+  const gaps = (n - 1) * BOARD_GAP_PX
+  const expanded = row.boards.filter((board) => !board.collapsed)
+  const fixed = row.boards
+    .filter((board) => board.collapsed)
+    .reduce((sum, board) => sum + (collapsedWidths.get(board.id) ?? 0), 0)
+  // Свёрнутую только что — её шапку ещё не измерили: пока запасной вариант (та же раскладка, без переполнения на кадр)
+  const measured = row.boards.every((board) => !board.collapsed || collapsedWidths.has(board.id))
+  const widths =
+    rowWidth > 0 && measured
+      ? allocateWidths(
+          expanded.map((board) => boardNaturalWidth(board.leaf_columns_count)),
+          rowWidth - gaps - fixed,
+        )
+      : null
+  const share = `calc((100% - ${gaps}px) / ${n})`
   return row.boards
     .map((board) => {
-      // Длинное название свёрнутой доски не шире ряда: шапка обрезает его многоточием
       if (board.collapsed) return 'fit-content(100%)'
+      if (widths) return `${widths[expanded.indexOf(board)]}px`
       const width = boardNaturalWidth(board.leaf_columns_count)
       return `minmax(min(${width}px, 20rem, ${share}), ${width}px)`
     })

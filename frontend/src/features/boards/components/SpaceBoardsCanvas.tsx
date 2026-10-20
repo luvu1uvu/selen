@@ -93,6 +93,7 @@ export function SpaceBoardsCanvas({
 
   const onArchive = useCallback((board: SpaceBoard) => setToArchive(board), [])
   const { activeBoard, drop, dndProps } = useBoardLayoutDnd(contentRef, boards, move)
+  const metrics = useRowMetrics(contentRef, boards)
 
   return (
     <div
@@ -120,7 +121,7 @@ export function SpaceBoardsCanvas({
             <div
               key={row.id}
               className="flex flex-col gap-3 md:grid md:items-start md:justify-start"
-              style={{ gridTemplateColumns: rowTemplate(row) }}
+              style={{ gridTemplateColumns: rowTemplate(row, metrics.width, metrics.collapsed) }}
               data-board-row={row.id}
             >
               {row.boards.map((board) => (
@@ -317,6 +318,54 @@ function useBoardLayoutDnd(
       onDragCancel: reset,
     },
   }
+}
+
+interface RowMetrics {
+  /** Ширина под доски ряда (содержимое холста без отступов); 0 — ещё не измерена. */
+  width: number
+  /** Ширины свёрнутых досок — по их шапке. */
+  collapsed: ReadonlyMap<string, number>
+}
+
+/**
+ * Ширина рядов и свёрнутых досок — для раздачи ширин развёрнутым доскам (rowTemplate, LATER-79). Меряется
+ * ResizeObserver: при изменении окна, дерева, сворачивании и разворачивании.
+ */
+function useRowMetrics(
+  contentRef: RefObject<HTMLDivElement | null>,
+  boards: SpaceBoard[] | undefined,
+): RowMetrics {
+  const [metrics, setMetrics] = useState<RowMetrics>({ width: 0, collapsed: new Map() })
+  useLayoutEffect(() => {
+    const content = contentRef.current
+    if (!content) return
+    const measure = () => {
+      const style = getComputedStyle(content)
+      const width = Math.floor(
+        content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+      )
+      const collapsed = new Map(
+        [...content.querySelectorAll<HTMLElement>('[data-board-collapsed]')].map((section) => [
+          section.dataset.boardBlock!,
+          Math.ceil(section.getBoundingClientRect().width),
+        ]),
+      )
+      setMetrics((previous) =>
+        previous.width === width &&
+        previous.collapsed.size === collapsed.size &&
+        [...collapsed].every(([id, w]) => previous.collapsed.get(id) === w)
+          ? previous
+          : { width, collapsed },
+      )
+    }
+    // Первое измерение — сразу из ResizeObserver (он сообщает размер при подписке)
+    const observer = new ResizeObserver(measure)
+    observer.observe(content)
+    for (const section of content.querySelectorAll('[data-board-collapsed]'))
+      observer.observe(section)
+    return () => observer.disconnect()
+  }, [contentRef, boards])
+  return metrics
 }
 
 /**

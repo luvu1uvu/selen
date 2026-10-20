@@ -1,11 +1,13 @@
 import type { SpaceBoard } from '@/shared/types/api'
 import {
+  allocateWidths,
   applyBoardMove,
   boardLayoutMoves,
   boardNaturalWidth,
   groupRows,
   layoutDropAt,
   pendingRowId,
+  rowTemplate,
   type LayoutGeometry,
 } from './layout'
 
@@ -50,6 +52,50 @@ describe('ряды досок', () => {
     expect(boardNaturalWidth(4)).toBe(4 * 272 + 3 * 8 + 26)
     expect(boardNaturalWidth(1)).toBe(320)
     expect(boardNaturalWidth(0)).toBe(320)
+  })
+})
+
+describe('ширины досок в ряду (LATER-79)', () => {
+  it('узкая — по своим колонкам, если широкой остаётся хотя бы 20rem; широкая — остаток', () => {
+    // Ноутбук 1440 с деревом: ряд 1096 px, зазор 12 — «Дежурства» (578) целиком, «Широкая доска» — 506
+    expect(allocateWidths([578, 3938], 1084)).toEqual([578, 506])
+    expect(allocateWidths([3938, 578], 1084)).toEqual([506, 578])
+  })
+
+  it('все помещаются — каждая по своей ширине', () => {
+    expect(allocateWidths([578, 1138], 2000)).toEqual([578, 1138])
+  })
+
+  it('узкой не хватает места без ущерба соседке — поровну', () => {
+    // 1138 + 320 > 1084: обе по 542
+    expect(allocateWidths([1138, 2266], 1084)).toEqual([542, 542])
+    expect(allocateWidths([2266, 2266, 2266], 1200)).toEqual([400, 400, 400])
+  })
+
+  it('узкие — целиком по очереди, пока остальным остаётся по 20rem; не хватает всем — поровну', () => {
+    // 320 и 400 — целиком, две широкие делят 1400 − 720
+    expect(allocateWidths([320, 3000, 400, 3000], 1400)).toEqual([320, 340, 400, 340])
+    // Четырём доскам по 20rem не хватает места — поровну
+    expect(allocateWidths([320, 3000, 400, 3000], 1200)).toEqual([300, 300, 300, 300])
+  })
+
+  it('шаблон ряда: ширины за вычетом зазоров и свёрнутых досок; до измерения — запасной вариант на CSS', () => {
+    const row = {
+      id: 'r',
+      boards: [
+        board('N', 'r', { leaf_columns_count: 2 }),
+        board('C', 'r', { collapsed: true }),
+        board('W', 'r', { leaf_columns_count: 14 }),
+      ],
+    }
+    // 1096 − 2 зазора − 200 (свёрнутая) = 872: узкая 578, широкая 294 — меньше 20rem, поэтому поровну
+    expect(rowTemplate(row, 1096, new Map([['C', 200]]))).toBe('436px fit-content(100%) 436px')
+    expect(rowTemplate(row, 1400, new Map([['C', 200]]))).toBe('578px fit-content(100%) 598px')
+    // Шапка свёрнутой ещё не измерена — запасной вариант
+    expect(rowTemplate(row, 1096)).toBe(rowTemplate(row))
+    expect(rowTemplate(row)).toBe(
+      'minmax(min(578px, 20rem, calc((100% - 24px) / 3)), 578px) fit-content(100%) minmax(min(3938px, 20rem, calc((100% - 24px) / 3)), 3938px)',
+    )
   })
 })
 
