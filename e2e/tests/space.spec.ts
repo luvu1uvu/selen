@@ -249,6 +249,55 @@ test('на вкладке «Участники» щелчок по доске в
   await expect(block(page, 'Нижняя')).toBeInViewport()
 })
 
+/**
+ * Считать сдвиги раскладки (layout-shift) досок первого ряда: без ширин доски ряда встают каждая на свою строку, и первый
+ * кадр без них — «прыжок».
+ */
+async function watchRowShifts(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { rowShifts: string[] }
+    w.rowShifts = []
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries() as unknown as { sources: { node?: Node | null }[] }[]) {
+        for (const { node } of entry.sources) {
+          const slot = node instanceof Element ? node.closest('[data-board-slot]') : null
+          if (slot && slot.closest('[data-board-row]') === document.querySelector('[data-board-row]'))
+            w.rowShifts.push(slot.querySelector('section')?.getAttribute('aria-label') ?? '?')
+        }
+      }
+    }).observe({ type: 'layout-shift' })
+  })
+}
+const rowShifts = (page: Page) => page.evaluate(() => (window as unknown as { rowShifts: string[] }).rowShifts)
+
+test('возврат на «Доски» и вход в пространство из дерева — доски ряда сразу на своих местах (U-1 UX-ревью LATER-81)', async ({
+  page,
+}) => {
+  const narrow = await rect(page, 'Узкая')
+  const wide = await rect(page, 'Широкая')
+  expect(wide.top).toBe(narrow.top)
+  await watchRowShifts(page)
+
+  await page.getByRole('tab', { name: 'Участники' }).click()
+  await expect(page.getByRole('tab', { name: 'Участники' })).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('tab', { name: 'Доски' }).click()
+  await expect(block(page, 'Широкая')).toBeVisible()
+  await page.waitForTimeout(300)
+  expect(await rowShifts(page)).toEqual([])
+  expect(await rect(page, 'Широкая')).toEqual(wide)
+
+  // Другое пространство и обратно: список досок «Рядов» уже загружен — холст сразу с досками
+  const tree = page.getByRole('navigation', { name: 'Дерево' })
+  await tree.getByRole('link', { name: /^Перестановка/ }).click()
+  await expect(page.getByRole('heading', { name: 'Перестановка', level: 1 })).toBeVisible()
+  await tree.getByRole('link', { name: /^Ряды/ }).click()
+  await expect(page.getByRole('heading', { name: 'Ряды', level: 1 })).toBeVisible()
+  await loaded(page, 'Широкая')
+  await page.waitForTimeout(300)
+  expect(await rowShifts(page)).toEqual([])
+  expect((await rect(page, 'Широкая')).top).toBe((await rect(page, 'Узкая')).top)
+})
+
 test('карточка открывается поверх пространства, закрытие — на то же место', async ({ page }) => {
   await block(page, 'Высокая').evaluate((section) => {
     const canvas = section.closest('[data-board-canvas]')!

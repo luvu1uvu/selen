@@ -16,6 +16,7 @@ import {
   type CollisionDetection,
   type DragStartEvent,
 } from '@dnd-kit/core'
+import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigationType, useSearchParams } from 'react-router'
 import { GripVertical, LayoutGrid } from 'lucide-react'
@@ -340,8 +341,10 @@ interface RowMetrics {
 }
 
 /**
- * Ширина рядов и свёрнутых досок — для раздачи ширин развёрнутым доскам (rowWidths; LATER-79, LATER-81). Меряется
- * ResizeObserver: при изменении окна, дерева, сворачивании и разворачивании.
+ * Ширина рядов и свёрнутых досок — для раздачи ширин развёрнутым доскам (rowWidths; LATER-79, LATER-81). Меряется до
+ * первой отрисовки и дальше ResizeObserver (окно, дерево, сворачивание) — тоже до отрисовки кадра: без ширин доски ряда
+ * встают каждая на свою строку, и раскладка перескакивала бы (U-1 UX-ревью LATER-81). Скрытый холст (другая вкладка)
+ * не меряется — ширины остаются прежними, возврат на «Доски» без сдвига.
  */
 function useRowMetrics(
   contentRef: RefObject<HTMLDivElement | null>,
@@ -352,6 +355,7 @@ function useRowMetrics(
     const content = contentRef.current
     if (!content) return
     const measure = () => {
+      if (content.clientWidth === 0) return
       const style = getComputedStyle(content)
       const width = Math.floor(
         content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
@@ -375,8 +379,9 @@ function useRowMetrics(
           : { width, collapsed },
       )
     }
-    // Первое измерение — сразу из ResizeObserver (он сообщает размер при подписке)
-    const observer = new ResizeObserver(measure)
+    measure()
+    // setState из ResizeObserver React применил бы отдельной задачей — уже после отрисовки кадра со старыми ширинами
+    const observer = new ResizeObserver(() => flushSync(measure))
     observer.observe(content)
     for (const section of content.querySelectorAll('[data-board-collapsed]'))
       observer.observe(section)
