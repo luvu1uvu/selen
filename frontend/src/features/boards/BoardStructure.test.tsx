@@ -114,14 +114,15 @@ describe('Структура доски через меню', () => {
     await screen.findByText('Сохранено')
 
     await userEvent.click(screen.getByRole('button', { name: /^Действия с доской «/ }))
+    // Окно из «⋯» доски открывается после того, как меню вернуло фокус на «⋯» (кадром позже)
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать доску' }))
-    await userEvent.clear(screen.getByLabelText('Название'))
+    await userEvent.clear(await screen.findByLabelText('Название'))
     await userEvent.type(screen.getByLabelText('Название'), 'Продукт 2')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 
     await userEvent.click(screen.getByRole('button', { name: /^Действия с доской «/ }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить дорожку' }))
-    await userEvent.type(screen.getByLabelText('Название'), 'Баги')
+    await userEvent.type(await screen.findByLabelText('Название'), 'Баги')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить дорожку' }))
 
     await vi.waitFor(() =>
