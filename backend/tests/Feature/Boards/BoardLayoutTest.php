@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Cards\DeleteCardAction;
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
 use App\Models\Board;
@@ -196,6 +197,26 @@ it('«только свои карточки»: счётчик — только 
 
     expect($count($restricted))->toBe(1)
         ->and($count($this->owner))->toBe(2);
+});
+
+it('счётчик не считает карточки из корзины — ни у кого, и у администратора пространства (ADR-0015)', function () {
+    makeCard($this->a, 'To Do', $this->owner, 'Живая');
+    app(DeleteCardAction::class)->handle(admin(), makeCard($this->a, 'To Do', $this->owner, 'В корзину'));
+
+    $count = collect($this->actingAs($this->owner)->getJson('/api/v1/spaces/DEV/boards')->assertOk()->json('data'))
+        ->firstWhere('name', 'A')['cards_count'];
+    expect($count)->toBe(1);
+});
+
+it('«только свои» через группу: счётчик — только свои карточки (ADR-0008, ADR-0012)', function () {
+    $contractor = member();
+    addToSpaceViaGroup($this->space, $contractor, SpaceRole::Editor, ownCardsOnly: true);
+    makeCard($this->a, 'To Do', $this->owner, 'Чужая');
+    makeCard($this->a, 'To Do', $contractor, 'Своя');
+
+    $count = collect($this->actingAs($contractor)->getJson('/api/v1/spaces/DEV/boards')->assertOk()->json('data'))
+        ->firstWhere('name', 'A')['cards_count'];
+    expect($count)->toBe(1);
 });
 
 it('удаление пустого пространства уносит ряды его досок', function () {

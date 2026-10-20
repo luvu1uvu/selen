@@ -23,10 +23,14 @@ return new class extends Migration
             $table->string('position', 255)->collation('C');
 
             $table->index(['space_id', 'position']);
+            // Цель составного ключа boards(row_id, space_id) ниже
+            $table->unique(['id', 'space_id']);
         });
 
         Schema::table('boards', function (Blueprint $table) {
-            $table->foreignUlid('row_id')->nullable()->after('space_id')->constrained('board_rows')->restrictOnDelete();
+            $table->ulid('row_id')->nullable()->after('space_id');
+            // Ряд — только из пространства самой доски: ряд другого пространства база не примет, даже если ошибётся код
+            $table->foreign(['row_id', 'space_id'])->references(['id', 'space_id'])->on('board_rows')->restrictOnDelete();
             $table->index(['row_id', 'position']);
         });
 
@@ -47,7 +51,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('boards', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('row_id');
+            $table->dropForeign(['row_id', 'space_id']);
+            $table->dropIndex(['row_id', 'position']);
+            $table->dropColumn('row_id');
         });
         Schema::dropIfExists('board_rows');
     }

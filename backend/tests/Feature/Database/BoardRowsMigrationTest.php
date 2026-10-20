@@ -2,11 +2,12 @@
 
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /*
 | Миграция рядов досок (2026_10_23_100001_create_board_rows_table, ADR-0019): каждая существующая доска — в свой ряд
-| в прежнем порядке; миграция обратима.
+| в прежнем порядке; миграция обратима; ряд доски — только из её пространства (составной внешний ключ).
 */
 
 it('раскладывает существующие доски по одной в ряд в прежнем порядке; обратима', function () {
@@ -50,4 +51,17 @@ it('раскладывает существующие доски по одной
     } finally {
         $connection->rollBack();
     }
+});
+
+it('база не принимает ряд другого пространства у доски', function () {
+    $owner = member();
+    $dev = space(['key' => 'DEV']);
+    $ops = space(['key' => 'OPS']);
+    addToSpace($dev, $owner, SpaceRole::Admin);
+    addToSpace($ops, $owner, SpaceRole::Admin);
+    $mine = makeBoard($dev, $owner, BoardTemplate::Empty, 'Моя');
+    $foreign = makeBoard($ops, $owner, BoardTemplate::Empty, 'Чужая');
+
+    expect(fn () => DB::transaction(fn () => DB::table('boards')->where('id', $mine->id)->update(['row_id' => $foreign->row_id])))
+        ->toThrow(QueryException::class, 'boards_row_id_space_id_foreign');
 });
