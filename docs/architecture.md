@@ -19,7 +19,7 @@
 
 - **Один домен для SPA и API.** Поэтому аутентификация — cookie-сессии Sanctum без токенов и без CORS.
 - **nginx** — единая точка входа; в dev проксирует SPA на Vite (с WebSocket для hot reload),
-  в prod будет раздавать собранную статику (пример — `docker/nginx/prod.conf.example`; доводится на этапе деплоя).
+  в prod будет раздавать собранную статику (пример — `docker/nginx/prod.conf.example`; доводится к пилоту).
 - **php-fpm, queue, scheduler** — один Docker-образ (`docker/php/Dockerfile`), разные команды.
 - **Конфигурация** — единый корневой `.env` (шаблон `.env.example`): его читают и docker compose,
   и Laravel (смонтирован в контейнер как `backend/.env`).
@@ -73,7 +73,7 @@
 | `labels` | `id`, `space_id` (null — общая метка компании), `name` (unique среди активных набора, без учёта регистра), `color`, `archived_at` |
 | `card_labels` | `card_id`, `label_id` (PK пара) |
 | `comments` | `id`, `card_id`, `author_id`, `body` jsonb (документ Tiptap; null у удалённого), `edited_at`, `deleted_at`, timestamps |
-| `mentions` | `card_id`, `user_id`, `source_type` card/comment, `source_id`, `mentioned_by`, `created_at` — кто где упомянут (уведомления этапа 3) |
+| `mentions` | `card_id`, `user_id`, `source_type` card/comment, `source_id`, `mentioned_by`, `created_at` — кто где упомянут (уведомления этапа 4) |
 | `checklists`, `checklist_items` | чек-лист карточки (`title`, `position`) и его пункты (`text`, `is_done`, `done_at`, `done_by`, `position`) |
 | `card_links` | `card_id`, `url` (http/https), `title`, `created_by` |
 | `attachments` | `id`, `card_id`, `uploaded_by`, `disk`, `path` (`{card_id}/{ulid}`; `''` — файл стёрт по сроку), `name`, `mime` (по содержимому), `size`, `kind` image/video/file, `deleted_at`, `deleted_by` (ADR-0010) |
@@ -208,8 +208,10 @@ IP и user agent входов — в `auth_audit` с автоочисткой ч
 
 ## Задел на будущее
 
+Порядок и состав этапов — [дорожная карта](roadmap.md).
+
 - **Отчёты (этап 9):** строятся по `card_transitions` (ADR-0006) и `card_blocks` (время разрешения блокировок, ADR-0011).
 - **Документы в дереве (этап 8):** новый `nav_nodes.type = document` со своей ссылкой; видимость папки — по тому же
   правилу «внутри есть доступный элемент» (ADR-0013). Новые источники доступа — только в `SpaceAccessResolver`.
 - **Realtime и уведомления (этап 4):** Laravel Reverb (стандарт Laravel); упоминания уже хранятся в `mentions`.
-- **Деплой:** один VPS, тот же набор сервисов; prod-конфиг nginx и инструкция — отдельный этап.
+- **Деплой:** один VPS, тот же набор сервисов; prod-конфиг nginx и инструкция — к пилоту.
