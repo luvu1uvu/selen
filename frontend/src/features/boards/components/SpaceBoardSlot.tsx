@@ -14,6 +14,8 @@ export interface SpaceBoardSlotProps {
   rows: BoardRowView[]
   /** Администратор пространства: ручка ⠿, пункты «Переставить» и «Архивировать доску…». */
   canManage: boolean
+  /** Доска первого экрана: грузится сразу, не дожидаясь IntersectionObserver (действует при появлении места). */
+  eager: boolean
   /** Идёт перестановка — следующая недоступна (useMoveBoard). */
   moving: boolean
   /** Эту доску сейчас переносят мышью — она приглушена, пока на её месте не окажется копия. */
@@ -35,7 +37,7 @@ export interface SpaceBoardSlotProps {
 export const SpaceBoardSlot = memo(function SpaceBoardSlot(props: SpaceBoardSlotProps) {
   const { board, dragging } = props
   const slotRef = useRef<HTMLDivElement>(null)
-  const near = useNearViewport(slotRef, !board.collapsed)
+  const near = useNearViewport(slotRef, !board.collapsed, props.eager)
   useScrollAnchorFallback(slotRef)
 
   return (

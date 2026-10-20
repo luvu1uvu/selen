@@ -3,10 +3,14 @@ import { useEffect, useState, type RefObject } from 'react'
 /**
  * Блок подошёл к видимой части холста (с запасом — экран сверху и снизу, ADR-0019, «Производительность»): тогда доска
  * загружается и рисуется. Один раз «да» — навсегда: загруженная доска остаётся в DOM. Без IntersectionObserver
- * (старый браузер, тесты) — сразу «да».
+ * (старый браузер, тесты) и для блока первого экрана (`eager` при появлении) — сразу «да».
  */
-export function useNearViewport(ref: RefObject<HTMLElement | null>, enabled = true): boolean {
-  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined')
+export function useNearViewport(
+  ref: RefObject<HTMLElement | null>,
+  enabled = true,
+  eager = false,
+): boolean {
+  const [near, setNear] = useState(() => eager || typeof IntersectionObserver === 'undefined')
 
   useEffect(() => {
     const element = ref.current

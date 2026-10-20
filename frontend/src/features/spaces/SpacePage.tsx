@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ArchivedBoardsDialog } from '@/features/boards/components/ArchivedBoardsDialog'
 import { CreateBoardDialog } from '@/features/boards/components/CreateBoardDialog'
 import { SpaceBoardsCanvas } from '@/features/boards/components/SpaceBoardsCanvas'
+import { useSpaceBoards } from '@/features/boards/queries'
 import { CardPanel } from '@/features/cards/components/CardPanel'
 import { useCard } from '@/features/cards/queries'
 import { SpaceLabelsPanel } from '@/features/labels/components/SpaceLabelsPanel'
@@ -35,6 +36,8 @@ export function SpacePage() {
   const { spaceKey = '', cardKey } = useParams()
   const navigate = useNavigate()
   const spaceQuery = useSpace(spaceKey)
+  // Список досок — вместе с пространством, а не после него: холст ждал бы два запроса подряд
+  useSpaceBoards(spaceKey)
   const openCard = useCallback(
     (key: string) => navigate(`/spaces/${spaceKey}/cards/${key}`),
     [navigate, spaceKey],

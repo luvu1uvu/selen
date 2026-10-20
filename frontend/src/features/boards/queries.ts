@@ -21,10 +21,16 @@ export function useBoard(boardId: string | undefined) {
   })
 }
 
+/**
+ * Доски пространства (порядок раскладки, счётчики, личное сворачивание). Страница пространства запрашивает список
+ * вместе с самим пространством, холст подключается к нему мгновением позже — staleTime, чтобы второй наблюдатель не
+ * перезапрашивал только что пришедший список.
+ */
 export function useSpaceBoards(spaceKey: string) {
   return useQuery({
     queryKey: boardKeys.ofSpace(spaceKey),
     queryFn: () => fetchSpaceBoards(spaceKey),
+    staleTime: 2_000,
   })
 }
 

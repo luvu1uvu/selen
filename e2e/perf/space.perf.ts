@@ -13,13 +13,16 @@ import { instrument, longestFrame, mark, median, resetOpen } from './frames'
  *   одной доски.
  * - Свернуть и развернуть доску — самый долгий кадр.
  * - Свёрнутая доска — ни одного запроса её карточек.
+ * - Для сравнения — открытие одной доски первого ряда («Широкая 1», 200 карточек) её страницей (/boards/ID), переходом
+ *   внутри приложения: так открывалась доска до страницы пространства («до» плана пакета).
  */
 
 const RUNS = Number(process.env.PERF_RUNS ?? 5)
 
-type Phase = 'open' | 'dragFirst' | 'dragFar' | 'collapse' | 'expand'
+type Phase = 'single' | 'open' | 'dragFirst' | 'dragFar' | 'collapse' | 'expand'
 
 const LABELS: Record<Phase, string> = {
+  single: '«Широкая 1» (200 карточек) своей страницей — для сравнения',
   open: 'Открытие пространства (от клика, первый ряд досок)',
   dragFirst: 'Перетаскивание на первой доске (самый долгий кадр)',
   dragFar: 'Перетаскивание на дальней доске (самый долгий кадр)',
@@ -95,9 +98,26 @@ test('пространство: 5 досок по 200 карточек — от�
   for (const slowdown of [1, 4]) {
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: slowdown })
-    const results: Record<Phase, number[]> = { open: [], dragFirst: [], dragFar: [], collapse: [], expand: [] }
+    const results: Record<Phase, number[]> = { single: [], open: [], dragFirst: [], dragFar: [], collapse: [], expand: [] }
+    const wide = boards.find((board) => board.name === 'Широкая 1')!
 
     for (let run = 0; run < RUNS; run++) {
+      // Для сравнения: та же доска своей страницей
+      await page.goto('/')
+      await expect(page.getByRole('heading', { name: 'Пространства' })).toBeVisible()
+      await page.evaluate(
+        ({ id, cards }) => {
+          window.__expectedCards = cards
+          window.__perf.readyAt = null
+          window.__perf.clickAt = performance.now()
+          history.pushState(null, '', `/boards/${id}`)
+          dispatchEvent(new PopStateEvent('popstate'))
+        },
+        { id: wide.id, cards: wide.cards_count },
+      )
+      await page.waitForFunction(() => window.__perf.readyAt !== null, null, { timeout: 30_000 })
+      results.single.push(await page.evaluate(() => Math.round(window.__perf.readyAt! - window.__perf.clickAt!)))
+
       await page.goto('/')
       await expect(page.getByRole('heading', { name: 'Пространства' })).toBeVisible()
       await page.waitForFunction(() => window.__perf.treeAt !== null, null, { timeout: 30_000 })

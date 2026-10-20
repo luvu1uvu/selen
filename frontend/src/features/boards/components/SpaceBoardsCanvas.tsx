@@ -67,6 +67,11 @@ export function SpaceBoardsCanvas({
   const page = `space:${space.key}`
   useScrollMemory(canvasRef, { name: 'canvas', page, ready: boardsQuery.isSuccess })
   useFocusBoard(canvasRef, contentRef, boards, page, setCollapsed)
+  // Доски первого экрана (первый ряд или ряд доски из ?board=ID) грузятся сразу, без ожидания IntersectionObserver:
+  // он сообщит о них только после первой отрисовки — на кадр позже
+  const [params] = useSearchParams()
+  const focusId = params.get('board')
+  const eagerRow = (rows.find((row) => row.boards.some((b) => b.id === focusId)) ?? rows[0])?.id
 
   const onArchive = useCallback((board: SpaceBoard) => setToArchive(board), [])
   const { activeBoard, drop, dndProps } = useBoardLayoutDnd(contentRef, boards, move)
@@ -106,6 +111,7 @@ export function SpaceBoardsCanvas({
                   board={board}
                   rows={rows}
                   canManage={canManage}
+                  eager={row.id === eagerRow}
                   moving={moving}
                   dragging={activeBoard?.id === board.id}
                   onMove={move}
