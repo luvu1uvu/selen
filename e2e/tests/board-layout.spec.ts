@@ -234,9 +234,7 @@ function blockOnCanvas(page: Page) {
 }
 
 test('доска с 4 колонками на широком экране — блок по ширине колонок, справа и снизу фон холста', async ({ page }) => {
-  await page.getByRole('navigation', { name: 'Дерево' }).getByRole('button', { name: 'Раскрыть «Сквозные тесты»' }).click()
-  await page.getByRole('navigation', { name: 'Дерево' }).getByRole('link', { name: 'Плотная доска', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Плотная доска' })).toBeVisible()
+  await openBoard(page, 'Сквозные тесты', 'Плотная доска')
 
   const m = await blockOnCanvas(page)
   expect(m.block.right).toBeLessThan(m.canvas.right - 100)
@@ -250,9 +248,7 @@ test('доска с 4 колонками на широком экране — б
 })
 
 test('доска без карточек — высота по содержимому, под ней фон холста', async ({ page }) => {
-  await page.getByRole('navigation', { name: 'Дерево' }).getByRole('button', { name: 'Раскрыть «Сквозные тесты»' }).click()
-  await page.getByRole('navigation', { name: 'Дерево' }).getByRole('link', { name: 'Дорожки', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Дорожки' })).toBeVisible()
+  await openBoard(page, 'Сквозные тесты', 'Дорожки')
 
   const m = await blockOnCanvas(page)
   expect(m.canvasBelow).toBe(true)
@@ -306,9 +302,7 @@ test('отступы блока: первая и последняя колонк
   expect(Math.abs(p.lastCell - p.title)).toBeLessThanOrEqual(1)
 
   // Узкая доска (колонки помещаются)
-  await page.getByRole('navigation', { name: 'Дерево' }).getByRole('button', { name: 'Раскрыть «Сквозные тесты»' }).click()
-  await page.getByRole('navigation', { name: 'Дерево' }).getByRole('link', { name: 'Плотная доска', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Плотная доска' })).toBeVisible()
+  await openBoard(page, 'Сквозные тесты', 'Плотная доска')
   p = await paddings(page)
   expect(Math.abs(p.firstColumn - p.title)).toBeLessThanOrEqual(1)
   expect(Math.abs(p.lastColumn - p.title)).toBeLessThanOrEqual(1)
@@ -322,8 +316,12 @@ test('отступы блока: первая и последняя колонк
  */
 test('узкая доска после перехода в другое пространство и возврата — по ширине колонок, как при первом открытии (LATER-66)', async ({ page }) => {
   const tree = page.getByRole('navigation', { name: 'Дерево' })
+  // Доска из дерева открывается на странице своего пространства среди других его досок (ADR-0019, PR 3) — меряем
+  // блок именно этой доски
   const blockWidth = () =>
-    page.evaluate(() => document.querySelector('[data-board-canvas] section[aria-label]')!.getBoundingClientRect().width)
+    page.evaluate(() =>
+      document.querySelector('[data-board-canvas] section[aria-label="Плотная доска"]')!.getBoundingClientRect().width,
+    )
   const openFromTree = async (name: string) => {
     await tree.getByRole('link', { name, exact: true }).click()
     await expect(page.getByRole('heading', { name })).toBeVisible()

@@ -107,10 +107,22 @@ export type BoardTemplate = 'simple' | 'development' | 'empty'
 export interface BoardSummary {
   id: string
   space_id: string
+  /** Ряд на странице пространства; position — порядок внутри ряда (ADR-0019). */
+  row_id: string
   name: string
   description: string | null
   position: string
   archived_at: string | null
+}
+
+/** Доска в списке пространства (страница пространства): без карточек, в порядке раскладки (ряд, место в ряду). */
+export interface SpaceBoard extends BoardSummary {
+  /** Колонки без подколонок — ширина доски без загрузки карточек. */
+  leaf_columns_count: number
+  /** Активные карточки, видимые пользователю (ADR-0008), — счётчик свёрнутой доски. */
+  cards_count: number
+  /** Пользователь свернул доску у себя (личный вид, ADR-0019). */
+  collapsed: boolean
 }
 
 /** Колонка доски: сначала колонка первого уровня, за ней её подколонки. category — действующий тип. */

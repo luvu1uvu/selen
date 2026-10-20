@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Actions\Attachments\UploadAttachmentAction;
 use App\Actions\Boards\CreateBoardAction;
+use App\Actions\Boards\MoveBoardAction;
 use App\Actions\CardBlocks\BlockCardAction;
 use App\Actions\CardBlocks\UnblockCardAction;
 use App\Actions\CardLinks\AddCardLinkAction;
@@ -58,7 +59,8 @@ use Illuminate\Support\Facades\Date;
  *
  * Пространства DEV, OPS, MKT с разными участниками и ролями; доски из обоих шаблонов; карточки
  * с реалистичной историей перемещений за последние 60 дней (на них проверяются отчёты этапа 5).
- * Доска DEV / «Продукт» — 300 карточек: на ней проверяется отзывчивость интерфейса. Фасады заполнены:
+ * Доска DEV / «Продукт» — 300 карточек: на ней проверяется отзывчивость интерфейса. Доски DEV стоят рядами (ADR-0019):
+ * [«Дежурства» (две колонки), «Широкая доска»], [«Продукт»], [«Инфраструктура»]. Фасады заполнены:
  * метки (общие и пространства), ответственные, сроки, «Срочно», оценки, чек-листы, комментарии
  * с упоминаниями, ссылки и картинки-вложения. zhanna@selen.test — editor DEV
  * в режиме «только свои карточки» (видит около десятка карточек).
@@ -110,14 +112,21 @@ class BoardsDemoSeeder extends Seeder
             app(CreateColumnAction::class)->handle($this->people['anna'], $wide, $name, ColumnCategory::InProgress, null, null, $wideDone->id);
         }
 
+        // Узкая доска в две колонки (страница пространства рядами, LATER-55, PR 3): в первом ряду рядом с «Широкой доской»
+        $duty = $this->board($dev, 'Дежурства', BoardTemplate::Empty, 'anna');
+        $now = app(CreateColumnAction::class)->handle($this->people['anna'], $duty, 'Сейчас', ColumnCategory::InProgress, null, null, null);
+        app(CreateColumnAction::class)->handle($this->people['anna'], $duty, 'Готово', ColumnCategory::Done, null, $now->id, null);
+
         $editorsDev = ['anna', 'boris', 'grigory', 'demo'];
         $this->fill($product, 300, $editorsDev, self::DEV_TITLES, [
             'Backlog', 'To Do', 'In Progress', 'Code Review', 'Ready for Testing', 'Testing', 'Ready for Merge', 'Done',
         ], rework: ['Testing' => 'In Progress'], extraLane: $urgent);
         $this->fill($infra, 25, ['anna', 'grigory'], self::INFRA_TITLES, ['To Do', 'In Progress', 'Review', 'Done']);
+        $this->fill($duty, 8, ['anna', 'grigory'], self::INFRA_TITLES, ['Сейчас', 'Готово']);
         $this->fill($requests, 30, ['egor', 'boris'], self::OPS_TITLES, ['To Do', 'In Progress', 'Review', 'Done'], extraLane: $planned);
         $this->fill($content, 25, ['dina', 'vera'], self::MKT_TITLES, ['To Do', 'Текст', 'Дизайн', 'Review', 'Done'], rework: ['Review' => 'Текст']);
 
+        $this->arrangeDev($product, $wide, $duty);
         $this->decorate([$product, $infra, $requests, $content]);
         $this->restrictedContractor($dev, $product);
         $this->groups($dev, $ops, $mkt);
@@ -198,6 +207,18 @@ class BoardsDemoSeeder extends Seeder
     private function board(Space $space, string $name, BoardTemplate $template, string $owner, ?string $description = null): Board
     {
         return app(CreateBoardAction::class)->handle($this->people[$owner], $space, ['name' => $name, 'description' => $description], $template);
+    }
+
+    /**
+     * Ряды досок DEV (страница пространства, ADR-0019): первый ряд — узкая «Дежурства» и «Широкая доска» (узкая —
+     * по своим колонкам, широкая — остаток ряда, прокрутка вбок внутри блока), дальше по одной в ряду — «Продукт»
+     * и «Инфраструктура».
+     */
+    private function arrangeDev(Board $product, Board $wide, Board $duty): void
+    {
+        $move = app(MoveBoardAction::class);
+        $duty = $move->handle($this->people['anna'], $duty, null, null, newRow: true, newRowBeforeId: $product->row_id);
+        $move->handle($this->people['anna'], $wide, $duty->id, null, rowId: $duty->row_id);
     }
 
     private function column(Board $board, string $name): BoardColumn

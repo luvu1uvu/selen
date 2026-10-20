@@ -10,6 +10,7 @@ const boards: BoardSummary[] = [
   {
     id: 'board-1',
     space_id: 'space-1',
+    row_id: 'row-1',
     name: 'Продукт',
     description: null,
     position: 'a0',
@@ -18,6 +19,7 @@ const boards: BoardSummary[] = [
   {
     id: 'board-2',
     space_id: 'space-1',
+    row_id: 'row-1',
     name: 'Релизы',
     description: null,
     position: 'a1',

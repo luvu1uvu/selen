@@ -21,7 +21,11 @@ const boardPage = async () => ({
   Component: (await import('@/features/boards/BoardPage')).BoardPage,
 })
 
-/** Страницы досок прокручиваются своим холстом (ADR-0019). */
+const spacePage = async () => ({
+  Component: (await import('@/features/spaces/SpacePage')).SpacePage,
+})
+
+/** Страницы досок и пространства прокручиваются своим холстом (ADR-0019). */
 const canvas: RouteHandle = { canvas: true }
 
 /**
@@ -60,12 +64,9 @@ export const routes: RouteObject[] = [
             children: [
               { path: '/', element: <HomePage /> },
               { path: '/profile', element: <ProfilePage /> },
-              {
-                path: '/spaces/:spaceKey',
-                lazy: async () => ({
-                  Component: (await import('@/features/spaces/SpacePage')).SpacePage,
-                }),
-              },
+              // Пространство — все его доски рядами на холсте (ADR-0019); карточка — поверх, со своим адресом
+              { path: '/spaces/:spaceKey', lazy: spacePage, handle: canvas },
+              { path: '/spaces/:spaceKey/cards/:cardKey', lazy: spacePage, handle: canvas },
               // Карточка открывается поверх своей доски, у неё свой адрес — ссылку можно переслать
               { path: '/boards/:boardId', lazy: boardPage, handle: canvas },
               { path: '/cards/:cardKey', lazy: boardPage, handle: canvas },

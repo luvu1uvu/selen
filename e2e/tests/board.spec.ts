@@ -144,8 +144,7 @@ test('быстрое перетаскивание туда-обратно меж
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('console', (message) => message.type() === 'error' && /Maximum update depth|#185/.test(message.text()) && errors.push(message.text()))
 
-  await page.getByRole('navigation', { name: 'Дерево' }).getByRole('link', { name: 'Плотная доска', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Плотная доска' })).toBeVisible()
+  await openBoard(page, 'Сквозные тесты', 'Плотная доска')
   const todo = page.getByRole('group', { name: 'To Do', exact: true })
   const inProgress = page.getByRole('group', { name: 'In Progress', exact: true })
   const crashed = async () =>

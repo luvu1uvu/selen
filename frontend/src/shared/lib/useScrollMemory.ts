@@ -43,6 +43,14 @@ if (typeof window !== 'undefined') {
   })
 }
 
+/**
+ * Есть ли запомненное место контейнера `name` у записи истории `key` для страницы `page` — то есть «Назад» и «Вперёд»
+ * (и перезагрузка) вернут прокрутку сами. Например, `?board=ID` прокручивает холст к доске, только если места нет.
+ */
+export function hasScrollPlace(key: string, name: string, page: string): boolean {
+  return positions.get(`${key}:${name}`)?.page === page
+}
+
 /** Сколько ждать, пока содержимое дорастёт до запомненного места (данные грузятся после перехода). */
 const RESTORE_TIMEOUT_MS = 2000
 

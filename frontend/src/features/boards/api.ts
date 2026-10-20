@@ -6,6 +6,7 @@ import type {
   Collection,
   ColumnCategory,
   Resource,
+  SpaceBoard,
 } from '@/shared/types/api'
 
 /** Соседи для позиционирования: сервер сам разберётся, если они устарели (ADR-0007). */
@@ -14,8 +15,9 @@ export interface Neighbours {
   before_id?: string | null
 }
 
-export async function fetchSpaceBoards(spaceKey: string): Promise<BoardSummary[]> {
-  const { data } = await api.get<Collection<BoardSummary>>(`/spaces/${spaceKey}/boards`)
+/** Все доски пространства (и архивные) в порядке раскладки: ряд, затем место в ряду (ADR-0019). */
+export async function fetchSpaceBoards(spaceKey: string): Promise<SpaceBoard[]> {
+  const { data } = await api.get<Collection<SpaceBoard>>(`/spaces/${spaceKey}/boards`)
   return data.data
 }
 
@@ -39,8 +41,22 @@ export async function updateBoard(
   await api.patch(`/boards/${boardId}`, payload)
 }
 
-export async function moveBoard(boardId: string, neighbours: Neighbours): Promise<void> {
-  await api.post(`/boards/${boardId}/move`, neighbours)
+/**
+ * Куда переставить доску в раскладке пространства (ADR-0019): в ряд между соседями-досками или отдельным новым рядом
+ * между рядами (null — с этой стороны рядов нет).
+ */
+export type BoardMoveTarget =
+  | ({ row_id: string } & Neighbours)
+  | { new_row_after_id: string | null; new_row_before_id: string | null }
+
+export async function moveBoard(boardId: string, target: BoardMoveTarget): Promise<void> {
+  await api.post(`/boards/${boardId}/move`, target)
+}
+
+/** Свернуть или развернуть доску у себя на странице пространства (личный вид, ADR-0019). */
+export async function setBoardCollapsed(boardId: string, collapsed: boolean): Promise<void> {
+  if (collapsed) await api.put(`/boards/${boardId}/collapsed`)
+  else await api.delete(`/boards/${boardId}/collapsed`)
 }
 
 export async function setBoardArchived(boardId: string, archived: boolean): Promise<void> {

@@ -18,10 +18,12 @@ async function createBoard(page: Page, name: string, description: string) {
   await expect(page.getByRole('heading', { name })).toBeVisible()
 }
 
-const info = (page: Page) => page.getByRole('button', { name: 'Описание доски' })
+// Новая доска открывается на странице пространства среди других досок (ADR-0019, PR 3): ⓘ и «⋯» — этой доски
+const info = (page: Page, board: string) =>
+  page.getByRole('region', { name: board }).getByRole('button', { name: 'Описание доски' })
 
-async function editDescription(page: Page, description: string) {
-  await page.getByRole('button', { name: 'Действия с доской' }).click()
+async function editDescription(page: Page, board: string, description: string) {
+  await page.getByRole('region', { name: board }).getByRole('button', { name: 'Действия с доской' }).click()
   await page.getByRole('menuitem', { name: 'Изменить описание' }).click()
   const dialog = page.getByRole('dialog', { name: 'Описание доски' })
   await dialog.getByLabel('Описание').fill(description)
@@ -32,26 +34,27 @@ async function editDescription(page: Page, description: string) {
 test('доска без описания и с описанием из пробелов — значка ⓘ нет', async ({ page }) => {
   await openHome(page)
   await createBoard(page, 'Без правил', '   ')
-  await expect(info(page)).toHaveCount(0)
+  await expect(info(page, 'Без правил')).toHaveCount(0)
 })
 
 test('описание: задать при создании, изменить и стереть через «⋯» — ⓘ появляется и пропадает', async ({ page }) => {
   await openHome(page)
   await createBoard(page, 'Доска с правилами', 'Как завести баг:\nшаги и ожидаемый результат')
 
-  await info(page).click()
+  const board = 'Доска с правилами'
+  await info(page, board).click()
   await expect(page.getByRole('dialog').filter({ hasText: 'Как завести баг:' })).toContainText('шаги и ожидаемый результат')
   await page.keyboard.press('Escape')
 
-  await editDescription(page, 'Новые правила')
-  await info(page).click()
+  await editDescription(page, board, 'Новые правила')
+  await info(page, board).click()
   await expect(page.getByRole('dialog').filter({ hasText: 'Новые правила' })).toBeVisible()
   await page.keyboard.press('Escape')
 
-  await editDescription(page, '')
-  await expect(info(page)).toHaveCount(0)
+  await editDescription(page, board, '')
+  await expect(info(page, board)).toHaveCount(0)
   // После перезагрузки — так же: описание стёрто на сервере
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Доска с правилами' })).toBeVisible()
-  await expect(info(page)).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: board })).toBeVisible()
+  await expect(info(page, board)).toHaveCount(0)
 })

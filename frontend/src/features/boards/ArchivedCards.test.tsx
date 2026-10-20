@@ -17,7 +17,7 @@ const archived = (key: string, title: string): CardSummary => ({
 
 /** Архив карточек — пункт меню «⋯» доски (ADR-0019: шапка доски в одну строку). */
 async function openArchive() {
-  await userEvent.click(await screen.findByRole('button', { name: 'Действия с доской' }))
+  await userEvent.click(await screen.findByRole('button', { name: /^Действия с доской «/ }))
   await userEvent.click(await screen.findByRole('menuitem', { name: 'Архив карточек' }))
 }
 
@@ -111,7 +111,7 @@ describe('Доска: архив карточек и блокировка на �
     renderApp('/boards/board-1')
 
     expect(await screen.findByRole('heading', { name: 'Продукт' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Действия с доской' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Действия с доской «/ })).not.toBeInTheDocument()
   })
 
   it('окно архива из меню «⋯»: фокус внутри окна, Esc закрывает окно', async () => {
@@ -147,7 +147,7 @@ describe('Доска: архив карточек и блокировка на �
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с доской' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Действия с доской «/ }))
     expect(await screen.findByRole('menuitem', { name: 'Архив карточек' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Добавить колонку' })).not.toBeInTheDocument()
   })

@@ -22,16 +22,18 @@ test('ТК-L50.11. Описание доски — за ⓘ, архив карт
   await openBoard(page, 'Раскладка', 'Длинная доска')
   await expect(page.getByRole('button', { name: 'Описание доски' })).toHaveCount(0)
 
-  // 1. Доска с описанием
+  // 1. Доска с описанием. Из дерева она открывается на странице пространства среди других досок (ADR-0019, PR 3):
+  // ⓘ и «⋯» — в шапке этой доски
   await page
     .getByRole('navigation', { name: 'Дерево' })
     .getByRole('link', { name: 'С описанием', exact: true })
     .click()
   await expect(page.getByRole('heading', { name: 'С описанием' })).toBeVisible()
   await expect(page.getByText('Первая строка описания')).toHaveCount(0)
+  const board = page.getByRole('region', { name: 'С описанием' })
 
   // 2. ⓘ рядом с названием: всплывающее окно с описанием, переносы строк сохранены, текст выделяется
-  await page.getByRole('button', { name: 'Описание доски' }).click()
+  await board.getByRole('button', { name: 'Описание доски' }).click()
   const popover = page.getByRole('dialog').filter({ hasText: 'Первая строка описания' })
   await expect(popover).toBeVisible()
   // innerText — текст как на экране: перенос строки остаётся переносом, только если он виден
@@ -43,7 +45,7 @@ test('ТК-L50.11. Описание доски — за ⓘ, архив карт
   await expect(popover).toBeHidden()
 
   // 3. «⋯» справа в шапке доски → «Архив карточек»
-  await page.getByRole('button', { name: 'Действия с доской' }).click()
+  await board.getByRole('button', { name: 'Действия с доской' }).click()
   await page.getByRole('menuitem', { name: 'Архив карточек' }).click()
   await expect(page.getByRole('dialog', { name: 'Архив карточек' })).toBeVisible()
 })

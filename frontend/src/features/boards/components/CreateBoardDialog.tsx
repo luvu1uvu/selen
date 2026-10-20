@@ -75,7 +75,8 @@ export function CreateBoardDialog({
       toast.success(t('create.created'))
       setOpen(false)
       reset()
-      navigate(`/boards/${board.id}`)
+      // Новая доска — новым рядом внизу пространства: холст прокручивается к ней (ADR-0019)
+      navigate(`/spaces/${spaceKey}?board=${board.id}`)
     } catch (error) {
       if (!applyValidationErrors(error, setError)) {
         toast.error(getErrorMessage(error, tc('errors.generic')))

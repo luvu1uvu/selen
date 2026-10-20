@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Actions\Boards\CreateBoardAction;
+use App\Actions\Boards\MoveBoardAction;
 use App\Actions\Cards\CreateCardAction;
 use App\Actions\Cards\SetCardArchivedAction;
 use App\Actions\Cards\UpdateCardAction;
@@ -52,6 +53,11 @@ use Illuminate\Database\Seeder;
  * в To Do), «Срочные» (2 в To Do, 1 в In Progress) и «Плановые» (1 в Backlog). «Длинные дорожки» (lanes.spec)
  * и «Длинные дорожки приёмки» (ТК-L55.8) — полосы закреплены при прокрутке вниз: «Основная» и «Срочные» по 20 карточек
  * в To Do (выше окна), «Плановые» — 2.
+ *
+ * Страница пространства рядами (PR 3 пакета, LATER-55): ROWS «Ряды» (e2e-editor — editor, e2e-restricted — editor
+ * «только свои») — ряды [«Узкая» (2 колонки), «Широкая» (8 колонок)], [«Высокая» (40 карточек в To Do — выше окна)],
+ * [«Нижняя»]; space.spec только смотрит (сворачивание возвращает). ARRANGE «Перестановка» — «Первая», «Вторая»,
+ * «Третья» по одной в ряду: их переставляет board-rows.spec (перетаскивание и меню), раскладка меняется по ходу файла.
  *
  * Дерево (tree.spec): папка «E2E Мобильные» с пространством MOB «Мобильные приложения» (доска «Релизы»,
  * e2e-editor — commenter); QA и MOVE «E2E Перенос» (только администратор) — в корне.
@@ -189,6 +195,8 @@ class E2eSeeder extends Seeder
         app(CreateColumnAction::class)->handle($admin, $lanes, 'Разработка', null, $inProgress, null, null);
         app(CreateColumnAction::class)->handle($admin, $lanes, 'Ревью', null, $inProgress, null, null);
 
+        $this->rows($admin, $editor, $restricted);
+
         $mobile = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Мобильные приложения', 'key' => 'MOB'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $mobile, $editor, SpaceRole::Commenter);
         app(CreateBoardAction::class)->handle($admin, $mobile, ['name' => 'Релизы'], BoardTemplate::Simple);
@@ -200,5 +208,51 @@ class E2eSeeder extends Seeder
 
         $empty = app(CreateFolderAction::class)->handle($admin, 'E2E Пустая', null, null);
         app(CreateFolderAction::class)->handle($admin, 'E2E Вложенная пустая', null, $empty->id);
+    }
+
+    /** Страница пространства рядами (ADR-0019, PR 3 пакета): пространства ROWS и ARRANGE — см. описание класса. */
+    private function rows(User $admin, User $editor, User $restricted): void
+    {
+        $create = app(CreateBoardAction::class);
+        $move = app(MoveBoardAction::class);
+        $card = app(CreateCardAction::class);
+        $column = fn (string $boardId, string $name) => BoardColumn::query()->where('board_id', $boardId)->where('name', $name)->sole();
+        $lane = fn (string $boardId) => Lane::query()->where('board_id', $boardId)->sole();
+
+        $rows = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Ряды', 'key' => 'ROWS'], [$admin]);
+        app(AddSpaceMemberAction::class)->handle($admin, $rows, $editor, SpaceRole::Editor);
+        app(AddSpaceMemberAction::class)->handle($admin, $rows, $restricted, SpaceRole::Editor);
+        app(SetSpaceMemberRestrictionAction::class)->handle($admin, $rows, $restricted, true);
+
+        $narrow = $create->handle($admin, $rows, ['name' => 'Узкая'], BoardTemplate::Empty);
+        $inbox = app(CreateColumnAction::class)->handle($admin, $narrow, 'Входящие', ColumnCategory::Queue, null, null, null);
+        app(CreateColumnAction::class)->handle($admin, $narrow, 'Готово', ColumnCategory::Done, null, $inbox->id, null);
+        foreach (range(1, 3) as $i) {
+            $card->handle($editor, $narrow, ['title' => "Узкая карточка {$i}"], $inbox, $lane($narrow->id));
+        }
+        $wide = $create->handle($admin, $rows, ['name' => 'Широкая'], BoardTemplate::Development);
+        foreach (range(1, 6) as $i) {
+            $card->handle($editor, $wide, ['title' => "Широкая карточка {$i}"], $column($wide->id, 'To Do'), $lane($wide->id));
+        }
+        // Своя карточка подрядчика (e2e-restricted, «только свои»): счётчик свёрнутой доски — по своим (ADR-0008)
+        $own = $card->handle($editor, $wide, ['title' => 'Широкая карточка подрядчика'], $column($wide->id, 'Backlog'), $lane($wide->id));
+        app(UpdateCardAction::class)->handle($editor, $own, ['responsible_id' => $restricted->id]);
+        $move->handle($admin, $wide, $narrow->id, null, rowId: $narrow->row_id);
+
+        $tall = $create->handle($admin, $rows, ['name' => 'Высокая'], BoardTemplate::Simple);
+        foreach (range(1, 40) as $i) {
+            $card->handle($editor, $tall, ['title' => "Высокая карточка {$i}"], $column($tall->id, 'To Do'), $lane($tall->id));
+        }
+        $bottom = $create->handle($admin, $rows, ['name' => 'Нижняя'], BoardTemplate::Simple);
+        foreach (range(1, 2) as $i) {
+            $card->handle($editor, $bottom, ['title' => "Нижняя карточка {$i}"], $column($bottom->id, 'To Do'), $lane($bottom->id));
+        }
+
+        $arrange = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Перестановка', 'key' => 'ARRANGE'], [$admin]);
+        app(AddSpaceMemberAction::class)->handle($admin, $arrange, $editor, SpaceRole::Editor);
+        foreach (['Первая', 'Вторая', 'Третья'] as $name) {
+            $board = $create->handle($admin, $arrange, ['name' => $name], BoardTemplate::Simple);
+            $card->handle($editor, $board, ['title' => "{$name}: карточка"], $column($board->id, 'To Do'), $lane($board->id));
+        }
     }
 }
