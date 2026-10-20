@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Hook агента ux-reviewer (.claude/agents/ux-reviewer.md, ADR-0023): агент только смотрит.
 #   Встроенный браузер (mcp__Claude_Browser__*) — только своя вкладка и только dev:
-#     tabs_create — только в фоне; номер вкладки из ответа hook запоминает (PostToolUse), tabs_close — забывает;
+#     tabs_create — только в фоне; номер новой вкладки (tab-N) из ответа hook запоминает (PostToolUse), tabs_close —
+#     забывает. Другой номер (seed — общая вкладка панели: так отвечает tabs_create, если панель закрыли) не запоминается;
 #     остальные действия — только с tabId из этого списка: вкладки PM и других сессий (в том числе со стендом) агент
 #     не трогает и на передний план не выводит;
 #     navigate — только страницы http://localhost:8080 (не 127.0.0.1: cookie не различают порт и были бы общими со
 #     стендом 127.0.0.1:8081), без «Назад/Вперёд» и адресов API;
+#     computer — без перетаскивания мышью (left_click_drag отпускает карточку — это перенос);
 #     javascript_tool — только чтение страницы: без сети, переходов, cookie, хранилищ и программных щелчков;
-#     browser_batch — те же правила для каждого шага, без tabs_create и вложенных пакетов.
+#     browser_batch — те же правила для каждого шага, без tabs_create, tabs_close и вложенных пакетов.
 #   Read и Grep — только в копиях Selen и в сохранённом выводе инструментов; секреты (.env, бэкапы, кеш конфигурации
 #     Laravel, файлы вложений) — нет; Grep со строками по каталогам, где они лежат, — только счётчик или список файлов.
 # Это защита от случайного (ошибка агента, инструкция из прочитанного текста), а не от злонамеренного агента:
@@ -52,10 +54,11 @@ PREFIX='mcp__Claude_Browser__'
 if [[ "$event" == "PostToolUse" ]]; then
   case "$tool" in
     "${PREFIX}tabs_create")
-      # Ответ: {"tabId": "tab-1", …} (текстом внутри ответа MCP — с экранированными кавычками)
+      # Ответ: {"tabId": "tab-1", …} (текстом внутри ответа MCP — с экранированными кавычками). Своя — только новая
+      # вкладка tab-N: на закрытой панели tabs_create открывает её заново и отвечает общей вкладкой seed
       tab="$(jq -c '.tool_response' <<< "$input" 2> /dev/null \
         | perl -ne 'if (/tabId\\*"\s*:\s*\\*"([A-Za-z0-9_-]+)/) { print $1; exit }')"
-      if [[ -n "$tab" ]]; then
+      if [[ "$tab" =~ ^tab-[0-9]+$ ]]; then
         mkdir -p "$TABS_DIR" && chmod 700 "$TABS_DIR" && printf '%s\n' "$tab" >> "$TABS_FILE"
       fi
       ;;
@@ -72,18 +75,25 @@ fi
 
 # --- Браузер: одно действие (name — без префикса, data — его input)
 check_url() {
-  local url="$1"
+  local url="$1" path
   [[ "$url" =~ ^http://localhost:8080([/?#][^[:space:]]*)?$ ]] \
     || deny "адрес вне dev: ${url}. Можно только страницы http://localhost:8080 (не стенд, не 127.0.0.1, не внешние сайты, без «Назад/Вперёд»)."
-  [[ "$url" =~ ^http://localhost:8080/+(api|sanctum)([/?#]|$) ]] \
-    && deny "адреса API агенту не нужны — только страницы приложения: ${url}"
+  # Путь без строки запроса: браузер и nginx приводят «\», «%xx», «.» и «..» к другому пути (/./api → /api)
+  path="${url#http://localhost:8080}"
+  path="${path%%[?#]*}"
+  case "$path" in
+    *\\* | *%* | */./* | */../* | */. | */..) deny "в пути адреса — «\\», «%» или «.»/«..»; путь — как его показывает приложение: ${url}" ;;
+  esac
+  [[ "$(tr '[:upper:]' '[:lower:]' <<< "$path")" =~ ^/+(api|sanctum)(/|$) ]] && deny "адреса API агенту не нужны — только страницы приложения: ${url}"
   return 0
 }
 
 check_js() {
   local js="$1" bad
-  # Сеть, переходы, cookie и хранилища, выполнение строк как кода, программные щелчки и отправка форм
-  bad="$(perl -0777 -ne 'if (/(\bfetch\b|XMLHttpRequest|sendBeacon|WebSocket|EventSource|\blocation\b|\bhistory\b|\bopen\s*\(|\.submit\s*\(|requestSubmit|\bcookie|localStorage|sessionStorage|indexedDB|\bcaches\b|serviceWorker|postMessage|\bimport\s*\(|\beval\b|\bFunction\s*\(|\.click\s*\(|dispatchEvent|document\.write)/) { print $1 }' <<< "$js")"
+  # Сеть, переходы (и Navigation API), cookie и хранилища, выполнение строк как кода, программные щелчки и отправка
+  # форм. Сбой perl — запрет
+  bad="$(perl -0777 -ne 'if (/(\bfetch\b|XMLHttpRequest|sendBeacon|WebSocket|EventSource|\blocation\b|\bhistory\b|\bnavigation\s*\.|\bopen\s*\(|\.submit\s*\(|requestSubmit|\bcookie|localStorage|sessionStorage|indexedDB|\bcaches\b|serviceWorker|postMessage|\bimport\s*\(|\beval\b|\bFunction\s*\(|\.click\b|\[\s*["\x27`]click["\x27`]\s*\]|dispatchEvent|document\.write)/) { print $1 }' <<< "$js")" \
+    || deny "сбой проверки JS — действие не выполнено."
   [[ -z "$bad" ]] || deny "JS — только чтение страницы (размеры, стили, текст); «${bad}» не разрешено. Щелчки и клавиши — computer, адрес — navigate."
   return 0
 }
@@ -109,16 +119,27 @@ browser_action() {
       done
       return 0
       ;;
-    navigate | computer | find | get_page_text | read_page | javascript_tool | resize_window | read_console_messages | tabs_close) ;;
+    tabs_close)
+      # Закрытие — отдельным вызовом: PostToolUse видит только его и вычёркивает номер
+      [[ "$in_batch" == 0 ]] || deny "tabs_close — отдельным вызовом, не в пакете: hook вычёркивает номер вкладки после закрытия."
+      ;;
+    navigate | computer | find | get_page_text | read_page | javascript_tool | resize_window | read_console_messages) ;;
     *) deny "инструмент браузера «${name}» агенту не разрешён." ;;
   esac
-  tab="$(jq -r '.tabId // empty' <<< "$data")"
+  # Номер вкладки — строка из букв, цифр, «-» и «_»: иначе приложение взяло бы активную вкладку, а перевод строки
+  # дал бы grep два образца
+  tab="$(jq -r '.tabId | if type == "string" then . else empty end' <<< "$data" 2> /dev/null)"
   [[ "$name" == tabs_close && "$tab" == ux-reviewer-hook-check ]] \
     && deny "hook-check: hook агента активен — браузер только в своей вкладке и только dev."
-  [[ -n "$tab" ]] || deny "${name}: нужен tabId своей вкладки — без него действие ушло бы в переднюю вкладку (PM или другой сессии)."
+  [[ "$tab" =~ ^[A-Za-z0-9_-]+$ ]] || deny "${name}: нужен tabId своей вкладки (строкой) — без него действие ушло бы в переднюю вкладку (PM или другой сессии)."
+  [[ "$(jq -r 'has("serverId")' <<< "$data" 2> /dev/null)" == "false" ]] || deny "${name}: serverId агенту не нужен — только tabId своей вкладки."
   own_tab "$tab" || deny "${name}: вкладка ${tab} создана не агентом (или уже закрыта) — чужие вкладки не трогаем. Своя — tabs_create."
   case "$name" in
     navigate) check_url "$(jq -r '.url // empty' <<< "$data")" ;;
+    computer)
+      [[ "$(jq -r '.action // empty' <<< "$data")" != left_click_drag ]] \
+        || deny "перетаскивание мышью отпускает карточку — это перенос, данные меняются. Место броска — переносом с клавиатуры с Esc."
+      ;;
     javascript_tool) check_js "$(jq -r '.text // empty' <<< "$data")" ;;
   esac
   return 0

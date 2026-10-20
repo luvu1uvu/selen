@@ -6,6 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 HOOK="$PWD/.claude/hooks/ux-reviewer-guard.sh"
+AGENT="$PWD/.claude/agents/ux-reviewer.md"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -84,6 +85,26 @@ browser 0 javascript_tool '{"action": "javascript_exec", "tabId": "tab-2", "text
 browser 0 javascript_tool '{"action": "javascript_exec", "tabId": "tab-2", "text": "document.querySelector(\"[data-board-canvas]\").scrollTop = 600"}'
 browser 0 browser_batch '{"actions": [{"name": "navigate", "input": {"url": "http://localhost:8080/boards/2", "tabId": "tab-2"}}, {"name": "computer", "input": {"action": "screenshot", "tabId": "tab-2"}}]}'
 
+# JS-замеры из описания агента (блоки ```js) проходят hook: правка списка запретов не ломает инструкцию незаметно
+snippets=0
+while IFS= read -r -d '' js; do
+  snippets=$((snippets + 1))
+  browser 0 javascript_tool "$(jq -nc --arg t "$js" '{action: "javascript_exec", tabId: "tab-2", text: $t}')"
+done < <(perl -0777 -ne 'while (/```js\n(.*?)\n```/gs) { print "$1\0" }' "$AGENT")
+[[ "$snippets" -ge 5 ]] || { echo "ПРОВАЛ: в описании агента не нашлось JS-замеров (${snippets})"; failed=$((failed + 1)); }
+
+# Мышью — всё, кроме перетаскивания: left_click_drag отпускает карточку (перенос), в пакете тоже
+browser 0 computer '{"action": "left_click", "coordinate": [10, 10], "tabId": "tab-2"}'
+browser 0 computer '{"action": "hover", "coordinate": [10, 10], "tabId": "tab-2"}'
+browser 2 computer '{"action": "left_click_drag", "start_coordinate": [1, 1], "coordinate": [200, 200], "tabId": "tab-2"}'
+browser 2 browser_batch '{"actions": [{"name": "computer", "input": {"action": "left_click_drag", "start_coordinate": [1, 1], "coordinate": [9, 9], "tabId": "tab-2"}}]}'
+
+# Номер вкладки — только строка; serverId не нужен
+browser 2 computer '{"action": "screenshot", "tabId": ["tab-2"]}'
+browser 2 computer '{"action": "screenshot", "tabId": 2}'
+browser 2 computer '{"action": "screenshot", "tabId": "tab-2\nseed"}'
+browser 2 computer '{"action": "screenshot", "tabId": "tab-2", "serverId": "preview-1"}'
+
 # Чужие вкладки — нельзя, в том числе другому агенту ux-reviewer
 browser 2 computer '{"action": "screenshot", "tabId": "seed"}'
 browser 2 computer '{"action": "screenshot", "tabId": "tab-2"}' agent-2
@@ -95,6 +116,8 @@ for url in 'http://127.0.0.1:8081/' 'http://127.0.0.1:8080/' 'http://localhost:8
   'http://localhost:8080.example.com/' 'https://example.kaiten.ru/space/1' 'HTTP://LOCALHOST:8080/' \
   'javascript:alert(1)' 'file:///etc/passwd' 'data:text/html,x' 'back' 'forward' '' \
   'http://localhost:8080/api/v1/auth/me' 'http://localhost:8080//api/v1/boards' 'http://localhost:8080/sanctum/csrf-cookie' \
+  'http://localhost:8080/./api/v1/auth/me' 'http://localhost:8080/x/../api/v1/auth/me' 'http://localhost:8080/%61pi/v1' \
+  'http://localhost:8080/\api/v1' 'http://localhost:8080/boards/..' 'http://localhost:8080/API/v1/auth/me' \
   'http://localhost:8080/ x' 'http://localhost:8080/
 x'; do
   browser 2 navigate "$(jq -nc --arg u "$url" '{url: $u, tabId: "tab-2"}')"
@@ -108,7 +131,9 @@ for js in 'fetch("/api/v1/cards", {method: "POST"})' 'window.fetch("/x")' 'new X
   'form.requestSubmit()' 'document.cookie' 'localStorage.setItem("a", 1)' 'sessionStorage.clear()' \
   'indexedDB.deleteDatabase("x")' 'parent.postMessage("x", "*")' 'import("https://example.com/x.js")' \
   'eval("1")' 'new Function("return 1")()' 'document.querySelector("button").click()' \
-  'el.dispatchEvent(new MouseEvent("click"))' 'document.write("x")' 'caches.keys()'; do
+  'el.dispatchEvent(new MouseEvent("click"))' 'document.write("x")' 'caches.keys()' \
+  'navigation.navigate("http://127.0.0.1:8081/")' 'navigation.back()' 'HTMLElement.prototype.click.call(btn)' \
+  'btn["click"]()' "btn['click']()"; do
   browser 2 javascript_tool "$(jq -nc --arg t "$js" '{action: "javascript_exec", tabId: "tab-2", text: $t}')"
 done
 
@@ -118,6 +143,7 @@ browser 2 browser_batch '{"actions": [{"name": "computer", "input": {"action": "
 browser 2 browser_batch '{"actions": [{"name": "computer", "input": {"action": "screenshot"}}]}'
 browser 2 browser_batch '{"actions": [{"name": "javascript_tool", "input": {"action": "javascript_exec", "tabId": "tab-2", "text": "fetch(\"/x\")"}}]}'
 browser 2 browser_batch '{"actions": [{"name": "tabs_create", "input": {}}]}'
+browser 2 browser_batch '{"actions": [{"name": "tabs_close", "input": {"tabId": "tab-2"}}]}'
 browser 2 browser_batch '{"actions": [{"name": "browser_batch", "input": {"actions": []}}]}'
 browser 2 browser_batch '{"actions": [{"name": "tabs_select", "input": {"tabId": "tab-2"}}]}'
 browser 2 browser_batch '{"actions": "x"}'
@@ -137,6 +163,27 @@ browser 2 computer '{"action": "screenshot", "tabId": "tab-2"}'
 # Ответ — объект, а не текст: номер тоже находится
 after tabs_create '{}' '{"tabId": "tab-7", "reused": false}'
 browser 0 computer '{"action": "screenshot", "tabId": "tab-7"}'
+
+# Панель закрыли — tabs_create открыл её заново и ответил общей вкладкой seed (или окном popup-N): не своя
+after tabs_create '{}' "$(created seed)"
+browser 2 computer '{"action": "screenshot", "tabId": "seed"}'
+browser 2 tabs_close '{"tabId": "seed"}'
+after tabs_create '{}' "$(created popup-3)"
+browser 2 computer '{"action": "screenshot", "tabId": "popup-3"}'
+
+# Две свои вкладки: закрыл одну — вторая остаётся своей
+after tabs_create '{}' "$(created tab-8)"
+after tabs_close '{"tabId": "tab-7"}' '[{"type": "text", "text": "Closed tab tab-7."}]'
+browser 2 computer '{"action": "screenshot", "tabId": "tab-7"}'
+browser 0 computer '{"action": "screenshot", "tabId": "tab-8"}'
+
+# Нет agent_id — ключ по session_id: вкладка запоминается и узнаётся так же
+run 0 'после tabs_create без agent_id' "$(jq -nc --arg d "$MAIN" --argjson r "$(created tab-11)" \
+  '{hook_event_name: "PostToolUse", session_id: "s9", cwd: $d, tool_name: "mcp__Claude_Browser__tabs_create", tool_input: {}, tool_response: $r}')"
+run 0 'своя вкладка по session_id' "$(jq -nc --arg d "$MAIN" \
+  '{hook_event_name: "PreToolUse", session_id: "s9", cwd: $d, tool_name: "mcp__Claude_Browser__computer", tool_input: {action: "screenshot", tabId: "tab-11"}}')"
+run 2 'вкладка session_id чужому агенту' "$(jq -nc --arg d "$MAIN" \
+  '{hook_event_name: "PreToolUse", session_id: "s9", agent_id: "agent-1", cwd: $d, tool_name: "mcp__Claude_Browser__computer", tool_input: {action: "screenshot", tabId: "tab-11"}}')"
 
 # Нет номера агента и сессии — свою вкладку не определить
 run 2 'нет номера агента и сессии' '{"tool_name": "mcp__Claude_Browser__tabs_context", "tool_input": {}}'
@@ -165,7 +212,8 @@ grep_case 2 "$WT" content
 grep_case 2 "$TMP/pm" count
 run 2 'Grep со строками по шаблону .env' "$(request PreToolUse Grep "$(jq -nc --arg p "$MAIN/frontend" '{path: $p, pattern: "x", glob: "*.env*", output_mode: "content"}')")"
 
-# --- Остальные инструменты — нет
+# --- Остальные инструменты — нет. В жизни их не даёт список tools: описания агента (matcher hook их не ловит); здесь —
+# запрет по умолчанию в самом hook
 run 2 'Bash' "$(request PreToolUse Bash '{"command": "ls"}')"
 run 2 'Write' "$(request PreToolUse Write "$(jq -nc --arg p "$MAIN/docs/x.md" '{file_path: $p, content: "x"}')")"
 run 2 'Claude in Chrome' "$(request PreToolUse mcp__claude-in-chrome__navigate '{"url": "http://localhost:8080/"}')"
