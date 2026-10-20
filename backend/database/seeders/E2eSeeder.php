@@ -47,6 +47,11 @@ use Illuminate\Database\Seeder;
  * и «С описанием» (описание в две строки — ТК-L50.11).
  * «Дорожки» (шаблон «Простой», без карточек): дорожки «Основная» и с длинным названием, у In Progress — подколонки
  * «Разработка» и «Ревью» (add-card.spec — форма «+» в заголовке колонки).
+ * В LAYOUT для PR 2 пакета (дорожки внутри доски и их сворачивание, LATER-55): «Доска с дорожками» (lanes.spec)
+ * и «Дорожки приёмки» (приёмочные тесты ТК-L55) — шаблон «Разработка» (шире окна), дорожки «Основная» (3 карточки
+ * в To Do), «Срочные» (2 в To Do, 1 в In Progress) и «Плановые» (1 в Backlog). «Длинные дорожки» (lanes.spec)
+ * и «Длинные дорожки приёмки» (ТК-L55.8) — полосы закреплены при прокрутке вниз: «Основная» и «Срочные» по 20 карточек
+ * в To Do (выше окна), «Плановые» — 2.
  *
  * Дерево (tree.spec): папка «E2E Мобильные» с пространством MOB «Мобильные приложения» (доска «Релизы»,
  * e2e-editor — commenter); QA и MOVE «E2E Перенос» (только администратор) — в корне.
@@ -143,6 +148,38 @@ class E2eSeeder extends Seeder
             'name' => 'С описанием',
             'description' => "Первая строка описания\nВторая строка описания",
         ], BoardTemplate::Simple);
+
+        // Дорожки внутри доски и их личное сворачивание (LATER-55): свои доски у lanes.spec и у приёмочных тестов —
+        // сворачивание хранится на сервере, тесты не должны мешать друг другу
+        foreach (['Доска с дорожками' => 'Дорожная', 'Дорожки приёмки' => 'Приёмочная'] as $boardName => $prefix) {
+            $withLanes = app(CreateBoardAction::class)->handle($admin, $layout, ['name' => $boardName], BoardTemplate::Development);
+            $column = fn (string $name) => BoardColumn::query()->where('board_id', $withLanes->id)->where('name', $name)->sole();
+            $main = Lane::query()->where('board_id', $withLanes->id)->sole();
+            $urgent = app(CreateLaneAction::class)->handle($admin, $withLanes, 'Срочные', null, null);
+            $planned = app(CreateLaneAction::class)->handle($admin, $withLanes, 'Плановые', null, null);
+            foreach ([
+                [$main, 'To Do', 'основная 1'], [$main, 'To Do', 'основная 2'], [$main, 'To Do', 'основная 3'],
+                [$urgent, 'To Do', 'срочная 1'], [$urgent, 'To Do', 'срочная 2'], [$urgent, 'In Progress', 'срочная в работе'],
+                [$planned, 'Backlog', 'плановая'],
+            ] as [$cardLane, $columnName, $title]) {
+                app(CreateCardAction::class)->handle($editor, $withLanes, ['title' => "{$prefix} {$title}"], $column($columnName), $cardLane);
+            }
+        }
+
+        // Полосы дорожек закреплены при прокрутке вниз (замечание PM к PR 2): дорожки выше окна, шире окна — шаблон
+        // «Разработка». Свои доски у lanes.spec и у приёмочного теста ТК-L55.8
+        foreach (['Длинные дорожки' => 'Длинная', 'Длинные дорожки приёмки' => 'Приёмка длинной'] as $boardName => $prefix) {
+            $long = app(CreateBoardAction::class)->handle($admin, $layout, ['name' => $boardName], BoardTemplate::Development);
+            $toDo = BoardColumn::query()->where('board_id', $long->id)->where('name', 'To Do')->sole();
+            $main = Lane::query()->where('board_id', $long->id)->sole();
+            $urgent = app(CreateLaneAction::class)->handle($admin, $long, 'Срочные', null, null);
+            $planned = app(CreateLaneAction::class)->handle($admin, $long, 'Плановые', null, null);
+            foreach ([[$main, 'основная', 20], [$urgent, 'срочная', 20], [$planned, 'плановая', 2]] as [$cardLane, $title, $count]) {
+                foreach (range(1, $count) as $i) {
+                    app(CreateCardAction::class)->handle($editor, $long, ['title' => "{$prefix} {$title} {$i}"], $toDo, $cardLane);
+                }
+            }
+        }
 
         // Форма «+» в заголовке колонки (add-card.spec, LATER-49): две дорожки, у второй — длинное название
         // (многоточие), у In Progress — подколонки

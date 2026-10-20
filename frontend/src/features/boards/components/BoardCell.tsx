@@ -10,6 +10,17 @@ import type { BoardLookups } from '../model'
 import { AddCardForm } from './AddCardForm'
 import { SortableCardTile } from './CardTile'
 
+/**
+ * Тонкая вертикальная линия между колонками (как в Kaiten): посередине зазора gap-2 слева от элемента, у первого
+ * в ряду — нет. Одна и та же у заголовков колонок и ячеек — линии идут от верха строки заголовков до низа дорожки.
+ */
+const DIVIDER =
+  'relative not-first:before:absolute not-first:before:-left-[4.5px] not-first:before:w-px not-first:before:bg-border'
+/** Линия на всю высоту элемента: ячейка, заголовок колонки первого уровня. */
+export const COLUMN_DIVIDER = `${DIVIDER} not-first:before:inset-y-0`
+/** Линия между подколонками: от их заголовка до низа строки заголовков (через её нижний отступ). */
+export const SUBCOLUMN_DIVIDER = `${DIVIDER} not-first:before:top-0 not-first:before:-bottom-2`
+
 /** Форма «+» из заголовка колонки (LATER-44): открыта в ячейке первой дорожки, карточка — в начало. */
 export interface TopCardForm {
   lanes: Lane[]
@@ -24,6 +35,9 @@ export interface TopCardForm {
  * область под последней карточкой (не меньше 40 px) и при фокусе с клавиатуры; форма открывается там же,
  * карточка встаёт в конец. В пустой ячейке кнопка видна всегда — иначе не найти, как создать карточку (и на
  * планшете нет наведения). Во время перетаскивания кнопки нет, зона остаётся: бросок принимает вся ячейка.
+ *
+ * Ячейка без своего фона: колонки разделены тонкими линиями (решение PM 19.10, как в Kaiten). Во время переноса
+ * ячейка, куда упадёт карточка, подсвечена (highlighted), а место в ней — пунктирная рамка (SortableCardTile).
  */
 export const BoardCell = memo(function BoardCell({
   id,
@@ -37,6 +51,7 @@ export const BoardCell = memo(function BoardCell({
   lookups,
   canEdit,
   dragging,
+  highlighted,
   topForm,
   onOpen,
 }: {
@@ -53,6 +68,8 @@ export const BoardCell = memo(function BoardCell({
   canEdit: boolean
   /** Идёт перетаскивание карточки — кнопки добавления не показываем. */
   dragging: boolean
+  /** Переносимая карточка сейчас здесь — сюда она и упадёт. */
+  highlighted?: boolean
   topForm?: TopCardForm
   onOpen: (key: string) => void
 }) {
@@ -68,8 +85,9 @@ export const BoardCell = memo(function BoardCell({
       role="group"
       aria-label={label}
       className={cn(
-        'bg-muted/40 flex min-h-24 w-68 shrink-0 flex-col gap-2 rounded-lg p-2',
-        isOver && 'bg-muted',
+        'flex min-h-24 w-68 shrink-0 flex-col gap-2 p-2',
+        COLUMN_DIVIDER,
+        (highlighted || isOver) && 'bg-muted',
       )}
     >
       {canEdit && topForm && (

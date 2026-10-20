@@ -96,7 +96,14 @@
     "archived": "Дорожка архивирована",
     "newTitle": "Новая дорожка",
     "renameTitle": "Дорожка",
-    "name": "Название"
+    "name": "Название",
+    "collapse": "Свернуть дорожку «{{name}}»",
+    "expand": "Развернуть дорожку «{{name}}»",
+    "cardsCount_one": "{{count}} карточка",
+    "cardsCount_few": "{{count}} карточки",
+    "cardsCount_many": "{{count}} карточек",
+    "cardsCount_other": "{{count}} карточки",
+    "collapseFailed": "Не удалось свернуть или развернуть дорожку. Попробуйте ещё раз."
   },
   "rename": {
     "title": "Переименовать",

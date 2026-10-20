@@ -193,6 +193,8 @@ export interface BoardDetail {
   has_done_column: boolean
   columns: BoardColumn[]
   lanes: Lane[]
+  /** Дорожки, которые пользователь у себя свернул (личный вид, ADR-0019), — в порядке дорожек. */
+  collapsed_lane_ids: string[]
   /** Только карточки, видимые пользователю (режим «только свои карточки»). */
   cards: BoardCard[]
   card_types: CardType[]

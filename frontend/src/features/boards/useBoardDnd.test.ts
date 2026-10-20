@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import type { BoardCard } from '@/shared/types/api'
 import { makeBoardCard, makeBoardDetail } from '@/test/boards'
-import { boardKeyboardCoordinates, useBoardDnd } from './useBoardDnd'
+import { boardKeyboardCoordinates, useBoardDnd, type CollapsedLaneProbe } from './useBoardDnd'
 
 const extra: BoardCard = makeBoardCard({
   id: 'c3',
@@ -120,6 +120,22 @@ describe('Перетаскивание карточек (логика доски
     expect(hook.result.current.cells['todo:main']).toEqual(['c1', 'c3'])
   })
 
+  it('над свёрнутой дорожкой (цели нет) карточка возвращается на своё место, отпускание ничего не меняет', () => {
+    const { hook, onMove, handlers } = setup()
+
+    act(() => handlers().onDragStart({ active: { id: 'c1' } }))
+    act(() => handlers().onDragOver({ active: { id: 'c1' }, over: { id: 'c2' } }))
+    expect(hook.result.current.cells['dev:main']).toEqual(['c1', 'c2'])
+
+    act(() => handlers().onDragOver({ active: { id: 'c1' }, over: null }))
+    expect(hook.result.current.cells['todo:main']).toEqual(['c1', 'c3'])
+    expect(hook.result.current.cells['dev:main']).toEqual(['c2'])
+
+    act(() => handlers().onDragEnd({ active: { id: 'c1' }, over: null }))
+    expect(onMove).not.toHaveBeenCalled()
+    expect(hook.result.current.cells['todo:main']).toEqual(['c1', 'c3'])
+  })
+
   it('клик сразу после перетаскивания карточку не открывает', () => {
     vi.useFakeTimers()
     const { hook, handlers } = setup()
@@ -222,6 +238,48 @@ describe('Цель перетаскивания (collisionDetection)', () => {
 
     const empty = { ...args({ x: 100, y: 300 }), droppableContainers: [container('todo:main')] }
     expect(detect(empty).map((c) => c.id)).toEqual(['todo:main'])
+  })
+
+  /** Строка свёрнутой дорожки — полоса по y [top, top + 40]; прокрутки холста нет (координаты содержимого = окна). */
+  const collapsedRowAt =
+    (row: { top: number }) =>
+    ({ y }: { x: number; y: number }): CollapsedLaneProbe => ({
+      y,
+      band: y >= row.top && y <= row.top + 40 ? { top: row.top, bottom: row.top + 40 } : null,
+    })
+
+  it('над строкой свёрнутой дорожки цели нет; дальше, вне колонок, — тоже нет (ADR-0019)', () => {
+    const hook = renderHook(() => useBoardDnd([], vi.fn(), collapsedRowAt({ top: 600 }))).result
+      .current
+    const detect = (pointer: { x: number; y: number }) =>
+      hook.collisionDetection(args(pointer)).map((c) => c.id)
+
+    expect(detect({ x: 400, y: 40 })).toEqual(['c2'])
+    // Не в соседнюю по вертикали дорожку, а «никуда»: такого droppable нет, dnd-kit отдаёт over = null
+    expect(detect({ x: 400, y: 620 })).toEqual(['collapsed-lane'])
+    expect(detect({ x: 275, y: 700 })).toEqual(['collapsed-lane'])
+    expect(detect({ x: 100, y: 40 })).toEqual(['c3'])
+  })
+
+  it('строка ушла из-под указателя (карточка вернулась, дорожка выше выросла) — «цели нет» держится в прежней полосе', () => {
+    const row = { top: 600 }
+    const hook = renderHook(() => useBoardDnd([], vi.fn(), collapsedRowAt(row))).result.current
+    const detect = (pointer: { x: number; y: number }) =>
+      hook.collisionDetection(args(pointer)).map((c) => c.id)
+
+    expect(detect({ x: 400, y: 620 })).toEqual(['collapsed-lane'])
+    // Возврат карточки на место сдвинул строку вниз на 70 px — под указателем теперь ячейки, но цель не меняется
+    row.top = 670
+    expect(detect({ x: 400, y: 620 })).toEqual(['collapsed-lane'])
+    expect(detect({ x: 400, y: 605 })).toEqual(['collapsed-lane'])
+    // Указатель вышел из прежней полосы — обычный выбор цели
+    expect(detect({ x: 400, y: 40 })).toEqual(['c2'])
+    // Новое начало переноса не наследует удержание
+    row.top = 600
+    expect(detect({ x: 400, y: 620 })).toEqual(['collapsed-lane'])
+    act(() => hook.handlers.onDragStart({ active: { id: 'c1' } }))
+    row.top = 670
+    expect(detect({ x: 400, y: 620 })).toEqual(['c2'])
   })
 
   it('с клавиатуры (без указателя) — по центру переносимой карточки', () => {

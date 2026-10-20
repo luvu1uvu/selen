@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react'
 
 /** Сдвиг колеса в пикселях: deltaMode 1 — строки, 2 — страницы. */
-function pixels(delta: number, mode: number, page: number) {
+export function wheelPixels(delta: number, mode: number, page: number) {
   return mode === 1 ? delta * 16 : mode === 2 ? delta * page : delta
 }
 
@@ -52,7 +52,7 @@ export function useSyncedScrollLeft({
       const vertical = shifted ? 0 : event.deltaY
       if (horizontal === 0 || Math.abs(vertical) > Math.abs(horizontal)) return
       event.preventDefault()
-      main.scrollLeft += pixels(horizontal, event.deltaMode, main.clientWidth)
+      main.scrollLeft += wheelPixels(horizontal, event.deltaMode, main.clientWidth)
     }
 
     elements.forEach((e) => e.addEventListener('scroll', sync, { passive: true }))

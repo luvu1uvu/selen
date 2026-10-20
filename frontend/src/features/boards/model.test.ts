@@ -1,6 +1,14 @@
 import type { BoardCard, BoardColumn } from '@/shared/types/api'
 import { makeBoardCard } from '@/test/boards'
-import { buildLayout, cellId, groupCardIds, moveCardLocally, neighboursAt } from './model'
+import {
+  allLanesCollapsed,
+  buildLayout,
+  lastLaneCollapsed,
+  cellId,
+  groupCardIds,
+  moveCardLocally,
+  neighboursAt,
+} from './model'
 
 function column(id: string, parent_id: string | null = null): BoardColumn {
   return { id, parent_id, name: id, category: 'queue', position: id }
@@ -89,5 +97,32 @@ describe('модель доски', () => {
         }),
       ),
     ).toEqual(['1a', '2a', '4b', '3c'])
+  })
+})
+
+describe('allLanesCollapsed', () => {
+  const lanes = [
+    { id: 'main', name: 'Основная', position: 'a0' },
+    { id: 'urgent', name: 'Срочные', position: 'a1' },
+  ]
+
+  it('свёрнуты все дорожки — да; хотя бы одна развёрнута — нет; одна дорожка — никогда (LATER-70)', () => {
+    expect(allLanesCollapsed({ lanes, collapsed_lane_ids: ['main', 'urgent'] })).toBe(true)
+    expect(allLanesCollapsed({ lanes, collapsed_lane_ids: ['urgent'] })).toBe(false)
+    expect(allLanesCollapsed({ lanes: [lanes[0]], collapsed_lane_ids: ['main'] })).toBe(false)
+  })
+})
+
+describe('lastLaneCollapsed', () => {
+  const lanes = [
+    { id: 'main', name: 'Основная', position: 'a0' },
+    { id: 'urgent', name: 'Срочные', position: 'a1' },
+  ]
+
+  it('свёрнута последняя — да (и при развёрнутых верхних); свёрнута только верхняя — нет; одна дорожка — нет (LATER-70)', () => {
+    expect(lastLaneCollapsed({ lanes, collapsed_lane_ids: ['urgent'] })).toBe(true)
+    expect(lastLaneCollapsed({ lanes, collapsed_lane_ids: ['main', 'urgent'] })).toBe(true)
+    expect(lastLaneCollapsed({ lanes, collapsed_lane_ids: ['main'] })).toBe(false)
+    expect(lastLaneCollapsed({ lanes: [lanes[0]], collapsed_lane_ids: ['main'] })).toBe(false)
   })
 })

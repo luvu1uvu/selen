@@ -64,12 +64,8 @@ export function ColumnHeader({
   const next = siblings[index + 1]
 
   return (
-    <div
-      className={cn(
-        'flex min-h-9 items-center justify-between gap-2 rounded-md px-2',
-        isTopLevel ? 'bg-muted/60' : 'bg-muted/30',
-      )}
-    >
+    // Без своей плашки: колонки разделены тонкими линиями (как в Kaiten); отступ слева — как у карточек в ячейке
+    <div className="flex min-h-9 items-center justify-between gap-2 px-2">
       <div className="flex min-w-0 items-center gap-2">
         <span className={cn('truncate text-sm', isTopLevel ? 'font-semibold' : 'font-medium')}>
           {column.name}
@@ -156,16 +152,14 @@ export function ColumnHeader({
   )
 }
 
-/** Заголовок дорожки (показывается, только если дорожек больше одной). */
-export function LaneHeader({
+/** Меню администратора у названия дорожки: переименовать, переставить, архивировать. */
+export function LaneMenu({
   lane,
   lanes,
-  canManage,
   onAction,
 }: {
   lane: Lane
   lanes: Lane[]
-  canManage: boolean
   onAction: (action: StructureAction) => void
 }) {
   const { t } = useTranslation('boards')
@@ -175,46 +169,41 @@ export function LaneHeader({
   const next = lanes[index + 1]
 
   return (
-    <div className="sticky left-0 flex w-fit items-center gap-1 py-2">
-      <span className="text-sm font-semibold">{lane.name}</span>
-      {canManage && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              aria-label={t('lane.menu', { name: lane.name })}
-            >
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onSelect={() => onAction({ kind: 'renameLane', lane })}>
-              {t('lane.rename')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!previous}
-              onSelect={() => previous && move({ id: lane.id, before_id: previous.id })}
-            >
-              {t('lane.moveUp')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!next}
-              onSelect={() => next && move({ id: lane.id, after_id: next.id })}
-            >
-              {t('lane.moveDown')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={() => onAction({ kind: 'archiveLane', lane })}
-            >
-              {t('lane.archive')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0"
+          aria-label={t('lane.menu', { name: lane.name })}
+        >
+          <MoreHorizontal />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onSelect={() => onAction({ kind: 'renameLane', lane })}>
+          {t('lane.rename')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!previous}
+          onSelect={() => previous && move({ id: lane.id, before_id: previous.id })}
+        >
+          {t('lane.moveUp')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!next}
+          onSelect={() => next && move({ id: lane.id, after_id: next.id })}
+        >
+          {t('lane.moveDown')}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="destructive"
+          onSelect={() => onAction({ kind: 'archiveLane', lane })}
+        >
+          {t('lane.archive')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

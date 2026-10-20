@@ -50,6 +50,7 @@ export function makeBoardDetail(overrides: Partial<BoardDetail> = {}): BoardDeta
       { id: 'done', parent_id: null, name: 'Done', category: 'done', position: 'a2' },
     ],
     lanes: [{ id: 'main', name: 'Основная', position: 'a0' }],
+    collapsed_lane_ids: [],
     cards: [
       makeBoardCard({ id: 'c1', key: 'DEV-1', title: 'Первая', column_id: 'todo' }),
       makeBoardCard({

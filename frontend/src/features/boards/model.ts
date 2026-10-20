@@ -42,6 +42,28 @@ export function buildLookups(board: BoardDetail, timeZone: string | undefined): 
   }
 }
 
+/**
+ * Свёрнуты все дорожки доски (личный вид, ADR-0019): тогда доска — шапка, заголовки колонок и полосы дорожек, блок
+ * кончается последней полосой (LATER-70). Одну дорожку не свернуть — у доски с одной дорожкой не бывает.
+ */
+export function allLanesCollapsed(
+  board: Pick<BoardDetail, 'lanes' | 'collapsed_lane_ids'>,
+): boolean {
+  const collapsed = new Set(board.collapsed_lane_ids)
+  return board.lanes.length > 1 && board.lanes.every((lane) => collapsed.has(lane.id))
+}
+
+/**
+ * Свёрнута последняя дорожка (личный вид, ADR-0019): блок доски кончается её полосой — ни минимальной высоты, ни
+ * отступа под ней (LATER-70, общее правило PM 20.10). Одну дорожку не свернуть — у доски с одной дорожкой не бывает.
+ */
+export function lastLaneCollapsed(
+  board: Pick<BoardDetail, 'lanes' | 'collapsed_lane_ids'>,
+): boolean {
+  const last = board.lanes.at(-1)
+  return board.lanes.length > 1 && !!last && board.collapsed_lane_ids.includes(last.id)
+}
+
 /** Идентификатор ячейки (колонка × дорожка) для drag-and-drop. */
 export function cellId(columnId: string, laneId: string): string {
   return `${columnId}:${laneId}`

@@ -13,6 +13,22 @@ import type { CardMoveTarget } from './useCardMove'
 
 type Cells = Record<string, string[]>
 
+/**
+ * Где указатель относительно строк свёрнутых дорожек (даёт доска): y — указатель, band — строка свёрнутой дорожки под
+ * ним (верх и низ) или null. Обе величины — в координатах содержимого холста: от его прокрутки они не зависят, а от
+ * сдвигов раскладки зависит только band.
+ */
+export interface CollapsedLaneProbe {
+  y: number
+  band: { top: number; bottom: number } | null
+}
+
+/**
+ * «Цели нет»: указатель над строкой свёрнутой дорожки. Такой зоны среди droppable нет, поэтому dnd-kit сообщает
+ * over = null — карточка возвращается на своё место, бросок отменяется.
+ */
+const NO_TARGET: Collision[] = [{ id: 'collapsed-lane' }]
+
 /** Минимум полей событий dnd-kit, нужный логике (удобно и для тестов). */
 interface DragEvent {
   active: { id: UniqueIdentifier }
@@ -47,10 +63,17 @@ function insertBefore(ids: string[], cardId: string, overId: string): string[] {
  * карточка этой ячейки, в зазоре между колонками — последняя найденная цель. С клавиатуры указателя нет — его роль
  * играет центр переносимой карточки: по «ближайшим углам» высокая пустая ячейка соседней колонки проигрывала
  * карточкам своей, и карточка из низа длинной колонки не переносилась вбок.
+ *
+ * Свёрнутая дорожка бросок не принимает (ADR-0019): ячеек у неё нет, а над её строкой (collapsedLaneAt) цели нет
+ * вовсе — иначе карточка ушла бы в соседнюю по вертикали дорожку. Карточка тогда показана на своём месте, отпускание
+ * ничего не меняет. Возврат карточки на место может сдвинуть строку (её дорожка или дорожка выше снова выросла) из-под
+ * указателя — и цель снова зависела бы от раскладки, которую меняет сам перенос (пинг-понг выше). Поэтому «цели нет»
+ * держится, пока указатель в той полосе, где он встретил строку, а не там, где строка теперь.
  */
 export function useBoardDnd(
   cards: BoardCard[],
   onMove: (card: BoardCard, target: CardMoveTarget) => void,
+  collapsedLaneAt?: (point: { x: number; y: number }) => CollapsedLaneProbe | null,
 ) {
   const cardsById = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards])
   const serverCells = useMemo(() => groupCardIds(cards), [cards])
@@ -62,45 +85,64 @@ export function useBoardDnd(
   const [activeId, setActiveId] = useState<string | null>(null)
   const justDragged = useRef(false)
   const lastTarget = useRef<Collision[]>([])
+  // Полоса строки свёрнутой дорожки, над которой указатель встретил «цели нет» (координаты содержимого холста)
+  const heldBand = useRef<CollapsedLaneProbe['band']>(null)
   const cells =
     dragCells ?? (dropped && dropped.server === serverCells ? dropped.cells : serverCells)
 
-  const collisionDetection = useCallback<CollisionDetection>((args) => {
-    const box = args.collisionRect
-    const pointer = args.pointerCoordinates ?? {
-      x: box.left + box.width / 2,
-      y: box.top + box.height / 2,
-    }
+  const collisionDetection = useCallback<CollisionDetection>(
+    (args) => {
+      const box = args.collisionRect
+      const pointer = args.pointerCoordinates ?? {
+        x: box.left + box.width / 2,
+        y: box.top + box.height / 2,
+      }
+      const probe = collapsedLaneAt?.(pointer)
+      if (probe) {
+        const held = heldBand.current
+        if (held && probe.y >= held.top && probe.y <= held.bottom) return NO_TARGET
+        heldBand.current = probe.band
+        if (probe.band) {
+          lastTarget.current = NO_TARGET
+          return NO_TARGET
+        }
+      }
 
-    // Ячейки, в чьей вертикальной полосе указатель; из них — ближайшая по вертикали (0 — указатель внутри)
-    const [cell] = args.droppableContainers
-      .filter((c) => isCellId(String(c.id)))
-      .flatMap((c) => {
-        const rect = args.droppableRects.get(c.id)
-        if (!rect || pointer.x < rect.left || pointer.x > rect.right) return []
-        return [{ id: c.id, distance: Math.max(rect.top - pointer.y, 0, pointer.y - rect.bottom) }]
-      })
-      .sort((a, b) => a.distance - b.distance)
-    if (!cell) return lastTarget.current
+      // Ячейки, в чьей вертикальной полосе указатель; из них — ближайшая по вертикали (0 — указатель внутри)
+      const [cell] = args.droppableContainers
+        .filter((c) => isCellId(String(c.id)))
+        .flatMap((c) => {
+          const rect = args.droppableRects.get(c.id)
+          if (!rect || pointer.x < rect.left || pointer.x > rect.right) return []
+          return [
+            { id: c.id, distance: Math.max(rect.top - pointer.y, 0, pointer.y - rect.bottom) },
+          ]
+        })
+        .sort((a, b) => a.distance - b.distance)
+      if (!cell) return lastTarget.current
 
-    const cardContainers = args.droppableContainers.filter(
-      (c) => c.data.current?.sortable?.containerId === cell.id,
-    )
-    const [card] = closestCenter({ ...args, droppableContainers: cardContainers })
-    lastTarget.current = [card ?? cell]
-    return lastTarget.current
-  }, [])
+      const cardContainers = args.droppableContainers.filter(
+        (c) => c.data.current?.sortable?.containerId === cell.id,
+      )
+      const [card] = closestCenter({ ...args, droppableContainers: cardContainers })
+      lastTarget.current = [card ?? cell]
+      return lastTarget.current
+    },
+    [collapsedLaneAt],
+  )
 
   const onDragStart = ({ active }: Pick<DragEvent, 'active'>) => {
     lastTarget.current = []
+    heldBand.current = null
     setActiveId(String(active.id))
     setDropped(null)
     setDragCells(serverCells)
   }
 
-  // Состояние меняется только при смене ячейки; порядок внутри ячейки ведёт SortableContext (без setState)
+  // Состояние меняется только при смене ячейки; порядок внутри ячейки ведёт SortableContext (без setState).
+  // Цели нет (над свёрнутой дорожкой) — карточка на своём месте
   const onDragOver = ({ active, over }: DragEvent) => {
-    if (!over) return
+    if (!over) return setDragCells(serverCells)
     setDragCells((previous) => {
       const current = previous ?? serverCells
       const from = findCell(String(active.id), current)

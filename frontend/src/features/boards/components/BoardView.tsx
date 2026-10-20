@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -14,14 +22,24 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/shared/lib/utils'
 import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import { useSyncedScrollLeft } from '@/shared/lib/useSyncedScrollLeft'
-import type { BoardDetail } from '@/shared/types/api'
+import type { BoardDetail, Lane } from '@/shared/types/api'
 import { useCurrentUser } from '@/features/auth/queries'
-import { buildLayout, buildLookups, cellId, countCards, parseCellId } from '../model'
-import { boardKeyboardCoordinates, useBoardDnd } from '../useBoardDnd'
+import {
+  allLanesCollapsed,
+  buildLayout,
+  buildLookups,
+  cellId,
+  countCards,
+  parseCellId,
+} from '../model'
+import { boardKeyboardCoordinates, useBoardDnd, type CollapsedLaneProbe } from '../useBoardDnd'
 import { useCardMove } from '../useCardMove'
-import { BoardCell, type TopCardForm } from './BoardCell'
+import { useLaneCollapse } from '../useLaneCollapse'
+import { useStickyLaneRows } from '../useStickyLaneRows'
+import { BoardCell, COLUMN_DIVIDER, SUBCOLUMN_DIVIDER, type TopCardForm } from './BoardCell'
 import { CardTileView } from './CardTile'
-import { ColumnHeader, LaneHeader } from './StructureMenus'
+import { LaneRow } from './LaneRow'
+import { ColumnHeader } from './StructureMenus'
 import type { StructureAction } from './StructureDialogs'
 
 /**
@@ -34,6 +52,10 @@ import type { StructureAction } from './StructureDialogs'
  * привязался бы к нему, а не к холсту) и повторяет его горизонтальную прокрутку; родная полоса прокрутки тела
  * скрыта, вместо неё — полоса внизу окна. Автопрокрутка при перетаскивании: у края доски едет тело, у верхнего
  * и нижнего края окна — холст.
+ *
+ * Дорожки — строки внутри блока доски (LATER-55): строка дорожки (название, счётчик, свернуть) и под ней ячейки по
+ * колонкам; одна дорожка — без строки. Свёрнутая пользователем дорожка — одна строка: ячеек нет, «+ Карточка» нет,
+ * бросок не принимает; «+» в заголовке колонки открывает форму в первой развёрнутой дорожке.
  */
 export function BoardView({
   board,
@@ -50,32 +72,118 @@ export function BoardView({
   const { data: me } = useCurrentUser()
   const lookups = useMemo(() => buildLookups(board, me?.timezone), [board, me?.timezone])
   const moveCard = useCardMove(board.id)
-  const { cells, cardsById, activeCard, guardClick, collisionDetection, handlers } = useBoardDnd(
-    board.cards,
-    moveCard,
-  )
-  const openCard = useMemo(() => guardClick(onOpenCard), [guardClick, onOpenCard])
-  const canEdit = board.permissions.edit_cards
-  const canManage = board.permissions.manage
-  const topLevel = layout.groups.map((group) => group.column)
-  const showLaneHeaders = board.lanes.length > 1
-  // «+» в заголовке листовой колонки: форма в её ячейке первой дорожки, карточка — в начало (LATER-44)
-  const [topFormColumn, setTopFormColumn] = useState<string | null>(null)
-  const firstLaneId = board.lanes[0]?.id
-  const addCardAtTop = (columnId: string) =>
-    canEdit ? () => setTopFormColumn(columnId) : undefined
-  const topForm = (columnId: string): TopCardForm => ({
-    lanes: board.lanes,
-    cellCardIds: (laneId) => cells[cellId(columnId, laneId)] ?? EMPTY,
-    onClose: () => setTopFormColumn(null),
-  })
+  const setLaneCollapsed = useLaneCollapse(board.id)
 
   const headerRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
-  useSyncedScrollLeft({ body: bodyRef, header: headerRef, bar: barRef })
   const stickyRef = useRef<HTMLDivElement>(null)
-  useStickyOffset(stickyRef, bodyRef)
+  // Строки свёрнутых дорожек — над ними перетаскиваемая карточка цели не находит (useBoardDnd). Считаются только в
+  // видимой части тела доски ниже закреплённых заголовков: строка тянется на всю ширину прокрутки, а уехавшая под
+  // заголовки — не перехватывает указатель над ними. Вертикаль — в координатах содержимого холста
+  const collapsedRows = useRef(new Map<string, HTMLElement>())
+  const collapsedLaneAt = useCallback(({ x, y }: { x: number; y: number }) => {
+    const body = bodyRef.current
+    if (!body || collapsedRows.current.size === 0) return null
+    const scroll = body.closest('[data-board-canvas]')?.scrollTop ?? 0
+    const visible = body.getBoundingClientRect()
+    const top = stickyRef.current?.getBoundingClientRect().bottom ?? visible.top
+    // Свёрнутые дорожки в конце доски — ниже тела, под полосой прокрутки: по вертикали — до низа блока
+    const bottom = body.parentElement?.getBoundingClientRect().bottom ?? visible.bottom
+    const probe: CollapsedLaneProbe = { y: y + scroll, band: null }
+    if (x < visible.left || x > visible.right || y < top || y > bottom) return probe
+    for (const row of collapsedRows.current.values()) {
+      const rect = row.getBoundingClientRect()
+      if (y >= rect.top && y <= rect.bottom) {
+        probe.band = { top: rect.top + scroll, bottom: rect.bottom + scroll }
+        break
+      }
+    }
+    return probe
+  }, [])
+  const { cells, cardsById, activeCard, guardClick, collisionDetection, handlers } = useBoardDnd(
+    board.cards,
+    moveCard,
+    collapsedLaneAt,
+  )
+  const openCard = useMemo(() => guardClick(onOpenCard), [guardClick, onOpenCard])
+  // Ячейка, где сейчас переносимая карточка, — туда она и упадёт (подсветка)
+  const targetCell = activeCard
+    ? Object.keys(cells).find((key) => cells[key].includes(activeCard.id))
+    : undefined
+  const canEdit = board.permissions.edit_cards
+  const canManage = board.permissions.manage
+  const topLevel = layout.groups.map((group) => group.column)
+  const showLaneHeaders = board.lanes.length > 1
+  // Одна дорожка — строки нет, свернуть её нельзя (даже если свернули, пока дорожек было больше)
+  const collapsed = useMemo(
+    () => new Set(showLaneHeaders ? board.collapsed_lane_ids : []),
+    [showLaneHeaders, board.collapsed_lane_ids],
+  )
+  // Свёрнутые дорожки в конце доски (идут подряд до последней) под развёрнутыми — после полосы прокрутки вбок, вне
+  // тела (renderLane). Свёрнуты все — остаются в теле: полосы прокрутки тогда нет, а пустое тело (одна линейка нулевой
+  // высоты) браузер вбок не прокручивает
+  let tail = board.lanes.length
+  while (showLaneHeaders && tail > 0 && collapsed.has(board.lanes[tail - 1].id)) tail--
+  if (tail === 0) tail = board.lanes.length
+  const laneCounts = useMemo(() => {
+    const result: Record<string, number> = {}
+    for (const card of board.cards) result[card.lane_id] = (result[card.lane_id] ?? 0) + 1
+    return result
+  }, [board.cards])
+  // «+» в заголовке листовой колонки: форма в её ячейке первой развёрнутой дорожки, карточка — в начало (LATER-44).
+  // Свёрнуты все — «+» разворачивает первую дорожку и открывает форму в ней (решение PM 4). Форма привязана к своей
+  // дорожке: её свернули (или не удалось развернуть) — форма закрывается, а не переезжает в другую дорожку
+  const [topForm, setTopForm] = useState<{ columnId: string; laneId: string } | null>(null)
+  const [seenCollapsed, setSeenCollapsed] = useState(collapsed)
+  if (seenCollapsed !== collapsed) {
+    setSeenCollapsed(collapsed)
+    if (topForm && collapsed.has(topForm.laneId) && !seenCollapsed.has(topForm.laneId))
+      setTopForm(null)
+  }
+  const firstLaneId = board.lanes.find((lane) => !collapsed.has(lane.id))?.id
+  const addCardAtTop = (columnId: string) =>
+    canEdit
+      ? () => {
+          const laneId = firstLaneId ?? board.lanes[0]?.id
+          if (!laneId) return
+          if (!firstLaneId) setLaneCollapsed(laneId, false)
+          setTopForm({ columnId, laneId })
+        }
+      : undefined
+  const topFormProps = (columnId: string): TopCardForm => ({
+    lanes: board.lanes,
+    cellCardIds: (laneId) => cells[cellId(columnId, laneId)] ?? EMPTY,
+    onClose: () => setTopForm(null),
+  })
+
+  useSyncedScrollLeft({ body: bodyRef, header: headerRef, bar: barRef })
+  // Закреплённая полоса дорожки (useStickyLaneRows) — тоже над элементом, к которому прокручивают
+  useStickyOffset(stickyRef, bodyRef, showLaneHeaders ? LANE_ROW_PX : 0)
+  const updateStickyBands = useStickyLaneRows(bodyRef, stickyRef)
+  // Свернули или развернули дорожку — полоса остаётся там же на экране: свёрнутая из закреплённой полосы доска остаётся
+  // на этой дорожке, а не уезжает к следующим (её карточки пропали) или к началу (замечание PM к PR 2)
+  const toggleAnchor = useRef<{ laneId: string; top: number } | null>(null)
+  const laneRowOf = (laneId: string) =>
+    bodyRef.current?.parentElement?.querySelector<HTMLElement>(
+      `[data-lane-section="${laneId}"] [data-lane-row]`,
+    )
+  const toggleLane = (laneId: string, collapse: boolean) => {
+    const row = laneRowOf(laneId)
+    if (row) toggleAnchor.current = { laneId, top: row.getBoundingClientRect().top }
+    setLaneCollapsed(laneId, collapse)
+  }
+  useLayoutEffect(() => {
+    updateStickyBands()
+    const anchor = toggleAnchor.current
+    toggleAnchor.current = null
+    const row = anchor && laneRowOf(anchor.laneId)
+    const canvas = bodyRef.current?.closest('[data-board-canvas]')
+    if (!anchor || !row || !canvas) return
+    // Полоса снова в потоке (пересчёт выше) — холст сдвигается так, чтобы она стояла, где была
+    canvas.scrollTop += row.getBoundingClientRect().top - anchor.top
+    updateStickyBands()
+  }, [collapsed, updateStickyBands])
   // «Назад» возвращает и прокрутку доски вбок
   useScrollMemory(bodyRef, { name: `board:${board.id}`, page: board.id, axis: 'x' })
 
@@ -118,6 +226,79 @@ export function BoardView({
     },
   }
 
+  /**
+   * Дорожка: полоса (если дорожек больше одной) и ячейки по колонкам. trailing — свёрнутая дорожка в конце доски: она
+   * вне тела, после полосы прокрутки вбок (у неё нет ячеек, прокручивать вбок нечего), — так блок кончается её полосой,
+   * а полоса прокрутки остаётся под развёрнутыми дорожками выше (LATER-70, LATER-4).
+   */
+  const renderLane = (lane: Lane, index: number, trailing: boolean) => {
+    const isCollapsed = collapsed.has(lane.id)
+    return (
+      <section
+        key={lane.id}
+        aria-label={lane.name}
+        data-lane-section={lane.id}
+        // Последняя дорожка тянется до низа доски — фон колонок доходит до низа блока
+        className={cn(
+          'flex flex-col',
+          !isCollapsed && index === board.lanes.length - 1 && 'flex-1',
+        )}
+      >
+        {/* Обёртка держит место полосы в потоке, когда сама полоса закреплена под заголовками колонок */}
+        {showLaneHeaders && (
+          <div className={cn('h-10', !trailing && '-mx-3')}>
+            <LaneRow
+              lane={lane}
+              lanes={board.lanes}
+              count={laneCounts[lane.id] ?? 0}
+              collapsed={isCollapsed}
+              canManage={canManage}
+              // Дорожки разделены тонкой линией; над первой — нижняя граница заголовков колонок
+              className={cn(index > 0 && 'border-t')}
+              rowRef={(row) => {
+                if (row && isCollapsed) collapsedRows.current.set(lane.id, row)
+                else collapsedRows.current.delete(lane.id)
+              }}
+              onAction={onAction}
+              onToggle={() => toggleLane(lane.id, !isCollapsed)}
+            />
+          </div>
+        )}
+        {/* Без вертикальных отступов: линии между колонками — от строки заголовков до низа дорожки */}
+        {!isCollapsed && (
+          <div className="flex flex-1 items-stretch gap-2">
+            {layout.leaves.map((column) => {
+              const id = cellId(column.id, lane.id)
+              return (
+                <BoardCell
+                  key={id}
+                  id={id}
+                  label={showLaneHeaders ? `${column.name} / ${lane.name}` : column.name}
+                  boardId={board.id}
+                  columnId={column.id}
+                  columnName={column.name}
+                  laneId={lane.id}
+                  cardIds={cells[id] ?? EMPTY}
+                  cardsById={cardsById}
+                  lookups={lookups}
+                  canEdit={canEdit}
+                  dragging={activeCard !== undefined}
+                  highlighted={id === targetCell}
+                  topForm={
+                    topForm?.columnId === column.id && topForm.laneId === lane.id
+                      ? topFormProps(column.id)
+                      : undefined
+                  }
+                  onOpen={openCard}
+                />
+              )
+            })}
+          </div>
+        )}
+      </section>
+    )
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -130,9 +311,10 @@ export function BoardView({
         <div ref={headerRef} className="overflow-hidden" data-board-columns>
           {/* Отступы слева и справа — как у шапки доски: колонки не касаются края блока ни в начале, ни в конце
               прокрутки (LATER-65); у строки заголовков и тела одинаковые, иначе заголовки разъедутся с колонками */}
-          <div className="inline-flex min-w-full gap-2 px-3 py-2">
+          {/* Вертикальные отступы — у колонок, а не у строки: линии между колонками — на всю её высоту */}
+          <div className="inline-flex min-w-full gap-2 px-3">
             {layout.groups.map((group) => (
-              <div key={group.column.id} className="flex flex-col gap-1">
+              <div key={group.column.id} className={cn('flex flex-col gap-1 py-2', COLUMN_DIVIDER)}>
                 <div className={group.children.length ? 'w-full' : 'w-68'}>
                   <ColumnHeader
                     column={group.column}
@@ -147,7 +329,7 @@ export function BoardView({
                 {group.children.length > 0 && (
                   <div className="flex gap-2">
                     {group.children.map((child) => (
-                      <div key={child.id} className="w-68">
+                      <div key={child.id} className={cn('w-68', SUBCOLUMN_DIVIDER)}>
                         <ColumnHeader
                           column={child}
                           siblings={group.children}
@@ -175,55 +357,25 @@ export function BoardView({
         className="relative flex flex-1 scrollbar-none flex-col overflow-x-auto [&_*]:scroll-mt-(--board-sticky)"
         data-board-body
       >
-        <div className="flex min-w-full flex-1 flex-col gap-2 self-start px-3 py-2">
-          {board.lanes.map((lane, index) => (
-            <section
-              key={lane.id}
-              aria-label={lane.name}
-              // Последняя дорожка тянется до низа доски — фон колонок доходит до низа окна
-              className={cn('flex flex-col', index === board.lanes.length - 1 && 'flex-1')}
-            >
-              {showLaneHeaders && (
-                <LaneHeader
-                  lane={lane}
-                  lanes={board.lanes}
-                  canManage={canManage}
-                  onAction={onAction}
-                />
-              )}
-              <div className="flex flex-1 items-stretch gap-2">
-                {layout.leaves.map((column) => {
-                  const id = cellId(column.id, lane.id)
-                  return (
-                    <BoardCell
-                      key={id}
-                      id={id}
-                      label={showLaneHeaders ? `${column.name} / ${lane.name}` : column.name}
-                      boardId={board.id}
-                      columnId={column.id}
-                      columnName={column.name}
-                      laneId={lane.id}
-                      cardIds={cells[id] ?? EMPTY}
-                      cardsById={cardsById}
-                      lookups={lookups}
-                      canEdit={canEdit}
-                      dragging={activeCard !== undefined}
-                      topForm={
-                        topFormColumn === column.id && lane.id === firstLaneId
-                          ? topForm(column.id)
-                          : undefined
-                      }
-                      onOpen={openCard}
-                    />
-                  )
-                })}
-              </div>
-            </section>
-          ))}
+        {/* Отступы слева и справа — у контейнера (как у строки заголовков, LATER-65); строка дорожки растянута на всю
+            ширину блока отрицательными полями */}
+        <div className="flex min-w-full flex-1 flex-col self-start px-3">
+          {/* Линейка нулевой высоты по колонкам: ширину тела задают не только ячейки — свёрнуты все дорожки, а доска
+              всё равно прокручивается вбок до последней колонки (вместе с заголовками) */}
+          <div aria-hidden className="flex h-0 gap-2">
+            {layout.leaves.map((column) => (
+              <div key={column.id} className="w-68 shrink-0" />
+            ))}
+          </div>
+          {board.lanes.slice(0, tail).map((lane, index) => renderLane(lane, index, false))}
         </div>
       </div>
 
-      <BoardScrollbar barRef={barRef} bodyRef={bodyRef} />
+      {/* Свёрнуты все дорожки — полосы прокрутки вбок нет (иначе она стояла бы между заголовками и полосами): вбок доска
+          прокручивается тачпадом, Shift+колесом над заголовками и с клавиатуры (LATER-70) */}
+      <BoardScrollbar barRef={barRef} bodyRef={bodyRef} hidden={allLanesCollapsed(board)} />
+      {/* Свёрнутые дорожки в конце — под полосой прокрутки: блок кончается последней полосой (LATER-70) */}
+      {board.lanes.slice(tail).map((lane, index) => renderLane(lane, tail + index, true))}
       <DragOverlay>
         {activeCard && (
           <CardTileView card={activeCard} lookups={lookups} className="w-64 rotate-2 shadow-lg" />
@@ -237,26 +389,32 @@ const EMPTY: string[] = []
 
 /** Шапка доски (h-12) над закреплёнными заголовками колонок — их высота разная (подколонки). */
 const BOARD_HEADER_PX = 48
+/** Полоса дорожки (h-10, LaneRow). */
+const LANE_ROW_PX = 40
 
 /**
- * Высота закреплённых шапки и заголовков колонок — в CSS-переменную `--board-sticky` тела доски: от неё
- * отступ при прокрутке к элементу (scroll-margin), чтобы он не оказался под заголовками.
+ * Высота закреплённых шапки и заголовков колонок (и полосы дорожки — extra) — в CSS-переменную `--board-sticky` тела
+ * доски: от неё отступ при прокрутке к элементу (scroll-margin), чтобы он не оказался под заголовками.
  */
 function useStickyOffset(
   stickyRef: RefObject<HTMLDivElement | null>,
   bodyRef: RefObject<HTMLDivElement | null>,
+  extra: number,
 ) {
   useEffect(() => {
     const sticky = stickyRef.current
     const body = bodyRef.current
     if (!sticky || !body) return
     const measure = () =>
-      body.style.setProperty('--board-sticky', `${BOARD_HEADER_PX + sticky.offsetHeight + 8}px`)
+      body.style.setProperty(
+        '--board-sticky',
+        `${BOARD_HEADER_PX + sticky.offsetHeight + extra + 8}px`,
+      )
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(sticky)
     return () => observer.disconnect()
-  }, [stickyRef, bodyRef])
+  }, [stickyRef, bodyRef, extra])
 }
 
 /**
@@ -266,11 +424,19 @@ function useStickyOffset(
 function BoardScrollbar({
   barRef,
   bodyRef,
+  hidden,
 }: {
   barRef: RefObject<HTMLDivElement | null>
   bodyRef: RefObject<HTMLDivElement | null>
+  hidden: boolean
 }) {
   const [size, setSize] = useState({ content: 0, overflows: false })
+
+  // Скрытая полоса прокрутку не повторяет (у неё нет размеров) — показали снова: на место тела
+  useEffect(() => {
+    if (!hidden && barRef.current && bodyRef.current)
+      barRef.current.scrollLeft = bodyRef.current.scrollLeft
+  }, [hidden, barRef, bodyRef])
 
   useEffect(() => {
     const body = bodyRef.current
@@ -297,7 +463,7 @@ function BoardScrollbar({
       // хоть раз ставший шире колонок, сам держал эту ширину через полосу (LATER-66)
       className={cn(
         'bg-background/90 sticky bottom-0 z-10 [scrollbar-width:thin] overflow-x-auto overflow-y-hidden [contain:inline-size]',
-        size.overflows ? 'min-h-3' : 'invisible h-0',
+        hidden ? 'hidden' : size.overflows ? 'min-h-3' : 'invisible h-0',
       )}
       data-board-scrollbar
     >

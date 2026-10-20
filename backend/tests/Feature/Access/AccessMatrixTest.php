@@ -68,6 +68,9 @@ function spaceEndpoints(): array
         ['PATCH', 'lanes/{lane}', 'admin'],
         ['POST', 'lanes/{lane}/move', 'admin'],
         ['POST', 'lanes/{lane}/archive', 'admin'],
+        // Личное сворачивание дорожки — вид, а не изменение доски (ADR-0019)
+        ['PUT', 'lanes/{lane}/collapsed', 'member'],
+        ['DELETE', 'lanes/{lane}/collapsed', 'member'],
 
         ['POST', 'boards/{board}/cards', 'editor'],
         ['GET', 'cards/{card}', 'member'],

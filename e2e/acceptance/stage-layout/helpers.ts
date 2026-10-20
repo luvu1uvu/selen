@@ -1,9 +1,10 @@
 import { expect, type Locator, type Page } from '@playwright/test'
+import { openBoard, openHome } from '../../tests/helpers'
 
 /**
- * Общие шаги приёмочных автотестов PR 1 пакета «Раскладка» (LATER-4, LATER-50; docs/stages/layout-package.md,
- * ТК-L50.*). Прокрутка в приложении — не у окна, а у холста страницы доски (вертикаль) и тела доски (вбок), ADR-0019:
- * мерить её надо у этих контейнеров.
+ * Общие шаги приёмочных автотестов пакета «Раскладка»: PR 1 (LATER-4, LATER-50; docs/stages/layout-package.md,
+ * ТК-L50.*) и PR 2 (LATER-55, ТК-L55.* — в конце файла). Прокрутка в приложении — не у окна, а у холста страницы
+ * доски (вертикаль) и тела доски (вбок), ADR-0019: мерить её надо у этих контейнеров.
  *
  * Данные E2eSeeder, пространство «Раскладка» (LAYOUT): «Длинная доска» — 8 колонок, 30 карточек в To Do (только
  * читаем: её же ждёт нетронутой board-layout.spec); «Доска переносов» — такая же, её карточки тесты переносят и
@@ -108,3 +109,85 @@ export function cardsIn(page: Page, column: string) {
 export async function expectNoCrash(page: Page) {
   await expect(page.getByText('Что-то пошло не так')).toHaveCount(0)
 }
+
+/*
+ * PR 2 пакета (LATER-55, ТК-L55.*): дорожки — строки внутри доски, личное сворачивание, сетка колонок. Доска «Продукт»
+ * демо-данных → «Дорожки приёмки» пространства «Раскладка» (E2eSeeder): шаблон «Разработка» (шире окна), дорожки
+ * «Основная» (3 карточки в To Do), «Срочные» (2 в To Do, 1 в In Progress) и «Плановые» (1 в Backlog). Сворачивание
+ * хранится на сервере и у каждого пользователя своё — каждый автотест сначала разворачивает все дорожки сам.
+ */
+export const LANES_BOARD = 'Дорожки приёмки'
+export const LANES = ['Основная', 'Срочные', 'Плановые']
+
+/** Дорожка — блок с её строкой и ячейками; строка — полоса с названием, счётчиком и шевроном. */
+export const lane = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
+export const laneRow = (page: Page, name: string) => lane(page, name).locator('[data-lane-row]')
+export const toggle = (page: Page, name: string, action: 'Свернуть' | 'Развернуть') =>
+  lane(page, name).getByRole('button', { name: `${action} дорожку «${name}»` })
+export const cell = (page: Page, name: string) => page.getByRole('group', { name, exact: true })
+
+/** Развернуть все свёрнутые дорожки — по одной: следующая, когда эта развернулась (иначе щелчок попал бы в неё же). */
+export async function expandAllLanes(page: Page) {
+  await expect(page.locator('[data-lane-row]')).toHaveCount(LANES.length)
+  const expand = page.getByRole('button', { name: /^Развернуть дорожку/ })
+  for (let left = await expand.count(); left > 0; left--) {
+    await expand.first().click()
+    await expect(expand).toHaveCount(left - 1)
+  }
+}
+
+/** «Дорожки приёмки» с развёрнутыми дорожками. */
+export async function openLanesBoard(page: Page) {
+  await openHome(page)
+  await openBoard(page, 'Раскладка', LANES_BOARD)
+  await expandAllLanes(page)
+}
+
+export const center = (box: { x: number; y: number; width: number; height: number }) => ({
+  x: box.x + box.width / 2,
+  y: box.y + box.height / 2,
+})
+
+/** Плавное движение мыши (с зажатой кнопкой — перенос, как от человека: dnd-kit начинает его после сдвига на 5 px). */
+export async function glide(page: Page, from: { x: number; y: number }, to: { x: number; y: number }, steps = 20) {
+  for (let step = 1; step <= steps; step++) {
+    await page.mouse.move(from.x + ((to.x - from.x) * step) / steps, from.y + ((to.y - from.y) * step) / steps)
+  }
+}
+
+/**
+ * Место переносимой карточки в теле доски — кнопка с её названием и пунктирной рамкой: в какой ячейке и где.
+ * Переносимая под указателем копия (DragOverlay) — вне тела доски и сюда не попадает.
+ */
+export function slotOf(page: Page, name: string) {
+  return page.evaluate((name) => {
+    const slots = [...document.querySelectorAll('[data-board-body] [role="button"], [data-board-body] button')].filter(
+      (el) => el.getAttribute('aria-label') === name,
+    )
+    return slots.map((el) => {
+      const box = el.getBoundingClientRect()
+      return {
+        cell: el.closest('[role="group"]')?.getAttribute('aria-label') ?? null,
+        dashed: getComputedStyle(el).outlineStyle === 'dashed',
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+      }
+    })
+  }, name)
+}
+
+/** Фон ячеек тела доски: подсвеченная — с фоном, остальные — прозрачные. */
+export function cellBackgrounds(page: Page) {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      [...document.querySelectorAll('[data-board-body] [role="group"]')].map((c) => [
+        c.getAttribute('aria-label'),
+        getComputedStyle(c).backgroundColor,
+      ]),
+    ),
+  )
+}
+
+export const TRANSPARENT = 'rgba(0, 0, 0, 0)'
