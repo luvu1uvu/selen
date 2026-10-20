@@ -45,17 +45,24 @@ export function BoardBlock({
   const { t } = useTranslation('boards')
   const [action, setAction] = useState<StructureAction>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
+  // Свёрнуты все дорожки (их больше одной — одну не свернуть) — доска из шапки, заголовков и полос: минимальная высота
+  // оставила бы под полосами пустую область (замечание PM к PR 2)
+  const collapsed = new Set(board.collapsed_lane_ids)
+  const allLanesCollapsed =
+    board.lanes.length > 1 && board.lanes.every((lane) => collapsed.has(lane.id))
 
   return (
     <section
       aria-label={board.name}
       // Блок на фоне холста (поправка PM 19.10, как в Kaiten): ширина — по колонкам, но не шире холста (тогда тело
       // прокручивается вбок внутри блока); не уже 20rem — шапка с названием и кнопками не ломается и при одной
-      // колонке; высота — по содержимому, не ниже 15rem (шапка, заголовки и ячейка с «+ Карточка»).
+      // колонке; высота — по содержимому, не ниже 15rem (шапка, заголовки и ячейка с «+ Карточка»), а при всех
+      // свёрнутых дорожках — ровно по содержимому.
       // overflow: clip — содержимое обрезается по скруглённой рамке (уголки шапки, прижатой к верху холста, не торчат);
       // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста
       className={cn(
-        'bg-background flex min-h-60 w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
+        'bg-background flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
+        !allLanesCollapsed && 'min-h-60',
         className,
       )}
     >
