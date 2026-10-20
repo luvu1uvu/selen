@@ -1,65 +1,23 @@
 import { expect, test, type Page } from '@playwright/test'
 import { login } from '../tests/helpers'
+import { instrument, longestFrame, mark, median } from './frames'
 
 /**
- * Замер отзывчивости доски DEV / «Продукт» (300 карточек, BoardsDemoSeeder) на production-сборке.
- * Запуск: make perf. Методика — docs/runbook.md, раздел «Производительность доски».
+ * Замер отзывчивости доски DEV / «Продукт» (300 карточек, BoardsDemoSeeder) на production-сборке — её отдельной
+ * страницей (/boards/ID). Запуск: make perf. Методика — docs/runbook.md, раздел «Производительность доски».
  *
  * Для каждого действия считаем самый долгий кадр (разрыв между requestAnimationFrame) — сколько
- * интерфейс не мог перерисоваться. Открытие доски — от клика по ссылке до кадра, в котором видны все
- * карточки (с сетью и загрузкой чанка).
+ * интерфейс не мог перерисоваться. Открытие доски — от перехода до кадра, в котором видны все карточки (с сетью и
+ * загрузкой чанка). Ссылка доски в дереве с PR 3 пакета «Раскладка» ведёт на страницу пространства (ADR-0019) — её
+ * замер в space.perf.ts; здесь, как до неё, — переход на страницу одной доски внутри приложения.
  */
 
 const RUNS = Number(process.env.PERF_RUNS ?? 5)
 
 type Phase = 'tree' | 'open' | 'dragStart' | 'dragOver' | 'dragMove' | 'drop'
 
-declare global {
-  interface Window {
-    __expectedCards: number
-    __perf: {
-      frames: number[]
-      marks: Record<string, number>
-      readyAt: number | null
-      clickAt: number | null
-      treeAt: number | null
-    }
-  }
-}
-
-/** Счётчик кадров и момент, когда на странице появились все карточки. Ставится до навигации. */
-async function instrument(page: Page) {
-  await page.addInitScript(() => {
-    const perf = {
-      frames: [] as number[],
-      marks: {} as Record<string, number>,
-      readyAt: null as number | null,
-      clickAt: null as number | null,
-      treeAt: null as number | null,
-    }
-    window.__perf = perf
-    document.addEventListener('click', (e) => (perf.clickAt ??= e.timeStamp), { capture: true })
-    const tick = (t: number) => {
-      perf.frames.push(t)
-      // Дерево отрисовано: в нём есть пространство DEV (отсчёт — от начала загрузки страницы)
-      if (perf.treeAt === null && document.querySelector('nav[aria-label="Дерево"] a[href="/spaces/DEV"]')) {
-        perf.treeAt = t
-      }
-      if (
-        perf.readyAt === null &&
-        window.__expectedCards &&
-        document.querySelectorAll('[aria-label^="Открыть DEV-"]').length >= window.__expectedCards
-      ) {
-        perf.readyAt = t
-      }
-      requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
-  })
-}
-
-/** Сколько активных карточек на доске «Продукт» — столько должно появиться на экране. */
-async function expectedCards(page: Page): Promise<number> {
+/** Активные карточки доски «Продукт» и её id — столько карточек должно появиться на экране. */
+async function productBoard(page: Page): Promise<{ id: string; cards: number }> {
   // Запрос из страницы: Sanctum узнаёт SPA по заголовку Referer; X-Selen-User — пользователь вкладки, без него
   // сервер запрос не выполнит (ADR-0002, LATER-57)
   return page.evaluate(async () => {
@@ -69,39 +27,30 @@ async function expectedCards(page: Page): Promise<number> {
     const get = (url: string) => json(url, { 'X-Selen-User': me.data.id })
     const boards = await get('/api/v1/spaces/DEV/boards')
     const board = boards.data.find((b: { name: string }) => b.name === 'Продукт')
-    return (await get(`/api/v1/boards/${board.id}`)).data.cards.length as number
+    return { id: board.id as string, cards: (await get(`/api/v1/boards/${board.id}`)).data.cards.length as number }
   })
 }
-
-const mark = (page: Page, name: string) => page.evaluate((n) => (window.__perf.marks[n] = performance.now()), name)
-
-/** Самый долгий кадр между двумя отметками. */
-function longestFrame(frames: number[], from: number, to: number): number {
-  let worst = 0
-  for (let i = 1; i < frames.length; i++) {
-    if (frames[i] < from || frames[i - 1] > to) continue
-    worst = Math.max(worst, frames[i] - frames[i - 1])
-  }
-  return Math.round(worst)
-}
-
-const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
 
 type Results = Record<Phase, number[]>
 
 /** Прогоны «открыть доску → перетащить карточку» при заданном замедлении процессора. */
-async function measure(page: Page, cpuSlowdown: number): Promise<Results> {
+async function measure(page: Page, boardId: string, cpuSlowdown: number): Promise<Results> {
   const cdp = await page.context().newCDPSession(page)
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuSlowdown })
   const results: Results = { tree: [], open: [], dragStart: [], dragOver: [], dragMove: [], drop: [] }
 
   for (let run = 0; run < RUNS; run++) {
-    // Открытие: со страницы пространств, клик по доске в дереве
+    // Открытие: со страницы пространств переход на страницу доски внутри приложения — как раньше по ссылке дерева
+    // (history.pushState и popstate: так React Router переходит по «Назад» и «Вперёд»)
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Пространства' })).toBeVisible()
     await page.waitForFunction(() => window.__perf.treeAt !== null, null, { timeout: 30_000 })
     results.tree.push(await page.evaluate(() => Math.round(window.__perf.treeAt!)))
-    await page.getByRole('link', { name: 'Продукт' }).first().click()
+    await page.evaluate((id) => {
+      window.__perf.clickAt = performance.now()
+      history.pushState(null, '', `/boards/${id}`)
+      dispatchEvent(new PopStateEvent('popstate'))
+    }, boardId)
     await page.waitForFunction(() => window.__perf.readyAt !== null, null, { timeout: 30_000 })
     results.open.push(await page.evaluate(() => Math.round(window.__perf.readyAt! - window.__perf.clickAt!)))
     await page.waitForTimeout(500)
@@ -148,7 +97,7 @@ async function measure(page: Page, cpuSlowdown: number): Promise<Results> {
 
 const LABELS: Record<Phase, string> = {
   tree: 'Появление дерева (от начала загрузки страницы)',
-  open: 'Открытие доски (от клика, с сетью и чанком)',
+  open: 'Открытие доски (от перехода, с сетью и чанком)',
   dragStart: 'Начало перетаскивания (самый долгий кадр)',
   dragOver: 'Переход карточки в другую колонку',
   dragMove: 'Движение внутри колонки',
@@ -157,18 +106,18 @@ const LABELS: Record<Phase, string> = {
 
 test('доска на 300 карточек: открытие и перетаскивание', async ({ page }) => {
   test.setTimeout(120_000 * RUNS)
-  await instrument(page)
+  await instrument(page, { treeLink: '/spaces/DEV', cardPrefix: 'Открыть DEV-' })
   await login(page, 'anna@selen.test')
-  const cards = await expectedCards(page)
+  const { id, cards } = await productBoard(page)
   await page.addInitScript((n: number) => (window.__expectedCards = n), cards)
-  // Доска открывается из дерева: переход в пространство раскрывает путь к нему (папка «Продуктовые команды» и
-  // пространство DEV), раскрытое запоминается в браузере — дальше ссылка на доску видна сразу на «/»
+  // Переход в пространство раскрывает путь к нему в дереве (папка «Продуктовые команды»), раскрытое запоминается в
+  // браузере — «дерево отрисовано» на «/» отсчитывается по ссылке DEV
   await page.goto('/spaces/DEV')
   await expect(page.getByRole('navigation', { name: 'Дерево' }).getByRole('link', { name: 'Продукт' })).toBeVisible()
 
   // Обычная скорость и замедление процессора ×4 (слабый офисный ноутбук) — на нём разница заметнее
   for (const slowdown of [1, 4]) {
-    const results = await measure(page, slowdown)
+    const results = await measure(page, id, slowdown)
     console.log(`\nДоска DEV / «Продукт», ${cards} карточек, CPU ×${slowdown}, прогонов: ${RUNS}. Медиана (все значения), мс:`)
     for (const phase of Object.keys(LABELS) as Phase[]) {
       const values = results[phase]

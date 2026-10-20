@@ -66,7 +66,7 @@ export async function openBoard(page: Page, space: string, board: string) {
 export async function openSpaceBoard(page: Page, space: string, board: string) {
   const tree = await expandSpace(page, space)
   await tree.getByRole('link', { name: board, exact: true }).click()
-  await expect(page.getByRole('heading', { name: board })).toBeVisible()
+  await expect(page.getByRole('heading', { name: board, exact: true })).toBeVisible()
 }
 
 /** Раскрыть пространство в дереве, если оно ещё свёрнуто (раскрытое запоминается в браузере и после перехода). */

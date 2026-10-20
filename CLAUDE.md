@@ -27,7 +27,7 @@ make migrate         # новые миграции — под владельце
 make db-roles        # перевести старую базу на роли selen_owner / selen_app (один раз; повтор безопасен)
 make test            # все тесты (backend с покрытием + frontend с порогом покрытия 77 %)
 make e2e             # тесты в браузере (Playwright) на изолированном стеке, dev-база не трогается
-make perf            # замер производительности доски на 300 карточек (production-сборка, ~2 мин)
+make perf            # замер производительности: доска на 300 карточек и пространство 5×200 (production-сборка, ~5 мин)
 make metrics SPACE=DEV DAYS=60   # сводка lead/cycle time по доскам (проверка метрик)
 make lint            # Pint, Larastan, ESLint, Prettier, tsc — без изменений файлов
 make fix             # автоисправление стиля

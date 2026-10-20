@@ -287,6 +287,9 @@ function useBoardLayoutDnd(
   }
 }
 
+/** Пользователь сам взялся за прокрутку — холст больше не держит доску у верха. */
+const STOP_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
+
 /**
  * `?board=ID` в адресе (клик по доске в дереве, новая доска, ссылка): один раз на переход — доска разворачивается
  * (личное сворачивание снимается насовсем, решение PM 3) и холст прокручивается так, чтобы её верх был у верха холста.
@@ -316,11 +319,27 @@ function useFocusBoard(
     requestAnimationFrame(() => {
       const canvas = canvasRef.current
       const content = contentRef.current
-      const slot = content?.querySelector(`[data-board-slot="${CSS.escape(board.id)}"]`)
-      if (!canvas || !content || !slot) return
+      if (!canvas || !content) return
       const padding = parseFloat(getComputedStyle(content).paddingTop) || 0
-      canvas.scrollTop +=
-        slot.getBoundingClientRect().top - canvas.getBoundingClientRect().top - padding
+      const align = () => {
+        const slot = content.querySelector(`[data-board-slot="${CSS.escape(board.id)}"]`)
+        if (slot)
+          canvas.scrollTop +=
+            slot.getBoundingClientRect().top - canvas.getBoundingClientRect().top - padding
+      }
+      align()
+      // Доски выше догружаются и растут (их заглушки ниже настоящих досок): доска держится у верха холста, пока
+      // содержимое меняется, — не дольше 2 с и пока пользователь не прокрутил сам. Привязка прокрутки браузера здесь
+      // не помогает: её якорь — первый видимый элемент, а это может быть край доски выше
+      const observer = new ResizeObserver(align)
+      observer.observe(content)
+      const stop = () => {
+        observer.disconnect()
+        window.clearTimeout(timer)
+        for (const type of STOP_EVENTS) canvas.removeEventListener(type, stop)
+      }
+      const timer = window.setTimeout(stop, 2000)
+      for (const type of STOP_EVENTS) canvas.addEventListener(type, stop, { passive: true })
     })
   }, [focusId, boards, location.key, navigationType, page, canvasRef, contentRef, setCollapsed])
 }
