@@ -1,10 +1,11 @@
 import { memo, useEffect, useMemo, useRef, type MouseEvent, type RefObject } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/shared/lib/utils'
 import type { SpaceBoard } from '@/shared/types/api'
 import type { BoardMoveTarget } from '../api'
 import { boardEstimatedHeight, boardLayoutMoves, type BoardRowView } from '../layout'
-import { useBoard } from '../queries'
+import { boardKeys, useBoard } from '../queries'
 import { useNearViewport } from '../useNearViewport'
 import { BoardBlock, BoardHeader, BoardMenuShell, type BoardHeaderSlots } from './BoardBlock'
 import { BoardCollapseButton, BoardDragHandle, BoardLayoutMenuItems } from './BoardLayoutControls'
@@ -37,7 +38,9 @@ export interface SpaceBoardSlotProps {
 export const SpaceBoardSlot = memo(function SpaceBoardSlot(props: SpaceBoardSlotProps) {
   const { board, dragging } = props
   const slotRef = useRef<HTMLDivElement>(null)
-  const near = useNearViewport(slotRef, !board.collapsed, props.eager)
+  // Доска уже в кеше (была загружена, переехала в другой ряд, вернулись «Назад») — рисуется сразу, без заглушки
+  const cached = useQueryClient().getQueryData(boardKeys.detail(board.id)) !== undefined
+  const near = useNearViewport(slotRef, !board.collapsed, props.eager || cached)
   useScrollAnchorFallback(slotRef)
 
   return (
@@ -55,7 +58,23 @@ export const SpaceBoardSlot = memo(function SpaceBoardSlot(props: SpaceBoardSlot
       )}
     </div>
   )
-})
+}, sameSlot)
+
+/**
+ * Список рядов меняется при любой перестановке и сворачивании; доску это касается, только если сменились её пункты
+ * «Переставить» — иначе блок с сотнями карточек не перерисовывается.
+ */
+function sameSlot(previous: SpaceBoardSlotProps, next: SpaceBoardSlotProps) {
+  for (const key of Object.keys(next) as (keyof SpaceBoardSlotProps)[]) {
+    if (key !== 'rows' && previous[key] !== next[key]) return false
+  }
+  return (
+    previous.rows === next.rows ||
+    !next.canManage ||
+    JSON.stringify(boardLayoutMoves(previous.rows, next.board.id)) ===
+      JSON.stringify(boardLayoutMoves(next.rows, next.board.id))
+  )
+}
 
 /** Ручка, свернуть и пункты меню раскладки — одинаковые у всех состояний доски. */
 function useLayoutSlots({
@@ -66,7 +85,7 @@ function useLayoutSlots({
   onMove,
   onToggleCollapsed,
   onArchive,
-}: SpaceBoardSlotProps): Required<BoardHeaderSlots> {
+}: SpaceBoardSlotProps): BoardHeaderSlots {
   const moves = useMemo(() => boardLayoutMoves(rows, board.id), [rows, board.id])
   return {
     leading: canManage ? (
@@ -79,29 +98,29 @@ function useLayoutSlots({
         onToggle={() => onToggleCollapsed(board.id, !board.collapsed)}
       />
     ),
-    menuItems: (dialog) =>
-      canManage ? (
-        <BoardLayoutMenuItems
-          moves={moves}
-          disabled={moving}
-          onMove={(target) => onMove(board.id, target)}
-          onArchive={dialog(() => onArchive(board))}
-        />
-      ) : null,
+    // Только администратору пространства: у остальных этих пунктов нет, а пустое место в меню дало бы «⋯» без пунктов
+    menuItems: canManage
+      ? (dialog) => (
+          <BoardLayoutMenuItems
+            moves={moves}
+            disabled={moving}
+            onMove={(target) => onMove(board.id, target)}
+            onArchive={dialog(() => onArchive(board))}
+          />
+        )
+      : undefined,
   }
 }
 
 /** Меню «⋯» доски, у которой нет загруженного содержимого (свёрнута, грузится): только раскладка и архив. */
 function LayoutOnlyMenu({
   name,
-  canManage,
   menuItems,
 }: {
   name: string
-  canManage: boolean
-  menuItems: Required<BoardHeaderSlots>['menuItems']
+  menuItems: BoardHeaderSlots['menuItems']
 }) {
-  if (!canManage) return null
+  if (!menuItems) return null
   return <BoardMenuShell name={name}>{(dialog) => menuItems(dialog)}</BoardMenuShell>
 }
 
@@ -111,7 +130,7 @@ function LayoutOnlyMenu({
  */
 function CollapsedBoard(props: SpaceBoardSlotProps) {
   const { t } = useTranslation('boards')
-  const { board, canManage, onToggleCollapsed } = props
+  const { board, onToggleCollapsed } = props
   const slots = useLayoutSlots(props)
   const expandOnClick = (event: MouseEvent<HTMLElement>) => {
     const target = event.target as Element
@@ -137,7 +156,7 @@ function CollapsedBoard(props: SpaceBoardSlotProps) {
         className="hover:bg-accent cursor-pointer"
         onClick={expandOnClick}
       >
-        <LayoutOnlyMenu name={board.name} canManage={canManage} menuItems={slots.menuItems} />
+        <LayoutOnlyMenu name={board.name} menuItems={slots.menuItems} />
         {slots.trailing}
       </BoardHeader>
     </section>
@@ -150,7 +169,7 @@ function CollapsedBoard(props: SpaceBoardSlotProps) {
  */
 function BoardPlaceholder(props: SpaceBoardSlotProps & { failed?: boolean }) {
   const { t } = useTranslation('boards')
-  const { board, canManage, failed } = props
+  const { board, failed } = props
   const slots = useLayoutSlots(props)
   return (
     <section
@@ -171,7 +190,7 @@ function BoardPlaceholder(props: SpaceBoardSlotProps & { failed?: boolean }) {
         description={board.description}
         className="border-b"
       >
-        <LayoutOnlyMenu name={board.name} canManage={canManage} menuItems={slots.menuItems} />
+        <LayoutOnlyMenu name={board.name} menuItems={slots.menuItems} />
         {slots.trailing}
       </BoardHeader>
       <p className={cn('p-3 text-sm', failed ? 'text-destructive' : 'text-muted-foreground')}>

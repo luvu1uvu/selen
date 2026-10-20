@@ -18,7 +18,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { lastLaneCollapsed } from '../model'
-import { useSetAutoAssign } from '../queries'
+import { BoardScopeContext, useSetAutoAssign } from '../queries'
 import { ArchivedCardsDialog } from './ArchivedCardsDialog'
 import { BoardView } from './BoardView'
 import { StructureDialogs, type StructureAction } from './StructureDialogs'
@@ -159,59 +159,62 @@ export function BoardBlock({
   const endsWithBand = lastLaneCollapsed(board)
 
   return (
-    <section
-      aria-label={board.name}
-      // Блок на фоне холста (поправка PM 19.10, как в Kaiten): ширина — по колонкам, но не шире холста (тогда тело
-      // прокручивается вбок внутри блока); не уже 20rem — шапка с названием и кнопками не ломается и при одной
-      // колонке; высота — по содержимому, не ниже 15rem (шапка, заголовки и ячейка с «+ Карточка»), а при свёрнутой
-      // последней дорожке — ровно по содержимому.
-      // overflow: clip — содержимое обрезается по скруглённой рамке (уголки шапки, прижатой к верху холста, не торчат);
-      // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста
-      className={cn(
-        'bg-background flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
-        !endsWithBand && 'min-h-60',
-        className,
-      )}
-      style={style}
-      data-board-block={board.id}
-    >
-      <BoardHeader
-        name={board.name}
-        heading={heading}
-        leading={slots?.leading}
-        breadcrumb={breadcrumb}
-        description={board.description}
-        className="sticky top-0 z-20 border-b"
+    // Изменения структуры внутри блока перечитывают эту доску, а не все загруженные (useInvalidateBoards)
+    <BoardScopeContext.Provider value={board.id}>
+      <section
+        aria-label={board.name}
+        // Блок на фоне холста (поправка PM 19.10, как в Kaiten): ширина — по колонкам, но не шире холста (тогда тело
+        // прокручивается вбок внутри блока); не уже 20rem — шапка с названием и кнопками не ломается и при одной
+        // колонке; высота — по содержимому, не ниже 15rem (шапка, заголовки и ячейка с «+ Карточка»), а при свёрнутой
+        // последней дорожке — ровно по содержимому.
+        // overflow: clip — содержимое обрезается по скруглённой рамке (уголки шапки, прижатой к верху холста, не торчат);
+        // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста
+        className={cn(
+          'bg-background flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
+          !endsWithBand && 'min-h-60',
+          className,
+        )}
+        style={style}
+        data-board-block={board.id}
       >
-        <BoardMenu
-          board={board}
-          extraItems={slots?.menuItems}
-          onAction={setAction}
-          onOpenArchive={() => setArchiveOpen(true)}
-        />
-        {slots?.trailing}
-      </BoardHeader>
+        <BoardHeader
+          name={board.name}
+          heading={heading}
+          leading={slots?.leading}
+          breadcrumb={breadcrumb}
+          description={board.description}
+          className="sticky top-0 z-20 border-b"
+        >
+          <BoardMenu
+            board={board}
+            extraItems={slots?.menuItems}
+            onAction={setAction}
+            onOpenArchive={() => setArchiveOpen(true)}
+          />
+          {slots?.trailing}
+        </BoardHeader>
 
-      {board.columns.length === 0 ? (
-        <div className="text-muted-foreground m-3 flex-1 rounded-xl border border-dashed p-12 text-center">
-          {t('board.noColumns')}
-        </div>
-      ) : (
-        // Сбой доски не уносит шапку и остальное приложение
-        <ErrorBoundary>
-          <BoardView board={board} onOpenCard={onOpenCard} onAction={setAction} />
-        </ErrorBoundary>
-      )}
+        {board.columns.length === 0 ? (
+          <div className="text-muted-foreground m-3 flex-1 rounded-xl border border-dashed p-12 text-center">
+            {t('board.noColumns')}
+          </div>
+        ) : (
+          // Сбой доски не уносит шапку и остальное приложение
+          <ErrorBoundary>
+            <BoardView board={board} onOpenCard={onOpenCard} onAction={setAction} />
+          </ErrorBoundary>
+        )}
 
-      <StructureDialogs boardId={board.id} action={action} onClose={() => setAction(null)} />
-      {archiveOpen && (
-        <ArchivedCardsDialog
-          boardId={board.id}
-          canDelete={board.permissions.delete_cards}
-          onClose={() => setArchiveOpen(false)}
-        />
-      )}
-    </section>
+        <StructureDialogs boardId={board.id} action={action} onClose={() => setAction(null)} />
+        {archiveOpen && (
+          <ArchivedCardsDialog
+            boardId={board.id}
+            canDelete={board.permissions.delete_cards}
+            onClose={() => setArchiveOpen(false)}
+          />
+        )}
+      </section>
+    </BoardScopeContext.Provider>
   )
 }
 

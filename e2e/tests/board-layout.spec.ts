@@ -181,7 +181,9 @@ test('«Назад» возвращает прежнее место прокру
   // Другая страница (пространство — по ссылке над доской), затем «Назад»
   await page.getByRole('link', { name: 'Раскладка', exact: true }).first().click()
   await expect(page.getByRole('heading', { name: 'Раскладка', level: 1 })).toBeVisible()
-  expect(await page.evaluate(() => document.querySelector('main')!.scrollTop)).toBe(0)
+  // Страница пространства — тоже холст (ADR-0019, PR 3): с начала — его прокрутка
+  await expect(page.locator('[data-board-canvas]')).toBeVisible()
+  expect(await page.evaluate(() => document.querySelector('[data-board-canvas]')!.scrollTop)).toBe(0)
 
   await page.goBack()
   await expect(page.getByRole('heading', { name: 'Длинная доска' })).toBeVisible()

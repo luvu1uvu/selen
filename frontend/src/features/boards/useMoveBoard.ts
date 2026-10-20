@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/shared/api/errors'
 import { navigationKeys } from '@/features/navigation/queries'
 import type { SpaceBoard } from '@/shared/types/api'
 import { moveBoard, type BoardMoveTarget } from './api'
-import { applyBoardMove } from './layout'
+import { applyBoardMove, pendingRowId } from './layout'
 import { boardKeys } from './queries'
 
 /**
@@ -31,6 +31,14 @@ export function useMoveBoard(spaceKey: string) {
       if (previous) queryClient.setQueryData(key, applyBoardMove(previous, boardId, target))
       return { previous }
     },
+    // Временный ряд — сразу на настоящий: если перечитывание не дойдёт (свернули доску, сбой сети), следующая
+    // перестановка не сошлётся на несуществующий ряд
+    onSuccess: (board, { boardId }) =>
+      queryClient.setQueryData<SpaceBoard[]>(key, (boards) =>
+        boards?.map((b) =>
+          b.row_id === pendingRowId(boardId) ? { ...b, row_id: board.row_id } : b,
+        ),
+      ),
     onError: (error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(key, context.previous)
       toast.error(getErrorMessage(error, t('layout.moveFailed')))
@@ -47,7 +55,11 @@ export function useMoveBoard(spaceKey: string) {
   // Одна и та же функция, пока не началась или не закончилась перестановка: блоки досок (memo) не перерисовываются
   const move = useCallback(
     (boardId: string, target: BoardMoveTarget) => {
-      if (!moving) mutate({ boardId, target })
+      // Ряд, которого на сервере ещё нет, — ждём ответа на прежнюю перестановку
+      const ids =
+        'row_id' in target ? [target.row_id] : [target.new_row_after_id, target.new_row_before_id]
+      if (moving || ids.some((id) => id?.startsWith(pendingRowId('')))) return
+      mutate({ boardId, target })
     },
     [moving, mutate],
   )

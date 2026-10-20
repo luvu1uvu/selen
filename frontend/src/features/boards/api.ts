@@ -49,8 +49,10 @@ export type BoardMoveTarget =
   | ({ row_id: string } & Neighbours)
   | { new_row_after_id: string | null; new_row_before_id: string | null }
 
-export async function moveBoard(boardId: string, target: BoardMoveTarget): Promise<void> {
-  await api.post(`/boards/${boardId}/move`, target)
+/** Ответ — доска на новом месте (её ряд — настоящий id нового ряда). */
+export async function moveBoard(boardId: string, target: BoardMoveTarget): Promise<BoardSummary> {
+  const { data } = await api.post<Resource<BoardSummary>>(`/boards/${boardId}/move`, target)
+  return data.data
 }
 
 /** Свернуть или развернуть доску у себя на странице пространства (личный вид, ADR-0019). */

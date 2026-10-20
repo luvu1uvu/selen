@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { SpaceBoard } from '@/shared/types/api'
@@ -94,7 +94,7 @@ describe('Страница пространства: доски рядами', (
     expect((rows[0] as HTMLElement).style.gridTemplateColumns).toBe(
       'minmax(min(1138px, 20rem, calc((100% - 12px) / 2)), 1138px) minmax(min(320px, 20rem, calc((100% - 12px) / 2)), 320px)',
     )
-    expect((rows[1] as HTMLElement).style.gridTemplateColumns).toBe('max-content')
+    expect((rows[1] as HTMLElement).style.gridTemplateColumns).toBe('fit-content(100%)')
     await waitFor(() => expect(fetched.sort()).toEqual(['b-narrow', 'b-product']))
   })
 
@@ -186,7 +186,7 @@ describe('Страница пространства: доски рядами', (
       http.post('*/api/v1/boards/:id/move', async ({ request }) => {
         bodies.push(await request.json())
         list[1] = { ...boards[1], row_id: 'r-new' }
-        return HttpResponse.json({ data: boards[1] })
+        return HttpResponse.json({ data: list[1] })
       }),
     )
     renderApp('/spaces/DEV')
@@ -229,6 +229,38 @@ describe('Страница пространства: доски рядами', (
     expect(
       within(await region('Инфраструктура')).queryByRole('button', { name: /Действия с доской/ }),
     ).not.toBeInTheDocument()
+  })
+
+  it('без прав на правку и структуру у доски нет «⋯» (пустого меню)', async () => {
+    serve(
+      boards,
+      makeSpace({
+        my_role: 'commenter',
+        permissions: { manage: false, edit_cards: false, view_access_sources: true },
+      }),
+    )
+    renderApp('/spaces/DEV')
+
+    const product = await loaded('Продукт')
+    expect(
+      within(product).queryByRole('button', { name: /Действия с доской/ }),
+    ).not.toBeInTheDocument()
+    expect(within(product).getByRole('button', { name: 'Свернуть доску «Продукт»' })).toBeVisible()
+  })
+
+  it('переход к доске (?board=ID) с вкладки «Участники» открывает «Доски»', async () => {
+    serve()
+    const { router } = renderApp('/spaces/DEV')
+    await loaded('Продукт')
+    await userEvent.click(screen.getByRole('tab', { name: 'Участники' }))
+    expect(screen.getByRole('tab', { name: 'Участники' })).toHaveAttribute('aria-selected', 'true')
+
+    await act(() => router.navigate('/spaces/DEV?board=b-narrow'))
+    expect(screen.getByRole('tab', { name: 'Доски' })).toHaveAttribute('aria-selected', 'true')
+    // Холст не размонтировался: загруженная доска на месте сразу
+    expect(
+      screen.getByRole('region', { name: 'Продукт' }).querySelector('[data-board-body]'),
+    ).not.toBeNull()
   })
 
   it('?board=ID из дерева разворачивает свёрнутую доску насовсем', async () => {

@@ -4,8 +4,9 @@ import {
   useQuery,
   useQueryClient,
   type Query,
+  type QueryClient,
 } from '@tanstack/react-query'
-import { boardKeys } from '@/features/boards/queries'
+import { boardKeys, refreshBoards } from '@/features/boards/queries'
 import type { CardDetail } from '@/shared/types/api'
 import type { RichTextDoc } from '@/shared/components/rich-text/doc'
 import {
@@ -79,6 +80,8 @@ export function useArchivedCards(boardId: string, search: string, page: number) 
 export function useCardChanged() {
   const queryClient = useQueryClient()
   return (card: CardDetail) => {
+    // Карточка могла уехать на другую доску — перечитываются обе
+    const before = queryClient.getQueryData<CardDetail>(cardKeys.detail(card.key))
     queryClient.setQueryData(cardKeys.detail(card.key), card)
     return Promise.all([
       queryClient.invalidateQueries({ queryKey: cardKeys.history(card.key) }),
@@ -88,9 +91,15 @@ export function useCardChanged() {
           ['detail', 'archived', 'search'].includes(query.queryKey[1] as string) &&
           query.queryKey[2] !== card.key,
       }),
-      queryClient.invalidateQueries({ queryKey: boardKeys.all }),
+      refreshBoards(queryClient, [card.board.id, ...(before ? [before.board.id] : [])]),
     ])
   }
+}
+
+/** Доска карточки из кеша её панели — чтобы перечитать только её; нет в кеше — null (перечитать все). */
+export function boardOf(queryClient: QueryClient, key: string): string[] | null {
+  const card = queryClient.getQueryData<CardDetail>(cardKeys.detail(key))
+  return card ? [card.board.id] : null
 }
 
 export function useCreateCard(boardId: string) {
@@ -141,7 +150,7 @@ export function useDeleteCard() {
         queryClient.invalidateQueries({
           predicate: (query) => query.queryKey[0] === 'cards' && !ofDeleted(query),
         }),
-        queryClient.invalidateQueries({ queryKey: boardKeys.all }),
+        refreshBoards(queryClient, boardOf(queryClient, key)),
       ]).then(() => queryClient.removeQueries({ predicate: ofDeleted, type: 'inactive' }))
     },
   })
@@ -187,7 +196,7 @@ export function useCommentMutation(key: string) {
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: cardKeys.comments(key) }),
-        queryClient.invalidateQueries({ queryKey: boardKeys.all }),
+        refreshBoards(queryClient, boardOf(queryClient, key)),
       ]),
   })
 }

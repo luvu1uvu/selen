@@ -106,6 +106,24 @@ test('с клавиатуры — меню «⋯» → «Переставить�
   await expect.poll(() => layout(page)).toEqual([['Первая'], ['Третья'], ['Вторая']])
 })
 
+test('отпустили над деревом — вне холста доска остаётся на месте, запроса нет', async ({ page }) => {
+  const before = await layout(page)
+  const requests: string[] = []
+  page.on('request', (request) => request.url().includes('/move') && requests.push(request.url()))
+  const handle = page.getByRole('region', { name: 'Вторая' }).locator('[data-board-handle]')
+  const from = (await handle.boundingBox())!
+  const tree = (await page.getByRole('navigation', { name: 'Дерево' }).boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 20, from.y + 20, { steps: 3 })
+  await page.mouse.move(tree.x + tree.width / 2, from.y + 10, { steps: 15 })
+  await expect(page.locator('[data-board-drop]')).toHaveCount(0)
+  await page.mouse.up()
+  await page.waitForTimeout(300)
+  expect(requests).toEqual([])
+  expect(await layout(page)).toEqual(before)
+})
+
 test('у участника без прав администратора нет ни ручки ⠿, ни пунктов перестановки', async ({ browser }) => {
   const editor = await pageAs(browser, 'e2e-editor@selen.test')
   await openArrange(editor)

@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createContext, useContext } from 'react'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type { BoardTemplate } from '@/shared/types/api'
 import { createBoard, fetchBoard, fetchSpaceBoards, updateBoard } from './api'
 
@@ -34,12 +35,36 @@ export function useSpaceBoards(spaceKey: string) {
   })
 }
 
-/** Обновить всё, где видны доски: страницы досок, список пространства, сайдбар. */
+/**
+ * Доска, внутри которой идёт изменение (её блок, BoardBlock): изменение структуры перечитывает её, а не все доски —
+ * на странице пространства их загружено несколько (ADR-0019).
+ */
+export const BoardScopeContext = createContext<string | null>(null)
+
+/**
+ * Перечитать доски после изменения: boardIds — те, что изменились (перечитываются сразу), плюс списки досок
+ * пространств (счётчики). Остальные доски только помечаются устаревшими и перечитаются, когда понадобятся (при
+ * возврате на вкладку или следующем открытии): на странице пространства загружено несколько досок, и каждое изменение
+ * карточки перечитывало бы их все. null — неизвестно, какие доски задеты: перечитать все.
+ */
+export function refreshBoards(queryClient: QueryClient, boardIds: string[] | null) {
+  if (!boardIds) return queryClient.invalidateQueries({ queryKey: boardKeys.all })
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: boardKeys.all, refetchType: 'none' }),
+    ...[...new Set(boardIds)].map((id) =>
+      queryClient.invalidateQueries({ queryKey: boardKeys.detail(id) }),
+    ),
+    queryClient.invalidateQueries({ queryKey: ['boards', 'space'] }),
+  ])
+}
+
+/** Обновить всё, где видны доски: доску изменения (или все), списки пространства, сайдбар, карточки. */
 export function useInvalidateBoards() {
   const queryClient = useQueryClient()
+  const boardId = useContext(BoardScopeContext)
   return () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: boardKeys.all }),
+      refreshBoards(queryClient, boardId ? [boardId] : null),
       queryClient.invalidateQueries({ queryKey: ['spaces'] }),
       queryClient.invalidateQueries({ queryKey: ['cards'] }),
     ])

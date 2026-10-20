@@ -211,6 +211,40 @@ test('доска из дерева: страница пространства п
   await loaded(page, 'Высокая')
 })
 
+test('«Назад» и перезагрузка — на то же место, хотя доски выше грузятся заново и растут', async ({ page }) => {
+  // «Средняя» — на 100 px ниже верха холста; «Высокая» — дальше экрана выше неё, и её заглушка намного ниже настоящей
+  // доски: по пикселям прокрутки после перезагрузки у верха оказалась бы другая доска
+  await block(page, 'Средняя').evaluate((section) => {
+    const canvas = section.closest('[data-board-canvas]')!
+    canvas.scrollTop += section.getBoundingClientRect().top - canvas.getBoundingClientRect().top - 100
+  })
+  await loaded(page, 'Средняя')
+  const offset = async () => (await rect(page, 'Средняя')).top - (await canvasRect(page)).top
+  await expect.poll(async () => Math.abs((await offset()) - 100)).toBeLessThanOrEqual(2)
+
+  await page.getByRole('button', { name: 'Меню пользователя' }).click()
+  await page.getByRole('menuitem', { name: 'Профиль' }).click()
+  await expect(page).toHaveURL(/\/profile$/)
+  await page.goBack()
+  await loaded(page, 'Средняя')
+  await expect.poll(async () => Math.abs((await offset()) - 100), { timeout: 5000 }).toBeLessThanOrEqual(2)
+
+  // Перезагрузка — кеша досок нет: «Высокая» снова заглушка и не грузится, пока холст далеко от неё
+  await page.reload()
+  await loaded(page, 'Средняя')
+  await expect.poll(async () => Math.abs((await offset()) - 100), { timeout: 5000 }).toBeLessThanOrEqual(2)
+  await expect(block(page, 'Высокая')).toHaveAttribute('data-board-placeholder')
+})
+
+test('на вкладке «Участники» щелчок по доске в дереве открывает «Доски» и прокручивает к ней', async ({ page }) => {
+  await page.getByRole('tab', { name: 'Участники' }).click()
+  await expect(page.getByRole('tab', { name: 'Участники' })).toHaveAttribute('aria-selected', 'true')
+  await openSpaceBoard(page, 'Ряды', 'Нижняя')
+  await expect(page.getByRole('tab', { name: 'Доски' })).toHaveAttribute('aria-selected', 'true')
+  await loaded(page, 'Нижняя')
+  await expect(block(page, 'Нижняя')).toBeInViewport()
+})
+
 test('карточка открывается поверх пространства, закрытие — на то же место', async ({ page }) => {
   await block(page, 'Высокая').evaluate((section) => {
     const canvas = section.closest('[data-board-canvas]')!

@@ -55,7 +55,7 @@ const BOARD_GAP_PX = 12
  * Колонки сетки ряда (CSS grid): у каждой доски — от своей минимальной ширины до ширины по колонкам. Сетка раздаёт
  * свободное место поровну, пока доска не дорастёт до своей ширины (алгоритм grid «maximize tracks»): узкие доски — целиком,
  * широкие делят остаток ряда поровну и прокручиваются вбок внутри блока. Минимум — 20rem, но не больше равной доли
- * ряда: много досок в ряду не вылезают за край холста. Свёрнутая — по своей шапке. С `flex: 0 1 ширина` (первый
+ * ряда: много досок в ряду не вылезают за край холста. Свёрнутая — по своей шапке, но не шире ряда. С `flex: 0 1 ширина` (первый
  * вариант плана) сжимались все доски ряда пропорционально, и двухколоночная рядом с широкой уходила в 20rem.
  */
 export function rowTemplate(row: BoardRowView): string {
@@ -63,7 +63,8 @@ export function rowTemplate(row: BoardRowView): string {
   const share = `calc((100% - ${(n - 1) * BOARD_GAP_PX}px) / ${n})`
   return row.boards
     .map((board) => {
-      if (board.collapsed) return 'max-content'
+      // Длинное название свёрнутой доски не шире ряда: шапка обрезает его многоточием
+      if (board.collapsed) return 'fit-content(100%)'
       const width = boardNaturalWidth(board.leaf_columns_count)
       return `minmax(min(${width}px, 20rem, ${share}), ${width}px)`
     })

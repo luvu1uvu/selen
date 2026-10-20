@@ -1,6 +1,6 @@
-import { useCallback, useEffect, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArchivedBoardsDialog } from '@/features/boards/components/ArchivedBoardsDialog'
@@ -43,6 +43,16 @@ export function SpacePage() {
     [navigate, spaceKey],
   )
   const closeCard = useCallback(() => navigate(`/spaces/${spaceKey}`), [navigate, spaceKey])
+  // Вкладка — своя у страницы, но переход в другое пространство и к доске (?board=ID — из дерева, новая доска)
+  // открывает «Доски»: иначе адрес и дерево сменились бы, а на экране остались участники
+  const location = useLocation()
+  const [tab, setTab] = useState('boards')
+  const [seen, setSeen] = useState({ key: location.key, spaceKey })
+  if (seen.key !== location.key) {
+    setSeen({ key: location.key, spaceKey })
+    if (seen.spaceKey !== spaceKey || new URLSearchParams(location.search).has('board'))
+      setTab('boards')
+  }
 
   if (spaceQuery.isPending) {
     return (
@@ -68,7 +78,7 @@ export function SpacePage() {
 
   return (
     <>
-      <Tabs defaultValue="boards" className="min-h-0 flex-1 gap-0">
+      <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1 gap-0">
         {/* Панель пространства — вне прокрутки холста, всегда на месте */}
         <div className="bg-background flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2 md:px-4">
           <div className="flex min-w-0 items-center gap-2">
@@ -94,8 +104,13 @@ export function SpacePage() {
           <Alert className="rounded-none border-x-0 border-t-0">{t('page.archived')}</Alert>
         )}
 
-        <TabsContent value="boards" className="flex min-h-0 flex-col">
-          <SpaceBoardsCanvas space={space} onOpenCard={openCard} />
+        {/* Холст не размонтируется на других вкладках: загруженные доски и прокрутка остаются */}
+        <TabsContent
+          value="boards"
+          forceMount
+          className="flex min-h-0 flex-col data-[state=inactive]:hidden"
+        >
+          <SpaceBoardsCanvas space={space} active={tab === 'boards'} onOpenCard={openCard} />
         </TabsContent>
         <TabsContent value="members" className="min-h-0 overflow-y-auto p-4 md:p-8">
           <MembersPanel space={space} />

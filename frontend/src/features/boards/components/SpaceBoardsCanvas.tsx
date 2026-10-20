@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -14,7 +22,7 @@ import { GripVertical, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
-import { hasScrollPlace, useScrollMemory } from '@/shared/lib/useScrollMemory'
+import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import type { Space, SpaceBoard } from '@/shared/types/api'
 import { setBoardArchived, type BoardMoveTarget } from '../api'
 import {
@@ -27,6 +35,7 @@ import {
 import { useSpaceBoards, useStructureMutation } from '../queries'
 import { useBoardCollapse } from '../useBoardCollapse'
 import { useMoveBoard } from '../useMoveBoard'
+import { anchorOf, currentAnchor, pinBoard, rememberAnchor, takeFocus } from '../canvasAnchor'
 import { SpaceBoardSlot } from './SpaceBoardSlot'
 
 /** У досок нет целей-droppable: куда упадёт доска, решает указатель (layoutDropAt). */
@@ -46,9 +55,12 @@ const noCollisions: CollisionDetection = () => []
  */
 export function SpaceBoardsCanvas({
   space,
+  active = true,
   onOpenCard,
 }: {
   space: Space
+  /** Вкладка «Доски» открыта: на другой вкладке холст скрыт, но не размонтирован. */
+  active?: boolean
   onOpenCard: (key: string) => void
 }) {
   const { t } = useTranslation('boards')
@@ -64,9 +76,15 @@ export function SpaceBoardsCanvas({
   const archive = useStructureMutation((boardId: string) => setBoardArchived(boardId, true))
   const [toArchive, setToArchive] = useState<SpaceBoard | null>(null)
 
+  useKeepScrollWhileHidden(canvasRef, active)
   const page = `space:${space.key}`
-  useScrollMemory(canvasRef, { name: 'canvas', page, ready: boardsQuery.isSuccess })
-  useFocusBoard(canvasRef, contentRef, boards, page, setCollapsed)
+  const byAnchor = useCanvasPlacement(canvasRef, boards, boardsQuery.isFetching, page, setCollapsed)
+  useScrollMemory(canvasRef, {
+    name: 'canvas',
+    page,
+    ready: boardsQuery.isSuccess,
+    restore: !byAnchor,
+  })
   // Доски первого экрана (первый ряд или ряд доски из ?board=ID) грузятся сразу, без ожидания IntersectionObserver:
   // он сообщит о них только после первой отрисовки — на кадр позже
   const [params] = useSearchParams()
@@ -247,9 +265,17 @@ function useBoardLayoutDnd(
     if (!activeId || !content) return
     const canvas = content.closest<HTMLElement>('[data-board-canvas]')
     const update = () => {
-      const next = pointer.current
-        ? layoutDropAt(pointer.current, measure(content), activeId)
-        : null
+      const point = pointer.current
+      // Вне холста (над деревом, панелями) цели нет: отпустили там — доска остаётся на месте
+      const bounds = canvas?.getBoundingClientRect()
+      const inside =
+        !!point &&
+        !!bounds &&
+        point.x >= bounds.left &&
+        point.x <= bounds.right &&
+        point.y >= bounds.top &&
+        point.y <= bounds.bottom
+      const next = point && inside ? layoutDropAt(point, measure(content), activeId) : null
       dropRef.current = next
       setDrop(next && relativeTo(next, content.getBoundingClientRect()))
     }
@@ -293,18 +319,38 @@ function useBoardLayoutDnd(
   }
 }
 
-/** Пользователь сам взялся за прокрутку — холст больше не держит доску у верха. */
-const STOP_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
+/**
+ * Скрытый (display: none) холст теряет прокрутку — после возврата на вкладку «Доски» она восстанавливается: место
+ * запоминается при каждой прокрутке, пока холст виден.
+ */
+function useKeepScrollWhileHidden(canvasRef: RefObject<HTMLDivElement | null>, active: boolean) {
+  const last = useRef(0)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !active) return
+    const save = () => (last.current = canvas.scrollTop)
+    canvas.addEventListener('scroll', save, { passive: true })
+    return () => canvas.removeEventListener('scroll', save)
+  }, [canvasRef, active])
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current
+    if (canvas && active && canvas.scrollTop !== last.current) canvas.scrollTop = last.current
+  }, [canvasRef, active])
+}
 
 /**
- * `?board=ID` в адресе (клик по доске в дереве, новая доска, ссылка): один раз на переход — доска разворачивается
- * (личное сворачивание снимается насовсем, решение PM 3) и холст прокручивается так, чтобы её верх был у верха холста.
- * «Назад», «Вперёд» и перезагрузку с запомненным местом не трогает: место восстанавливает useScrollMemory.
+ * Место холста страницы пространства:
+ * - запоминается относительно доски при каждой прокрутке (canvasAnchor): заглушки досок ниже настоящих, и пиксели после
+ *   «Назад» или перезагрузки приходились бы на другое место;
+ * - «Назад», «Вперёд» и перезагрузка — доска, что была у верха, снова там же, пока доски выше догружаются;
+ * - `?board=ID` (клик в дереве, новая доска, ссылка) — один раз на запись истории: доска разворачивается (личное
+ *   сворачивание снимается насовсем, решение PM 3) и встаёт у верха холста. Нет её в списке, а список ещё
+ *   перечитывается (доску только что создали), — ждём свежего списка.
  */
-function useFocusBoard(
+function useCanvasPlacement(
   canvasRef: RefObject<HTMLDivElement | null>,
-  contentRef: RefObject<HTMLDivElement | null>,
   boards: SpaceBoard[] | undefined,
+  fetching: boolean,
   page: string,
   setCollapsed: (boardId: string, collapsed: boolean) => void,
 ) {
@@ -312,40 +358,60 @@ function useFocusBoard(
   const focusId = params.get('board')
   const location = useLocation()
   const navigationType = useNavigationType()
-  const handled = useRef<string | null>(null)
+  const placed = useRef<string | null>(null)
+  const release = useRef<(() => void) | null>(null)
+  const loaded = boards !== undefined
+
+  // Новое удержание отменяет прежнее (два перехода подряд); уход со страницы — тоже
+  const hold = useCallback((canvas: HTMLElement, boardId: string, offset: number) => {
+    release.current?.()
+    release.current = pinBoard(canvas, boardId, offset)
+  }, [])
+  useEffect(() => () => release.current?.(), [])
 
   useEffect(() => {
-    if (!focusId || !boards || handled.current === location.key) return
-    handled.current = location.key
-    const board = boards.find((candidate) => candidate.id === focusId && !candidate.archived_at)
-    if (!board || (navigationType === 'POP' && hasScrollPlace(location.key, 'canvas', page))) return
+    const canvas = canvasRef.current
+    if (!canvas || !loaded) return
+    let frame = 0
+    const save = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const anchor = currentAnchor(canvas, page)
+        if (anchor) rememberAnchor(location.key, anchor)
+      })
+    }
+    canvas.addEventListener('scroll', save, { passive: true })
+    return () => {
+      canvas.removeEventListener('scroll', save)
+      cancelAnimationFrame(frame)
+    }
+  }, [canvasRef, loaded, page, location.key])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !boards || placed.current === location.key) return
+    const back = navigationType === 'POP' ? anchorOf(location.key, page) : undefined
+    if (back) {
+      placed.current = location.key
+      if (boards.some((board) => board.id === back.boardId && !board.archived_at))
+        requestAnimationFrame(() => hold(canvas, back.boardId, back.offset))
+      return
+    }
+    const board = focusId
+      ? boards.find((candidate) => candidate.id === focusId && !candidate.archived_at)
+      : undefined
+    if (focusId && !board && fetching) return
+    placed.current = location.key
+    if (!board || !takeFocus(location.key)) return
     if (board.collapsed) setCollapsed(board.id, false)
-    // Кадр спустя — раскладка уже с развёрнутой доской. Без отмены при смене списка: развернули — список в кеше
-    // сменился, эффект перезапустится (и сразу выйдет), а прокрутка должна случиться
+    // Кадр спустя — раскладка уже с развёрнутой доской
     requestAnimationFrame(() => {
-      const canvas = canvasRef.current
-      const content = contentRef.current
-      if (!canvas || !content) return
-      const padding = parseFloat(getComputedStyle(content).paddingTop) || 0
-      const align = () => {
-        const slot = content.querySelector(`[data-board-slot="${CSS.escape(board.id)}"]`)
-        if (slot)
-          canvas.scrollTop +=
-            slot.getBoundingClientRect().top - canvas.getBoundingClientRect().top - padding
-      }
-      align()
-      // Доски выше догружаются и растут (их заглушки ниже настоящих досок): доска держится у верха холста, пока
-      // содержимое меняется, — не дольше 2 с и пока пользователь не прокрутил сам. Привязка прокрутки браузера здесь
-      // не помогает: её якорь — первый видимый элемент, а это может быть край доски выше
-      const observer = new ResizeObserver(align)
-      observer.observe(content)
-      const stop = () => {
-        observer.disconnect()
-        window.clearTimeout(timer)
-        for (const type of STOP_EVENTS) canvas.removeEventListener(type, stop)
-      }
-      const timer = window.setTimeout(stop, 2000)
-      for (const type of STOP_EVENTS) canvas.addEventListener(type, stop, { passive: true })
+      const content = canvas.firstElementChild
+      const padding = content ? parseFloat(getComputedStyle(content).paddingTop) || 0 : 0
+      hold(canvas, board.id, padding)
     })
-  }, [focusId, boards, location.key, navigationType, page, canvasRef, contentRef, setCollapsed])
+  }, [canvasRef, boards, fetching, focusId, location.key, navigationType, page, setCollapsed, hold])
+
+  /** «Назад» вернёт место по доске — пиксели useScrollMemory не восстанавливает. */
+  return navigationType === 'POP' && anchorOf(location.key, page) !== undefined
 }

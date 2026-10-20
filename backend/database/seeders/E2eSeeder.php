@@ -56,7 +56,8 @@ use Illuminate\Database\Seeder;
  *
  * Страница пространства рядами (PR 3 пакета, LATER-55): ROWS «Ряды» (e2e-editor — editor, e2e-restricted — editor
  * «только свои») — ряды [«Узкая» (2 колонки), «Широкая» (8 колонок)], [«Высокая» (40 карточек в To Do — выше окна)],
- * [«Нижняя»]; space.spec только смотрит (сворачивание возвращает). ARRANGE «Перестановка» — «Первая», «Вторая»,
+ * [«Нижняя»], [«Промежуточная»], [«Средняя»], [«Последняя»] (40, 20 и 40 карточек поровну по колонкам); space.spec только
+ * смотрит (сворачивание возвращает). ARRANGE «Перестановка» — «Первая», «Вторая»,
  * «Третья» по одной в ряду: их переставляет board-rows.spec (перетаскивание и меню), раскладка меняется по ходу файла.
  *
  * Дерево (tree.spec): папка «E2E Мобильные» с пространством MOB «Мобильные приложения» (доска «Релизы»,
@@ -246,6 +247,16 @@ class E2eSeeder extends Seeder
         $bottom = $create->handle($admin, $rows, ['name' => 'Нижняя'], BoardTemplate::Simple);
         foreach (range(1, 2) as $i) {
             $card->handle($editor, $bottom, ['title' => "Нижняя карточка {$i}"], $column($bottom->id, 'To Do'), $lane($bottom->id));
+        }
+        // «Назад» и перезагрузка (space.spec): цель — «Средняя» посреди длинного пространства; «Высокая» (все карточки в одной
+        // колонке — её заглушка намного ниже настоящей доски) — дальше экрана выше цели. У досок ниже «Нижней» карточки
+        // поровну по колонкам — заглушки почти как настоящие доски, холст не упирается в конец
+        foreach (['Промежуточная' => 40, 'Средняя' => 20, 'Последняя' => 40] as $name => $count) {
+            $board = $create->handle($admin, $rows, ['name' => $name], BoardTemplate::Simple);
+            $columns = ['To Do', 'In Progress', 'Review', 'Done'];
+            foreach (range(1, $count) as $i) {
+                $card->handle($editor, $board, ['title' => "{$name}: карточка {$i}"], $column($board->id, $columns[$i % 4]), $lane($board->id));
+            }
         }
 
         $arrange = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Перестановка', 'key' => 'ARRANGE'], [$admin]);
