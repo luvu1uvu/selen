@@ -12,27 +12,32 @@ test.use({ storageState: authFile('e2e-editor@selen.test') })
 const canvasScroll = (page: Page) =>
   page.locator('[data-board-canvas]').evaluate((canvas) => canvas.scrollTop)
 
-/** Длинная доска, холст прокручен вниз; возвращает плитку карточки, видимую на экране, и адрес доски. */
+/**
+ * Длинная доска, холст прокручен вниз так, что карточка — посередине экрана (не под закреплёнными заголовками: щелчок
+ * по частично закрытой карточке прокручивает холст к ней — так было и до окна). Возвращает плитку, адрес доски и место
+ * прокрутки.
+ */
 async function scrolledBoard(page: Page) {
   await openHome(page)
   await openBoard(page, 'Раскладка', 'Длинная доска')
   const boardUrl = page.url()
-  await page.locator('[data-board-canvas]').evaluate((canvas) => canvas.scrollTo(0, 600))
-  await expect.poll(() => canvasScroll(page)).toBe(600)
   const tile = page.getByRole('button', { name: /^Открыть LAYOUT-20:/ })
+  await tile.evaluate((element) => element.scrollIntoView({ block: 'center' }))
   await expect(tile).toBeInViewport()
-  return { tile, boardUrl }
+  const scroll = await canvasScroll(page)
+  expect(scroll).toBeGreaterThan(300)
+  return { tile, boardUrl, scroll }
 }
 
 test('открытие с доски и закрытие: Esc, щелчок мимо, ✕ — доска на том же месте', async ({ page }) => {
-  const { tile, boardUrl } = await scrolledBoard(page)
+  const { tile, boardUrl, scroll } = await scrolledBoard(page)
 
   for (const close of ['Escape', 'outside', 'button'] as const) {
     await tile.click()
     const window = page.getByRole('dialog', { name: /Карточка длинной доски 20/ })
     await expect(window).toBeVisible()
     await expect(page).toHaveURL(/\/cards\/LAYOUT-20$/)
-    expect(await canvasScroll(page)).toBe(600)
+    expect(await canvasScroll(page)).toBe(scroll)
     // Около 800 px шириной (max-w-3xl), у верха экрана
     const box = (await window.boundingBox())!
     expect(box.width).toBeGreaterThan(700)
@@ -45,12 +50,12 @@ test('открытие с доски и закрытие: Esc, щелчок ми
 
     await expect(window).toBeHidden()
     expect(page.url()).toBe(boardUrl)
-    expect(await canvasScroll(page)).toBe(600)
+    expect(await canvasScroll(page)).toBe(scroll)
   }
 })
 
 test('«Назад» закрывает окно, «Вперёд» открывает снова', async ({ page }) => {
-  const { tile, boardUrl } = await scrolledBoard(page)
+  const { tile, boardUrl, scroll } = await scrolledBoard(page)
   await tile.click()
   const window = page.getByRole('dialog', { name: /Карточка длинной доски 20/ })
   await expect(window).toBeVisible()
@@ -58,7 +63,7 @@ test('«Назад» закрывает окно, «Вперёд» открыв�
   await page.goBack()
   await expect(window).toBeHidden()
   expect(page.url()).toBe(boardUrl)
-  expect(await canvasScroll(page)).toBe(600)
+  expect(await canvasScroll(page)).toBe(scroll)
 
   await page.goForward()
   await expect(window).toBeVisible()
@@ -97,7 +102,7 @@ test('на узком экране окно — на весь экран', async
 test('несохранённый текст: первый Esc выводит из поля, закрытие спрашивает «Закрыть без сохранения?»', async ({
   page,
 }) => {
-  const { tile, boardUrl } = await scrolledBoard(page)
+  const { tile, boardUrl, scroll } = await scrolledBoard(page)
   await tile.click()
   const window = page.getByRole('dialog', { name: /Карточка длинной доски 20/ })
   const comment = window.getByRole('textbox', { name: 'Новый комментарий' })
@@ -129,7 +134,7 @@ test('несохранённый текст: первый Esc выводит и�
   await confirm.getByRole('button', { name: 'Закрыть без сохранения' }).click()
   await expect(window).toBeHidden()
   expect(page.url()).toBe(boardUrl)
-  expect(await canvasScroll(page)).toBe(600)
+  expect(await canvasScroll(page)).toBe(scroll)
 })
 
 test('файл, брошенный на окно, становится вложением', async ({ page }) => {
@@ -150,7 +155,7 @@ test('файл, брошенный на окно, становится влож�
 
   await expect(page.getByText('Файл «перетащенный.txt» приложен')).toBeVisible()
   await expect(
-    window.getByRole('region', { name: 'Файлы' }).getByRole('link', { name: 'перетащенный.txt' }),
+    window.getByRole('region', { name: 'Файлы' }).getByRole('link', { name: 'перетащенный.txt', exact: true }),
   ).toBeVisible()
   await expect(window.getByText('Отпустите, чтобы приложить файл')).toBeHidden()
 })

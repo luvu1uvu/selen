@@ -43,9 +43,10 @@ test('создать карточку и перетащить в другую к
   await expect(page.getByRole('group', { name: 'In Progress', exact: true }).locator(card)).toBeVisible()
   await expect(page.getByRole('group', { name: 'To Do', exact: true }).locator(card)).toHaveCount(0)
 
-  // История перемещений в панели карточки
+  // История перемещений — вкладка «История» окна карточки (UI-1a)
   await card.click()
   await expect(page).toHaveURL(/\/cards\/QA-\d+$/)
+  await page.getByRole('dialog').getByRole('tab', { name: 'История' }).click()
   await expect(page.getByRole('dialog').getByText('To Do → In Progress')).toBeVisible()
 })
 
