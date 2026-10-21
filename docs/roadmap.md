@@ -20,7 +20,7 @@
 | LATER-64 | Описание доски: задать, изменить, стереть | ✅ | [#4](https://github.com/luvu1uvu/selen/pull/4); LATER-64 |
 | LATER-69 | `make host-worktrees-clean` перепроверяет копию после «y» и трогает только копии Remote Control | ✅ | [журнал](stages/hotfix-later-69.md), [аудит host.sh](security/audit-2026-10-19-host-worktrees.md); [#6](https://github.com/luvu1uvu/selen/pull/6), [#7](https://github.com/luvu1uvu/selen/pull/7); LATER-69 |
 | LATER-71 | Агент UX/UI-ревьюер: субагент `ux-reviewer` (только смотрит), правила вида `docs/ui-guidelines.md`, ADR | ✅ | [журнал](stages/hotfix-later-71.md), [правила вида](ui-guidelines.md), [ADR-0023](adr/0023-ux-review.md); [#9](https://github.com/luvu1uvu/selen/pull/9); LATER-71 |
-| Пакет раскладки, PR 3 | Экран пространства: все доски рядами, сворачивание и перенос досок, переход из дерева к доске | ⏭ | [журнал](stages/layout-package.md) (план PR 3); LATER-55 |
+| Пакет раскладки, PR 3 | Экран пространства: все доски рядами, сворачивание и перенос досок, переход из дерева к доске | ✅ | [журнал](stages/layout-package.md); [#13](https://github.com/luvu1uvu/selen/pull/13); LATER-55, LATER-79, LATER-81 |
 | UI-1 | Окно карточки как в Kaiten ([README Kaiten](ui-reference/kaiten/README.md), раздел 02) + ссылка на файл, открытая напрямую (LATER-51) | ⏭ | LATER-51 |
 | Права 2.0 | Роли и доступ по модели Kaiten: каталог прав, пользовательские роли, доступ через папки с наследованием. Меняет модель прав — сначала план, код после подтверждения PM | ⏭ | LATER-47 |
 | 4 | Уведомления и realtime | 📋 | [architecture.md](architecture.md), «Задел на будущее»; вопросы — [отчёт этапа 3](stages/stage-3-report.md), раздел 8; [backlog](backlog.md) (уведомление о сбое бэкапа) |
