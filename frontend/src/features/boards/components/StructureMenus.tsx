@@ -71,10 +71,12 @@ export function ColumnHeader({
       />
       <div className="flex shrink-0 items-center">
         {isTopLevel && <CategoryDot category={column.category} />}
-        <span className="text-muted-foreground px-1 text-xs tabular-nums" aria-hidden>
+        <span
+          className="text-muted-foreground px-1 text-xs tabular-nums"
+          title={t('board.cardsCount', { count })}
+        >
           {count}
         </span>
-        <span className="sr-only">{t('board.cardsCount', { count })}</span>
         {onAddCard && (
           <Tooltip>
             <TooltipTrigger asChild>

@@ -24,7 +24,7 @@ export function TruncatedText({
         <Tag
           ref={ref as RefObject<HTMLHeadingElement>}
           className={cn(
-            'focus-visible:ring-ring/50 truncate rounded-sm outline-none focus-visible:ring-[3px]',
+            'focus-visible:ring-ring/50 truncate outline-none focus-visible:ring-[3px]',
             className,
           )}
           tabIndex={truncated ? 0 : undefined}

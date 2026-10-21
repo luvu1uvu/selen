@@ -77,8 +77,7 @@ describe('Доска: дорожки', () => {
     expect(chevron).not.toHaveAttribute('title')
     expect(cell('To Do / Срочные')).toBeInTheDocument()
     // Счётчики колонок — по всем дорожкам
-    const columns = document.querySelector<HTMLElement>('[data-board-columns]')!
-    expect(within(columns).getByText('2 карточки')).toBeInTheDocument()
+    expect(screen.getByTitle('2 карт.')).toHaveTextContent('2')
   })
 
   it('подсказка шеврона — всплывающая (Tooltip), а не атрибут title', async () => {

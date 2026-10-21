@@ -29,9 +29,9 @@ describe('Заголовок колонки', () => {
     // Подколонки Dev и QA — без точки: категория у них от колонки
     expect(within(columns()).getAllByRole('img')).toHaveLength(3)
 
-    // Порядок: название, точка, счётчик; число карточек — формой множественного числа
+    // Порядок: название, точка, счётчик
     const name = within(columns()).getByText('To Do')
-    const [count] = within(columns()).getAllByText('1 карточка')
+    const [count] = within(columns()).getAllByTitle('1 карт.')
     expect(name.compareDocumentPosition(queue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(queue.compareDocumentPosition(count) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(name).toHaveClass('flex-1')
