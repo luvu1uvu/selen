@@ -368,6 +368,9 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
   `tailscale serve` — сети Docker). `trustProxies(at: '*')` не возвращать: с ним лимиты
   входа обходились новым адресом в заголовке. IP клиента в коде — только `$request->ip()`. В Docker на macOS nginx
   видит любого клиента хоста как шлюз Docker (dev — 172.19.0.1).
+- **Расширения PHP не с pecl.php.net (LATER-82):** `redis` и `pcov` в `docker/php/Dockerfile` — из архивов тегов GitHub
+  с проверкой sha256, установщику передаются пути к папкам. `install-php-extensions redis` (по имени) снова пошёл бы на
+  PECL, который то и дело не отвечает. Новая версия — runbook, раздел 12.
 - **Порты в compose-файлах — только `"127.0.0.1:ПОРТ:…"`** (dev, E2E, стенд). Без адреса Docker слушает все интерфейсы:
   на Mac mini dev был открыт в офисную сеть и tailnet, а у dev-базы пароль по умолчанию (ADR-0018). `make host-status`
   и ежечасный бэкап предупреждают о порте не на 127.0.0.1. На этом держится и доверие прокси стенда (ADR-0021).
