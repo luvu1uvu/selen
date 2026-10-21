@@ -185,7 +185,8 @@ describe('Доска', () => {
       await screen.findByRole('button', { name: 'Действия с колонкой «In Progress»' }),
     )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Сменить тип' }))
-    await userEvent.selectOptions(screen.getByLabelText('Тип'), 'done')
+    // Окно из «⋯» открывается после того, как меню вернуло фокус на «⋯» (кадром позже)
+    await userEvent.selectOptions(await screen.findByLabelText('Тип'), 'done')
 
     expect(screen.getByText(/Сменится статус 1 карточки/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
@@ -208,7 +209,7 @@ describe('Доска', () => {
       await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }),
     )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить подколонку' }))
-    await userEvent.type(screen.getByLabelText('Название'), 'Анализ')
+    await userEvent.type(await screen.findByLabelText('Название'), 'Анализ')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить подколонку' }))
     await screen.findByText('Сохранено')
 

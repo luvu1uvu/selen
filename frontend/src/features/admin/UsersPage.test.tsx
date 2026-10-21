@@ -141,7 +141,7 @@ describe('Админка пользователей', () => {
     )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать' }))
     await userEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Деактивировать' }),
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Деактивировать' }),
     )
 
     expect(await screen.findByText('Пользователь деактивирован')).toBeInTheDocument()

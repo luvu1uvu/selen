@@ -67,7 +67,7 @@ describe('Структура доски через меню', () => {
     const menu = await screen.findByRole('button', { name: 'Действия с дорожкой «Срочные»' })
     await userEvent.click(menu)
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать' }))
-    const name = screen.getByLabelText('Название')
+    const name = await screen.findByLabelText('Название')
     await userEvent.clear(name)
     await userEvent.type(name, 'Горящие')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
@@ -110,7 +110,7 @@ describe('Структура доски через меню', () => {
       await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }),
     )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать' }))
-    await userEvent.clear(screen.getByLabelText('Название'))
+    await userEvent.clear(await screen.findByLabelText('Название'))
     await userEvent.type(screen.getByLabelText('Название'), 'Очередь')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
     await screen.findByText('Сохранено')
