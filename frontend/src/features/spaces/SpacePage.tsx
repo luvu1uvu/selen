@@ -123,13 +123,14 @@ export function SpacePage() {
 type PanelDialog = 'archive' | 'create' | 'edit' | null
 
 /**
- * Панель пространства — вне прокрутки холста, всегда на месте. Как в Kaiten: название, ключ, ⓘ, вкладки «Доски /
- * Участники / Метки», сразу за ними — «Архив досок» и «Создать доску» (только на вкладке «Доски»); правая часть панели —
- * под «Фильтры» (этап 6), там пока только «Изменить» (LATER-74, решения PM 20.10).
+ * Панель пространства — вне прокрутки холста, всегда на месте, всегда одна строка. Как в Kaiten: название, ключ, ⓘ,
+ * вкладки «Доски / Участники / Метки», сразу за ними — «Архив досок» и «Создать доску» (только на вкладке «Доски»);
+ * правая часть панели — под «Фильтры» (этап 6), там пока только «Изменить» (LATER-74, решения PM 20.10).
  *
- * Узкий экран (768 px и уже — та же граница, что «доски в колонку», брейкпоинт rows) — одна строка: «Название · ключ ·
- * ⓘ · вкладки · ⋯»; кнопки — пунктами меню «⋯» (только доступные; нет ни одного — нет и «⋯»). Длинное название
- * обрезается, полное — в подсказке; вкладки и «⋯» не переносятся (дополнение PM 21.10).
+ * Узкая панель (уже 56rem = 896 px — по ширине самой панели, container query: с открытым деревом это окно до ~1210 px)
+ * — «Название · ключ · ⓘ · вкладки · ⋯»: кнопки — пунктами меню «⋯» (только доступные; нет ни одного — нет и «⋯»).
+ * Длинное название обрезается, полное — в подсказке; на экране уже 480 px ключа нет — названию больше места (ответы PM
+ * 21.10 на вопросы по PR #16).
  */
 function SpacePanel({ space, tab }: { space: Space; tab: string }) {
   const { t } = useTranslation('spaces')
@@ -140,79 +141,87 @@ function SpacePanel({ space, tab }: { space: Space; tab: string }) {
   const close = (open: boolean) => !open && setDialog(null)
 
   return (
-    <div className="bg-background rows:flex-wrap rows:gap-x-4 flex items-center gap-x-1.5 gap-y-2 border-b px-3 py-2 md:px-4">
-      <div className="rows:gap-2 flex min-w-0 items-center gap-1">
-        <TruncatedText as="h1" text={space.name} className="text-lg font-semibold" />
-        <Badge variant="secondary" className="max-rows:px-1.5 shrink-0 font-mono">
-          {space.key}
-        </Badge>
-        <SpaceInfo space={space} />
-      </div>
-      <TabsList className="shrink-0">
-        {/* На узком экране — плотнее (и зазоры, и поля бейджа): вся панель в одну строку и на 375 px */}
-        <TabsTrigger value="boards" className="max-rows:px-1.5">
-          {t('page.tabs.boards')}
-        </TabsTrigger>
-        <TabsTrigger value="members" className="max-rows:px-1.5">
-          {t('page.tabs.members')}
-        </TabsTrigger>
-        <TabsTrigger value="labels" className="max-rows:px-1.5">
-          {t('page.tabs.labels')}
-        </TabsTrigger>
-      </TabsList>
-      {onBoards && (
-        <div className="max-rows:hidden flex items-center gap-2">
-          <Button variant="outline" onClick={() => setDialog('archive')}>
-            <Archive />
-            {tb('layout.archived')}
-          </Button>
-          {canManage && <Button onClick={() => setDialog('create')}>{tb('list.create')}</Button>}
+    // @container — панель меряет себя сама: узкий вид с «⋯» зависит от её ширины, а не окна (дерево открыто или нет)
+    <div className="bg-background @container border-b">
+      <div className="flex items-center gap-x-1.5 px-3 py-2 md:px-4 @4xl:gap-x-4">
+        <div className="flex min-w-0 items-center gap-1 @4xl:gap-2">
+          <TruncatedText as="h1" text={space.name} className="text-lg font-semibold" />
+          <Badge
+            variant="secondary"
+            className="shrink-0 font-mono max-[30rem]:hidden @max-4xl:px-1.5"
+          >
+            {space.key}
+          </Badge>
+          <SpaceInfo space={space} />
         </div>
-      )}
-      {canManage && (
-        <Button
-          variant="outline"
-          className="max-rows:hidden ml-auto"
-          onClick={() => setDialog('edit')}
-        >
-          {t('page.edit')}
-        </Button>
-      )}
-      {(onBoards || canManage) && (
-        <ActionsMenu
-          label={t('page.menu', { name: space.name })}
-          className="rows:hidden ml-auto size-7"
-        >
-          {(opensDialog) => (
-            <>
-              {onBoards && (
-                <DropdownMenuItem onSelect={opensDialog(() => setDialog('archive'))}>
-                  <Archive />
-                  {tb('layout.archived')}
-                </DropdownMenuItem>
-              )}
-              {onBoards && canManage && (
-                <DropdownMenuItem onSelect={opensDialog(() => setDialog('create'))}>
-                  <Plus />
-                  {tb('list.createItem')}
-                </DropdownMenuItem>
-              )}
-              {canManage && (
-                <DropdownMenuItem onSelect={opensDialog(() => setDialog('edit'))}>
-                  <Pencil />
-                  {t('page.editItem')}
-                </DropdownMenuItem>
-              )}
-            </>
-          )}
-        </ActionsMenu>
-      )}
+        <TabsList className="shrink-0">
+          {/* Узкая панель — плотнее (и зазоры, и поля бейджа): вся в одну строку и на 375 px */}
+          <TabsTrigger value="boards" className="@max-4xl:px-1.5">
+            {t('page.tabs.boards')}
+          </TabsTrigger>
+          <TabsTrigger value="members" className="@max-4xl:px-1.5">
+            {t('page.tabs.members')}
+          </TabsTrigger>
+          <TabsTrigger value="labels" className="@max-4xl:px-1.5">
+            {t('page.tabs.labels')}
+          </TabsTrigger>
+        </TabsList>
+        {onBoards && (
+          <div className="flex shrink-0 items-center gap-2 @max-4xl:hidden">
+            <Button variant="outline" onClick={() => setDialog('archive')}>
+              <Archive />
+              {tb('layout.archived')}
+            </Button>
+            {canManage && <Button onClick={() => setDialog('create')}>{tb('list.create')}</Button>}
+          </div>
+        )}
+        {canManage && (
+          <Button
+            variant="outline"
+            className="ml-auto shrink-0 @max-4xl:hidden"
+            onClick={() => setDialog('edit')}
+          >
+            {t('page.edit')}
+          </Button>
+        )}
+        {(onBoards || canManage) && (
+          <ActionsMenu
+            label={t('page.menu', { name: space.name })}
+            className="ml-auto size-7 @4xl:hidden"
+          >
+            {(opensDialog) => (
+              <>
+                {onBoards && (
+                  <DropdownMenuItem onSelect={opensDialog(() => setDialog('archive'))}>
+                    <Archive />
+                    {tb('layout.archived')}
+                  </DropdownMenuItem>
+                )}
+                {onBoards && canManage && (
+                  <DropdownMenuItem onSelect={opensDialog(() => setDialog('create'))}>
+                    <Plus />
+                    {tb('list.createItem')}
+                  </DropdownMenuItem>
+                )}
+                {canManage && (
+                  <DropdownMenuItem onSelect={opensDialog(() => setDialog('edit'))}>
+                    <Pencil />
+                    {t('page.editItem')}
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
+          </ActionsMenu>
+        )}
 
-      <ArchivedBoardsDialog space={space} open={dialog === 'archive'} onOpenChange={close} />
-      {canManage && (
-        <CreateBoardDialog spaceKey={space.key} open={dialog === 'create'} onOpenChange={close} />
-      )}
-      {canManage && <EditSpaceDialog space={space} open={dialog === 'edit'} onOpenChange={close} />}
+        <ArchivedBoardsDialog space={space} open={dialog === 'archive'} onOpenChange={close} />
+        {canManage && (
+          <CreateBoardDialog spaceKey={space.key} open={dialog === 'create'} onOpenChange={close} />
+        )}
+        {canManage && (
+          <EditSpaceDialog space={space} open={dialog === 'edit'} onOpenChange={close} />
+        )}
+      </div>
     </div>
   )
 }

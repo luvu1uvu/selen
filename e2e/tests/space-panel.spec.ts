@@ -55,7 +55,9 @@ test('узкий экран (375 px): панель в одну строку, к�
   const heading = page.getByRole('heading', { name: 'Ряды', level: 1 })
   const menu = page.getByRole('button', { name: menuLabel })
 
-  await expectOneLine([heading, page.getByText('ROWS', { exact: true }), page.getByRole('tablist').first(), menu])
+  // На экране уже 480 px ключа нет — названию больше места (ответ PM 21.10); ⓘ на месте
+  await expect(page.getByText('ROWS', { exact: true })).toBeHidden()
+  await expectOneLine([heading, page.getByRole('button', { name: 'О пространстве' }), page.getByRole('tablist').first(), menu])
   expect((await box(menu)).x + (await box(menu)).width).toBeLessThanOrEqual(375 - 12 + 1)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   for (const name of ['Архив досок', 'Создать доску', 'Изменить'])
@@ -92,6 +94,29 @@ test('узкий экран (375 px): панель в одну строку, к�
   await menu.click()
   await expect(page.getByRole('menuitem')).toHaveText(['Изменить…'])
   await page.keyboard.press('Escape')
+})
+
+test('узкую панель задаёт её ширина, а не окна: 1024 px с деревом — «⋯», дерево свёрнуто — кнопки', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await openRows(page)
+  const menu = page.getByRole('button', { name: menuLabel })
+  const archive = page.getByRole('button', { name: 'Архив досок', exact: true })
+  // Дерево открыто — панель уже 896 px: одна строка с «⋯», ключ на месте (окно шире 480)
+  await expect(menu).toBeVisible()
+  await expect(archive).toBeHidden()
+  await expectOneLine([
+    page.getByRole('heading', { name: 'Ряды', level: 1 }),
+    page.getByText('ROWS', { exact: true }),
+    page.getByRole('tablist').first(),
+    menu,
+  ])
+  // Дерево свёрнуто — панель шире: кнопки за вкладками, «⋯» нет
+  await page.getByRole('button', { name: 'Свернуть панель' }).click()
+  await expect(archive).toBeVisible()
+  await expect(menu).toBeHidden()
+  await expectOneLine([page.getByRole('tablist').first(), archive, page.getByRole('button', { name: 'Изменить', exact: true })])
+  await page.getByRole('button', { name: 'Дерево', exact: true }).click()
+  await expect(menu).toBeVisible()
 })
 
 test('узкий экран, 768 px: одна строка; у редактора на «Участниках» «⋯» нет', async ({ browser }) => {

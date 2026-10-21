@@ -5,7 +5,8 @@ import { expectHint, isTruncated } from './helpers'
 /**
  * ТК-L74.3 (LATER-74, дополнение PM 21.10): на узком экране (375 и 768 px) панель пространства — одна строка «Название ·
  * ключ · ⓘ · вкладки · ⋯»; кнопки «Архив досок», «Создать доску», «Изменить» — пунктами «⋯», каждый открывает своё окно;
- * на «Участниках» в «⋯» — только «Изменить…»; обрезанное название — полное в подсказке. «Разработка» → RACC «Приёмка
+ * на «Участниках» в «⋯» — только «Изменить…»; обрезанное название — полное в подсказке. На экране уже 480 px ключа нет
+ * (ответ PM 21.10 на вопрос 1 по PR #16) — на 375 строка «Название · ⓘ · вкладки · ⋯». «Разработка» → RACC «Приёмка
  * рядов» (E2eSeeder), Анна → e2e-admin. Окна только открываются и закрываются.
  */
 test.use({ storageState: authFile('e2e-admin@selen.test'), viewport: { width: 375, height: 812 } })
@@ -56,8 +57,10 @@ test('ТК-L74.3. Панель пространства на узком экра
   const { heading, key, info, tabs, menu } = panel(page)
   await expect(heading).toBeVisible()
 
-  // 2. Одна строка: название, ключ, вкладки, «⋯»; кнопок на панели нет; название обрезано — полное в подсказке
-  await expectOneLine([heading, key, info, tabs, menu])
+  // 2. Одна строка: название, ⓘ, вкладки, «⋯» (ключа на 375 нет); кнопок на панели нет; название обрезано — полное
+  // в подсказке
+  await expect(key).toBeHidden()
+  await expectOneLine([heading, info, tabs, menu])
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   for (const name of ['Архив досок', 'Создать доску', 'Изменить'])
     await expect(page.getByRole('button', { name, exact: true })).toBeHidden()
