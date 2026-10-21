@@ -597,6 +597,22 @@ describe('Окно карточки', () => {
       await vi.waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
     })
 
+    it('после Esc в меню «⋯» подсказка не открывается — следующий Esc закрывает окно (U-5 UX-ревью)', async () => {
+      serveCard(makeCardDetail())
+      const { router } = renderApp('/boards/board-1')
+      await userEvent.click(await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' }))
+      const window = await screen.findByRole('dialog', { name: 'Первая' })
+
+      await openActions(window)
+      await userEvent.keyboard('{Escape}')
+      await vi.waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+      expect(within(window).getByRole('button', { name: /^Действия с карточкой/ })).toHaveFocus()
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+
+      await userEvent.keyboard('{Escape}')
+      await vi.waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
+    })
+
     it('системный администратор удаляет в корзину из «⋯» — окно закрывается, карточку не перезапрашиваем', async () => {
       let deleted = 0
       let fetchedAfterDelete = 0

@@ -60,7 +60,7 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="focus-visible:ring-ring/50 rounded-sm font-mono text-xs outline-none hover:underline focus-visible:ring-[3px]"
+              className="focus-visible:ring-ring/50 inline-flex min-h-6 items-center rounded-sm font-mono text-xs outline-none hover:underline focus-visible:ring-[3px]"
               aria-label={`${card.key}. ${t('card.copyKeyLink')}`}
               onClick={copyLink}
             >
@@ -176,7 +176,8 @@ function TitleField({ card }: { card: CardDetail }) {
     if (!element) return
     const fit = () => {
       element.style.height = 'auto'
-      element.style.height = `${element.scrollHeight}px`
+      // scrollHeight — без рамки поля, а высота задаётся с ней (border-box)
+      element.style.height = `${element.scrollHeight + element.offsetHeight - element.clientHeight}px`
     }
     fit()
     let width = element.clientWidth

@@ -59,7 +59,8 @@ export function CardLabelsField({ card, canEdit }: { card: CardDetail; canEdit: 
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground px-2"
+              // Значок вровень с левым краем значений «Основных параметров» (U-7 UX-ревью UI-1a)
+              className="text-muted-foreground -ml-2 px-2 has-[>svg]:px-2"
               disabled={setLabels.isPending}
             >
               <Tags />

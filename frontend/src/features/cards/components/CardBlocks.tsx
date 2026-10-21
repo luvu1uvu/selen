@@ -42,7 +42,8 @@ export function CardActiveBlocks({
       {active.map((block) => (
         <div
           key={block.id}
-          className="border-destructive/40 bg-destructive/5 grid gap-1 rounded-md border p-3 text-sm"
+          // Белый фон и красная полоса слева: на розовой заливке текст был ниже 4,5:1 (U-1 UX-ревью UI-1a)
+          className="border-destructive/40 border-l-destructive bg-background grid gap-1 rounded-md border border-l-4 p-3 text-sm"
         >
           <span className="text-destructive flex items-center gap-1.5 font-medium">
             <Ban className="size-4" aria-hidden />

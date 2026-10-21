@@ -6,7 +6,10 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DragCancelEvent,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   arrayMove,
@@ -192,6 +195,27 @@ function ChecklistBlock({
     void run({ kind: 'moveItem', id, ...neighboursAt(ids, to) })
   }
 
+  const itemText = (id: string | number) => order.find((item) => item.id === id)?.text ?? ''
+  const position = (id: string | number) => order.findIndex((item) => item.id === id) + 1
+  // Подсказка и объявления для экранного диктора — по-русски, как на доске (U-2 UX-ревью UI-1a)
+  const accessibility = {
+    screenReaderInstructions: { draggable: t('checklists.dndInstructions') },
+    announcements: {
+      onDragStart: ({ active }: DragStartEvent) =>
+        t('checklists.dndPickedUp', { text: itemText(active.id) }),
+      onDragOver: ({ active, over }: DragOverEvent) =>
+        over
+          ? t('checklists.dndOver', { text: itemText(active.id), position: position(over.id) })
+          : undefined,
+      onDragEnd: ({ active, over }: DragEndEvent) =>
+        over
+          ? t('checklists.dndDropped', { text: itemText(active.id), position: position(over.id) })
+          : t('checklists.dndCancelled', { text: itemText(active.id) }),
+      onDragCancel: ({ active }: DragCancelEvent) =>
+        t('checklists.dndCancelled', { text: itemText(active.id) }),
+    },
+  }
+
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (over && active.id !== over.id)
       move(
@@ -241,7 +265,12 @@ function ChecklistBlock({
           />
         </div>
       )}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        accessibility={accessibility}
+        onDragEnd={onDragEnd}
+      >
         <SortableContext
           items={order.map((item) => item.id)}
           strategy={verticalListSortingStrategy}
@@ -302,6 +331,7 @@ function ItemRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
     disabled: !canEdit,
+    attributes: { roleDescription: t('checklists.dndRole') },
   })
 
   return (

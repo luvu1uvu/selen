@@ -58,7 +58,10 @@ function useSave(cardKey: string) {
 export function ParamRow({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div className="grid gap-1 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start sm:gap-4">
-      <dt className="text-muted-foreground text-sm sm:py-1.5">{label}</dt>
+      {/* <Label> в названии — той же насыщенности и высоты, что текст (U-6 UX-ревью UI-1a) */}
+      <dt className="text-muted-foreground text-sm sm:py-1.5 [&_label]:leading-5 [&_label]:font-normal">
+        {label}
+      </dt>
       <dd className="flex min-h-8 min-w-0 flex-wrap items-center gap-1.5 text-sm">{children}</dd>
     </div>
   )
@@ -317,7 +320,7 @@ function ParticipantsField({ card, canEdit }: { card: CardDetail; canEdit: boole
           disabled={participant.isPending}
           onSelect={(user) => void toggle(user.id, !ids.includes(user.id))}
         >
-          <Button variant="ghost" size="sm" className="text-muted-foreground -ml-1 px-2">
+          <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 px-2">
             {t('params.addParticipants')}
           </Button>
         </PersonPicker>

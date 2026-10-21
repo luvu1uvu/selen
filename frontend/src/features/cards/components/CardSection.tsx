@@ -57,9 +57,13 @@ export function CardSection({
             />
             <span className="truncate">{title}</span>
             {count !== undefined && count > 0 && (
-              <span className="text-muted-foreground text-xs font-normal tabular-nums">
-                {count}
-              </span>
+              <>
+                {/* Диктору — «Чек-листы, 1», а не «Чек-листы1» */}
+                <span className="sr-only">, </span>
+                <span className="text-muted-foreground text-xs font-normal tabular-nums">
+                  {count}
+                </span>
+              </>
             )}
           </button>
         </h3>

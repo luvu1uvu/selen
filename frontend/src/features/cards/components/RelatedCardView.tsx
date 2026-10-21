@@ -25,7 +25,10 @@ export function RelatedCardView({ card }: { card: RelatedCard }) {
 
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
-      <Link {...cardLink(card.key)} className="shrink-0 font-mono text-xs hover:underline">
+      <Link
+        {...cardLink(card.key)}
+        className="inline-flex min-h-6 shrink-0 items-center font-mono text-xs hover:underline"
+      >
         {card.key}
       </Link>
       <span className="truncate" title={card.title}>

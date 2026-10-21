@@ -72,7 +72,8 @@ export function CardAttachmentsSection({
               {attachment.kind === 'image' ? (
                 <button
                   type="button"
-                  className="block w-full"
+                  // Рамка фокуса — внутри: снаружи её срезал бы overflow-hidden у figure (U-3 UX-ревью UI-1a)
+                  className="focus-visible:ring-ring/50 block w-full outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
                   aria-label={t('attachments.open', { name: attachment.name })}
                   onClick={() => setPreview(attachment)}
                 >

@@ -110,6 +110,9 @@ describe('Карточка: описание, комментарии, чек-л�
     expect(
       await within(section).findByRole('toolbar', { name: 'Форматирование' }),
     ).toBeInTheDocument()
+    // Значки панели — с подсказкой (U-4 UX-ревью UI-1a)
+    await userEvent.hover(within(section).getByRole('button', { name: 'Жирный' }))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Жирный')
     await userEvent.click(within(section).getByRole('button', { name: 'Сохранить описание' }))
 
     await vi.waitFor(() => expect(calls).toHaveLength(1))
@@ -210,7 +213,11 @@ describe('Карточка: описание, комментарии, чек-л�
       'Документация{Enter}',
     )
     await userEvent.click(within(panel).getByRole('checkbox', { name: 'Тесты' }))
-    within(panel).getByRole('button', { name: 'Переставить «Тесты» (Alt+↑/↓)' }).focus()
+    // Ручка перестановки — по-русски для экранного диктора (U-2 UX-ревью UI-1a)
+    const grip = within(panel).getByRole('button', { name: 'Переставить «Тесты» (Alt+↑/↓)' })
+    expect(grip).toHaveAttribute('aria-roledescription', 'пункт чек-листа')
+    expect(grip).toHaveAccessibleDescription(/^Чтобы переставить пункт, нажмите пробел/)
+    grip.focus()
     await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}')
 
     await vi.waitFor(() =>

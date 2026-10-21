@@ -37,11 +37,12 @@ function DialogContent({
         {...props}
       >
         {children}
-        {/* ✕ — цель 32 px и рамка фокуса (правила вида, разделы 4, 11). Подсказки Tooltip нет: окно без полей отдаёт фокус
-            ✕ при открытии, и первый Esc закрыл бы подсказку, а не окно */}
+        {/* ✕ — цель 32 px и рамка фокуса (правила вида, разделы 4, 11), фон — содержимое окна, прокрученное под ✕, не
+            просвечивает. Подсказки Tooltip нет: окно без полей отдаёт фокус ✕ при открытии, и первый Esc закрыл бы
+            подсказку, а не окно */}
         <DialogPrimitive.Close
           aria-label={closeLabel}
-          className="hover:bg-accent focus-visible:ring-ring/50 absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]"
+          className="bg-background hover:bg-accent focus-visible:ring-ring/50 absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]"
         >
           <XIcon className="size-4" />
         </DialogPrimitive.Close>

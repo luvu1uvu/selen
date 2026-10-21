@@ -3,6 +3,7 @@ import { MoreHorizontal } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
+import { restoreFocusQuietly } from '@/shared/ui/restore-focus'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 /** Обёртка обработчика пункта меню, который открывает окно (см. ActionsMenu). */
@@ -42,6 +43,7 @@ export function ActionsMenu({
   children: (opensDialog: OpensDialog) => ReactNode
 }) {
   const pending = useRef<(() => void) | null>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
   const dialog: OpensDialog = (open) => () => {
     pending.current = open
   }
@@ -54,6 +56,7 @@ export function ActionsMenu({
               variant="ghost"
               size="icon"
               className={cn('shrink-0', className)}
+              ref={trigger}
               aria-label={label}
               onFocus={hideHintUnlessKeyboard}
             >
@@ -65,7 +68,11 @@ export function ActionsMenu({
       </Tooltip>
       <DropdownMenuContent
         align={align}
-        onCloseAutoFocus={() => {
+        onCloseAutoFocus={(event) => {
+          // Фокус на «⋯» возвращаем сами и без подсказки: открытая подсказка забрала бы следующий Esc у окна под
+          // меню (U-5 UX-ревью UI-1a, как LATER-94)
+          event.preventDefault()
+          restoreFocusQuietly(trigger.current)
           const open = pending.current
           pending.current = null
           // Фокус сейчас вернётся на «⋯» — окно откроется кадром позже

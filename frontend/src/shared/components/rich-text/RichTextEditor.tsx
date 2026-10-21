@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/shared/lib/utils'
+import { Hint } from '@/shared/components/Hint'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { isEmptyDoc, type MentionCandidate, type RichTextDoc } from './doc'
@@ -314,19 +315,20 @@ function Toolbar({ editor, onLink }: { editor: Editor; onLink: () => void }) {
       className="flex flex-wrap gap-0.5 border-b p-1"
     >
       {buttons.map(([key, icon, run]) => (
-        <Button
-          key={key}
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={cn('size-7', state[key] && 'bg-accent')}
-          aria-label={t(`richText.tools.${key}`)}
-          aria-pressed={state[key]}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={run}
-        >
-          {icon}
-        </Button>
+        <Hint key={key} label={t(`richText.tools.${key}`)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn('size-7', state[key] && 'bg-accent')}
+            aria-label={t(`richText.tools.${key}`)}
+            aria-pressed={state[key]}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={run}
+          >
+            {icon}
+          </Button>
+        </Hint>
       ))}
     </div>
   )
