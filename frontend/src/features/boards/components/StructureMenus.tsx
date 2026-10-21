@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { cn } from '@/shared/lib/utils'
 import type { BoardColumn, Lane } from '@/shared/types/api'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
@@ -13,14 +12,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { moveColumn, moveLane } from '../api'
 import { useStructureMutation } from '../queries'
 import type { StructureAction } from './StructureDialogs'
 
-const CATEGORY_STYLES = {
-  queue: 'bg-slate-100 text-slate-700',
-  in_progress: 'bg-blue-100 text-blue-800',
-  done: 'bg-emerald-100 text-emerald-800',
+/** Точка категории колонки: насыщенные цвета — не меньше 3:1 к белому (правила вида, разделы 2 и 11). */
+const CATEGORY_DOTS = {
+  queue: 'bg-slate-500',
+  in_progress: 'bg-blue-600',
+  done: 'bg-emerald-600',
 } as const
 
 /** Перестановка через меню: надёжнее перетаскивания на сетке с подколонками и доступно с клавиатуры. */
@@ -37,8 +38,9 @@ function useMove(fn: (id: string, n: { after_id?: string; before_id?: string }) 
 }
 
 /**
- * Заголовок колонки или подколонки: название, тип, счётчик карточек, «+» (новая карточка в начало колонки —
- * у листовых колонок, если можно создавать карточки, LATER-44) и меню администратора.
+ * Заголовок колонки или подколонки, как в Kaiten (README Kaiten, раздел 03; LATER-77): название слева на всю оставшуюся
+ * ширину, справа — категория точкой с подсказкой (у колонки верхнего уровня), счётчик карточек, «+» (новая карточка
+ * в начало колонки — у листовых колонок, если можно создавать карточки, LATER-44) и меню администратора.
  */
 export function ColumnHeader({
   column,
@@ -65,35 +67,33 @@ export function ColumnHeader({
 
   return (
     // Без своей плашки: колонки разделены тонкими линиями (как в Kaiten); отступ слева — как у карточек в ячейке
-    <div className="flex min-h-9 items-center justify-between gap-2 px-2">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className={cn('truncate text-sm', isTopLevel ? 'font-semibold' : 'font-medium')}>
-          {column.name}
-        </span>
-        <span
-          className="text-muted-foreground text-xs tabular-nums"
-          title={t('board.cardsCount', { count })}
-        >
+    <div className="flex min-h-9 items-center gap-2 px-2">
+      <span
+        className={cn('min-w-0 flex-1 truncate text-sm', isTopLevel ? 'font-semibold' : 'font-medium')}
+      >
+        {column.name}
+      </span>
+      <div className="flex shrink-0 items-center">
+        {isTopLevel && <CategoryDot category={column.category} />}
+        <span className="text-muted-foreground px-1 text-xs tabular-nums" aria-hidden>
           {count}
         </span>
-        {isTopLevel && (
-          <Badge className={cn('border-transparent', CATEGORY_STYLES[column.category])}>
-            {t(`categories.${column.category}`)}
-          </Badge>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center">
+        <span className="sr-only">{t('board.cardsCount', { count })}</span>
         {onAddCard && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            aria-label={t('addCard.topLabel', { column: column.name })}
-            title={t('addCard.topLabel', { column: column.name })}
-            onClick={onAddCard}
-          >
-            <Plus />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                aria-label={t('addCard.topLabel', { column: column.name })}
+                onClick={onAddCard}
+              >
+                <Plus />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('addCard.topLabel', { column: column.name })}</TooltipContent>
+          </Tooltip>
         )}
         {canManage && (
           <DropdownMenu>
@@ -149,6 +149,31 @@ export function ColumnHeader({
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * Категория колонки — цветная точка с подсказкой «Очередь» / «В работе» / «Готово» вместо текстового бейджа (LATER-77):
+ * название колонки получает всю ширину. Подсказка видна и по фокусу — точка в порядке Tab; цель — 24 px (WCAG 2.5.8).
+ */
+function CategoryDot({ category }: { category: BoardColumn['category'] }) {
+  const { t } = useTranslation('boards')
+  const label = t(`categories.${category}`)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={label}
+          tabIndex={0}
+          className="focus-visible:ring-ring/50 inline-flex size-6 items-center justify-center rounded-md outline-none focus-visible:ring-[3px]"
+          data-category={category}
+        >
+          <span className={cn('size-2 rounded-full', CATEGORY_DOTS[category])} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
