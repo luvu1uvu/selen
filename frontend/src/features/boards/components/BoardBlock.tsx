@@ -136,9 +136,10 @@ export function BoardBlock({
         // колонке; высота — по содержимому, не ниже 15rem (шапка, заголовки и ячейка с «+ Карточка»), а при свёрнутой
         // последней дорожке — ровно по содержимому.
         // overflow: clip — содержимое обрезается по скруглённой рамке (уголки шапки, прижатой к верху холста, не торчат);
-        // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста
+        // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста.
+        // relative — для затенения краёв тела доски (BoardView, EdgeShade)
         className={cn(
-          'bg-background flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
+          'bg-background relative flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
           !endsWithBand && 'min-h-60',
           className,
         )}
