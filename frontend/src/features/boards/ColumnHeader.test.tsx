@@ -64,7 +64,9 @@ describe('Заголовок колонки', () => {
 
     const lane = screen.getByRole('button', { name: 'Действия с дорожкой «Основная»' })
     act(() => lane.focus())
-    expect(await screen.findByRole('tooltip', { name: 'Действия с дорожкой «Основная»' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('tooltip', { name: 'Действия с дорожкой «Основная»' }),
+    ).toBeInTheDocument()
   })
 
   it('«+» в заголовке — подсказка Tooltip, а не title', async () => {

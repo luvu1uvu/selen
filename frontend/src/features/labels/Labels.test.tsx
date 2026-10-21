@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { Label } from '@/shared/types/api'
@@ -46,9 +46,27 @@ describe('Метки', () => {
     expect(await screen.findByText('Метка сохранена')).toBeInTheDocument()
     expect(body).toEqual({ name: 'Клиент', color: '#f59e0b' })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Действия с меткой Безопасность' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Действия с меткой «Безопасность»' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Архивировать' }))
     await vi.waitFor(() => expect(archived).toEqual(['l-sec']))
+  })
+
+  it('у «⋯» метки — подсказка с названием в «ёлочках», по наведению и по фокусу (LATER-80)', async () => {
+    signedInAs(makeUser())
+    server.use(http.get('*/api/v1/admin/labels', () => HttpResponse.json({ data: [company] })))
+    renderApp('/admin/labels')
+
+    const menu = await screen.findByRole('button', { name: 'Действия с меткой «Безопасность»' })
+    expect(menu).not.toHaveAttribute('title')
+    const user = userEvent.setup()
+    await user.hover(menu)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Действия с меткой «Безопасность»')
+    await user.unhover(menu)
+    act(() => menu.blur())
+    act(() => menu.focus())
+    expect(
+      await screen.findByRole('tooltip', { name: 'Действия с меткой «Безопасность»' }),
+    ).toBeInTheDocument()
   })
 
   it('ошибки сервера раскладываются в поля формы', async () => {
@@ -90,7 +108,7 @@ describe('Метки', () => {
     expect(within(row).getByText('В архиве')).toBeInTheDocument()
     expect(screen.getByText('Безопасность')).toBeInTheDocument()
 
-    await userEvent.click(within(row).getByRole('button', { name: 'Действия с меткой Фронтенд' }))
+    await userEvent.click(within(row).getByRole('button', { name: 'Действия с меткой «Фронтенд»' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Восстановить' }))
     expect(await screen.findByText('Метка восстановлена')).toBeInTheDocument()
     expect(restored).toBe(true)

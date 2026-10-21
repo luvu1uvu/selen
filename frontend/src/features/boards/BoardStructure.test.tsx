@@ -106,7 +106,9 @@ describe('Структура доски через меню', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать' }))
     await userEvent.clear(screen.getByLabelText('Название'))
     await userEvent.type(screen.getByLabelText('Название'), 'Очередь')

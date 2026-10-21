@@ -8,20 +8,14 @@ import {
   ArrowUp,
   FolderInput,
   FolderPlus,
-  MoreHorizontal,
   Pencil,
   Trash2,
 } from 'lucide-react'
+import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import type { AdminNavNode } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
 import { EveryoneMark, HiddenFromTreeMark, NodeIcon } from './components/NodeIcon'
 import { RestoreFolderDialog } from './components/RestoreFolderDialog'
 import { useNavigation } from './queries'
@@ -134,77 +128,72 @@ export function StructurePage() {
                   </Badge>
                 )}
                 <div className="ml-auto">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        aria-label={t('structure.actions.menu', { name })}
-                      >
-                        <MoreHorizontal />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          structure.edit(
-                            node.type === 'folder'
-                              ? { mode: 'folder', id: node.id, name, icon: node.icon }
-                              : { mode: 'icon', id: node.id, name, icon: node.icon },
-                          )
-                        }
-                      >
-                        <Pencil />
-                        {node.type === 'folder'
-                          ? t('structure.actions.edit')
-                          : t('structure.actions.icon')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => structure.move(node)}>
-                        <FolderInput />
-                        {t('structure.actions.move')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem disabled={first} onSelect={() => structure.shift(node, -1)}>
-                        <ArrowUp />
-                        {t('structure.actions.up')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem disabled={last} onSelect={() => structure.shift(node, 1)}>
-                        <ArrowDown />
-                        {t('structure.actions.down')}
-                      </DropdownMenuItem>
-                      {node.type === 'folder' && (
-                        <>
-                          <DropdownMenuItem
-                            disabled={node.depth >= maxDepth}
-                            onSelect={() =>
-                              structure.edit({ mode: 'create', parent: { id: node.id, name } })
-                            }
-                          >
-                            <FolderPlus />
-                            {t('structure.actions.addSubfolder')}
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => structure.archive(node)}>
-                        <Archive />
-                        {t('structure.actions.archive')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        disabled={node.type === 'folder' && structure.hasChildren(node)}
-                        title={
-                          node.type === 'folder' && structure.hasChildren(node)
-                            ? t('structure.deleteNotEmpty')
-                            : undefined
-                        }
-                        onSelect={() => structure.remove(node)}
-                      >
-                        <Trash2 />
-                        {t('structure.actions.delete')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <ActionsMenu label={t('structure.actions.menu', { name })} className="size-8">
+                    {(dialog) => (
+                      <>
+                        <DropdownMenuItem
+                          onSelect={dialog(() =>
+                            structure.edit(
+                              node.type === 'folder'
+                                ? { mode: 'folder', id: node.id, name, icon: node.icon }
+                                : { mode: 'icon', id: node.id, name, icon: node.icon },
+                            ),
+                          )}
+                        >
+                          <Pencil />
+                          {node.type === 'folder'
+                            ? t('structure.actions.edit')
+                            : t('structure.actions.icon')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={dialog(() => structure.move(node))}>
+                          <FolderInput />
+                          {t('structure.actions.move')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={first}
+                          onSelect={() => structure.shift(node, -1)}
+                        >
+                          <ArrowUp />
+                          {t('structure.actions.up')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled={last} onSelect={() => structure.shift(node, 1)}>
+                          <ArrowDown />
+                          {t('structure.actions.down')}
+                        </DropdownMenuItem>
+                        {node.type === 'folder' && (
+                          <>
+                            <DropdownMenuItem
+                              disabled={node.depth >= maxDepth}
+                              onSelect={dialog(() =>
+                                structure.edit({ mode: 'create', parent: { id: node.id, name } }),
+                              )}
+                            >
+                              <FolderPlus />
+                              {t('structure.actions.addSubfolder')}
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={dialog(() => structure.archive(node))}>
+                          <Archive />
+                          {t('structure.actions.archive')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={node.type === 'folder' && structure.hasChildren(node)}
+                          title={
+                            node.type === 'folder' && structure.hasChildren(node)
+                              ? t('structure.deleteNotEmpty')
+                              : undefined
+                          }
+                          onSelect={dialog(() => structure.remove(node))}
+                        >
+                          <Trash2 />
+                          {t('structure.actions.delete')}
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </ActionsMenu>
                 </div>
               </li>
             )

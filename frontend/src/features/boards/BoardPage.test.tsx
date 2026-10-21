@@ -204,7 +204,9 @@ describe('Доска', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить подколонку' }))
     await userEvent.type(screen.getByLabelText('Название'), 'Анализ')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить подколонку' }))
@@ -237,7 +239,9 @@ describe('Доска', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Архивировать' }))
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Архивировать' }),
