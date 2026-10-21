@@ -61,8 +61,10 @@ test('узкий экран (375 px): панель в одну строку, к�
   for (const name of ['Архив досок', 'Создать доску', 'Изменить'])
     await expect(page.getByRole('button', { name, exact: true })).toBeHidden()
 
-  // «⋯» — с подсказкой; пункты — все, на которые есть права
-  await menu.focus()
+  // «⋯» — с подсказкой по фокусу с клавиатуры (Tab с активной вкладки); пункты — все, на которые есть права
+  await page.getByRole('tab', { name: 'Доски' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(menu).toBeFocused()
   await expect(page.getByRole('tooltip')).toHaveText(menuLabel)
   await menu.click()
   await expect(page.getByRole('menuitem')).toHaveText(['Архив досок', 'Создать доску…', 'Изменить…'])

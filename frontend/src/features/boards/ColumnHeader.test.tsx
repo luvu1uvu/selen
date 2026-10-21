@@ -46,7 +46,7 @@ describe('Заголовок колонки', () => {
     expect(await screen.findByRole('tooltip', { name: 'Готово' })).toBeInTheDocument()
   })
 
-  it('«⋯» колонки и дорожки — подсказка по наведению и по фокусу, название в «ёлочках» (LATER-75)', async () => {
+  it('«⋯» колонки и дорожки — подсказка, название в «ёлочках» (LATER-75)', async () => {
     const board = makeBoardDetail()
     board.lanes = [
       { id: 'main', name: 'Основная', position: 'a0' },
@@ -61,12 +61,14 @@ describe('Заголовок колонки', () => {
     await user.hover(column)
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Действия с колонкой «To Do»')
     await user.unhover(column)
+    await user.keyboard('{Escape}')
 
     const lane = screen.getByRole('button', { name: 'Действия с дорожкой «Основная»' })
-    act(() => lane.focus())
+    await user.hover(lane)
     expect(
       await screen.findByRole('tooltip', { name: 'Действия с дорожкой «Основная»' }),
     ).toBeInTheDocument()
+    // По фокусу с клавиатуры — та же подсказка: ActionsMenu.test и E2E (jsdom не отличает фокус Tab от щелчка на странице)
   })
 
   it('«+» в заголовке — подсказка Tooltip, а не title', async () => {

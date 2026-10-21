@@ -51,7 +51,14 @@ export function installSession(queryClient: QueryClient) {
   const resetData = () =>
     queryClient.resetQueries({ predicate: (query) => !isCurrentUserKey(query.queryKey) })
 
+  // Ошибка повтора после 419 (shared/api/client.ts) проходит перехватчики дважды — в повторе и в исходном запросе;
+  // обрабатываем её один раз, иначе 409 перечитывал бы все данные дважды
+  const handled = new WeakSet<object>()
   const response = api.interceptors.response.use(undefined, (error: unknown) => {
+    if (typeof error === 'object' && error !== null) {
+      if (handled.has(error)) return Promise.reject(error)
+      handled.add(error)
+    }
     const status = getErrorStatus(error)
     const code = getErrorBody(error)?.code
     if (status === 401) {

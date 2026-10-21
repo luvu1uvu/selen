@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog'
@@ -34,9 +34,25 @@ describe('ActionsMenu', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Действия с меткой «Бэкенд»')
     await user.unhover(menu)
     await user.keyboard('{Escape}')
+    await vi.waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
 
-    act(() => menu.focus())
+    // По фокусу с клавиатуры — подсказка; по фокусу от мыши (щелчок, возврат после пункта меню) — нет
+    await user.tab()
+    expect(menu).toHaveFocus()
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Действия с меткой «Бэкенд»')
+  })
+
+  it('после пункта, выбранного мышью, фокус на «⋯», но подсказка не висит', async () => {
+    render(<Example />)
+    const user = userEvent.setup()
+    const menu = screen.getByRole('button', { name: 'Действия с меткой «Бэкенд»' })
+    await user.click(menu)
+    await user.click(await screen.findByRole('menuitem', { name: 'Изменить…' }))
+    await screen.findByRole('dialog', { name: 'Метка' })
+    await user.click(screen.getByRole('button', { name: 'Закрыть' }))
+    await vi.waitFor(() => expect(menu).toHaveFocus())
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
   })
 
   it('пункт с окном: окно забирает фокус, закрытое — возвращает его на «⋯»', async () => {

@@ -18,8 +18,10 @@ export function TruncatedText({
 }) {
   const ref = useRef<HTMLElement>(null)
   const truncated = useTruncated(ref, text)
+  // Подсказка управляемая: у целиком видного названия она не открывается вовсе (и не ссылается на пустое описание)
+  const [open, setOpen] = useState(false)
   return (
-    <Tooltip>
+    <Tooltip open={truncated && open} onOpenChange={setOpen}>
       <TooltipTrigger asChild>
         <Tag
           ref={ref as RefObject<HTMLHeadingElement>}

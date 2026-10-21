@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { Label } from '@/shared/types/api'
@@ -51,7 +51,7 @@ describe('Метки', () => {
     await vi.waitFor(() => expect(archived).toEqual(['l-sec']))
   })
 
-  it('у «⋯» метки — подсказка с названием в «ёлочках», по наведению и по фокусу (LATER-80)', async () => {
+  it('у «⋯» метки — подсказка с названием в «ёлочках» (LATER-80)', async () => {
     signedInAs(makeUser())
     server.use(http.get('*/api/v1/admin/labels', () => HttpResponse.json({ data: [company] })))
     renderApp('/admin/labels')
@@ -61,12 +61,7 @@ describe('Метки', () => {
     const user = userEvent.setup()
     await user.hover(menu)
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Действия с меткой «Безопасность»')
-    await user.unhover(menu)
-    act(() => menu.blur())
-    act(() => menu.focus())
-    expect(
-      await screen.findByRole('tooltip', { name: 'Действия с меткой «Безопасность»' }),
-    ).toBeInTheDocument()
+    // По фокусу с клавиатуры — та же подсказка: ActionsMenu.test (jsdom не отличает фокус Tab от щелчка на странице)
   })
 
   it('ошибки сервера раскладываются в поля формы', async () => {

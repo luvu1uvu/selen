@@ -160,7 +160,6 @@ export function BoardView({
   })
 
   useSyncedScrollLeft({ body: bodyRef, header: headerRef, bar: barRef })
-  const edges = useScrollEdges(bodyRef, stickyRef)
   // Закреплённая полоса дорожки (useStickyLaneRows) — тоже над элементом, к которому прокручивают
   useStickyOffset(stickyRef, bodyRef, showLaneHeaders ? LANE_ROW_PX : 0)
   const updateStickyBands = useStickyLaneRows(bodyRef, stickyRef)
@@ -311,7 +310,13 @@ export function BoardView({
     >
       {/* Заголовки колонок: закреплены под шапкой доски (h-12), сдвигаются вбок вместе с телом */}
       <div ref={stickyRef} className="bg-background sticky top-12 z-10 border-b">
-        <div ref={headerRef} className="overflow-hidden" data-board-columns>
+        {/* Фокус Tab на точке или «⋯» колонки у края — строка сдвигается к ней, тело — следом (useSyncedScrollLeft) */}
+        <div
+          ref={headerRef}
+          className="relative overflow-hidden"
+          data-board-columns
+          onFocus={revealFocused}
+        >
           {/* Отступы слева и справа — как у шапки доски: колонки не касаются края блока ни в начале, ни в конце
               прокрутки (LATER-65); у строки заголовков и тела одинаковые, иначе заголовки разъедутся с колонками */}
           {/* Вертикальные отступы — у колонок, а не у строки: линии между колонками — на всю её высоту */}
@@ -350,8 +355,7 @@ export function BoardView({
             ))}
           </div>
         </div>
-        <EdgeShade side="start" visible={edges.start} className="inset-y-0" />
-        <EdgeShade side="end" visible={edges.end} className="inset-y-0" />
+        <EdgeShades bodyRef={bodyRef} />
       </div>
 
       {/* Тело доски — прокрутка вбок. relative обязателен: без него абсолютно позиционированные потомки (sr-only
@@ -377,8 +381,7 @@ export function BoardView({
         </div>
       </div>
       {/* Затенение краёв тела — поверх него, вне прокрутки (место — в блоке доски, relative) */}
-      <EdgeShade side="start" visible={edges.start} style={edges.body} />
-      <EdgeShade side="end" visible={edges.end} style={edges.body} />
+      <EdgeShades bodyRef={bodyRef} stickyRef={stickyRef} overBody />
 
       {/* Свёрнуты все дорожки — полосы прокрутки вбок нет (иначе она стояла бы между заголовками и полосами): вбок доска
           прокручивается тачпадом, Shift+колесом над заголовками и с клавиатуры (LATER-70) */}
@@ -396,19 +399,25 @@ export function BoardView({
 
 const EMPTY: string[] = []
 
-/** Запас до края видимой части тела: поле ячейки — рамка фокуса карточки видна целиком. */
-const FOCUS_MARGIN_PX = 8
+/** Запас до края видимой части тела — ширина затенения края (EdgeShade): карточка с рамкой фокуса не под тенью. */
+const FOCUS_MARGIN_PX = 24
 
 /**
- * Элемент тела доски, получивший фокус с клавиатуры (Tab), — целиком в видимой части тела по горизонтали. Chrome сам
- * прокручивает только полностью скрытый элемент: у частично видимой карточки (узкая доска, колонка у края) правый край
- * и рамка фокуса оставались за краем. Тело прокручивается вбок само, холст и окно вбок не двигаются (UX-ревью LATER-81,
- * U-3). Щелчок мышью доску не сдвигает (фокус не :focus-visible).
+ * Элемент тела доски (или строки заголовков колонок), получивший фокус с клавиатуры (Tab), — целиком в видимой части по
+ * горизонтали. Chrome сам прокручивает только полностью скрытый элемент: у частично видимой карточки (узкая доска,
+ * колонка у края) правый край и рамка фокуса оставались за краем. Прокручивается вбок только сама доска, холст и окно —
+ * нет (UX-ревью LATER-81, U-3). Щелчок мышью доску не сдвигает (фокус не :focus-visible). Фокус в меню и окнах из
+ * порталов (событие React всплывает и оттуда) — не в счёт: меню у края сдвигало бы доску на каждом пункте.
  */
 function revealFocused(event: FocusEvent<HTMLDivElement>) {
   const body = event.currentTarget
   const target = event.target
-  if (!(target instanceof HTMLElement) || !target.matches(':focus-visible')) return
+  if (
+    !(target instanceof HTMLElement) ||
+    !body.contains(target) ||
+    !target.matches(':focus-visible')
+  )
+    return
   const view = body.getBoundingClientRect()
   const left = view.left + FOCUS_MARGIN_PX
   const right = view.left + body.clientWidth - FOCUS_MARGIN_PX
@@ -430,13 +439,37 @@ interface ScrollEdges {
 }
 
 /**
+ * Затенение обоих краёв: над строкой заголовков колонок (внутри неё) или над телом доски (overBody — в блоке доски, по
+ * месту тела). Состояние — своё у этой пары: прокрутка и рост доски перерисовывают только её, а не всю доску.
+ */
+function EdgeShades({
+  bodyRef,
+  stickyRef,
+  overBody = false,
+}: {
+  bodyRef: RefObject<HTMLDivElement | null>
+  stickyRef?: RefObject<HTMLDivElement | null>
+  overBody?: boolean
+}) {
+  const edges = useScrollEdges(bodyRef, stickyRef, overBody)
+  const place = overBody ? { style: edges.body } : { className: 'inset-y-0' }
+  return (
+    <>
+      <EdgeShade side="start" visible={edges.start} {...place} />
+      <EdgeShade side="end" visible={edges.end} {...place} />
+    </>
+  )
+}
+
+/**
  * Можно ли листать тело доски вбок дальше влево (start) и вправо (end): у доски шире видимой части это почти незаметно —
  * на macOS полоса прокрутки скрыта, а колонка у края срезана как раз по границе (U-7 UX-ревью варианта Б; дополнение PM
  * 21.10 к пачке LATER-74). Пересчёт — при прокрутке тела и смене размеров тела и строки заголовков.
  */
 function useScrollEdges(
   bodyRef: RefObject<HTMLDivElement | null>,
-  stickyRef: RefObject<HTMLDivElement | null>,
+  stickyRef: RefObject<HTMLDivElement | null> | undefined,
+  trackPlace: boolean,
 ): ScrollEdges {
   const [edges, setEdges] = useState<ScrollEdges>({
     start: false,
@@ -449,8 +482,9 @@ function useScrollEdges(
     const measure = () => {
       const start = body.scrollLeft > 1
       const end = body.scrollLeft + body.clientWidth < body.scrollWidth - 1
-      const top = body.offsetTop
-      const height = body.offsetHeight
+      // Место тела нужно только затенению над телом: строке заголовков рост доски безразличен
+      const top = trackPlace ? body.offsetTop : 0
+      const height = trackPlace ? body.offsetHeight : 0
       setEdges((prev) =>
         prev.start === start &&
         prev.end === end &&
@@ -465,12 +499,12 @@ function useScrollEdges(
     const observer = new ResizeObserver(measure)
     observer.observe(body)
     if (body.firstElementChild) observer.observe(body.firstElementChild)
-    if (stickyRef.current) observer.observe(stickyRef.current)
+    if (stickyRef?.current) observer.observe(stickyRef.current)
     return () => {
       body.removeEventListener('scroll', measure)
       observer.disconnect()
     }
-  }, [bodyRef, stickyRef])
+  }, [bodyRef, stickyRef, trackPlace])
   return edges
 }
 
