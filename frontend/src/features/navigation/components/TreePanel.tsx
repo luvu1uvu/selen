@@ -23,7 +23,9 @@ import { TreeNodeActions } from './TreeNodeActions'
 
 /** Где мы сейчас: пространство, доска или карточка (ключ карточки начинается с ключа пространства). */
 function currentTarget(pathname: string) {
-  const space = matchPath('/spaces/:spaceKey', pathname)
+  const space =
+    matchPath('/spaces/:spaceKey', pathname) ??
+    matchPath('/spaces/:spaceKey/cards/:cardKey', pathname)
   if (space) return { spaceKey: space.params.spaceKey }
   const board = matchPath('/boards/:boardId', pathname)
   if (board) return { boardId: board.params.boardId }

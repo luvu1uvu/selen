@@ -55,6 +55,8 @@ const RESTORE_TIMEOUT_MS = 2000
  *
  * `name` различает контейнеры одной страницы (холст и горизонтальная прокрутка доски), `ready` — контейнер
  * показан и содержимое отрисовано (до этого восстанавливать нечего; пока не готов — страница считается новой).
+ * `restore: false` — место при «Назад» ставит сама страница (холст пространства — по доске, canvasAnchor): прокрутка
+ * не трогается, ни в начало, ни на запомненные пиксели.
  */
 export function useScrollMemory(
   ref: RefObject<HTMLElement | null>,
@@ -63,7 +65,8 @@ export function useScrollMemory(
     page,
     axis = 'y',
     ready = true,
-  }: { name: string; page: string; axis?: 'x' | 'y'; ready?: boolean },
+    restore = true,
+  }: { name: string; page: string; axis?: 'x' | 'y'; ready?: boolean; restore?: boolean },
 ) {
   const location = useLocation()
   const navigationType = useNavigationType()
@@ -111,6 +114,10 @@ export function useScrollMemory(
       set(0)
       return
     }
+    if (!restore) {
+      shown.current = { page, key, restoring: false }
+      return
+    }
     shown.current = { page, key, restoring: true }
     const done = () => {
       if (shown.current?.key === key) shown.current.restoring = false
@@ -150,5 +157,5 @@ export function useScrollMemory(
     timer = window.setTimeout(finish, RESTORE_TIMEOUT_MS)
     // Сброс эффекта (переход, StrictMode) — только снять ожидание; restoring остаётся, и повтор продолжит
     return cleanup
-  }, [ref, axis, ready, page, navigationType, key])
+  }, [ref, axis, ready, restore, page, navigationType, key])
 }

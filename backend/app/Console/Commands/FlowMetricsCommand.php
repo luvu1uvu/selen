@@ -37,7 +37,7 @@ class FlowMetricsCommand extends Command
         $this->info("{$space->key} «{$space->name}»: карточки, завершённые за последние {$days} дн. (lead = создание → готово, cycle = начало работы → готово)");
 
         $rows = [];
-        foreach ($space->boards()->active()->orderBy('position')->get() as $board) {
+        foreach ($space->boards()->active()->inLayoutOrder()->get() as $board) {
             $rows[] = $this->summary($board, $metrics, $since);
         }
 

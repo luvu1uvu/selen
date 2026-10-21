@@ -3,6 +3,7 @@ import { EyeOff, Trash2 } from 'lucide-react'
 import { Link } from 'react-router'
 import type { RelatedCard } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
+import { useCardPath } from '../useCardPath'
 
 /**
  * Связанная или блокирующая карточка: номер-ссылка, название, категория. Невидимая зрителю —
@@ -10,6 +11,7 @@ import { Badge } from '@/shared/ui/badge'
  */
 export function RelatedCardView({ card }: { card: RelatedCard }) {
   const { t } = useTranslation('boards')
+  const cardPath = useCardPath()
 
   if (card.hidden) {
     const Icon = card.deleted ? Trash2 : EyeOff
@@ -23,7 +25,7 @@ export function RelatedCardView({ card }: { card: RelatedCard }) {
 
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
-      <Link to={`/cards/${card.key}`} className="shrink-0 font-mono text-xs hover:underline">
+      <Link to={cardPath(card.key)} className="shrink-0 font-mono text-xs hover:underline">
         {card.key}
       </Link>
       <span className="truncate" title={card.title}>

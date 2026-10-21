@@ -56,6 +56,9 @@ function spaceEndpoints(): array
         ['POST', 'boards/{board}/move', 'admin'],
         ['POST', 'boards/{board}/archive', 'admin'],
         ['POST', 'boards/{board}/restore', 'admin'],
+        // Личное сворачивание доски на странице пространства — вид, а не изменение доски (ADR-0019)
+        ['PUT', 'boards/{board}/collapsed', 'member'],
+        ['DELETE', 'boards/{board}/collapsed', 'member'],
         ['GET', 'boards/{board}/archived-cards', 'editor'],
 
         ['POST', 'boards/{board}/columns', 'admin'],

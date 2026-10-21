@@ -6,6 +6,7 @@ use App\Enums\BoardTemplate;
 use App\Enums\EventType;
 use App\Models\Board;
 use App\Models\BoardColumn;
+use App\Models\BoardRow;
 use App\Models\Lane;
 use App\Models\Space;
 use App\Models\User;
@@ -15,7 +16,8 @@ use App\Support\FractionalIndex;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Создание доски из шаблона: колонки шаблона + дорожка «Основная». Доска встаёт в конец списка.
+ * Создание доски из шаблона: колонки шаблона + дорожка «Основная». Доска встаёт новым рядом внизу раскладки
+ * пространства (ADR-0019, решение PM 5).
  */
 class CreateBoardAction
 {
@@ -33,11 +35,16 @@ class CreateBoardAction
             // Доски пространства создаются и переставляются по очереди
             Space::query()->lockForUpdate()->findOrFail($space->id);
 
+            $row = BoardRow::query()->create([
+                'space_id' => $space->id,
+                'position' => $this->positions->atEnd(BoardRow::query()->where('space_id', $space->id)),
+            ]);
             $board = Board::query()->create([
                 'space_id' => $space->id,
+                'row_id' => $row->id,
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,
-                'position' => $this->positions->atEnd(Board::query()->where('space_id', $space->id)),
+                'position' => FractionalIndex::between(null, null),
             ]);
 
             $columns = $template->columns();

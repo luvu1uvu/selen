@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { NavLink } from 'react-router'
+import { Link, matchPath, useLocation, useSearchParams } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import type { NavTreeNode } from '@/shared/types/api'
@@ -59,8 +59,24 @@ function SpaceToggle({
 }
 
 /**
+ * Что сейчас открыто: пространство (с карточкой поверх — тоже) и доска — `?board=ID` на странице пространства или
+ * страница одной доски. Открыта доска — подсвечена она, а не пространство.
+ */
+function useCurrentPlace() {
+  const { pathname } = useLocation()
+  const [params] = useSearchParams()
+  const space =
+    matchPath('/spaces/:spaceKey', pathname) ??
+    matchPath('/spaces/:spaceKey/cards/:cardKey', pathname)
+  const board = matchPath('/boards/:boardId', pathname)
+  const boardId = board?.params.boardId ?? (space ? params.get('board') : null)
+  return { spaceKey: boardId ? undefined : space?.params.spaceKey, boardId }
+}
+
+/**
  * Дерево навигации в стиле Kaiten (docs/ui-reference/kaiten/README.md, раздел 01): папки и пространства со
- * стрелками раскрытия, под пространством — доски. Подсветка текущего элемента — через NavLink.
+ * стрелками раскрытия, под пространством — доски. Доска открывается на странице пространства — среди остальных
+ * его досок, холст прокручивается к ней (`/spaces/KEY?board=ID`, ADR-0019). Подсвечен открытый элемент.
  */
 export function NavTree({
   nodes,
@@ -78,6 +94,7 @@ export function NavTree({
   actions?: (node: NavTreeNode, depth: number) => ReactNode
   depth?: number
 }) {
+  const current = useCurrentPlace()
   return (
     <ul className="grid gap-0.5">
       {nodes.map((node) => {
@@ -126,18 +143,18 @@ export function NavTree({
         } else {
           row = (
             <div className="group/row relative">
-              <NavLink
+              <Link
                 to={`/spaces/${node.space.key}`}
-                end
                 onClick={onNavigate}
-                className={({ isActive }) => cn(rowClass, isActive && activeClass)}
+                aria-current={current.spaceKey === node.space.key ? 'page' : undefined}
+                className={cn(rowClass, current.spaceKey === node.space.key && activeClass)}
                 style={{ paddingLeft: indent(depth) }}
               >
                 <Spacer />
                 <NodeIcon kind="space" icon={node.icon} />
                 {node.everyone && <EveryoneMark />}
                 <span className="truncate">{node.space.name}</span>
-              </NavLink>
+              </Link>
               {node.boards.length > 0 && (
                 <SpaceToggle
                   expanded={expanded}
@@ -154,16 +171,17 @@ export function NavTree({
               <ul className="grid gap-0.5">
                 {node.boards.map((board) => (
                   <li key={board.id}>
-                    <NavLink
-                      to={`/boards/${board.id}`}
+                    <Link
+                      to={`/spaces/${node.space.key}?board=${board.id}`}
                       onClick={onNavigate}
-                      className={({ isActive }) => cn(rowClass, isActive && activeClass)}
+                      aria-current={current.boardId === board.id ? 'page' : undefined}
+                      className={cn(rowClass, current.boardId === board.id && activeClass)}
                       style={{ paddingLeft: indent(depth + 1) }}
                     >
                       <Spacer />
                       <NodeIcon kind="board" />
                       <span className="truncate">{board.name}</span>
-                    </NavLink>
+                    </Link>
                   </li>
                 ))}
               </ul>

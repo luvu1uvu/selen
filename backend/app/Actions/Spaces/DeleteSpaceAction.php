@@ -5,6 +5,7 @@ namespace App\Actions\Spaces;
 use App\Enums\EventType;
 use App\Models\Board;
 use App\Models\BoardColumn;
+use App\Models\BoardRow;
 use App\Models\Card;
 use App\Models\Label;
 use App\Models\Lane;
@@ -21,8 +22,8 @@ use Illuminate\Validation\ValidationException;
  * Удаление пространства навсегда (LATER-43, ADR-0013 «Изменения»): только пространства, в котором никогда не было
  * карточек — ни активных, ни архивных, ни удалённых в корзину (LATER-45, ADR-0015: история карточек нужна метрикам,
  * карточки физически не удаляются). Вместе с ним удаляется его пустая структура: доски (и архивные) с колонками
- * и дорожками, участники, доступы групп, метки пространства, узел дерева. Записи журнала событий остаются
- * (append-only, ADR-0003).
+ * и дорожками, ряды раскладки досок, участники, доступы групп, метки пространства, узел дерева. Записи журнала
+ * событий остаются (append-only, ADR-0003).
  */
 class DeleteSpaceAction
 {
@@ -47,6 +48,7 @@ class DeleteSpaceAction
             BoardColumn::query()->whereIn('board_id', $boardIds)->delete();
             Lane::query()->whereIn('board_id', $boardIds)->delete();
             Board::query()->whereKey($boardIds)->delete();
+            BoardRow::query()->where('space_id', $space->id)->delete();
             Label::query()->where('space_id', $space->id)->delete();
             SpaceGroup::query()->where('space_id', $space->id)->delete();
             SpaceMember::query()->where('space_id', $space->id)->delete();

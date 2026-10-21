@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  *
  * @property string $id
  * @property string $space_id
+ * @property string $row_id ряд на странице пространства (ADR-0019); position — порядок внутри ряда
  * @property string $name
  * @property string|null $description
  * @property string $position
@@ -24,11 +25,12 @@ use Illuminate\Support\Carbon;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Space $space
+ * @property-read BoardRow $row
  * @property-read Collection<int, BoardColumn> $columns
  * @property-read Collection<int, Lane> $lanes
  * @property-read Collection<int, Card> $cards
  */
-#[Fillable(['space_id', 'name', 'description', 'position', 'auto_assign_on_move'])]
+#[Fillable(['space_id', 'row_id', 'name', 'description', 'position', 'auto_assign_on_move'])]
 class Board extends Model
 {
     use HasUlids;
@@ -45,6 +47,12 @@ class Board extends Model
     public function space(): BelongsTo
     {
         return $this->belongsTo(Space::class);
+    }
+
+    /** @return BelongsTo<BoardRow, $this> */
+    public function row(): BelongsTo
+    {
+        return $this->belongsTo(BoardRow::class);
     }
 
     /** @return HasMany<BoardColumn, $this> */
@@ -69,6 +77,18 @@ class Board extends Model
     public function scopeActive(Builder $query): void
     {
         $query->whereNull('archived_at');
+    }
+
+    /**
+     * Порядок раскладки пространства (ADR-0019): ряд, затем место в ряду. Единый порядок досок везде — страница
+     * пространства, дерево, метрики; boards.position сам по себе — только порядок внутри ряда.
+     *
+     * @param  Builder<Board>  $query
+     */
+    public function scopeInLayoutOrder(Builder $query): void
+    {
+        $query->orderBy(BoardRow::query()->select('position')->whereColumn('board_rows.id', 'boards.row_id'))
+            ->orderBy('boards.position');
     }
 
     public function isArchived(): bool

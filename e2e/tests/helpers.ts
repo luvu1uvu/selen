@@ -48,10 +48,32 @@ export async function pageAs(browser: Browser, user: User) {
   return page
 }
 
-/** Открыть доску через дерево навигации: раскрыть пространство и перейти по ссылке доски. */
+/**
+ * Открыть доску её отдельной страницей (/boards/ID — одна доска, как по ссылке «Поделиться»): найти доску в дереве
+ * навигации и перейти на её страницу. Ссылка доски в дереве ведёт на страницу пространства, где все его доски рядами
+ * (`/spaces/KEY?board=ID`, ADR-0019), — её проверяют space.spec и board-rows.spec; тесты страницы одной доски (блок
+ * доски, прокрутка, дорожки, перенос карточек) открывают её здесь, как до рядов.
+ */
 export async function openBoard(page: Page, space: string, board: string) {
-  const tree = page.getByRole('navigation', { name: 'Дерево' })
-  await tree.getByRole('button', { name: `Раскрыть «${space}»` }).click()
-  await tree.getByRole('link', { name: board, exact: true }).click()
+  const tree = await expandSpace(page, space)
+  const href = await tree.getByRole('link', { name: board, exact: true }).getAttribute('href')
+  const id = new URL(href!, 'http://selen').searchParams.get('board')
+  await page.goto(`/boards/${id}`)
   await expect(page.getByRole('heading', { name: board })).toBeVisible()
+}
+
+/** Открыть доску из дерева, как пользователь: страница пространства, холст прокручен к доске (ADR-0019). */
+export async function openSpaceBoard(page: Page, space: string, board: string) {
+  const tree = await expandSpace(page, space)
+  await tree.getByRole('link', { name: board, exact: true }).click()
+  await expect(page.getByRole('heading', { name: board, exact: true })).toBeVisible()
+}
+
+/** Раскрыть пространство в дереве, если оно ещё свёрнуто (раскрытое запоминается в браузере и после перехода). */
+async function expandSpace(page: Page, space: string) {
+  const tree = page.getByRole('navigation', { name: 'Дерево' })
+  const toggle = tree.getByRole('button', { name: new RegExp(`^(Раскрыть|Свернуть) «${space}»$`) })
+  await expect(toggle).toBeVisible()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  return tree
 }

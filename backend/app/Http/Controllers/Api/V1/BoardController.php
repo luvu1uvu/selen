@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\V1;
 use App\Actions\Boards\CreateBoardAction;
 use App\Actions\Boards\MoveBoardAction;
 use App\Actions\Boards\SetBoardArchivedAction;
+use App\Actions\Boards\SetBoardCollapsedAction;
 use App\Actions\Boards\UpdateBoardAction;
 use App\Enums\BoardTemplate;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Boards\MoveStructureRequest;
+use App\Http\Requests\Boards\MoveBoardRequest;
+use App\Http\Requests\Boards\SetBoardCollapsedRequest;
 use App\Http\Requests\Boards\StoreBoardRequest;
 use App\Http\Requests\Boards\UpdateBoardRequest;
 use App\Http\Resources\BoardDetailResource;
@@ -22,16 +24,42 @@ use App\Services\Cards\CardVisibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 
 class BoardController extends Controller
 {
-    /** Все доски пространства, включая архивные (страница пространства). */
-    public function index(Space $space): AnonymousResourceCollection
+    /**
+     * Все доски пространства, включая архивные, в порядке раскладки (ряд, затем место в ряду; ADR-0019) — для страницы
+     * пространства. Без карточек: ширина доски — по числу листовых колонок, у свёрнутой — счётчик видимых пользователю
+     * активных карточек (CardVisibility, ADR-0008) и личный признак сворачивания. Запросов — постоянное число на любое
+     * число досок.
+     */
+    public function index(Request $request, Space $space, CardVisibility $visibility): AnonymousResourceCollection
     {
         Gate::authorize('view', $space);
+        /** @var User $user */
+        $user = $request->user();
 
-        return BoardResource::collection($space->boards()->orderBy('position')->get());
+        $boards = $space->boards()
+            ->inLayoutOrder()
+            ->withCount(['columns as leaf_columns_count' => fn ($q) => $q->active()
+                ->whereDoesntHave('children', fn ($children) => $children->active())])
+            ->get();
+        $cards = $visibility->scope(Card::query()->where('space_id', $space->id), $user, $space)
+            ->active()
+            ->toBase()
+            ->selectRaw('board_id, count(*) as aggregate')
+            ->groupBy('board_id')
+            ->pluck('aggregate', 'board_id');
+        $collapsed = $user->collapsedBoards()->where('boards.space_id', $space->id)->pluck('boards.id')->flip();
+
+        foreach ($boards as $board) {
+            $board->setAttribute('cards_count', (int) ($cards[$board->id] ?? 0));
+            $board->setAttribute('collapsed', $collapsed->has($board->id));
+        }
+
+        return BoardResource::collection($boards);
     }
 
     public function store(StoreBoardRequest $request, Space $space, CreateBoardAction $action): JsonResponse
@@ -58,15 +86,35 @@ class BoardController extends Controller
         return new BoardResource($action->handle($request->user(), $board, $request->validated()));
     }
 
-    /** Перестановка доски внутри её пространства. */
-    public function move(MoveStructureRequest $request, Board $board, MoveBoardAction $action): BoardResource
+    /** Перестановка доски в раскладке её пространства: в ряд, отдельным рядом или рядом с соседом (ADR-0019). */
+    public function move(MoveBoardRequest $request, Board $board, MoveBoardAction $action): BoardResource
     {
         return new BoardResource($action->handle(
             $request->user(),
             $board,
             $request->validated('after_id'),
             $request->validated('before_id'),
+            rowId: $request->validated('row_id'),
+            newRow: $request->wantsNewRow(),
+            newRowAfterId: $request->validated('new_row_after_id'),
+            newRowBeforeId: $request->validated('new_row_before_id'),
         ));
+    }
+
+    /** Свернуть доску у себя на странице пространства (личный вид, ADR-0019). */
+    public function collapse(SetBoardCollapsedRequest $request, Board $board, SetBoardCollapsedAction $action): Response
+    {
+        $action->handle($request->user(), $board, true);
+
+        return response()->noContent();
+    }
+
+    /** Развернуть доску у себя. */
+    public function expand(SetBoardCollapsedRequest $request, Board $board, SetBoardCollapsedAction $action): Response
+    {
+        $action->handle($request->user(), $board, false);
+
+        return response()->noContent();
     }
 
     public function archive(Request $request, Board $board, SetBoardArchivedAction $action): BoardResource

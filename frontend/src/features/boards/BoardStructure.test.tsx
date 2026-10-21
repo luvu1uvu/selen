@@ -113,15 +113,16 @@ describe('Структура доски через меню', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
     await screen.findByText('Сохранено')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Действия с доской' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Действия с доской «/ }))
+    // Окно из «⋯» доски открывается после того, как меню вернуло фокус на «⋯» (кадром позже)
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать доску' }))
-    await userEvent.clear(screen.getByLabelText('Название'))
+    await userEvent.clear(await screen.findByLabelText('Название'))
     await userEvent.type(screen.getByLabelText('Название'), 'Продукт 2')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Действия с доской' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Действия с доской «/ }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить дорожку' }))
-    await userEvent.type(screen.getByLabelText('Название'), 'Баги')
+    await userEvent.type(await screen.findByLabelText('Название'), 'Баги')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить дорожку' }))
 
     await vi.waitFor(() =>
@@ -143,7 +144,7 @@ describe('Структура доски через меню', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с доской' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Действия с доской «/ }))
     const toggle = await screen.findByRole('menuitemcheckbox', {
       name: 'Автоназначение при переходе в работу',
     })
@@ -169,7 +170,7 @@ describe('Структура доски через меню', () => {
     renderApp('/boards/board-1')
 
     // Изменить: поле — с текущим описанием
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с доской' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Действия с доской «/ }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Изменить описание' }))
     let dialog = await screen.findByRole('dialog', { name: 'Описание доски' })
     const field = within(dialog).getByLabelText('Описание')
@@ -179,12 +180,12 @@ describe('Структура доски через меню', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
     expect(await screen.findByText('Описание сохранено')).toBeInTheDocument()
     expect(bodies[0]).toEqual({ description: 'Новые правила\nвторая строка' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Описание доски' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Описание доски «/ }))
     expect(await screen.findByText(/Новые правила/)).toHaveTextContent('вторая строка')
     await userEvent.keyboard('{Escape}')
 
     // Стереть: пустое поле — описания нет, значок ⓘ пропадает
-    await userEvent.click(screen.getByRole('button', { name: 'Действия с доской' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Действия с доской «/ }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Изменить описание' }))
     dialog = await screen.findByRole('dialog', { name: 'Описание доски' })
     await userEvent.clear(within(dialog).getByLabelText('Описание'))
@@ -193,7 +194,7 @@ describe('Структура доски через меню', () => {
     expect(await screen.findByText('Описание удалено')).toBeInTheDocument()
     expect(bodies[1]).toEqual({ description: null })
     await vi.waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Описание доски' })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('button', { name: /^Описание доски «/ })).not.toBeInTheDocument(),
     )
   })
 
@@ -210,7 +211,7 @@ describe('Структура доски через меню', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с доской' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Действия с доской «/ }))
     expect(await screen.findByRole('menuitem', { name: 'Архив карточек' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Изменить описание' })).not.toBeInTheDocument()
   })

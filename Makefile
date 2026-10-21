@@ -151,7 +151,7 @@ e2e-stage: ## Все приёмочные автотесты этапа: make e2
 	./scripts/e2e.sh "acceptance/stage-$(STAGE)/"
 
 .PHONY: perf
-perf: ## Замер производительности доски на 300 карточек (production-сборка, демо-данные)
+perf: ## Замер производительности: доска на 300 карточек и пространство 5×200 (production-сборка, демо-данные)
 	./scripts/perf.sh
 
 .PHONY: e2e-down

@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { boardKeys } from '@/features/boards/queries'
+import { refreshBoards } from '@/features/boards/queries'
 import { getErrorMessage, getErrorStatus } from '@/shared/api/errors'
 import type { Attachment } from '@/shared/types/api'
 import { uploadAttachment } from './api'
-import { cardKeys } from './queries'
+import { boardOf, cardKeys } from './queries'
 
 /** Лимит — как на сервере (ADR-0010): nginx, PHP и валидация. */
 export const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024
@@ -39,7 +39,7 @@ export function useAttachmentUpload(cardKey: string) {
       )
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: cardKeys.detail(cardKey) }),
-        queryClient.invalidateQueries({ queryKey: boardKeys.all }),
+        refreshBoards(queryClient, boardOf(queryClient, cardKey)),
       ])
       return attachment
     } catch (error) {

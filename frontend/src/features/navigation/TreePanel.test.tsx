@@ -67,9 +67,10 @@ describe('Панель «Дерево»', () => {
       '/spaces/IOS',
     )
     await user.click(within(nav).getByRole('button', { name: 'Раскрыть «iOS»' }))
+    // Доска открывается на странице пространства, среди его досок (ADR-0019)
     expect(within(nav).getByRole('link', { name: 'Релизы iOS' })).toHaveAttribute(
       'href',
-      '/boards/b-ios',
+      '/spaces/IOS?board=b-ios',
     )
     expect(JSON.parse(window.localStorage.getItem('selen.nav.expanded.member-1') ?? '[]')).toEqual([
       'f-mobile',
@@ -118,6 +119,20 @@ describe('Панель «Дерево»', () => {
       'aria-expanded',
       'true',
     )
+  })
+
+  it('открыта доска на странице пространства — подсвечена доска, а не пространство', async () => {
+    signedInAs(member)
+    withTree()
+    server.use(http.get('*/api/v1/spaces/IOS', () => HttpResponse.json({ data: ios })))
+    renderApp('/spaces/IOS?board=b-ios')
+
+    const nav = await treeNav()
+    expect(await within(nav).findByRole('link', { name: 'Релизы iOS' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(linkTo(nav, '/spaces/IOS')).not.toHaveAttribute('aria-current')
   })
 
   it('поиск находит доску по части названия вместе с родительской папкой', async () => {

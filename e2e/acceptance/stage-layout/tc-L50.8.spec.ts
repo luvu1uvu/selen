@@ -23,7 +23,9 @@ test('ТК-L50.8. Новая страница — с начала, «Назад�
   // 2. Ссылка на пространство перед названием доски: страница — с самого верха
   await page.getByRole('region', { name: 'Длинная доска' }).getByRole('link', { name: 'Раскладка', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Раскладка', level: 1 })).toBeVisible()
-  expect(await page.getByRole('main').evaluate((main) => main.scrollTop)).toBe(0)
+  // Страница пространства — тоже холст (ADR-0019, PR 3): «с самого верха» — у его прокрутки, а не у main
+  await expect(page.locator('[data-board-canvas]')).toBeVisible()
+  expect(await page.locator('[data-board-canvas]').evaluate((canvas) => canvas.scrollTop)).toBe(0)
   await expect(page.getByRole('heading', { name: 'Раскладка', level: 1 })).toBeInViewport()
 
   // 3. «Назад»: доска на том же месте по вертикали и вбок

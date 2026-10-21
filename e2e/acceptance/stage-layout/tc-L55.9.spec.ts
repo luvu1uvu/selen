@@ -167,8 +167,8 @@ test('ТК-L55.9. Колонки разделены тонкими линиям�
   expect(Math.abs(review.line!.x - sub.line.x)).toBeLessThanOrEqual(1)
 
   // 3. Одна дорожка: отступы слева от первой и справа от последней колонки — как у названия доски
-  await page.getByRole('navigation', { name: 'Дерево' }).getByRole('link', { name: 'Плотная доска', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Плотная доска', exact: true })).toBeVisible()
+  // Своей страницей (/boards/ID): из дерева доска открывается на странице пространства среди других (ADR-0019, PR 3)
+  await openBoard(page, 'Сквозные тесты', 'Плотная доска')
   await expect(page.getByRole('group', { name: 'To Do', exact: true })).toBeVisible()
   g = await grid(page, 'Плотная доска')
   expectLines(g, ['To Do'])
