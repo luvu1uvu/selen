@@ -216,9 +216,9 @@ test('доска из дерева: страница пространства п
   await openSpaceBoard(page, 'Ряды', 'Высокая')
   await expect(page).toHaveURL(/\/spaces\/ROWS\?board=/)
   await loaded(page, 'Высокая')
-  // Верх доски — у верха холста (с его отступом) и остаётся там, пока доски выше догружаются
+  // Верх доски — у верха холста (отступ — зазор между строками ряда, 12 px) и остаётся там, пока доски выше догружаются
   const canvas = await canvasRect(page)
-  await expect.poll(async () => Math.abs((await rect(page, 'Высокая')).top - canvas.top - 16)).toBeLessThanOrEqual(2)
+  await expect.poll(async () => Math.abs((await rect(page, 'Высокая')).top - canvas.top - 12)).toBeLessThanOrEqual(2)
   expect((await canvasRect(page)).scrollTop).toBeGreaterThan(0)
   const tree = page.getByRole('navigation', { name: 'Дерево' })
   await expect(tree.getByRole('link', { name: 'Высокая', exact: true })).toHaveAttribute('aria-current', 'page')
@@ -227,6 +227,27 @@ test('доска из дерева: страница пространства п
   // Развёрнута насовсем: и без ?board — развёрнута
   await page.goto('/spaces/ROWS')
   await loaded(page, 'Высокая')
+})
+
+test('доска из дерева во второй строке ряда — над ней не торчит край доски выше (U-6 UX-ревью варианта Б)', async ({ page }) => {
+  // «Широкая» (8 колонок) рядом с «Узкой» не помещается — вторая строка первого ряда, над ней зазор 12 px
+  await openSpaceBoard(page, 'Ряды', 'Широкая')
+  await expect(page).toHaveURL(/\/spaces\/ROWS\?board=/)
+  await loaded(page, 'Широкая')
+  const canvas = await canvasRect(page)
+  const wide = await rect(page, 'Широкая')
+  expect(wide.top).toBeGreaterThan((await rect(page, 'Узкая')).bottom)
+  await expect.poll(async () => Math.abs((await rect(page, 'Широкая')).top - canvas.top - 12)).toBeLessThanOrEqual(2)
+  // Между верхом холста и доской — только холст: ни пикселя нижнего края «Узкой»
+  const above = await page.evaluate(
+    ({ x, top, bottom }) => {
+      const hits = []
+      for (let y = top + 1; y < bottom; y++) hits.push(document.elementFromPoint(x, y)?.closest('section[data-board-block]')?.getAttribute('aria-label') ?? null)
+      return hits.filter((name) => name !== null)
+    },
+    { x: wide.left + 40, top: canvas.top, bottom: (await rect(page, 'Широкая')).top },
+  )
+  expect(above).toEqual([])
 })
 
 test('«Назад» и перезагрузка — на то же место, хотя доски выше грузятся заново и растут', async ({ page }) => {

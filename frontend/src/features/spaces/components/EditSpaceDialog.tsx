@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
@@ -7,23 +7,24 @@ import { z } from 'zod'
 import { applyValidationErrors, getErrorMessage } from '@/shared/api/errors'
 import type { Space } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/shared/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Textarea } from '@/shared/ui/textarea'
 import { useUpdateSpace } from '../queries'
 
-export function EditSpaceDialog({ space }: { space: Space }) {
+/** «Изменить» на панели пространства: название и описание. Открывает панель — кнопкой или пунктом меню «⋯». */
+export function EditSpaceDialog({
+  space,
+  open,
+  onOpenChange: setOpen,
+}: {
+  space: Space
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const { t } = useTranslation('spaces')
   const { t: tc } = useTranslation()
-  const [open, setOpen] = useState(false)
   const updateSpace = useUpdateSpace(space.key)
 
   const schema = useMemo(
@@ -68,9 +69,6 @@ export function EditSpaceDialog({ space }: { space: Space }) {
         if (!next) reset(defaults)
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant="outline">{t('page.edit')}</Button>
-      </DialogTrigger>
       <DialogContent closeLabel={tc('actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('edit.title')}</DialogTitle>

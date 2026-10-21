@@ -46,9 +46,22 @@ describe('Метки', () => {
     expect(await screen.findByText('Метка сохранена')).toBeInTheDocument()
     expect(body).toEqual({ name: 'Клиент', color: '#f59e0b' })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Действия с меткой Безопасность' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Действия с меткой «Безопасность»' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Архивировать' }))
     await vi.waitFor(() => expect(archived).toEqual(['l-sec']))
+  })
+
+  it('у «⋯» метки — подсказка с названием в «ёлочках» (LATER-80)', async () => {
+    signedInAs(makeUser())
+    server.use(http.get('*/api/v1/admin/labels', () => HttpResponse.json({ data: [company] })))
+    renderApp('/admin/labels')
+
+    const menu = await screen.findByRole('button', { name: 'Действия с меткой «Безопасность»' })
+    expect(menu).not.toHaveAttribute('title')
+    const user = userEvent.setup()
+    await user.hover(menu)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Действия с меткой «Безопасность»')
+    // По фокусу с клавиатуры — та же подсказка: ActionsMenu.test (jsdom не отличает фокус Tab от щелчка на странице)
   })
 
   it('ошибки сервера раскладываются в поля формы', async () => {
@@ -90,7 +103,7 @@ describe('Метки', () => {
     expect(within(row).getByText('В архиве')).toBeInTheDocument()
     expect(screen.getByText('Безопасность')).toBeInTheDocument()
 
-    await userEvent.click(within(row).getByRole('button', { name: 'Действия с меткой Фронтенд' }))
+    await userEvent.click(within(row).getByRole('button', { name: 'Действия с меткой «Фронтенд»' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Восстановить' }))
     expect(await screen.findByText('Метка восстановлена')).toBeInTheDocument()
     expect(restored).toBe(true)

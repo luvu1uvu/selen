@@ -1,19 +1,18 @@
-import { useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
+import { useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Archive, Columns3, FileText, Info, MoreHorizontal, Pencil, Rows3 } from 'lucide-react'
+import { Archive, Columns3, FileText, Info, Pencil, Rows3 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { ActionsMenu, type OpensDialog } from '@/shared/components/ActionsMenu'
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
+import { TruncatedText } from '@/shared/components/TruncatedText'
 import { cn } from '@/shared/lib/utils'
 import type { BoardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import {
-  DropdownMenu,
   DropdownMenuCheckboxItem,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
@@ -36,52 +35,19 @@ export interface BoardHeaderSlots {
   menuItems?: (opensDialog: OpensDialog) => ReactNode
 }
 
-/** Обёртка обработчика пункта меню, который открывает окно (см. BoardMenu). */
-export type OpensDialog = (open: () => void) => () => void
-
-/**
- * Меню «⋯» в шапке доски. Пункт, который открывает окно, открывает его после того, как меню вернуло фокус на «⋯»: окно
- * забирает фокус (подсказка «⋯» закрывается — Esc закрывает окно, а не её), а закрытое окно возвращает фокус на «⋯»
- * (useRestoreFocus; раньше фокус уходил в body — U-6 UX-ревью PR 3).
- */
+/** Меню «⋯» в шапке доски: на странице пространства досок несколько — у каждого «⋯» своё имя (с названием доски). */
 export function BoardMenuShell({
   name,
   children,
 }: {
-  /** Название доски: на странице пространства досок несколько — у каждого «⋯» своё имя. */
   name: string
   children: (opensDialog: OpensDialog) => ReactNode
 }) {
   const { t } = useTranslation('boards')
-  const label = t('board.menu', { name })
-  const pending = useRef<(() => void) | null>(null)
-  const dialog: OpensDialog = (open) => () => {
-    pending.current = open
-  }
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7 shrink-0" aria-label={label}>
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        align="end"
-        onCloseAutoFocus={() => {
-          const open = pending.current
-          pending.current = null
-          // Фокус сейчас вернётся на «⋯» — окно откроется кадром позже
-          if (open) requestAnimationFrame(open)
-        }}
-      >
-        {children(dialog)}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <ActionsMenu label={t('board.menu', { name })} className="size-7">
+      {children}
+    </ActionsMenu>
   )
 }
 
@@ -119,7 +85,7 @@ export function BoardHeader({
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {leading}
         {breadcrumb}
-        <Heading className="truncate text-base font-semibold">{name}</Heading>
+        <TruncatedText as={Heading} text={name} className="text-base font-semibold" />
         {/* ⓘ — только когда описание есть: пустое и из одних пробелов — значка нет (LATER-64) */}
         {description?.trim() && <BoardDescription name={name} text={description.trim()} />}
         {afterName}
@@ -170,9 +136,10 @@ export function BoardBlock({
         // колонке; высота — по содержимому, не ниже 15rem (шапка, заголовки и ячейка с «+ Карточка»), а при свёрнутой
         // последней дорожке — ровно по содержимому.
         // overflow: clip — содержимое обрезается по скруглённой рамке (уголки шапки, прижатой к верху холста, не торчат);
-        // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста
+        // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста.
+        // relative — для затенения краёв тела доски (BoardView, EdgeShade)
         className={cn(
-          'bg-background flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
+          'bg-background relative flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
           !endsWithBand && 'min-h-60',
           className,
         )}

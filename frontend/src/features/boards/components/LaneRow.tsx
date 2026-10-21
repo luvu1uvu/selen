@@ -1,6 +1,7 @@
 import type { MouseEvent, Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp } from 'lucide-react'
+import { TruncatedText } from '@/shared/components/TruncatedText'
 import { cn } from '@/shared/lib/utils'
 import type { Lane } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
@@ -62,7 +63,7 @@ export function LaneRow({
       data-lane-row={collapsed ? 'collapsed' : 'expanded'}
     >
       <div className="sticky left-3 flex max-w-96 min-w-0 items-center gap-1 bg-inherit">
-        <span className="truncate text-sm font-semibold">{lane.name}</span>
+        <TruncatedText text={lane.name} className="text-sm font-semibold" />
         {canManage && <LaneMenu lane={lane} lanes={lanes} onAction={onAction} />}
       </div>
       <div className="sticky right-3 flex shrink-0 items-center gap-1 bg-inherit pl-2">

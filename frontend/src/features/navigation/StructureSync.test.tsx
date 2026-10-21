@@ -85,7 +85,8 @@ describe('«Структура» и дерево в сайдбаре', () => {
       expect(treeLinks()).toEqual(['/spaces/ONE', '/spaces/TWO', '/spaces/THREE']),
     )
 
-    await user.click(screen.getByRole('button', { name: 'Действия с «Пространство THREE»' }))
+    // Дерево (каркас) видно раньше страницы «Структура» — её код грузится отдельно (HydrateFallback)
+    await user.click(await screen.findByRole('button', { name: 'Действия с «Пространство THREE»' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Выше' }))
 
     await waitFor(() =>

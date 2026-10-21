@@ -6,6 +6,7 @@ import { cardsIn, expectOnTop, LAPTOP, scrolls, wheelCanvas } from './helpers'
  * ТК-L50.2 (LATER-50, п. 2): на длинной доске при прокрутке вниз шапка доски («Пространство / Доска» и «⋯») и строка
  * заголовков колонок (название, число карточек, тип, «+», у администратора — «⋯») остаются вверху; карточки уезжают
  * под заголовки. Доска «Продукт» → «Длинная доска» (E2eSeeder), администратор пространства — e2e-admin.
+ * Тип колонки — точка с подсказкой вместо текстового бейджа (LATER-77, решение PM 20.10).
  */
 test.use({ storageState: authFile('e2e-admin@selen.test'), viewport: LAPTOP })
 
@@ -30,18 +31,20 @@ test('ТК-L50.2. Шапка доски и заголовки колонок в�
 
   // Заголовки колонок: название, число карточек, тип, «+», «⋯» (администратор)
   const add = page.getByRole('button', { name: 'Добавить карточку в начало To Do' })
-  // Заголовок колонки To Do — самый внутренний блок строки заголовков, где есть и её «+», и тип
+  // Заголовок колонки To Do — самый внутренний блок строки заголовков, где есть её название, «+» и тип (точка «Очередь»)
+  const queue = page.getByRole('img', { name: 'Очередь', exact: true })
   const todo = page
     .locator('[data-board-columns] div')
+    .filter({ hasText: 'To Do' })
     .filter({ has: add })
-    .filter({ hasText: 'Очередь' })
+    .filter({ has: queue })
     .last()
   await expectOnTop(todo.getByText('To Do', { exact: true }))
   // Число карточек (board-layout.spec в общем прогоне переносит одну из To Do — само число не сверяем)
   await expectOnTop(todo.getByText(/^\d+$/))
-  await expectOnTop(todo.getByText('Очередь', { exact: true }))
+  await expectOnTop(todo.getByRole('img', { name: 'Очередь', exact: true }))
   await expectOnTop(add)
-  await expectOnTop(page.getByRole('button', { name: 'Действия с колонкой To Do' }))
+  await expectOnTop(page.getByRole('button', { name: 'Действия с колонкой «To Do»' }))
 
   // Карточки — под заголовками: там, где колонка To Do уходит под строку заголовков, сверху — заголовки
   const underHeader = await page.evaluate(() => {

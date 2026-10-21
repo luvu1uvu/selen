@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { Archive } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import type { Space } from '@/shared/types/api'
@@ -11,7 +10,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/shared/ui/dialog'
 import { setBoardArchived } from '../api'
 import { useSpaceBoards, useStructureMutation } from '../queries'
@@ -19,8 +17,17 @@ import { useSpaceBoards, useStructureMutation } from '../queries'
 /**
  * «Архив досок» на панели пространства (вместо списка под досками): архивные доски открываются отдельной страницей
  * (только для чтения), администратор пространства восстанавливает их — доска встаёт на прежнее место в раскладке.
+ * Открывает его панель — кнопкой или, на узком экране, пунктом меню «⋯» (LATER-74, дополнение PM 21.10).
  */
-export function ArchivedBoardsDialog({ space }: { space: Space }) {
+export function ArchivedBoardsDialog({
+  space,
+  open,
+  onOpenChange,
+}: {
+  space: Space
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const boardsQuery = useSpaceBoards(space.key)
@@ -37,13 +44,7 @@ export function ArchivedBoardsDialog({ space }: { space: Space }) {
   }
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <Archive />
-          {t('layout.archived')}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent closeLabel={tc('actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('layout.archived')}</DialogTitle>

@@ -313,7 +313,9 @@ describe('Админка: деактивация последнего админ
     renderApp('/admin/users')
 
     const row = (await screen.findByText('Анна')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Действия с пользователем' }))
+    await userEvent.click(
+      within(row).getByRole('button', { name: 'Действия с пользователем «Анна»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать' }))
 
     expect(

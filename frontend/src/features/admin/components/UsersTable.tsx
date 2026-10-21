@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
-import { KeyRound, MoreHorizontal } from 'lucide-react'
+import { KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCurrentUser } from '@/features/auth/queries'
 import { getErrorMessage } from '@/shared/api/errors'
+import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { Pagination } from '@/shared/components/Pagination'
 import { formatDateTime } from '@/shared/lib/dates'
@@ -12,13 +13,7 @@ import { isOwner } from '@/shared/lib/roles'
 import type { AdminUser, UserStatus } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -185,78 +180,75 @@ export function UsersTable() {
                       </Link>
                     </Button>
                   ) : (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label={t('users.actions.menu')}>
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => navigate(`/admin/users/${user.id}`)}>
-                          {t('users.actions.access')}
-                        </DropdownMenuItem>
-                        {canChangeRole && (
-                          <DropdownMenuItem
-                            onSelect={() =>
-                              run(
-                                () =>
-                                  changeRole.mutateAsync({
-                                    userId: user.id,
-                                    // Только участник ↔ администратор: роль Владельца — передачей владения
-                                    role: user.role === 'admin' ? 'member' : 'admin',
-                                  }),
-                                t('users.toasts.roleChanged'),
-                              )
-                            }
-                          >
-                            {user.role === 'admin'
-                              ? t('users.actions.makeMember')
-                              : t('users.actions.makeAdmin')}
+                    <ActionsMenu label={t('users.actions.menu', { name: user.name })}>
+                      {(dialog) => (
+                        <>
+                          <DropdownMenuItem onSelect={() => navigate(`/admin/users/${user.id}`)}>
+                            {t('users.actions.access')}
                           </DropdownMenuItem>
-                        )}
-                        {canResend && invitation && (
-                          <DropdownMenuItem
-                            onSelect={() =>
-                              run(
-                                () => resend.mutateAsync(invitation.id),
-                                t('users.toasts.invitationResent', { email: user.email }),
-                              )
-                            }
-                          >
-                            {t('users.actions.resendInvitation')}
-                          </DropdownMenuItem>
-                        )}
-                        {canReactivate && (
-                          <DropdownMenuItem
-                            onSelect={() =>
-                              run(
-                                () => reactivate.mutateAsync(user.id),
-                                t('users.toasts.reactivated'),
-                              )
-                            }
-                          >
-                            {t('users.actions.reactivate')}
-                          </DropdownMenuItem>
-                        )}
-                        {(canDeactivate || hasPendingInvitation) && <DropdownMenuSeparator />}
-                        {canDeactivate && (
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onSelect={() => setToDeactivate(user)}
-                          >
-                            {t('users.actions.deactivate')}
-                          </DropdownMenuItem>
-                        )}
-                        {hasPendingInvitation && (
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onSelect={() => setConfirm({ kind: 'revoke', user })}
-                          >
-                            {t('users.actions.revokeInvitation')}
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          {canChangeRole && (
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                run(
+                                  () =>
+                                    changeRole.mutateAsync({
+                                      userId: user.id,
+                                      // Только участник ↔ администратор: роль Владельца — передачей владения
+                                      role: user.role === 'admin' ? 'member' : 'admin',
+                                    }),
+                                  t('users.toasts.roleChanged'),
+                                )
+                              }
+                            >
+                              {user.role === 'admin'
+                                ? t('users.actions.makeMember')
+                                : t('users.actions.makeAdmin')}
+                            </DropdownMenuItem>
+                          )}
+                          {canResend && invitation && (
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                run(
+                                  () => resend.mutateAsync(invitation.id),
+                                  t('users.toasts.invitationResent', { email: user.email }),
+                                )
+                              }
+                            >
+                              {t('users.actions.resendInvitation')}
+                            </DropdownMenuItem>
+                          )}
+                          {canReactivate && (
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                run(
+                                  () => reactivate.mutateAsync(user.id),
+                                  t('users.toasts.reactivated'),
+                                )
+                              }
+                            >
+                              {t('users.actions.reactivate')}
+                            </DropdownMenuItem>
+                          )}
+                          {(canDeactivate || hasPendingInvitation) && <DropdownMenuSeparator />}
+                          {canDeactivate && (
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={dialog(() => setToDeactivate(user))}
+                            >
+                              {t('users.actions.deactivate')}
+                            </DropdownMenuItem>
+                          )}
+                          {hasPendingInvitation && (
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={dialog(() => setConfirm({ kind: 'revoke', user }))}
+                            >
+                              {t('users.actions.revokeInvitation')}
+                            </DropdownMenuItem>
+                          )}
+                        </>
+                      )}
+                    </ActionsMenu>
                   )}
                 </TableCell>
               </TableRow>

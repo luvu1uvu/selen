@@ -1,17 +1,11 @@
 import { useTranslation } from 'react-i18next'
-import { MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { LabelBadge } from '@/shared/components/LabelBadge'
 import type { Label } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { useSetLabelArchived } from '../queries'
 
@@ -67,27 +61,20 @@ export function LabelsTable({
             </TableCell>
             {canManage && (
               <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t('labels.actions.menu', { name: label.name })}
-                    >
-                      <MoreHorizontal />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => onEdit(label)}>
-                      {t('labels.actions.edit')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => toggleArchived(label)}>
-                      {label.archived_at
-                        ? t('labels.actions.restore')
-                        : t('labels.actions.archive')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <ActionsMenu label={t('labels.actions.menu', { name: label.name })}>
+                  {(dialog) => (
+                    <>
+                      <DropdownMenuItem onSelect={dialog(() => onEdit(label))}>
+                        {t('labels.actions.edit')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => toggleArchived(label)}>
+                        {label.archived_at
+                          ? t('labels.actions.restore')
+                          : t('labels.actions.archive')}
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </ActionsMenu>
               </TableCell>
             )}
           </TableRow>

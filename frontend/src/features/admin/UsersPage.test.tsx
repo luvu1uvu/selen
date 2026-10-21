@@ -136,10 +136,12 @@ describe('Админка пользователей', () => {
     renderApp('/admin/users')
 
     const row = (await screen.findByText('Борис')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Действия с пользователем' }))
+    await userEvent.click(
+      within(row).getByRole('button', { name: 'Действия с пользователем «Борис»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать' }))
     await userEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Деактивировать' }),
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Деактивировать' }),
     )
 
     expect(await screen.findByText('Пользователь деактивирован')).toBeInTheDocument()
@@ -152,7 +154,7 @@ describe('Админка пользователей', () => {
 
     const row = (await screen.findAllByText('owner@selen.test'))[0].closest('tr')!
     expect(within(row).getByText('вы')).toBeInTheDocument()
-    expect(within(row).queryByRole('button', { name: 'Действия с пользователем' })).toBeNull()
+    expect(within(row).queryByRole('button', { name: /^Действия с пользователем/ })).toBeNull()
   })
 
   it('бейдж «Владелец»; обычному администратору нет действий с Владельцем и администраторами', async () => {
@@ -191,7 +193,7 @@ describe('Админка пользователей', () => {
     expect(within(ownerRow).getByText('Владелец')).toBeInTheDocument()
     for (const name of ['Ольга Владелец', 'Другой Админ']) {
       const row = screen.getByText(name).closest('tr')!
-      expect(within(row).queryByRole('button', { name: 'Действия с пользователем' })).toBeNull()
+      expect(within(row).queryByRole('button', { name: /^Действия с пользователем/ })).toBeNull()
       expect(within(row).getByRole('link', { name: 'Доступ к пространствам' })).toHaveAttribute(
         'title',
         'Действия с администраторами и Владельцем доступны только Владельцу',
@@ -200,7 +202,7 @@ describe('Админка пользователей', () => {
 
     const memberRow = screen.getByText('Борис').closest('tr')!
     await userEvent.click(
-      within(memberRow).getByRole('button', { name: 'Действия с пользователем' }),
+      within(memberRow).getByRole('button', { name: 'Действия с пользователем «Борис»' }),
     )
     expect(await screen.findByRole('menuitem', { name: 'Деактивировать' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Сделать администратором' })).toBeNull()
@@ -224,7 +226,9 @@ describe('Админка пользователей', () => {
     renderApp('/admin/users')
 
     const row = (await screen.findByText('Борис')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Действия с пользователем' }))
+    await userEvent.click(
+      within(row).getByRole('button', { name: 'Действия с пользователем «Борис»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Сделать администратором' }))
 
     expect(await screen.findByText('Роль изменена')).toBeInTheDocument()

@@ -141,7 +141,9 @@ describe('Админка: пространства', () => {
     )
     renderApp('/admin/spaces')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с пространством' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^Действия с пространством «/ }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Назначить роль' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Назначить себе' }))
     await userEvent.selectOptions(screen.getByLabelText('Роль'), 'commenter')

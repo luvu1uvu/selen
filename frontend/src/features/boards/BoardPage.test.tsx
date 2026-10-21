@@ -20,7 +20,7 @@ describe('Доска', () => {
     expect(await screen.findByRole('heading', { name: 'Продукт' })).toBeInTheDocument()
     for (const name of ['To Do', 'In Progress', 'Dev', 'QA', 'Done']) {
       expect(
-        screen.getByRole('button', { name: `Действия с колонкой ${name}` }),
+        screen.getByRole('button', { name: `Действия с колонкой «${name}»` }),
       ).toBeInTheDocument()
     }
     expect(screen.getByRole('button', { name: 'Открыть DEV-2: Вторая' })).toHaveTextContent('Баг')
@@ -65,7 +65,7 @@ describe('Доска', () => {
     renderApp('/boards/board-1')
 
     expect(
-      await screen.findByRole('button', { name: 'Действия с дорожкой Срочные' }),
+      await screen.findByRole('button', { name: 'Действия с дорожкой «Срочные»' }),
     ).toBeInTheDocument()
     expect(screen.getByText(/нет колонки типа «Готово»/)).toBeInTheDocument()
   })
@@ -150,12 +150,18 @@ describe('Доска', () => {
     renderApp('/boards/board-1')
 
     const [own, foreign] = board.cards
-    expect(
-      await screen.findByRole('button', { name: `Открыть ${own.key}: ${own.title}` }),
-    ).toHaveAttribute('aria-disabled', 'false')
-    expect(
-      screen.getByRole('button', { name: `Открыть ${foreign.key}: ${foreign.title}` }),
-    ).toHaveAttribute('aria-disabled', 'true')
+    const ownTile = await screen.findByRole('button', { name: `Открыть ${own.key}: ${own.title}` })
+    expect(ownTile).toHaveAttribute('aria-roledescription')
+    expect(ownTile).toHaveAccessibleDescription(/пробел/)
+    // Чужую карточку перенести нельзя, но открыть можно: для диктора — обычная кнопка, без «недоступно» и без
+    // инструкции переноса (LATER-76)
+    const foreignTile = screen.getByRole('button', {
+      name: `Открыть ${foreign.key}: ${foreign.title}`,
+    })
+    expect(foreignTile).not.toHaveAttribute('aria-disabled')
+    expect(foreignTile).not.toHaveAttribute('aria-roledescription')
+    expect(foreignTile).not.toHaveAccessibleDescription()
+    expect(foreignTile).toHaveAttribute('tabindex', '0')
   })
 
   it('комментатор только смотрит: нет добавления карточек и меню структуры', async () => {
@@ -164,7 +170,10 @@ describe('Доска', () => {
     )
     renderApp('/boards/board-1')
 
-    expect(await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' })).toBeInTheDocument()
+    const tile = await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' })
+    // Переносить нельзя — карточка не «недоступна» для диктора, она открывается (LATER-76)
+    expect(tile).not.toHaveAttribute('aria-disabled')
+    expect(tile).not.toHaveAccessibleDescription()
     expect(screen.queryByRole('button', { name: /Добавить карточку/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Действия с колонкой/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Действия с доской «/ })).not.toBeInTheDocument()
@@ -182,10 +191,11 @@ describe('Доска', () => {
     renderApp('/boards/board-1')
 
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Действия с колонкой In Progress' }),
+      await screen.findByRole('button', { name: 'Действия с колонкой «In Progress»' }),
     )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Сменить тип' }))
-    await userEvent.selectOptions(screen.getByLabelText('Тип'), 'done')
+    // Окно из «⋯» открывается после того, как меню вернуло фокус на «⋯» (кадром позже)
+    await userEvent.selectOptions(await screen.findByLabelText('Тип'), 'done')
 
     expect(screen.getByText(/Сменится статус 1 карточки/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
@@ -204,9 +214,11 @@ describe('Доска', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой To Do' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить подколонку' }))
-    await userEvent.type(screen.getByLabelText('Название'), 'Анализ')
+    await userEvent.type(await screen.findByLabelText('Название'), 'Анализ')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить подколонку' }))
     await screen.findByText('Сохранено')
 
@@ -237,7 +249,9 @@ describe('Доска', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой To Do' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Архивировать' }))
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Архивировать' }),

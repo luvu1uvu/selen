@@ -1,18 +1,13 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { CardTypeLabel } from '@/shared/components/CardTypeLabel'
 import type { CardType } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { CardTypeDialog } from './components/CardTypeDialog'
 import { useAdminCardTypes, useSetCardTypeArchived } from './queries'
@@ -72,25 +67,22 @@ export function CardTypesPage() {
                 )}
               </TableCell>
               <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label={t('cardTypes.actions.menu')}>
-                      <MoreHorizontal />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setEditing(type)}>
-                      {t('cardTypes.actions.edit')}
-                    </DropdownMenuItem>
-                    {!type.is_default && (
-                      <DropdownMenuItem onSelect={() => toggleArchived(type)}>
-                        {type.archived_at
-                          ? t('cardTypes.actions.restore')
-                          : t('cardTypes.actions.archive')}
+                <ActionsMenu label={t('cardTypes.actions.menu', { name: type.name })}>
+                  {(dialog) => (
+                    <>
+                      <DropdownMenuItem onSelect={dialog(() => setEditing(type))}>
+                        {t('cardTypes.actions.edit')}
                       </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      {!type.is_default && (
+                        <DropdownMenuItem onSelect={() => toggleArchived(type)}>
+                          {type.archived_at
+                            ? t('cardTypes.actions.restore')
+                            : t('cardTypes.actions.archive')}
+                        </DropdownMenuItem>
+                      )}
+                    </>
+                  )}
+                </ActionsMenu>
               </TableCell>
             </TableRow>
           ))}

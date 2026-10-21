@@ -1,21 +1,14 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
-import { MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import type { AdminSpace } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
 import { Label } from '@/shared/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { AssignSpaceRoleDialog } from './components/AssignSpaceRoleDialog'
@@ -131,37 +124,37 @@ export function SpacesAdminPage() {
                 )}
               </TableCell>
               <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label={t('spaces.actions.menu')}>
-                      <MoreHorizontal />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setAssignTo(space)}>
-                      {t('spaces.actions.assign')}
-                    </DropdownMenuItem>
-                    {space.my_role && (
-                      <DropdownMenuItem onSelect={() => navigate(`/spaces/${space.key}`)}>
-                        {t('spaces.actions.open')}
+                <ActionsMenu label={t('spaces.actions.menu', { name: space.name })}>
+                  {(dialog) => (
+                    <>
+                      <DropdownMenuItem onSelect={dialog(() => setAssignTo(space))}>
+                        {t('spaces.actions.assign')}
                       </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    {space.archived_at ? (
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          run(() => restore.mutateAsync(space.id), t('spaces.toasts.restored'))
-                        }
-                      >
-                        {t('spaces.actions.restore')}
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem variant="destructive" onSelect={() => setToArchive(space)}>
-                        {t('spaces.actions.archive')}
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      {space.my_role && (
+                        <DropdownMenuItem onSelect={() => navigate(`/spaces/${space.key}`)}>
+                          {t('spaces.actions.open')}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      {space.archived_at ? (
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            run(() => restore.mutateAsync(space.id), t('spaces.toasts.restored'))
+                          }
+                        >
+                          {t('spaces.actions.restore')}
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={dialog(() => setToArchive(space))}
+                        >
+                          {t('spaces.actions.archive')}
+                        </DropdownMenuItem>
+                      )}
+                    </>
+                  )}
+                </ActionsMenu>
               </TableCell>
             </TableRow>
           ))}

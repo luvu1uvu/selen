@@ -28,14 +28,14 @@ describe('Структура доски через меню', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой Done' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой «Done»' }))
     expect(await screen.findByRole('menuitem', { name: 'Правее' })).toHaveAttribute(
       'aria-disabled',
       'true',
     )
     await userEvent.click(screen.getByRole('menuitem', { name: 'Левее' }))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Действия с колонкой Dev' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Действия с колонкой «Dev»' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Правее' }))
 
     await vi.waitFor(() =>
@@ -64,10 +64,10 @@ describe('Структура доски через меню', () => {
     )
     renderApp('/boards/board-1')
 
-    const menu = await screen.findByRole('button', { name: 'Действия с дорожкой Срочные' })
+    const menu = await screen.findByRole('button', { name: 'Действия с дорожкой «Срочные»' })
     await userEvent.click(menu)
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать' }))
-    const name = screen.getByLabelText('Название')
+    const name = await screen.findByLabelText('Название')
     await userEvent.clear(name)
     await userEvent.type(name, 'Горящие')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
@@ -106,9 +106,11 @@ describe('Структура доски через меню', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой To Do' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }),
+    )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать' }))
-    await userEvent.clear(screen.getByLabelText('Название'))
+    await userEvent.clear(await screen.findByLabelText('Название'))
     await userEvent.type(screen.getByLabelText('Название'), 'Очередь')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
     await screen.findByText('Сохранено')

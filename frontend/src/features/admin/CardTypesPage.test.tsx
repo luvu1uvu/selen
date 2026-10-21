@@ -61,7 +61,7 @@ describe('Админка: типы карточек', () => {
     renderApp('/admin/card-types')
 
     const row = (await screen.findByText('Баг')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Действия с типом' }))
+    await userEvent.click(within(row).getByRole('button', { name: 'Действия с типом «Баг»' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Восстановить' }))
 
     expect(await screen.findByText('Тип восстановлен')).toBeInTheDocument()
