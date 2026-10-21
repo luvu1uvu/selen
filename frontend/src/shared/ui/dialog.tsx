@@ -3,7 +3,6 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 import { XIcon } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { useRestoreFocus } from './restore-focus'
-import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -38,22 +37,14 @@ function DialogContent({
         {...props}
       >
         {children}
-        {/* ✕ — цель 32 px, рамка фокуса и подсказка, как у остальных значков без текста (правила вида, разделы 4, 8).
-            Подсказка по фокусу — только с клавиатуры: окно без полей само отдаёт фокус ✕ при открытии */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DialogPrimitive.Close
-              aria-label={closeLabel}
-              className="hover:bg-accent focus-visible:ring-ring/50 absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]"
-              onFocus={(event) => {
-                if (!event.currentTarget.matches(':focus-visible')) event.preventDefault()
-              }}
-            >
-              <XIcon className="size-4" />
-            </DialogPrimitive.Close>
-          </TooltipTrigger>
-          <TooltipContent>{closeLabel}</TooltipContent>
-        </Tooltip>
+        {/* ✕ — цель 32 px и рамка фокуса (правила вида, разделы 4, 11). Подсказки Tooltip нет: окно без полей отдаёт фокус
+            ✕ при открытии, и первый Esc закрыл бы подсказку, а не окно */}
+        <DialogPrimitive.Close
+          aria-label={closeLabel}
+          className="hover:bg-accent focus-visible:ring-ring/50 absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]"
+        >
+          <XIcon className="size-4" />
+        </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   )
