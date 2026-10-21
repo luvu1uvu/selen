@@ -99,7 +99,8 @@ export function SpaceBoardsCanvas({
       data-board-canvas
     >
       <DndContext {...dndProps}>
-        <div ref={contentRef} className="relative flex min-h-full flex-col gap-3 p-3 md:p-4">
+        {/* Между рядами — gap-6, между строками одного ряда — gap-3: ряд виден (ответ PM 21.10, U-3 UX-ревью варианта Б) */}
+        <div ref={contentRef} className="relative flex min-h-full flex-col gap-6 p-3 md:p-4">
           {boardsQuery.isPending && (
             <p className="text-muted-foreground text-sm">{tc('states.loading')}</p>
           )}
@@ -189,7 +190,7 @@ export function SpaceBoardsCanvas({
  */
 function DropLine({ drop }: { drop: LayoutDrop }) {
   const style =
-    drop.kind === 'row'
+    'x' in drop.line
       ? {
           left: drop.line.x - 1.5,
           top: drop.line.top,
@@ -214,23 +215,24 @@ function DropLine({ drop }: { drop: LayoutDrop }) {
 
 /** Линия — от угла содержимого холста, а не окна. */
 function relativeTo(drop: LayoutDrop, origin: DOMRect): LayoutDrop {
-  return drop.kind === 'row'
-    ? {
-        ...drop,
-        line: {
-          x: drop.line.x - origin.left,
-          top: drop.line.top - origin.top,
-          bottom: drop.line.bottom - origin.top,
-        },
-      }
-    : {
-        ...drop,
-        line: {
-          y: drop.line.y - origin.top,
-          left: drop.line.left - origin.left,
-          right: drop.line.right - origin.left,
-        },
-      }
+  if ('x' in drop.line) {
+    const line = drop.line
+    return {
+      ...drop,
+      kind: 'row',
+      line: {
+        x: line.x - origin.left,
+        top: line.top - origin.top,
+        bottom: line.bottom - origin.top,
+      },
+    }
+  }
+  const line = {
+    y: drop.line.y - origin.top,
+    left: drop.line.left - origin.left,
+    right: drop.line.right - origin.left,
+  }
+  return drop.kind === 'row' ? { ...drop, line } : { ...drop, line }
 }
 
 /** Где ряды и доски на экране сейчас (координаты окна) — для цели переноса. */
@@ -242,6 +244,8 @@ function measure(content: HTMLElement): LayoutGeometry {
         id: row.dataset.boardRow!,
         top: rect.top,
         bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
         boards: [...row.querySelectorAll<HTMLElement>('[data-board-slot]')].map((slot) => {
           // Блок доски бывает уже своего места в ряду (w-fit) — линия у его края, а не у края места
           const block = (slot.firstElementChild as HTMLElement | null) ?? slot

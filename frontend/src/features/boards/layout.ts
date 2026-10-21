@@ -151,24 +151,35 @@ export interface LayoutGeometry {
     id: string
     top: number
     bottom: number
+    /** Края ряда — ширина, в которую укладываются его доски. */
+    left: number
+    right: number
     boards: { id: string; left: number; right: number; top: number; bottom: number }[]
   }[]
 }
 
+/** Зазор между досками строки и между строками ряда — gap-3 ряда (между рядами — больше, gap-6). */
+const BOARD_GAP_PX = 12
+
+/** Вертикальная линия-указатель (x, от top до bottom) и горизонтальная (y, от left до right). */
+export type DropVertical = { x: number; top: number; bottom: number }
+export type DropHorizontal = { y: number; left: number; right: number }
+
 /**
- * Куда упадёт доска и где нарисовать линию-указатель: в ряд — вертикальная линия между досками (x, от top до bottom),
- * отдельным рядом — горизонтальная линия между рядами (y, от left до right).
+ * Куда упадёт доска и где нарисовать линию-указатель: в ряд — там, где доска на самом деле встанет: вертикальная линия
+ * между досками строки, а если рядом с соседкой слева не поместится — горизонтальная под строкой соседки, длиной в
+ * переносимую доску (ответ PM 21.10, U-5 UX-ревью варианта Б); отдельным рядом — горизонтальная во всю ширину между рядами.
  */
 export type LayoutDrop =
   | {
       kind: 'row'
       target: BoardMoveTarget
-      line: { x: number; top: number; bottom: number }
+      line: DropVertical | DropHorizontal
     }
   | {
       kind: 'newRow'
       target: BoardMoveTarget
-      line: { y: number; left: number; right: number }
+      line: DropHorizontal
     }
 
 /**
@@ -252,12 +263,24 @@ export function layoutDropAt(
         : k === 0
           ? lineOthers[0].left
           : lineOthers[k - 1].right
-    const { top, bottom } = span(line)
-    return {
-      kind: 'row',
-      target: { row_id: row.id, after_id: after?.id ?? null, before_id: before?.id ?? null },
-      line: { x, top, bottom },
+    const target = { row_id: row.id, after_id: after?.id ?? null, before_id: before?.id ?? null }
+    // Ряд укладывает доски по порядку: встанет ли доска сразу за соседкой слева, в её строке, — или начнёт следующую
+    const afterLine = after && lines.find((candidate) => candidate.includes(after))
+    if (after && afterLine) {
+      const dragged = rows
+        .flatMap((candidate) => candidate.boards)
+        .find((board) => board.id === boardId)
+      const width = Math.min(dragged ? dragged.right - dragged.left : 0, row.right - row.left)
+      const { top, bottom } = span(afterLine)
+      if (after.right + BOARD_GAP_PX + width > row.right + 1) {
+        const y = bottom + BOARD_GAP_PX / 2
+        return { kind: 'row', target, line: { y, left: row.left, right: row.left + width } }
+      }
+      // Помещается: сразу за соседкой слева — и когда она в строке выше той, над которой указатель
+      if (afterLine !== line) return { kind: 'row', target, line: { x: after.right, top, bottom } }
     }
+    const { top, bottom } = span(line)
+    return { kind: 'row', target, line: { x, top, bottom } }
   }
   return null
 }

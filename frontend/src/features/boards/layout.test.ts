@@ -105,13 +105,15 @@ describe('перестановка из меню', () => {
 })
 
 describe('цель переноса доски', () => {
-  // r1: A [0–400], B [412–800], высота ряда 100–600; r2: C [0–1000], 612–700
+  // Ряды шириной 1500: r1: A [0–400], B [412–800], высота ряда 100–600; r2: C [0–1000], 612–700
   const geometry: LayoutGeometry = {
     rows: [
       {
         id: 'r1',
         top: 100,
         bottom: 600,
+        left: 0,
+        right: 1500,
         boards: [
           { id: 'A', left: 0, right: 400, top: 100, bottom: 600 },
           { id: 'B', left: 412, right: 800, top: 100, bottom: 400 },
@@ -121,16 +123,19 @@ describe('цель переноса доски', () => {
         id: 'r2',
         top: 612,
         bottom: 700,
+        left: 0,
+        right: 1500,
         boards: [{ id: 'C', left: 0, right: 1000, top: 612, bottom: 700 }],
       },
     ],
   }
 
   it('над рядом — между досками по половинам; своё место — без запроса', () => {
+    // Правее B: C (1000 px) рядом не помещается (800 + 12 + 1000 > 1500) — линия под строкой, длиной в C (U-5)
     expect(layoutDropAt({ x: 900, y: 300 }, geometry, 'C')).toEqual({
       kind: 'row',
       target: { row_id: 'r1', after_id: 'B', before_id: null },
-      line: { x: 800, top: 100, bottom: 600 },
+      line: { y: 606, left: 0, right: 1000 },
     })
     expect(layoutDropAt({ x: 100, y: 300 }, geometry, 'C')?.target).toEqual({
       row_id: 'r1',
@@ -184,6 +189,8 @@ describe('цель переноса доски', () => {
           id: 'r1',
           top: 100,
           bottom: 700,
+          left: 0,
+          right: 1000,
           boards: [
             { id: 'A', left: 0, right: 400, top: 100, bottom: 400 },
             { id: 'B', left: 412, right: 800, top: 100, bottom: 400 },
@@ -209,6 +216,59 @@ describe('цель переноса доски', () => {
       row_id: 'r1',
       after_id: 'D',
       before_id: null,
+    })
+  })
+
+  it('линия — где доска на самом деле встанет: рядом с соседкой слева, а не поместится — под её строкой (U-5)', () => {
+    // Ряд шириной 1000: строка 1 — A [0–400]; строка 2 — W [0–1000] (шире не бывает); другой ряд — N (300) и M (700)
+    const geometry: LayoutGeometry = {
+      rows: [
+        {
+          id: 'r1',
+          top: 100,
+          bottom: 900,
+          left: 0,
+          right: 1000,
+          boards: [
+            { id: 'A', left: 0, right: 400, top: 100, bottom: 500 },
+            { id: 'W', left: 0, right: 1000, top: 512, bottom: 900 },
+          ],
+        },
+        {
+          id: 'r2',
+          top: 924,
+          bottom: 1200,
+          left: 0,
+          right: 1000,
+          boards: [
+            { id: 'N', left: 0, right: 300, top: 924, bottom: 1200 },
+            { id: 'M', left: 312, right: 1012, top: 924, bottom: 1200 },
+          ],
+        },
+      ],
+    }
+    // Над левой половиной W: N (300) помещается за A — встанет в первую строку, линия справа от A по её высоте
+    expect(layoutDropAt({ x: 100, y: 700 }, geometry, 'N')).toEqual({
+      kind: 'row',
+      target: { row_id: 'r1', after_id: 'A', before_id: 'W' },
+      line: { x: 400, top: 100, bottom: 500 },
+    })
+    // M (700) за A не помещается (400 + 12 + 700 > 1000) — начнёт вторую строку перед W: линия под строкой A, длиной в M
+    expect(layoutDropAt({ x: 100, y: 700 }, geometry, 'M')).toEqual({
+      kind: 'row',
+      target: { row_id: 'r1', after_id: 'A', before_id: 'W' },
+      line: { y: 506, left: 0, right: 700 },
+    })
+    // Правее A над первой строкой: N — рядом, вертикальная линия; M — под строкой A, длиной в M
+    expect(layoutDropAt({ x: 300, y: 300 }, geometry, 'N')?.line).toEqual({
+      x: 400,
+      top: 100,
+      bottom: 500,
+    })
+    expect(layoutDropAt({ x: 300, y: 300 }, geometry, 'M')?.line).toEqual({
+      y: 506,
+      left: 0,
+      right: 700,
     })
   })
 })
