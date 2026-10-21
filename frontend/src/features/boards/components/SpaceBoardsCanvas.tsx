@@ -16,7 +16,6 @@ import {
   type CollisionDetection,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigationType, useSearchParams } from 'react-router'
 import { GripVertical, LayoutGrid } from 'lucide-react'
@@ -342,9 +341,9 @@ interface RowMetrics {
 
 /**
  * Ширина рядов и свёрнутых досок — для раздачи ширин развёрнутым доскам (rowWidths; LATER-79, LATER-81). Меряется до
- * первой отрисовки и дальше ResizeObserver (окно, дерево, сворачивание) — тоже до отрисовки кадра: без ширин доски ряда
- * встают каждая на свою строку, и раскладка перескакивала бы (U-1 UX-ревью LATER-81). Скрытый холст (другая вкладка)
- * не меряется — ширины остаются прежними, возврат на «Доски» без сдвига.
+ * первой отрисовки — без ширин доски ряда встают каждая на свою строку, и раскладка перескакивала бы (U-1 UX-ревью
+ * LATER-81); дальше — ResizeObserver (окно, дерево, сворачивание). Скрытый холст (другая вкладка) не меряется — ширины
+ * остаются прежними, возврат на «Доски» без сдвига.
  */
 function useRowMetrics(
   contentRef: RefObject<HTMLDivElement | null>,
@@ -380,8 +379,10 @@ function useRowMetrics(
       )
     }
     measure()
-    // setState из ResizeObserver React применил бы отдельной задачей — уже после отрисовки кадра со старыми ширинами
-    const observer = new ResizeObserver(() => flushSync(measure))
+    // Без flushSync: он выполнял бы эффекты прямо здесь — подписки досок на IntersectionObserver раньше, чем холст после
+    // «Назад» и перезагрузки встанет на запомненное место, и грузились бы доски выше него. Цена — при смене ширины окна
+    // кадр со старыми ширинами (U-2 UX-ревью LATER-81, мелочь)
+    const observer = new ResizeObserver(measure)
     observer.observe(content)
     for (const section of content.querySelectorAll('[data-board-collapsed]'))
       observer.observe(section)
