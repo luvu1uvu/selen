@@ -53,4 +53,57 @@ describe('Заголовок колонки', () => {
     await userEvent.setup().hover(add)
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Добавить карточку в начало To Do')
   })
+
+  describe('обрезанное название — полное в подсказке (LATER-74)', () => {
+    // jsdom не считает раскладку: «не помещается» — текст длиннее 12 символов (ширина содержимого больше видимой)
+    beforeEach(() => {
+      vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return (this.textContent?.length ?? 0) > 12 ? 200 : 50
+      })
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100)
+      const board = makeBoardDetail({ name: 'Продуктовая доска команды' })
+      board.columns[0] = { ...board.columns[0], name: 'Подготовка релиза' }
+      board.lanes = [
+        { id: 'main', name: 'Основная', position: 'a0' },
+        { id: 'urgent', name: 'Срочные исправления в проде', position: 'a1' },
+      ]
+      server.use(http.get('*/api/v1/boards/board-1', () => HttpResponse.json({ data: board })))
+    })
+    afterEach(() => vi.restoreAllMocks())
+
+    it('колонка, дорожка и доска: подсказка по наведению и по фокусу (Tab)', async () => {
+      renderApp('/boards/board-1')
+      const user = userEvent.setup()
+      const heading = await screen.findByRole('heading', { name: 'Продуктовая доска команды' })
+
+      const column = within(columns()).getByText('Подготовка релиза')
+      expect(column).toHaveAttribute('tabindex', '0')
+      expect(column).not.toHaveAttribute('title')
+      await user.hover(column)
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Подготовка релиза')
+      await user.unhover(column)
+
+      const lane = within(screen.getByRole('region', { name: 'Срочные исправления в проде' }))
+      const laneName = lane.getByText('Срочные исправления в проде')
+      act(() => laneName.focus())
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Срочные исправления в проде')
+
+      act(() => heading.focus())
+      expect(heading).toHaveFocus()
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Продуктовая доска команды')
+    })
+
+    it('название целиком — без подсказки и без остановки Tab', async () => {
+      renderApp('/boards/board-1')
+      await screen.findByRole('heading', { name: 'Продуктовая доска команды' })
+      const name = within(columns()).getByText('Done')
+      expect(name).not.toHaveAttribute('tabindex')
+      await userEvent.setup().hover(name)
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+      expect(screen.getByText('Основная')).not.toHaveAttribute('tabindex')
+    })
+  })
 })

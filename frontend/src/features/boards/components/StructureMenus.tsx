@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { MoreHorizontal, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { TruncatedText } from '@/shared/components/TruncatedText'
 import { cn } from '@/shared/lib/utils'
 import type { BoardColumn, Lane } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
@@ -68,11 +69,11 @@ export function ColumnHeader({
   return (
     // Без своей плашки: колонки разделены тонкими линиями (как в Kaiten); отступ слева — как у карточек в ячейке
     <div className="flex min-h-9 items-center gap-2 px-2">
-      <span
-        className={cn('min-w-0 flex-1 truncate text-sm', isTopLevel ? 'font-semibold' : 'font-medium')}
-      >
-        {column.name}
-      </span>
+      {/* Обрезанное название — полное в подсказке (LATER-74) */}
+      <TruncatedText
+        text={column.name}
+        className={cn('min-w-0 flex-1 text-sm', isTopLevel ? 'font-semibold' : 'font-medium')}
+      />
       <div className="flex shrink-0 items-center">
         {isTopLevel && <CategoryDot category={column.category} />}
         <span className="text-muted-foreground px-1 text-xs tabular-nums" aria-hidden>

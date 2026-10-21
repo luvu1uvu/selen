@@ -4,6 +4,7 @@ import { Archive, Columns3, FileText, Info, MoreHorizontal, Pencil, Rows3 } from
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
+import { TruncatedText } from '@/shared/components/TruncatedText'
 import { cn } from '@/shared/lib/utils'
 import type { BoardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
@@ -119,7 +120,7 @@ export function BoardHeader({
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {leading}
         {breadcrumb}
-        <Heading className="truncate text-base font-semibold">{name}</Heading>
+        <TruncatedText as={Heading} text={name} className="text-base font-semibold" />
         {/* ⓘ — только когда описание есть: пустое и из одних пробелов — значка нет (LATER-64) */}
         {description?.trim() && <BoardDescription name={name} text={description.trim()} />}
         {afterName}
