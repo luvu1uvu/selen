@@ -13,6 +13,8 @@ final readonly class CardFlowTimes
         public ?CarbonInterface $createdAt,
         public ?CarbonInterface $firstStartedAt,
         public ?CarbonInterface $completedAt,
+        /** Последнее перемещение в другое место; null — карточку не перемещали (CardFlowMetrics). */
+        public ?CarbonInterface $movedAt = null,
     ) {}
 
     /** Lead time = created_at → completed_at. null — карточка не завершена. */

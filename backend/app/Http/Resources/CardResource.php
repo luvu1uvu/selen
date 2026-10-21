@@ -18,7 +18,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Карточка целиком (боковая панель). Ожидает загруженное Card::loadDetails().
+ * Карточка целиком (окно карточки). Ожидает загруженное Card::loadDetails().
  *
  * @mixin Card
  */
@@ -112,6 +112,8 @@ class CardResource extends JsonResource
             'created_at' => $this->created_at->format('Y-m-d\TH:i:s.u\Z'),
             'first_started_at' => $this->first_started_at?->format('Y-m-d\TH:i:s.u\Z'),
             'completed_at' => $this->completed_at?->format('Y-m-d\TH:i:s.u\Z'),
+            // Последнее перемещение в другое место (окно карточки: «Перемещена N назад»); null — не перемещали
+            'moved_at' => $times->movedAt?->format('Y-m-d\TH:i:s.u\Z'),
             'archived_at' => $this->archived_at?->toIso8601ZuluString(),
             // Считаются по card_transitions (CardFlowMetrics), секунды; null — не завершена
             'metrics' => [

@@ -17,6 +17,10 @@ use App\Models\CardTransition;
  * - first_started_at — первый вход в категорию in_progress (или сразу в done, если in_progress пропущена);
  * - completed_at — последний вход в done, если карточка сейчас в done; иначе null;
  * - lead time = created_at → completed_at; cycle time = first_started_at → completed_at.
+ *
+ * moved_at — последний переход в другое место (колонка, дорожка, доска; в том числе возврат из архива в другую ячейку
+ * и переезд в первую подколонку). Смена типа колонки место не меняет — не перемещение (окно карточки, «Перемещена N
+ * назад»).
  */
 class CardFlowMetrics
 {
@@ -31,6 +35,7 @@ class CardFlowMetrics
         $createdAt = null;
         $firstStartedAt = null;
         $completedAt = null;
+        $movedAt = null;
 
         foreach ($transitions as $transition) {
             if ($transition->reason === TransitionReason::Created) {
@@ -41,6 +46,10 @@ class CardFlowMetrics
                 $firstStartedAt = $transition->moved_at;
             }
 
+            if ($transition->reason === TransitionReason::Manual || $transition->reason === TransitionReason::ColumnSplit) {
+                $movedAt = $transition->moved_at;
+            }
+
             if ($transition->to_category !== ColumnCategory::Done) {
                 $completedAt = null;
             } elseif ($transition->from_category !== ColumnCategory::Done) {
@@ -48,6 +57,6 @@ class CardFlowMetrics
             }
         }
 
-        return new CardFlowTimes($createdAt, $firstStartedAt, $completedAt);
+        return new CardFlowTimes($createdAt, $firstStartedAt, $completedAt, $movedAt);
     }
 }

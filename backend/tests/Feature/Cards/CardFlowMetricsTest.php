@@ -191,3 +191,18 @@ it('card_transitions — append-only в базе', function (string $sql) {
     'DELETE' => ['DELETE FROM card_transitions'],
     'TRUNCATE' => ['TRUNCATE card_transitions'],
 ]);
+
+it('момент перемещения — последний переход в другое место, без смены типа колонки', function () {
+    at($this, '0 hours');
+    $card = makeCard($this->board, 'To Do', $this->user);
+    expect($this->metrics->forCard($card)->movedAt)->toBeNull();
+
+    at($this, '+2 hours');
+    moveCard($card, 'In Progress', $this->user);
+    expect($this->metrics->forCard($card)->movedAt?->equalTo($this->start->copy()->addHours(2)))->toBeTrue();
+
+    // Смена типа колонки пишет переход, но место карточки прежнее
+    at($this, '+5 hours');
+    app(ChangeColumnCategoryAction::class)->handle($this->user, columnNamed($this->board, 'In Progress'), ColumnCategory::Done);
+    expect($this->metrics->forCard($card)->movedAt?->equalTo($this->start->copy()->addHours(2)))->toBeTrue();
+});

@@ -41,6 +41,7 @@ it('создаёт карточку с номером пространства �
         ->assertJsonPath('data.column.category', 'queue')
         ->assertJsonPath('data.created_by.id', $this->editor->id)
         ->assertJsonPath('data.first_started_at', null)
+        ->assertJsonPath('data.moved_at', null)
         ->assertJsonPath('data.metrics', ['lead_time_seconds' => null, 'cycle_time_seconds' => null]);
 
     createCardRequest($this)->assertJsonPath('data.key', 'DEV-2');
@@ -250,6 +251,10 @@ it('если колонку архивировали, карточка восс�
 it('история перемещений карточки — по порядку, с текущими названиями', function () {
     $card = makeCard($this->board, 'To Do', $this->editor);
     moveCard($card, 'In Progress', $this->editor);
+
+    $moved = CardTransition::query()->where('reason', 'manual')->sole()->moved_at;
+    $this->actingAs($this->editor)->getJson('/api/v1/cards/DEV-1')
+        ->assertOk()->assertJsonPath('data.moved_at', $moved->format('Y-m-d\TH:i:s.u\Z'));
 
     $this->actingAs($this->editor)->getJson('/api/v1/cards/DEV-1/transitions')
         ->assertOk()
