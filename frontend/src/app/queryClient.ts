@@ -41,6 +41,9 @@ const WITHOUT_TAB_USER = new Set(['/auth/me', '/auth/logout'])
  */
 export function installSession(queryClient: QueryClient) {
   const request = api.interceptors.request.use((config) => {
+    // Повтор после 419 (shared/api/client.ts) — от имени того же пользователя, что и исходный запрос: пока обновлялся
+    // токен, в кэше мог появиться другой (вход в соседней вкладке), и действие ушло бы от его имени
+    if (config.csrfRetried) return config
     const user = queryClient.getQueryData<User | null>(currentUserKey)
     if (user && !WITHOUT_TAB_USER.has(config.url ?? '')) {
       config.headers.set('X-Selen-User', user.id)

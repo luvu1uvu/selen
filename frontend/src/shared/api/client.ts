@@ -54,7 +54,7 @@ api.interceptors.response.use(undefined, async (error: unknown) => {
   } catch {
     throw error
   }
-  // Заголовок с прежним токеном — долой: axios поставит новый из cookie
-  config.headers.delete('X-XSRF-TOKEN')
+  // Новый токен axios возьмёт из cookie сам (X-XSRF-TOKEN ставится в копии конфига, в config его нет); пользователь
+  // вкладки (X-Selen-User) — тот же, что у исходного запроса (installSession)
   return api.request({ ...config, csrfRetried: true })
 })
