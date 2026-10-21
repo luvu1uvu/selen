@@ -150,12 +150,18 @@ describe('Доска', () => {
     renderApp('/boards/board-1')
 
     const [own, foreign] = board.cards
-    expect(
-      await screen.findByRole('button', { name: `Открыть ${own.key}: ${own.title}` }),
-    ).toHaveAttribute('aria-disabled', 'false')
-    expect(
-      screen.getByRole('button', { name: `Открыть ${foreign.key}: ${foreign.title}` }),
-    ).toHaveAttribute('aria-disabled', 'true')
+    const ownTile = await screen.findByRole('button', { name: `Открыть ${own.key}: ${own.title}` })
+    expect(ownTile).toHaveAttribute('aria-roledescription')
+    expect(ownTile).toHaveAccessibleDescription(/пробел/)
+    // Чужую карточку перенести нельзя, но открыть можно: для диктора — обычная кнопка, без «недоступно» и без
+    // инструкции переноса (LATER-76)
+    const foreignTile = screen.getByRole('button', {
+      name: `Открыть ${foreign.key}: ${foreign.title}`,
+    })
+    expect(foreignTile).not.toHaveAttribute('aria-disabled')
+    expect(foreignTile).not.toHaveAttribute('aria-roledescription')
+    expect(foreignTile).not.toHaveAccessibleDescription()
+    expect(foreignTile).toHaveAttribute('tabindex', '0')
   })
 
   it('комментатор только смотрит: нет добавления карточек и меню структуры', async () => {
@@ -164,7 +170,10 @@ describe('Доска', () => {
     )
     renderApp('/boards/board-1')
 
-    expect(await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' })).toBeInTheDocument()
+    const tile = await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' })
+    // Переносить нельзя — карточка не «недоступна» для диктора, она открывается (LATER-76)
+    expect(tile).not.toHaveAttribute('aria-disabled')
+    expect(tile).not.toHaveAccessibleDescription()
     expect(screen.queryByRole('button', { name: /Добавить карточку/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Действия с колонкой/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Действия с доской «/ })).not.toBeInTheDocument()

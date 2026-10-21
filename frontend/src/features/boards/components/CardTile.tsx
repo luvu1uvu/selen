@@ -146,7 +146,9 @@ function Counter({
 
 /**
  * Карточка, которую можно перетаскивать. Клик или Enter открывает её (Enter не занят под
- * перетаскивание с клавиатуры — там используется пробел).
+ * перетаскивание с клавиатуры — там используется пробел). Без права переноса — просто кнопка, которая открывает
+ * карточку: атрибуты dnd-kit (aria-disabled, инструкция переноса для диктора) ей не нужны — диктор объявлял её
+ * «недоступной», хотя она открывается (LATER-76).
  */
 export const SortableCardTile = memo(function SortableCardTile({
   card,
@@ -169,7 +171,7 @@ export const SortableCardTile = memo(function SortableCardTile({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      {...attributes}
+      {...(draggable ? attributes : undefined)}
       {...listeners}
       role="button"
       tabIndex={0}
