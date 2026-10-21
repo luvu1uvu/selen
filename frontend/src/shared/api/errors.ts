@@ -1,5 +1,6 @@
 import { isAxiosError } from 'axios'
 import type { FieldValues, Path, UseFormSetError } from 'react-hook-form'
+import i18n from '@/shared/i18n'
 
 export interface ApiErrorBody {
   message?: string
@@ -32,9 +33,13 @@ export function applyValidationErrors<T extends FieldValues>(
   return true
 }
 
-/** Сообщение об ошибке для показа пользователю: текст с сервера или общий ключ i18n. */
+/**
+ * Сообщение об ошибке для показа пользователю: текст с сервера или общий ключ i18n. 419 (CSRF-токен не подошёл и после
+ * обновления, LATER-78) — не английское «CSRF token mismatch.» с сервера, а что сделать.
+ */
 export function getErrorMessage(error: unknown, fallback: string): string {
   const status = getErrorStatus(error)
+  if (status === 419) return i18n.t('errors.sessionExpired')
   const body = getErrorBody(error)
   if (status && status < 500 && body?.message) return body.message
   return fallback
