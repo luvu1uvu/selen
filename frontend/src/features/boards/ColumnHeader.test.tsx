@@ -46,6 +46,27 @@ describe('Заголовок колонки', () => {
     expect(await screen.findByRole('tooltip', { name: 'Готово' })).toBeInTheDocument()
   })
 
+  it('«⋯» колонки и дорожки — подсказка по наведению и по фокусу, название в «ёлочках» (LATER-75)', async () => {
+    const board = makeBoardDetail()
+    board.lanes = [
+      { id: 'main', name: 'Основная', position: 'a0' },
+      { id: 'urgent', name: 'Срочные', position: 'a1' },
+    ]
+    server.use(http.get('*/api/v1/boards/board-1', () => HttpResponse.json({ data: board })))
+    renderApp('/boards/board-1')
+    const user = userEvent.setup()
+
+    const column = await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' })
+    expect(column).not.toHaveAttribute('title')
+    await user.hover(column)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Действия с колонкой «To Do»')
+    await user.unhover(column)
+
+    const lane = screen.getByRole('button', { name: 'Действия с дорожкой «Основная»' })
+    act(() => lane.focus())
+    expect(await screen.findByRole('tooltip', { name: 'Действия с дорожкой «Основная»' })).toBeInTheDocument()
+  })
+
   it('«+» в заголовке — подсказка Tooltip, а не title', async () => {
     renderApp('/boards/board-1')
     const add = await screen.findByRole('button', { name: 'Добавить карточку в начало To Do' })

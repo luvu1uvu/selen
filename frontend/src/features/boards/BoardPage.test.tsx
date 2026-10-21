@@ -20,7 +20,7 @@ describe('Доска', () => {
     expect(await screen.findByRole('heading', { name: 'Продукт' })).toBeInTheDocument()
     for (const name of ['To Do', 'In Progress', 'Dev', 'QA', 'Done']) {
       expect(
-        screen.getByRole('button', { name: `Действия с колонкой ${name}` }),
+        screen.getByRole('button', { name: `Действия с колонкой «${name}»` }),
       ).toBeInTheDocument()
     }
     expect(screen.getByRole('button', { name: 'Открыть DEV-2: Вторая' })).toHaveTextContent('Баг')
@@ -65,7 +65,7 @@ describe('Доска', () => {
     renderApp('/boards/board-1')
 
     expect(
-      await screen.findByRole('button', { name: 'Действия с дорожкой Срочные' }),
+      await screen.findByRole('button', { name: 'Действия с дорожкой «Срочные»' }),
     ).toBeInTheDocument()
     expect(screen.getByText(/нет колонки типа «Готово»/)).toBeInTheDocument()
   })
@@ -182,7 +182,7 @@ describe('Доска', () => {
     renderApp('/boards/board-1')
 
     await userEvent.click(
-      await screen.findByRole('button', { name: 'Действия с колонкой In Progress' }),
+      await screen.findByRole('button', { name: 'Действия с колонкой «In Progress»' }),
     )
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Сменить тип' }))
     await userEvent.selectOptions(screen.getByLabelText('Тип'), 'done')
@@ -204,7 +204,7 @@ describe('Доска', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой To Do' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Добавить подколонку' }))
     await userEvent.type(screen.getByLabelText('Название'), 'Анализ')
     await userEvent.click(screen.getByRole('button', { name: 'Добавить подколонку' }))
@@ -237,7 +237,7 @@ describe('Доска', () => {
     )
     renderApp('/boards/board-1')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой To Do' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Действия с колонкой «To Do»' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Архивировать' }))
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Архивировать' }),

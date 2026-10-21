@@ -127,7 +127,7 @@ describe('Доска: дорожки', () => {
 
     // Меню администратора на строке (у доски manage) — только меню
     await userEvent.click(
-      within(lane('Срочные')).getByRole('button', { name: 'Действия с дорожкой Срочные' }),
+      within(lane('Срочные')).getByRole('button', { name: 'Действия с дорожкой «Срочные»' }),
     )
     await userEvent.keyboard('{Escape}')
     expect(requests).toEqual([])

@@ -1,20 +1,18 @@
-import { useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
+import { useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Archive, Columns3, FileText, Info, MoreHorizontal, Pencil, Rows3 } from 'lucide-react'
+import { Archive, Columns3, FileText, Info, Pencil, Rows3 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { ActionsMenu, type OpensDialog } from '@/shared/components/ActionsMenu'
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary'
 import { TruncatedText } from '@/shared/components/TruncatedText'
 import { cn } from '@/shared/lib/utils'
 import type { BoardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import {
-  DropdownMenu,
   DropdownMenuCheckboxItem,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
@@ -37,52 +35,19 @@ export interface BoardHeaderSlots {
   menuItems?: (opensDialog: OpensDialog) => ReactNode
 }
 
-/** Обёртка обработчика пункта меню, который открывает окно (см. BoardMenu). */
-export type OpensDialog = (open: () => void) => () => void
-
-/**
- * Меню «⋯» в шапке доски. Пункт, который открывает окно, открывает его после того, как меню вернуло фокус на «⋯»: окно
- * забирает фокус (подсказка «⋯» закрывается — Esc закрывает окно, а не её), а закрытое окно возвращает фокус на «⋯»
- * (useRestoreFocus; раньше фокус уходил в body — U-6 UX-ревью PR 3).
- */
+/** Меню «⋯» в шапке доски: на странице пространства досок несколько — у каждого «⋯» своё имя (с названием доски). */
 export function BoardMenuShell({
   name,
   children,
 }: {
-  /** Название доски: на странице пространства досок несколько — у каждого «⋯» своё имя. */
   name: string
   children: (opensDialog: OpensDialog) => ReactNode
 }) {
   const { t } = useTranslation('boards')
-  const label = t('board.menu', { name })
-  const pending = useRef<(() => void) | null>(null)
-  const dialog: OpensDialog = (open) => () => {
-    pending.current = open
-  }
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7 shrink-0" aria-label={label}>
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        align="end"
-        onCloseAutoFocus={() => {
-          const open = pending.current
-          pending.current = null
-          // Фокус сейчас вернётся на «⋯» — окно откроется кадром позже
-          if (open) requestAnimationFrame(open)
-        }}
-      >
-        {children(dialog)}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <ActionsMenu label={t('board.menu', { name })} className="size-7">
+      {children}
+    </ActionsMenu>
   )
 }
 

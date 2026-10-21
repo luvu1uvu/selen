@@ -64,7 +64,7 @@ test('ТК-L55.8. Полоса дорожки закреплена при про
   const body = (await page.locator('[data-board-body]').boundingBox())!
   const row = laneRow(page, 'Основная')
   const name = (await row.getByText('Основная', { exact: true }).boundingBox())!
-  const menu = (await row.getByRole('button', { name: 'Действия с дорожкой Основная' }).boundingBox())!
+  const menu = (await row.getByRole('button', { name: 'Действия с дорожкой «Основная»' }).boundingBox())!
   const chevron = (await toggle(page, 'Основная', 'Свернуть').boundingBox())!
   const count = (await row.locator('[aria-hidden="true"]').filter({ hasText: /^\d+$/ }).boundingBox())!
   expect(name.x - body.x).toBeGreaterThanOrEqual(0)
@@ -95,7 +95,7 @@ test('ТК-L55.8. Полоса дорожки закреплена при про
   await expect.poll(async () => Math.abs((await bandBox(page, 'Основная')).y - line)).toBeLessThanOrEqual(1)
 
   // 4. «⋯» на закреплённой полосе — меню дорожки открывается; Esc — закрывается
-  await row.getByRole('button', { name: 'Действия с дорожкой Основная' }).click()
+  await row.getByRole('button', { name: 'Действия с дорожкой «Основная»' }).click()
   await expect(page.getByRole('menuitem', { name: 'Переименовать' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('menu')).toBeHidden()

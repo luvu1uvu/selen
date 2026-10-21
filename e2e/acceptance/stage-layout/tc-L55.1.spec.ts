@@ -35,7 +35,7 @@ test('ТК-L55.1. Дорожки — строки внутри доски @tc-L5
     const row = laneRow(page, name)
     // Слева — название и «⋯», справа — число карточек дорожки и стрелка ˄ (в видимой части доски)
     const title = (await row.getByText(name, { exact: true }).boundingBox())!
-    const menu = (await row.getByRole('button', { name: `Действия с дорожкой ${name}` }).boundingBox())!
+    const menu = (await row.getByRole('button', { name: `Действия с дорожкой «${name}»` }).boundingBox())!
     const chevron = toggle(page, name, 'Свернуть')
     await expect(chevron).toHaveAttribute('aria-expanded', 'true')
     const chevronBox = (await chevron.boundingBox())!

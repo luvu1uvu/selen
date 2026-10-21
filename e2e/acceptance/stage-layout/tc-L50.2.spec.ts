@@ -39,7 +39,7 @@ test('ТК-L50.2. Шапка доски и заголовки колонок в�
   await expectOnTop(todo.getByText(/^\d+$/))
   await expectOnTop(todo.getByRole('img', { name: 'Очередь', exact: true }))
   await expectOnTop(add)
-  await expectOnTop(page.getByRole('button', { name: 'Действия с колонкой To Do' }))
+  await expectOnTop(page.getByRole('button', { name: 'Действия с колонкой «To Do»' }))
 
   // Карточки — под заголовками: там, где колонка To Do уходит под строку заголовков, сверху — заголовки
   const underHeader = await page.evaluate(() => {

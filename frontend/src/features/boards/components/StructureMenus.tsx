@@ -1,18 +1,13 @@
 import { useTranslation } from 'react-i18next'
-import { MoreHorizontal, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { TruncatedText } from '@/shared/components/TruncatedText'
 import { cn } from '@/shared/lib/utils'
 import type { BoardColumn, Lane } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { moveColumn, moveLane } from '../api'
 import { useStructureMutation } from '../queries'
@@ -97,56 +92,52 @@ export function ColumnHeader({
           </Tooltip>
         )}
         {canManage && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                aria-label={t('column.menu', { name: column.name })}
-              >
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => onAction({ kind: 'renameColumn', column })}>
-                {t('column.rename')}
-              </DropdownMenuItem>
-              {isTopLevel && (
-                <>
-                  <DropdownMenuItem
-                    onSelect={() => onAction({ kind: 'addSubcolumn', parent: column })}
-                  >
-                    {t('column.addSubcolumn')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => onAction({ kind: 'changeType', column, cardsCount: count })}
-                  >
-                    {t('column.changeType')}
-                  </DropdownMenuItem>
-                </>
-              )}
-              <DropdownMenuItem
-                disabled={!previous}
-                onSelect={() => previous && move({ id: column.id, before_id: previous.id })}
-              >
-                {t('column.moveLeft')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!next}
-                onSelect={() => next && move({ id: column.id, after_id: next.id })}
-              >
-                {t('column.moveRight')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => onAction({ kind: 'archiveColumn', column })}
-              >
-                {t('column.archive')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ActionsMenu label={t('column.menu', { name: column.name })} className="size-7">
+            {(dialog) => (
+              <>
+                <DropdownMenuItem
+                  onSelect={dialog(() => onAction({ kind: 'renameColumn', column }))}
+                >
+                  {t('column.rename')}
+                </DropdownMenuItem>
+                {isTopLevel && (
+                  <>
+                    <DropdownMenuItem
+                      onSelect={dialog(() => onAction({ kind: 'addSubcolumn', parent: column }))}
+                    >
+                      {t('column.addSubcolumn')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={dialog(() =>
+                        onAction({ kind: 'changeType', column, cardsCount: count }),
+                      )}
+                    >
+                      {t('column.changeType')}
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuItem
+                  disabled={!previous}
+                  onSelect={() => previous && move({ id: column.id, before_id: previous.id })}
+                >
+                  {t('column.moveLeft')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!next}
+                  onSelect={() => next && move({ id: column.id, after_id: next.id })}
+                >
+                  {t('column.moveRight')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={dialog(() => onAction({ kind: 'archiveColumn', column }))}
+                >
+                  {t('column.archive')}
+                </DropdownMenuItem>
+              </>
+            )}
+          </ActionsMenu>
         )}
       </div>
     </div>
@@ -195,41 +186,33 @@ export function LaneMenu({
   const next = lanes[index + 1]
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 shrink-0"
-          aria-label={t('lane.menu', { name: lane.name })}
-        >
-          <MoreHorizontal />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuItem onSelect={() => onAction({ kind: 'renameLane', lane })}>
-          {t('lane.rename')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={!previous}
-          onSelect={() => previous && move({ id: lane.id, before_id: previous.id })}
-        >
-          {t('lane.moveUp')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={!next}
-          onSelect={() => next && move({ id: lane.id, after_id: next.id })}
-        >
-          {t('lane.moveDown')}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onSelect={() => onAction({ kind: 'archiveLane', lane })}
-        >
-          {t('lane.archive')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <ActionsMenu label={t('lane.menu', { name: lane.name })} align="start" className="size-7">
+      {(dialog) => (
+        <>
+          <DropdownMenuItem onSelect={dialog(() => onAction({ kind: 'renameLane', lane }))}>
+            {t('lane.rename')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!previous}
+            onSelect={() => previous && move({ id: lane.id, before_id: previous.id })}
+          >
+            {t('lane.moveUp')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!next}
+            onSelect={() => next && move({ id: lane.id, after_id: next.id })}
+          >
+            {t('lane.moveDown')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={dialog(() => onAction({ kind: 'archiveLane', lane }))}
+          >
+            {t('lane.archive')}
+          </DropdownMenuItem>
+        </>
+      )}
+    </ActionsMenu>
   )
 }
