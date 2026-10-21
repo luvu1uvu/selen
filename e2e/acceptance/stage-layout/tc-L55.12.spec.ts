@@ -7,8 +7,10 @@ import { block, canvas, DUTY, INFRA, layout, loaded, PRODUCT, rect, scrollToBoar
  * ТК-L55.12 (LATER-55, шаг 3): все доски пространства — рядами на одной странице. Сверху — панель пространства
  * (название, ключ, ⓘ, вкладки, «Архив досок», «Создать доску», «Изменить»), она и верхняя полоса с именем остаются на
  * месте при прокрутке; под панелью на сером холсте — блоки досок: [«Дежурства», «Широкая доска»], [«Продукт»],
- * [«Инфраструктура»], между ними — фон холста; у каждой доски своя шапка (⠿, название, «⋯», ˄) и строка заголовков
- * колонок. «Разработка» демо-данных → RACC «Приёмка рядов» (E2eSeeder), Анна → e2e-admin.
+ * [«Инфраструктура»]; доски не сжимаются (решение PM 21.10, вариант Б) — «Широкая доска» шире экрана и стоит строкой
+ * ниже «Дежурства», в том же ряду; между блоками и справа от «Дежурства» — фон холста; у каждой доски своя шапка (⠿,
+ * название, «⋯», ˄) и строка заголовков колонок. «Разработка» демо-данных → RACC «Приёмка рядов» (E2eSeeder), Анна →
+ * e2e-admin.
  */
 test.use({ storageState: authFile('e2e-admin@selen.test'), viewport: LAPTOP })
 
@@ -31,7 +33,8 @@ test('ТК-L55.12. Все доски пространства — рядами �
   for (const button of ['Архив досок', 'Создать доску', 'Изменить'])
     await expect(page.getByRole('button', { name: button, exact: true })).toBeVisible()
 
-  // Блоки досок рядами: в первом ряду «Дежурства» и справа «Широкая доска», ниже «Продукт», ещё ниже «Инфраструктура»
+  // Блоки досок рядами: «Дежурства», под ней «Широкая доска» (тот же ряд, в строку не помещается), ниже «Продукт», ещё
+  // ниже «Инфраструктура» — все от левого края
   await expect.poll(() => layout(page)).toEqual(START_LAYOUT)
   await loaded(page, DUTY)
   await loaded(page, WIDE)
@@ -39,13 +42,12 @@ test('ТК-L55.12. Все доски пространства — рядами �
   const wide = await rect(page, WIDE)
   const product = await rect(page, PRODUCT)
   const infra = await rect(page, INFRA)
-  expect(Math.abs(duty.top - wide.top)).toBeLessThanOrEqual(1)
-  expect(wide.left).toBeGreaterThan(duty.right)
-  expect(product.top).toBeGreaterThan(Math.max(duty.bottom, wide.bottom))
+  expect(wide.top).toBeGreaterThan(duty.bottom)
+  expect(product.top).toBeGreaterThan(wide.bottom)
   expect(infra.top).toBeGreaterThan(product.bottom)
-  for (const box of [product, infra]) expect(Math.abs(box.left - duty.left)).toBeLessThanOrEqual(1)
+  for (const box of [wide, product, infra]) expect(Math.abs(box.left - duty.left)).toBeLessThanOrEqual(1)
 
-  // Между блоками — серый фон холста (не блок доски), и он отличается от фона блока
+  // Справа от «Дежурства» и между блоками — серый фон холста (не блок доски), и он отличается от фона блока
   const gaps = await page.evaluate(
     (points) =>
       points.map(({ x, y }) => {
@@ -53,8 +55,8 @@ test('ТК-L55.12. Все доски пространства — рядами �
         return { inBlock: hit.closest('section[data-board-block]') !== null, inCanvas: hit.closest('[data-board-canvas]') !== null }
       }),
     [
-      { x: (duty.right + wide.left) / 2, y: duty.top + 20 },
-      { x: duty.left + 40, y: (Math.max(duty.bottom, wide.bottom) + product.top) / 2 },
+      { x: duty.right + 40, y: duty.top + 20 },
+      { x: duty.left + 40, y: (duty.bottom + wide.top) / 2 },
     ],
   )
   expect(gaps).toEqual([

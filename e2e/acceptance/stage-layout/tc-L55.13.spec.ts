@@ -4,15 +4,12 @@ import { LAPTOP, wheelOver } from './helpers'
 import { block, canvas, DUTY, loaded, openSpace, overflowX, PRODUCT, rect, scrollToBoard, WIDE } from './rows'
 
 /**
- * ТК-L55.13 (LATER-55, дополнение PM 19.10; ADR-0019 «Изменения» 20.10 — ширины в ряду сеткой): узкая доска в ряду
- * показана целиком, по своим колонкам, без прокрутки вбок; широкая занимает остаток ряда до правого края и
- * прокручивается вбок внутри своего блока (соседняя доска, панель и дерево на месте, заголовки над своими колонками);
- * доски ряда разной высоты — под короткой фон холста; доска одна в ряду и шире экрана («Продукт») — во всю ширину,
- * прокручивается вбок внутри себя, полоса прокрутки вбок — у низа окна. Окно ноутбука 1440×900, дерево открыто.
- * «Разработка» демо-данных → RACC «Приёмка рядов» (E2eSeeder), Анна → e2e-admin.
- *
- * Провал LATER-79: на 1440 px сетка ряда делит место поровну (по 542 px), а «Дежурствам» нужно 578 px — вторая
- * колонка обрезана на 36 px. Проверка «узкая целиком» — мягкая (expect.soft): остальные шаги проверяются и при провале.
+ * ТК-L55.13 (LATER-55, дополнение PM 19.10; решение PM 21.10, вариант Б — доски в ряду не сжимаются): каждая доска —
+ * по своим колонкам: «Дежурства» целиком, без прокрутки вбок, справа — фон холста; «Широкая доска» шире экрана — в строку
+ * к «Дежурства» не помещается, стоит под ней во всю ширину холста и прокручивается вбок внутри своего блока («Дежурства»,
+ * панель и дерево на месте, заголовки над своими колонками); «Продукт» (тоже шире экрана) — так же, полоса прокрутки
+ * вбок — у низа окна. Окно ноутбука 1440×900, дерево открыто. «Разработка» демо-данных → RACC «Приёмка рядов»
+ * (E2eSeeder), Анна → e2e-admin. Регрессия LATER-79 (узкая доска обрезана) — проверка «Дежурства целиком».
  */
 test.use({ storageState: authFile('e2e-admin@selen.test'), viewport: LAPTOP })
 
@@ -29,7 +26,7 @@ function headerOffsets(page: Page, board: string) {
   }, board)
 }
 
-test('ТК-L55.13. Узкая доска — по своим колонкам, широкая прокручивается вбок внутри блока @tc-L55.13', async ({ page }) => {
+test('ТК-L55.13. Каждая доска — по своим колонкам; шире экрана — во всю ширину с прокруткой внутри @tc-L55.13', async ({ page }) => {
   // 1. Открыть пространство, посмотреть на первый ряд
   await openSpace(page, 'RACC', 'Приёмка рядов')
   await loaded(page, DUTY)
@@ -40,14 +37,19 @@ test('ТК-L55.13. Узкая доска — по своим колонкам, �
 
   // «Дежурства» — целиком: обе колонки «Сейчас» и «Готово» внутри блока, без прокрутки вбок (LATER-79)
   const dutyBody = block(page, DUTY).locator('[data-board-body]')
-  expect.soft(await overflowX(dutyBody), 'LATER-79: «Дежурства» прокручивается вбок — узкая доска обрезана').toBeLessThanOrEqual(1)
+  expect(await overflowX(dutyBody), '«Дежурства» прокручивается вбок — доска сжата').toBeLessThanOrEqual(1)
   for (const column of ['Сейчас', 'Готово']) {
     const box = (await block(page, DUTY).getByRole('group', { name: column, exact: true }).boundingBox())!
-    expect.soft(box.x + box.width, `LATER-79: колонка «${column}» видна целиком`).toBeLessThanOrEqual(duty.right)
+    expect(box.x + box.width, `колонка «${column}» видна целиком`).toBeLessThanOrEqual(duty.right)
   }
-  // «Широкая доска» — справа в том же ряду и до правого края холста (с его отступом)
-  expect(Math.abs(duty.top - wide.top)).toBeLessThanOrEqual(1)
-  expect(Math.round(wide.left - duty.right)).toBe(12)
+  // Справа от «Дежурства» — фон холста: «Широкая доска» рядом не помещается и стоит под ней во всю ширину холста
+  const inBlock = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)!.closest('section[data-board-block]') !== null,
+    { x: duty.right + 40, y: duty.top + 20 },
+  )
+  expect(inBlock).toBe(false)
+  expect(Math.round(wide.top - duty.bottom)).toBe(12)
+  expect(Math.abs(wide.left - duty.left)).toBeLessThanOrEqual(1)
   expect(space.right - wide.right).toBeLessThanOrEqual(24)
 
   // 2. Прокрутить «Широкую доску» вбок до конца (тачпадом / Shift+колесом над ней)
@@ -82,25 +84,12 @@ test('ТК-L55.13. Узкая доска — по своим колонкам, �
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(LAPTOP.width)
 
-  // Доски ряда разной высоты: под более короткой — фон холста, а не белая пустая область
-  const now = { duty: await rect(page, DUTY), wide: await rect(page, WIDE) }
-  expect(Math.abs(now.duty.height - now.wide.height)).toBeGreaterThan(100)
-  const short = now.duty.bottom < now.wide.bottom ? now.duty : now.wide
-  const below = await page.evaluate(
-    ({ x, y }) => {
-      const hit = document.elementFromPoint(x, y)!
-      return { inBlock: hit.closest('section[data-board-block]') !== null, row: hit.closest('[data-board-row]') !== null }
-    },
-    { x: short.left + 40, y: short.bottom + 20 },
-  )
-  expect(below).toEqual({ inBlock: false, row: true })
-
-  // 3. Прокрутить страницу до «Продукта» (один в ряду) и прокрутить его вбок
+  // 3. Прокрутить страницу до «Продукта» (шире экрана) и прокрутить его вбок
   await scrollToBoard(page, PRODUCT, -300)
   await loaded(page, PRODUCT)
   await scrollToBoard(page, PRODUCT, -300)
   const product = await rect(page, PRODUCT)
-  // Во всю ширину холста (как первый ряд целиком), прокручивается вбок внутри себя
+  // Во всю ширину холста (как «Широкая доска»), прокручивается вбок внутри себя
   expect(Math.abs(product.left - duty.left)).toBeLessThanOrEqual(1)
   expect(Math.abs(product.right - wide.right)).toBeLessThanOrEqual(1)
   const productBody = block(page, PRODUCT).locator('[data-board-body]')

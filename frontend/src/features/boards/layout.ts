@@ -35,99 +35,17 @@ const COLUMN_GAP_PX = 8
 /** Отступы блока слева и справа (px-3) и его граница (1 px с каждой стороны). */
 const BLOCK_EDGES_PX = 2 * 12 + 2
 /** Блок доски не уже 20rem: шапка с названием и кнопками не ломается и при одной колонке (ADR-0019). */
-export const BOARD_MIN_WIDTH_PX = 320
+const BOARD_MIN_WIDTH_PX = 320
 
 /**
  * Ширина доски по её колонкам, без загрузки карточек: колонки, зазоры между ними, отступы и граница блока — ровно
- * как у BoardView. Не уже минимальной ширины блока. Нужна заглушке до загрузки доски и ряду: широкая доска
- * сжимается до остатка ряда, узкая — нет.
+ * как у BoardView. Не уже минимальной ширины блока. Это ширина места доски в ряду (не шире холста) — и заглушки до
+ * загрузки, и загруженной доски: доски в ряду не сжимаются (решение PM 21.10, вариант Б).
  */
 export function boardNaturalWidth(leafColumns: number): number {
   if (leafColumns <= 0) return BOARD_MIN_WIDTH_PX
   const columns = leafColumns * COLUMN_PX + (leafColumns - 1) * COLUMN_GAP_PX
   return Math.max(columns + BLOCK_EDGES_PX, BOARD_MIN_WIDTH_PX)
-}
-
-/** Зазор между досками ряда — gap-3 холста. */
-const BOARD_GAP_PX = 12
-
-/**
- * Ширины развёрнутых досок ряда в пределах `available` px (ADR-0019; LATER-79): узкие — по своим колонкам, широкие делят
- * остаток поровну и прокручиваются вбок внутри блока. Доски идут от узкой к широкой: доска получает свою ширину, если
- * остальным остаётся хотя бы их минимум (20rem или их ширина, если она меньше); дальше оставшиеся делят место поровну
- * (доска уже своей доли — своя ширина, её излишек — остальным). Раньше сетка раздавала место поровну всем сразу, и
- * узкая доска рядом с широкой не получала своей ширины, если та больше половины ряда (LATER-79).
- */
-export function allocateWidths(naturals: number[], available: number): number[] {
-  const result = naturals.map(() => 0)
-  const order = naturals.map((_, i) => i).sort((a, b) => naturals[a] - naturals[b])
-  let remaining = available
-  let k = 0
-  for (; k < order.length; k++) {
-    const reserve = order
-      .slice(k + 1)
-      .reduce((sum, j) => sum + Math.min(naturals[j], BOARD_MIN_WIDTH_PX), 0)
-    if (naturals[order[k]] + reserve > remaining) break
-    result[order[k]] = naturals[order[k]]
-    remaining -= naturals[order[k]]
-  }
-  for (; k < order.length; k++) {
-    const share = Math.max(Math.floor(remaining / (order.length - k)), 0)
-    result[order[k]] = Math.min(naturals[order[k]], share)
-    remaining -= result[order[k]]
-  }
-  return result
-}
-
-/**
- * Ширины развёрнутых досок ряда (px) при ширине ряда `rowWidth` (ADR-0019; LATER-79, LATER-81). Доска не уже минимальной
- * ширины блока (20rem) — шапка с названием и заголовки колонок читаемы: доски, которым не хватает места, переходят на
- * следующую строку того же ряда (flex-wrap, по порядку досок); в каждой строке — allocateWidths: узкие целиком, широкие
- * делят остаток и прокручиваются вбок внутри блока. Вбок ряд не прокручивается — холст по горизонтали не прокручивается
- * никогда, и доски за краем было бы не видно. Свёрнутая доска занимает ширину своей шапки (`collapsedWidths`; ещё не
- * измерена — с запасом в 20rem). Ширина ряда не измерена (0) — пустая карта: доски по своим колонкам, но не шире ряда.
- */
-export function rowWidths(
-  row: BoardRowView,
-  rowWidth: number,
-  collapsedWidths: ReadonlyMap<string, number> = new Map(),
-): Map<string, number> {
-  const result = new Map<string, number>()
-  if (rowWidth <= 0) return result
-  const minimum = (board: SpaceBoard) =>
-    Math.min(
-      board.collapsed
-        ? (collapsedWidths.get(board.id) ?? BOARD_MIN_WIDTH_PX)
-        : Math.min(boardNaturalWidth(board.leaf_columns_count), BOARD_MIN_WIDTH_PX),
-      rowWidth,
-    )
-
-  const lines: SpaceBoard[][] = []
-  let used = 0
-  for (const board of row.boards) {
-    const line = lines.at(-1)
-    const need = minimum(board) + (line?.length ? BOARD_GAP_PX : 0)
-    if (!line || used + need > rowWidth) {
-      lines.push([board])
-      used = minimum(board)
-    } else {
-      line.push(board)
-      used += need
-    }
-  }
-
-  for (const line of lines) {
-    const expanded = line.filter((board) => !board.collapsed)
-    const fixed = line
-      .filter((board) => board.collapsed)
-      .reduce((sum, board) => sum + minimum(board), 0)
-    const widths = allocateWidths(
-      expanded.map((board) => boardNaturalWidth(board.leaf_columns_count)),
-      rowWidth - (line.length - 1) * BOARD_GAP_PX - fixed,
-    )
-    expanded.forEach((board, i) => result.set(board.id, widths[i]))
-  }
-  return result
 }
 
 /** Блок доски не ниже 15rem (ADR-0019). */

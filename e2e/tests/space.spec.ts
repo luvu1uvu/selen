@@ -54,15 +54,18 @@ test.beforeEach(async ({ page }) => {
   await expandAll(page)
 })
 
-test('доски рядами: узкая — по своим колонкам, широкая — остаток ряда и прокрутка вбок внутри блока', async ({ page }) => {
+test('доски не сжимаются: узкая — по своим колонкам, шире холста — строкой ниже во всю ширину, прокрутка вбок внутри', async ({
+  page,
+}) => {
   const narrow = await rect(page, 'Узкая')
   const wide = await rect(page, 'Широкая')
   const tall = await rect(page, 'Высокая')
   const canvas = await canvasRect(page)
 
-  // Один ряд: верх одинаковый, «Широкая» — справа через зазор 12 px и до края холста (с его отступом)
-  expect(Math.abs(narrow.top - wide.top)).toBeLessThanOrEqual(1)
-  expect(Math.round(wide.left - narrow.right)).toBe(12)
+  // Решение PM 21.10, вариант Б: «Широкая» (8 колонок) шире холста — рядом с «Узкой» не помещается и стоит строкой ниже
+  // в том же ряду: через зазор 12 px, от левого края до правого края холста (с его отступом)
+  expect(Math.round(wide.top - narrow.bottom)).toBe(12)
+  expect(Math.abs(wide.left - narrow.left)).toBeLessThanOrEqual(1)
   expect(canvas.right - wide.right).toBeLessThanOrEqual(24)
   // Узкая — ровно по двум колонкам (2 × 272 + зазор 8 + отступы 2 × 12 + граница 2), без прокрутки вбок
   expect(Math.round(narrow.width)).toBe(578)
@@ -73,17 +76,15 @@ test('доски рядами: узкая — по своим колонкам, 
   expect(await overflow('Узкая')).toBeLessThanOrEqual(1)
   expect(await overflow('Широкая')).toBeGreaterThan(100)
 
-  // Высота — по содержимому (ответ PM 20.10): под более короткой доской ряда — фон холста
-  expect(Math.abs(narrow.height - wide.height)).toBeGreaterThan(20)
-  const short = narrow.bottom < wide.bottom ? narrow : wide
-  const below = await page.evaluate(
+  // Справа от «Узкой» — фон холста (ряд), а не блок доски
+  const right = await page.evaluate(
     ({ x, y }) => document.elementFromPoint(x, y)?.hasAttribute('data-board-row') ?? false,
-    { x: short.left + 40, y: short.bottom + 8 },
+    { x: narrow.right + 40, y: narrow.top + 20 },
   )
-  expect(below).toBe(true)
+  expect(right).toBe(true)
 
-  // Следующий ряд — под самой высокой доской ряда, от левого края
-  expect(tall.top).toBeGreaterThan(Math.max(narrow.bottom, wide.bottom))
+  // Следующий ряд — ниже, от левого края
+  expect(tall.top).toBeGreaterThan(wide.bottom)
   expect(Math.abs(tall.left - narrow.left)).toBeLessThanOrEqual(1)
 
   // Доска одна в ряду и помещается — по ширине колонок (4 колонки), справа фон холста
@@ -137,7 +138,10 @@ test('шапка и заголовки колонок каждой доски з
   expect(Math.abs(paddings.last - paddings.title)).toBeLessThanOrEqual(1)
 })
 
-test('свернуть доску: «Название · N карточек», блок по шапке, сосед справа сдвигается; личное и после перезагрузки', async ({ page, browser }) => {
+test('свернуть доску: «Название · N карточек», блок по шапке, свёрнутая встаёт в строку к соседке; личное и после перезагрузки', async ({
+  page,
+  browser,
+}) => {
   const wideBefore = await rect(page, 'Широкая')
   await block(page, 'Узкая').getByRole('button', { name: 'Свернуть доску «Узкая»' }).click()
 
@@ -145,12 +149,20 @@ test('свернуть доску: «Название · N карточек», �
   await expect(collapsed).toContainText('Узкая· 3 карточки')
   await expect(collapsed.locator('[data-board-body]')).toHaveCount(0)
   await expect(collapsed.getByRole('button', { name: 'Развернуть доску «Узкая»' })).toHaveAttribute('aria-expanded', 'false')
-  // Блок — по шапке (уже 20rem), «Широкая» сдвинулась влево к нему
+  // Блок — по шапке (уже 20rem); «Широкая» (шире холста) рядом не помещается — поднялась под неё, ширина та же
   const narrow = await rect(page, 'Узкая')
   expect(narrow.height).toBeLessThanOrEqual(52)
   expect(narrow.width).toBeLessThan(320)
+  await expect.poll(async () => Math.round((await rect(page, 'Широкая')).top - narrow.bottom)).toBe(12)
+  expect((await rect(page, 'Широкая')).width).toBe(wideBefore.width)
+
+  // Свёрнутая «Широкая» — тоже строка; помещается — встаёт справа от «Узкой» через зазор 12 px. Развернуть — обратно ниже
+  await block(page, 'Широкая').getByRole('button', { name: 'Свернуть доску «Широкая»' }).click()
   await expect.poll(async () => Math.round((await rect(page, 'Широкая')).left - narrow.right)).toBe(12)
-  expect((await rect(page, 'Широкая')).left).toBeLessThan(wideBefore.left - 100)
+  expect((await rect(page, 'Широкая')).top).toBe(narrow.top)
+  await block(page, 'Широкая').getByRole('heading', { name: 'Широкая' }).click()
+  await loaded(page, 'Широкая')
+  await expect.poll(async () => Math.round((await rect(page, 'Широкая')).top - narrow.bottom)).toBe(12)
 
   // После перезагрузки — свёрнута, и её карточки не загружаются
   const requests: string[] = []
@@ -275,7 +287,7 @@ test('возврат на «Доски» и вход в пространство
 }) => {
   const narrow = await rect(page, 'Узкая')
   const wide = await rect(page, 'Широкая')
-  expect(wide.top).toBe(narrow.top)
+  expect(wide.top).toBeGreaterThan(narrow.bottom)
   await watchRowShifts(page)
 
   await page.getByRole('tab', { name: 'Участники' }).click()
@@ -295,7 +307,7 @@ test('возврат на «Доски» и вход в пространство
   await loaded(page, 'Широкая')
   await page.waitForTimeout(300)
   expect(await rowShifts(page)).toEqual([])
-  expect((await rect(page, 'Широкая')).top).toBe((await rect(page, 'Узкая')).top)
+  expect(await rect(page, 'Широкая')).toEqual(wide)
 })
 
 test('карточка открывается поверх пространства, закрытие — на то же место', async ({ page }) => {

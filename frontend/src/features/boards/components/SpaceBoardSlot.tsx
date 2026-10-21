@@ -12,7 +12,12 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/shared/lib/utils'
 import type { SpaceBoard } from '@/shared/types/api'
 import type { BoardMoveTarget } from '../api'
-import { boardEstimatedHeight, boardLayoutMoves, type BoardRowView } from '../layout'
+import {
+  boardEstimatedHeight,
+  boardLayoutMoves,
+  boardNaturalWidth,
+  type BoardRowView,
+} from '../layout'
 import { boardKeys, useBoard } from '../queries'
 import { useNearViewport } from '../useNearViewport'
 import { BoardBlock, BoardHeader, BoardMenuShell, type BoardHeaderSlots } from './BoardBlock'
@@ -20,8 +25,6 @@ import { BoardCollapseButton, BoardDragHandle, BoardLayoutMenuItems } from './Bo
 
 export interface SpaceBoardSlotProps {
   board: SpaceBoard
-  /** Ширина развёрнутой доски в ряду (rowWidths); нет — ряд ещё не измерен или доска свёрнута. */
-  width?: number
   rows: BoardRowView[]
   /** Администратор пространства: ручка ⠿, пункты «Переставить» и «Архивировать доску…». */
   canManage: boolean
@@ -40,10 +43,10 @@ export interface SpaceBoardSlotProps {
 }
 
 /**
- * Место доски в ряду на странице пространства (ADR-0019). Ширину места задаёт ряд (rowWidths): узкая доска — по своим
- * колонкам, широкие делят остаток ряда и прокручиваются вбок внутри блока, но не уже 20rem — не поместились, переходят на
- * следующую строку ряда (LATER-81); свёрнутая — по своей шапке «Название · N карточек», соседи справа сдвигаются (ответ
- * PM 19.10). На экране 768 px и уже — во всю ширину.
+ * Место доски в ряду на странице пространства (ADR-0019). Доска не сжимается: место — её ширина по колонкам (известна
+ * без загрузки), не шире холста — только доска шире холста прокручивается вбок внутри блока; не поместилась в строку —
+ * ряд переносит её на следующую (решение PM 21.10, вариант Б). Свёрнутая — по своей шапке «Название · N карточек»,
+ * соседи справа сдвигаются (ответ PM 19.10). На экране 768 px и уже — во всю ширину.
  *
  * Развёрнутая доска загружается, когда подходит к видимой части холста (до этого — заглушка той же ширины);
  * свёрнутая не загружается вовсе — счётчик приходит в списке досок.
@@ -68,7 +71,11 @@ export const SpaceBoardSlot = memo(function SpaceBoardSlot(props: SpaceBoardSlot
         board.collapsed ? 'rows:w-fit' : 'rows:w-(--slot-w)',
         dragging && 'opacity-50',
       )}
-      style={props.width ? ({ '--slot-w': `${props.width}px` } as CSSProperties) : undefined}
+      style={
+        board.collapsed
+          ? undefined
+          : ({ '--slot-w': `${boardNaturalWidth(board.leaf_columns_count)}px` } as CSSProperties)
+      }
       data-board-slot={board.id}
     >
       {board.collapsed ? (

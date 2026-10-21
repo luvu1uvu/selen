@@ -1,16 +1,17 @@
 import { expect, test, type Page } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
-import { block, canvas, DUTY, INFRA, loaded, openSpace, PRODUCT, rect, WIDE } from './rows'
+import { block, DUTY, INFRA, loaded, openSpace, overflowX, PRODUCT, rect, WIDE } from './rows'
 
 /**
- * ТК-L55.24 (LATER-81): в ряду из четырёх досок каждая не уже 20rem (320 px) — название и заголовок первой колонки
- * читаются; не помещаются — переходят на строку ниже внутри того же ряда, порядок слева направо сохраняется. Страница
- * вбок не сдвигается. «Разработка» демо-данных после перестановки (все доски в первом ряду) → RFOUR «Четыре в ряд
- * приёмки» (E2eSeeder), Анна → e2e-admin. Регрессионный тест: до исправления на 1024 px доски сжимались до ~100 px.
+ * ТК-L55.24 (LATER-81; решение PM 21.10, вариант Б): в ряду из четырёх досок ни одна не сжимается — каждая своей ширины
+ * по колонкам (все колонки видны, без прокрутки вбок внутри), кроме доски шире экрана: она во всю ширину холста
+ * и прокручивается вбок внутри блока. Доска, которой не хватает места в строке, — строкой ниже в том же ряду, порядок
+ * сохраняется. Название и заголовок первой колонки читаются; страница вбок не сдвигается. «Разработка» демо-данных
+ * после перестановки (все доски в первом ряду) → RFOUR «Четыре в ряд приёмки» (E2eSeeder), Анна → e2e-admin: «Дежурства»
+ * (2 колонки, 578 px), «Широкая доска» (14), «Продукт» (8), «Инфраструктура» (4 колонки, 1138 px).
  */
 test.use({ storageState: authFile('e2e-admin@selen.test') })
 
-const MIN = 320
 const BOARDS = [DUTY, WIDE, PRODUCT, INFRA]
 const FIRST_COLUMN: Record<string, string> = {
   [DUTY]: 'Сейчас',
@@ -19,10 +20,12 @@ const FIRST_COLUMN: Record<string, string> = {
   [INFRA]: 'To Do',
 }
 
+// Холст: 1024 — 680 px, 1280 — 936, 1920 — 1576. Шире холста: на 1024 и 1280 — все, кроме «Дежурства»; на 1920 —
+// «Широкая доска» и «Продукт». Рядом с соседкой не помещается ни одна — каждая на своей строке
 const WINDOWS = [
-  { width: 1024, height: 768, lines: [[DUTY, WIDE], [PRODUCT, INFRA]] },
-  { width: 1280, height: 800, lines: [[DUTY, WIDE], [PRODUCT, INFRA]] },
-  { width: 1920, height: 1080, lines: [BOARDS] },
+  { width: 1024, height: 768, wider: [WIDE, PRODUCT, INFRA] },
+  { width: 1280, height: 800, wider: [WIDE, PRODUCT, INFRA] },
+  { width: 1920, height: 1080, wider: [WIDE, PRODUCT] },
 ]
 
 /** Строки ряда, как видно на экране: доски с одним верхом — одна строка, слева направо. */
@@ -43,20 +46,25 @@ for (const size of WINDOWS) {
     await openSpace(page, 'RFOUR', 'Четыре в ряд приёмки')
     for (const name of BOARDS) await loaded(page, name)
 
-    // Все четыре — в одном ряду
+    // Все четыре — в одном ряду; не помещаются в строку — ниже, порядок сохраняется
     await expect(page.locator('[data-board-row]')).toHaveCount(1)
     await expect(page.locator('[data-board-row] section[data-board-block]')).toHaveCount(4)
+    expect(await lines(page)).toEqual(BOARDS.map((name) => [name]))
 
-    // Строки внутри ряда: не помещаются — ниже, порядок сохраняется
-    expect(await lines(page)).toEqual(size.lines)
-
-    const space = await canvas(page)
+    const row = (await page.locator('[data-board-row]').boundingBox())!
     for (const name of BOARDS) {
       const box = await rect(page, name)
-      // Не уже 20rem и не шире холста
-      expect(box.width, name).toBeGreaterThanOrEqual(MIN)
-      expect(box.left, name).toBeGreaterThanOrEqual(space.left)
-      expect(box.right, name).toBeLessThanOrEqual(space.right)
+      const body = block(page, name).locator('[data-board-body]')
+      if (size.wider.includes(name)) {
+        // Шире экрана — во всю ширину холста, прокрутка вбок внутри блока
+        expect(Math.abs(box.left - row.x), name).toBeLessThanOrEqual(1)
+        expect(Math.abs(box.width - row.width), name).toBeLessThanOrEqual(1)
+        expect(await overflowX(body), name).toBeGreaterThan(0)
+      } else {
+        // Своей ширины: все колонки видны, прокрутки вбок внутри нет; справа — фон холста
+        expect(await overflowX(body), name).toBeLessThanOrEqual(1)
+        expect(box.width, name).toBeLessThan(row.width - 100)
+      }
       // Название доски видно целиком (без многоточия)
       const heading = block(page, name).getByRole('heading', { name, exact: true })
       await expect(heading).toBeVisible()

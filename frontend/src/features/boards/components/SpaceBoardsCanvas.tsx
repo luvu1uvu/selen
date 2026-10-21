@@ -26,7 +26,7 @@ import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import type { Space, SpaceBoard } from '@/shared/types/api'
 import { setBoardArchived, type BoardMoveTarget } from '../api'
-import { groupRows, layoutDropAt, rowWidths, type LayoutDrop, type LayoutGeometry } from '../layout'
+import { groupRows, layoutDropAt, type LayoutDrop, type LayoutGeometry } from '../layout'
 import { useSpaceBoards, useStructureMutation } from '../queries'
 import { useBoardCollapse } from '../useBoardCollapse'
 import { useMoveBoard } from '../useMoveBoard'
@@ -90,7 +90,6 @@ export function SpaceBoardsCanvas({
 
   const onArchive = useCallback((board: SpaceBoard) => setToArchive(board), [])
   const { activeBoard, drop, dndProps } = useBoardLayoutDnd(contentRef, boards, move)
-  const metrics = useRowMetrics(contentRef, boards)
 
   return (
     <div
@@ -114,39 +113,35 @@ export function SpaceBoardsCanvas({
               {canManage && <CreateBoardDialog spaceKey={space.key} />}
             </div>
           )}
-          {rows.map((row) => {
-            // Ширины досок ряда — rowWidths: не уже 20rem, не поместились — на следующую строку ряда (LATER-81).
-            // На экране 768 px и уже — колонка во всю ширину (брейкпоинт rows — с 769 px, index.css)
-            const widths = rowWidths(row, metrics.width, metrics.collapsed)
-            return (
-              <div
-                key={row.id}
-                className={cn(
-                  'rows:flex-row rows:flex-wrap rows:items-start flex flex-col gap-3',
-                  !revealed.ready && row.id !== eagerRow?.id && 'invisible',
-                )}
-                data-board-row={row.id}
-              >
-                {row.boards.map((board) => (
-                  <SpaceBoardSlot
-                    key={board.id}
-                    board={board}
-                    width={widths.get(board.id)}
-                    rows={rows}
-                    canManage={canManage}
-                    eager={row.id === eagerRow?.id}
-                    onSettled={revealed.onSettled}
-                    moving={moving}
-                    dragging={activeBoard?.id === board.id}
-                    onMove={move}
-                    onToggleCollapsed={setCollapsed}
-                    onArchive={onArchive}
-                    onOpenCard={onOpenCard}
-                  />
-                ))}
-              </div>
-            )
-          })}
+          {rows.map((row) => (
+            // Доски ряда — каждая своей ширины (по колонкам, не шире холста); не поместилась — на следующую строку ряда
+            // (решение PM 21.10, вариант Б). На экране 768 px и уже — колонка во всю ширину (брейкпоинт rows — с 769 px)
+            <div
+              key={row.id}
+              className={cn(
+                'rows:flex-row rows:flex-wrap rows:items-start flex flex-col gap-3',
+                !revealed.ready && row.id !== eagerRow?.id && 'invisible',
+              )}
+              data-board-row={row.id}
+            >
+              {row.boards.map((board) => (
+                <SpaceBoardSlot
+                  key={board.id}
+                  board={board}
+                  rows={rows}
+                  canManage={canManage}
+                  eager={row.id === eagerRow?.id}
+                  onSettled={revealed.onSettled}
+                  moving={moving}
+                  dragging={activeBoard?.id === board.id}
+                  onMove={move}
+                  onToggleCollapsed={setCollapsed}
+                  onArchive={onArchive}
+                  onOpenCard={onOpenCard}
+                />
+              ))}
+            </div>
+          ))}
           {drop && <DropLine drop={drop} />}
         </div>
         <DragOverlay dropAnimation={null}>
@@ -330,65 +325,6 @@ function useBoardLayoutDnd(
       onDragCancel: reset,
     },
   }
-}
-
-interface RowMetrics {
-  /** Ширина под доски ряда (содержимое холста без отступов); 0 — ещё не измерена. */
-  width: number
-  /** Ширины свёрнутых досок — по их шапке. */
-  collapsed: ReadonlyMap<string, number>
-}
-
-/**
- * Ширина рядов и свёрнутых досок — для раздачи ширин развёрнутым доскам (rowWidths; LATER-79, LATER-81). Меряется до
- * первой отрисовки — без ширин доски ряда встают каждая на свою строку, и раскладка перескакивала бы (U-1 UX-ревью
- * LATER-81); дальше — ResizeObserver (окно, дерево, сворачивание). Скрытый холст (другая вкладка) не меряется — ширины
- * остаются прежними, возврат на «Доски» без сдвига.
- */
-function useRowMetrics(
-  contentRef: RefObject<HTMLDivElement | null>,
-  boards: SpaceBoard[] | undefined,
-): RowMetrics {
-  const [metrics, setMetrics] = useState<RowMetrics>({ width: 0, collapsed: new Map() })
-  useLayoutEffect(() => {
-    const content = contentRef.current
-    if (!content) return
-    const measure = () => {
-      if (content.clientWidth === 0) return
-      const style = getComputedStyle(content)
-      const width = Math.floor(
-        content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
-      )
-      // Нужная ширина шапки, а не текущая: если название уже обрезано, текущая закрепила бы обрезку (U-4 UX-ревью PR 3)
-      const collapsed = new Map(
-        [...content.querySelectorAll<HTMLElement>('[data-board-collapsed]')].map((section) => {
-          const title = section.querySelector('h2')
-          const cut = title ? title.scrollWidth - title.clientWidth : 0
-          return [
-            section.dataset.boardBlock!,
-            Math.ceil(section.getBoundingClientRect().width + cut),
-          ]
-        }),
-      )
-      setMetrics((previous) =>
-        previous.width === width &&
-        previous.collapsed.size === collapsed.size &&
-        [...collapsed].every(([id, w]) => previous.collapsed.get(id) === w)
-          ? previous
-          : { width, collapsed },
-      )
-    }
-    measure()
-    // Без flushSync: он выполнял бы эффекты прямо здесь — подписки досок на IntersectionObserver раньше, чем холст после
-    // «Назад» и перезагрузки встанет на запомненное место, и грузились бы доски выше него. Цена — при смене ширины окна
-    // кадр со старыми ширинами (U-2 UX-ревью LATER-81, мелочь)
-    const observer = new ResizeObserver(measure)
-    observer.observe(content)
-    for (const section of content.querySelectorAll('[data-board-collapsed]'))
-      observer.observe(section)
-    return () => observer.disconnect()
-  }, [contentRef, boards])
-  return metrics
 }
 
 /**

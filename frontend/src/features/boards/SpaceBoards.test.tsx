@@ -90,7 +90,16 @@ describe('Страница пространства: доски рядами', (
         .getAllByRole('heading')
         .map((h) => h.textContent),
     ).toEqual(['Продукт', 'Узкая'])
-    // Ширины мест в ряду считает rowWidths (layout.test.ts): jsdom раскладку не считает, ширина холста — 0
+    // Доски не сжимаются: место — ширина по колонкам (4 колонки — 1138 px, одна — 20rem), не шире холста (CSS);
+    // свёрнутая — по своей шапке
+    const width = (name: string) =>
+      document
+        .querySelector<HTMLElement>(`[data-board-slot] section[aria-label="${name}"]`)!
+        .closest<HTMLElement>('[data-board-slot]')!
+        .style.getPropertyValue('--slot-w')
+    expect(width('Продукт')).toBe('1138px')
+    expect(width('Узкая')).toBe('320px')
+    expect(width('Инфраструктура')).toBe('')
     expect(within(rows[1] as HTMLElement).getByRole('region')).toBe(infra)
     await waitFor(() => expect(fetched.sort()).toEqual(['b-narrow', 'b-product']))
   })
