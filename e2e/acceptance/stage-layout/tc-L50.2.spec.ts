@@ -31,9 +31,14 @@ test('ТК-L50.2. Шапка доски и заголовки колонок в�
 
   // Заголовки колонок: название, число карточек, тип, «+», «⋯» (администратор)
   const add = page.getByRole('button', { name: 'Добавить карточку в начало To Do' })
-  // Заголовок колонки To Do — самый внутренний блок строки заголовков, где есть и её «+», и тип (точка «Очередь»)
+  // Заголовок колонки To Do — самый внутренний блок строки заголовков, где есть её название, «+» и тип (точка «Очередь»)
   const queue = page.getByRole('img', { name: 'Очередь', exact: true })
-  const todo = page.locator('[data-board-columns] div').filter({ has: add }).filter({ has: queue }).last()
+  const todo = page
+    .locator('[data-board-columns] div')
+    .filter({ hasText: 'To Do' })
+    .filter({ has: add })
+    .filter({ has: queue })
+    .last()
   await expectOnTop(todo.getByText('To Do', { exact: true }))
   // Число карточек (board-layout.spec в общем прогоне переносит одну из To Do — само число не сверяем)
   await expectOnTop(todo.getByText(/^\d+$/))
