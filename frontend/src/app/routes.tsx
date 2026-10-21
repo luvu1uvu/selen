@@ -8,6 +8,7 @@ import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { RequireAdmin, RequireAuth, RequireGuest } from './guards'
 import { RouteError } from './RouteError'
+import { RouteLoading } from './RouteLoading'
 import { AppLayout } from './layouts/AppLayout'
 import { AuthLayout } from './layouts/AuthLayout'
 import type { RouteHandle } from './routeHandle'
@@ -61,6 +62,8 @@ export const routes: RouteObject[] = [
         children: [
           {
             errorElement: <RouteError />,
+            // Пока грузится код страницы-чанка при первой загрузке приложения — «Загрузка…» на месте страницы
+            hydrateFallbackElement: <RouteLoading />,
             children: [
               { path: '/', element: <HomePage /> },
               { path: '/profile', element: <ProfilePage /> },
