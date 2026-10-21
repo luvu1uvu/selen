@@ -9,6 +9,7 @@ use App\Actions\Cards\SetCardArchivedAction;
 use App\Actions\Cards\UpdateCardAction;
 use App\Actions\Columns\CreateColumnAction;
 use App\Actions\Groups\SaveGroupAction;
+use App\Actions\Labels\SaveLabelAction;
 use App\Actions\Lanes\CreateLaneAction;
 use App\Actions\Navigation\CreateFolderAction;
 use App\Actions\Navigation\MoveNavNodeAction;
@@ -64,8 +65,10 @@ use Illuminate\Database\Seeder;
  * Приёмочные тесты PR 3 (ТК-L55.12–L55.24) — свои пространства RACC, RFOLD, RDRAG, RNEWROW, RKEYS, RARCH, RFOUR, устроенные
  * как «Разработка» демо-данных (acceptanceRows); в RFOUR все четыре доски — в первом ряду.
  *
- * Дерево (tree.spec): папка «E2E Мобильные» с пространством MOB «Мобильные приложения» (доска «Релизы»,
- * e2e-editor — commenter); QA и MOVE «E2E Перенос» (только администратор) — в корне.
+ * Дерево (tree.spec): папка «E2E Мобильные» с пространством MOB «Мобильные приложения» (доска «Релизы» с карточкой
+ * MOB-1, e2e-editor — commenter); QA и MOVE «E2E Перенос» (только администратор) — в корне.
+ * Пачка UX-1 (acceptance/stage-ux1): в LAYOUT — «Длинные названия» (ТК-L74.1), в QA — метка «Бэкенд» (ТК-L80.1), MOB-1 —
+ * ТК-L76.1 и ТК-L78.1.
  * Пустая папка «E2E Пустая» с вложенной «E2E Вложенная пустая» — в дереве видна только Владельцу (тест-кейсы 3c).
  */
 class E2eSeeder extends Seeder
@@ -192,6 +195,14 @@ class E2eSeeder extends Seeder
             }
         }
 
+        // Пачка UX-1 (acceptance/stage-ux1, ТК-L74.1): «Длинные названия» — колонку Backlog и дорожку «Основная» тест
+        // переименовывает через «⋯» в длинные названия и возвращает прежние; вторая дорожка — чтобы были видны полосы
+        // дорожек
+        $longNames = app(CreateBoardAction::class)->handle($admin, $layout, ['name' => 'Длинные названия'], BoardTemplate::Development);
+        app(CreateLaneAction::class)->handle($admin, $longNames, 'Срочные', null, null);
+        // ТК-L80.1: метка пространства QA — «⋯» её строки на вкладке «Метки»
+        app(SaveLabelAction::class)->handle($admin, ['name' => 'Бэкенд', 'color' => '#22c55e'], space: $space);
+
         // Форма «+» в заголовке колонки (add-card.spec, LATER-49): две дорожки, у второй — длинное название
         // (многоточие), у In Progress — подколонки
         $lanes = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Дорожки'], BoardTemplate::Simple);
@@ -204,7 +215,16 @@ class E2eSeeder extends Seeder
 
         $mobile = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Мобильные приложения', 'key' => 'MOB'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $mobile, $editor, SpaceRole::Commenter);
-        app(CreateBoardAction::class)->handle($admin, $mobile, ['name' => 'Релизы'], BoardTemplate::Simple);
+        $releases = app(CreateBoardAction::class)->handle($admin, $mobile, ['name' => 'Релизы'], BoardTemplate::Simple);
+        // Пачка UX-1 (acceptance/stage-ux1): карточка MOB-1, которую комментатор e2e-editor открывает, но не переносит
+        // (ТК-L76.1), и комментирует после чужого XSRF-токена (ТК-L78.1)
+        app(CreateCardAction::class)->handle(
+            $admin,
+            $releases,
+            ['title' => 'Релиз мобильного приложения'],
+            BoardColumn::query()->where('board_id', $releases->id)->where('name', 'To Do')->sole(),
+            Lane::query()->where('board_id', $releases->id)->sole(),
+        );
         app(CreateSpaceAction::class)->handle($admin, ['name' => 'E2E Перенос', 'key' => 'MOVE'], [$admin]);
 
         $folder = app(CreateFolderAction::class)->handle($admin, 'E2E Мобильные', '📱', null);
