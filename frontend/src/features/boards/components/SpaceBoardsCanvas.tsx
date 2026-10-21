@@ -89,6 +89,7 @@ export function SpaceBoardsCanvas({
   const revealed = useFirstScreenReveal(boardsQuery.isSuccess, eagerRow)
 
   const onArchive = useCallback((board: SpaceBoard) => setToArchive(board), [])
+  const toggleCollapsed = useKeepPlaceOnToggle(canvasRef, setCollapsed)
   const { activeBoard, drop, dndProps } = useBoardLayoutDnd(contentRef, boards, move)
 
   return (
@@ -124,18 +125,24 @@ export function SpaceBoardsCanvas({
               )}
               data-board-row={row.id}
             >
-              {row.boards.map((board) => (
+              {row.boards.map((board, index) => (
                 <SpaceBoardSlot
                   key={board.id}
                   board={board}
                   rows={rows}
                   canManage={canManage}
                   eager={row.id === eagerRow?.id}
+                  // Пока ряд первого экрана грузится, видны его первая доска и доска из ?board: заглушки ниже настоящих
+                  // досок, и доска следующей строки ряда «прыгала» бы вниз, когда доски над ней загрузятся (U-1 UX-ревью
+                  // варианта Б); остальные появятся сразу на своих местах
+                  concealed={
+                    !revealed.ready && row.id === eagerRow?.id && index > 0 && board.id !== focusId
+                  }
                   onSettled={revealed.onSettled}
                   moving={moving}
                   dragging={activeBoard?.id === board.id}
                   onMove={move}
-                  onToggleCollapsed={setCollapsed}
+                  onToggleCollapsed={toggleCollapsed}
                   onArchive={onArchive}
                   onOpenCard={onOpenCard}
                 />
@@ -353,6 +360,33 @@ function useFirstScreenReveal(
     return () => window.clearTimeout(timer)
   }, [ready])
   return { ready: ready || loaded, onSettled }
+}
+
+/**
+ * Свернули или развернули доску — её шапка остаётся на том же месте холста: доска может перейти в другую строку ряда
+ * (свёрнутая встаёт к соседке, развёрнутая — на строку ниже), и без этого уезжала бы с экрана, а под указателем
+ * оказывался бы шеврон другой доски (U-2 UX-ревью варианта Б). Шапка, закреплённая у верха холста (доска прокручена
+ * внутрь), остаётся у верха.
+ */
+function useKeepPlaceOnToggle(
+  canvasRef: RefObject<HTMLDivElement | null>,
+  setCollapsed: (boardId: string, collapsed: boolean) => void,
+) {
+  const release = useRef<(() => void) | null>(null)
+  useEffect(() => () => release.current?.(), [])
+  return useCallback(
+    (boardId: string, collapsed: boolean) => {
+      const canvas = canvasRef.current
+      const slot = canvas?.querySelector(`[data-board-slot="${CSS.escape(boardId)}"]`)
+      if (canvas && slot) {
+        const offset = slot.getBoundingClientRect().top - canvas.getBoundingClientRect().top
+        release.current?.()
+        release.current = pinBoard(canvas, boardId, Math.max(offset, 0))
+      }
+      setCollapsed(boardId, collapsed)
+    },
+    [canvasRef, setCollapsed],
+  )
 }
 
 /**

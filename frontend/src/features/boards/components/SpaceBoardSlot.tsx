@@ -30,6 +30,8 @@ export interface SpaceBoardSlotProps {
   canManage: boolean
   /** Доска первого экрана: грузится сразу, не дожидаясь IntersectionObserver (действует при появлении места). */
   eager: boolean
+  /** Место есть, но доска пока не видна: ряд первого экрана ещё грузится (U-1 UX-ревью варианта Б). */
+  concealed?: boolean
   /** Идёт перестановка — следующая недоступна (useMoveBoard). */
   moving: boolean
   /** Эту доску сейчас переносят мышью — она приглушена, пока на её месте не окажется копия. */
@@ -69,6 +71,7 @@ export const SpaceBoardSlot = memo(function SpaceBoardSlot(props: SpaceBoardSlot
       className={cn(
         'max-rows:w-full rows:max-w-full rows:flex-none min-w-0 outline-none',
         board.collapsed ? 'rows:w-fit' : 'rows:w-(--slot-w)',
+        props.concealed && 'invisible',
         dragging && 'opacity-50',
       )}
       style={
@@ -264,7 +267,9 @@ function useKeepCollapseFocus(ref: RefObject<HTMLElement | null>) {
     }
     const onFocusOut = (event: FocusEvent) => {
       const button = event.target as Element
-      // Фокус ушёл сам (Tab, щелчок) — отпускаем; кнопку убрали со страницы — держим
+      // Фокус ушёл с шеврона сам (Tab, щелчок) — отпускаем; шеврон убрали со страницы — держим. Уход с другого элемента
+      // не в счёт: Tab с «⋯» на шеврон отпустил бы фокус уже после того, как его взял шеврон (U-4 UX-ревью варианта Б)
+      if (!button.matches('[data-board-collapse]')) return
       setTimeout(() => {
         if (button.isConnected) held = false
       })

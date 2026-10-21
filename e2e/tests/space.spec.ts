@@ -27,6 +27,12 @@ function canvasRect(page: Page) {
   })
 }
 
+/** Прокрутить холст вниз на `dy` px. */
+const scrollCanvas = (page: Page, dy: number) =>
+  page.evaluate((dy) => {
+    document.querySelector('[data-board-canvas]')!.scrollTop += dy
+  }, dy)
+
 /** Доска загружена (не заглушка): у неё есть тело с колонками. */
 async function loaded(page: Page, name: string) {
   await expect(block(page, name).locator('[data-board-body]')).toBeVisible()
@@ -162,7 +168,7 @@ test('свернуть доску: «Название · N карточек», �
   expect((await rect(page, 'Широкая')).top).toBe(narrow.top)
   await block(page, 'Широкая').getByRole('heading', { name: 'Широкая' }).click()
   await loaded(page, 'Широкая')
-  await expect.poll(async () => Math.round((await rect(page, 'Широкая')).top - narrow.bottom)).toBe(12)
+  await expect.poll(async () => Math.round((await rect(page, 'Широкая')).top - (await rect(page, 'Узкая')).bottom)).toBe(12)
 
   // После перезагрузки — свёрнута, и её карточки не загружаются
   const requests: string[] = []
@@ -417,6 +423,104 @@ test('с клавиатуры: свернуть и развернуть доск
   await page.keyboard.press('Enter')
   await loaded(page, 'Узкая')
   await expect.poll(() => focused(page)).toBe('Свернуть доску «Узкая»')
+})
+
+test('с клавиатуры: Tab с «⋯» на шеврон, Enter — фокус остаётся на шевроне (U-4 UX-ревью варианта Б)', async ({ page }) => {
+  await block(page, 'Узкая').getByRole('button', { name: 'Действия с доской «Узкая»' }).focus()
+  await page.keyboard.press('Tab')
+  expect(await focused(page)).toBe('Свернуть доску «Узкая»')
+  await page.keyboard.press('Enter')
+  await expect(block(page, 'Узкая')).toContainText('· 3 карточки')
+  await expect.poll(() => focused(page)).toBe('Развернуть доску «Узкая»')
+  await page.keyboard.press('Enter')
+  await loaded(page, 'Узкая')
+  await expect.poll(() => focused(page)).toBe('Свернуть доску «Узкая»')
+})
+
+test('свернуть и развернуть доску — шапка не уезжает с экрана, под указателем её шеврон, фокус виден (U-2 UX-ревью варианта Б)', async ({
+  page,
+}) => {
+  // «Широкая» — строкой ниже «Узкой»; холст прокручен, «Широкая» на экране
+  await scrollCanvas(page, 300)
+  const wide = () => block(page, 'Широкая')
+  const headerY = async () => Math.round((await wide().locator('header').first().boundingBox())!.y)
+  const canvasTop = (await canvasRect(page)).top
+
+  // Свернуть мышью: свёрнутая встаёт в строку к «Узкой» — выше; холст прокручивается за ней, она остаётся на экране
+  let chevron = (await wide().getByRole('button', { name: 'Свернуть доску «Широкая»' }).boundingBox())!
+  await page.mouse.click(chevron.x + chevron.width / 2, chevron.y + chevron.height / 2)
+  await expect(wide()).toContainText(/· \d+ карточ/)
+  await expect.poll(headerY).toBeGreaterThanOrEqual(Math.round(canvasTop))
+  await expect(wide().locator('header').first()).toBeInViewport()
+
+  // Развернуть мышью: развёрнутая уходит в начало строки ниже — шапка остаётся на той же высоте, под указателем — шапка
+  // этой же доски, а не шеврон соседней
+  const collapsedY = await headerY()
+  chevron = (await wide().getByRole('button', { name: 'Развернуть доску «Широкая»' }).boundingBox())!
+  await page.mouse.click(chevron.x + chevron.width / 2, chevron.y + chevron.height / 2)
+  await loaded(page, 'Широкая')
+  await expect.poll(headerY).toBe(collapsedY)
+  const under = await page.evaluate(
+    ({ x, y }) => {
+      const hit = document.elementFromPoint(x, y)
+      return { board: hit?.closest('section[data-board-block]')?.getAttribute('aria-label'), header: !!hit?.closest('header') }
+    },
+    { x: chevron.x + chevron.width / 2, y: chevron.y + chevron.height / 2 },
+  )
+  expect(under).toEqual({ board: 'Широкая', header: true })
+
+  // С клавиатуры то же: Enter на шевроне — шапка на экране, фокус на шевроне и виден
+  await wide().getByRole('button', { name: 'Свернуть доску «Широкая»' }).focus()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => focused(page)).toBe('Развернуть доску «Широкая»')
+  await expect(wide().getByRole('button', { name: 'Развернуть доску «Широкая»' })).toBeInViewport()
+  const y = await headerY()
+  await page.keyboard.press('Enter')
+  await loaded(page, 'Широкая')
+  await expect.poll(headerY).toBe(y)
+  await expect.poll(() => focused(page)).toBe('Свернуть доску «Широкая»')
+  await expect(wide().getByRole('button', { name: 'Свернуть доску «Широкая»' })).toBeInViewport()
+})
+
+test('загрузка пространства: доска следующей строки ряда не появляется раньше досок над ней (U-1 UX-ревью варианта Б)', async ({
+  page,
+}) => {
+  // «Узкая» грузится последней: без исправления «Широкая» (строкой ниже) показывалась под заглушкой «Узкой» и уезжала
+  // вниз, когда та загружалась
+  const ids = await page.evaluate(async () => {
+    const me = await (await fetch('/api/v1/auth/me', { headers: { Accept: 'application/json' } })).json()
+    const list = await (
+      await fetch('/api/v1/spaces/ROWS/boards', { headers: { Accept: 'application/json', 'X-Selen-User': me.data.id } })
+    ).json()
+    return Object.fromEntries(list.data.map((b: { name: string; id: string }) => [b.name, b.id]))
+  })
+  await page.route(`**/api/v1/boards/${ids['Узкая']}`, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    await route.continue()
+  })
+  // Каждый кадр — верх каждого видимого места доски
+  await page.addInitScript(() => {
+    const tops: Record<string, number[]> = {}
+    ;(window as unknown as { slotTops: typeof tops }).slotTops = tops
+    const tick = () => {
+      for (const slot of document.querySelectorAll<HTMLElement>('[data-board-slot]')) {
+        if (getComputedStyle(slot).visibility === 'hidden') continue
+        ;(tops[slot.dataset.boardSlot!] ??= []).push(Math.round(slot.getBoundingClientRect().top))
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  await page.reload()
+  await loaded(page, 'Узкая')
+  await loaded(page, 'Широкая')
+  await page.waitForTimeout(300)
+  const tops = await page.evaluate(() => (window as unknown as { slotTops: Record<string, number[]> }).slotTops)
+  for (const name of ['Узкая', 'Широкая']) {
+    const seen = tops[ids[name]] ?? []
+    expect(seen.length, name).toBeGreaterThan(0)
+    expect(Math.max(...seen) - Math.min(...seen), `${name}: ${[...new Set(seen)].join(', ')}`).toBeLessThanOrEqual(1)
+  }
 })
 
 test('с клавиатуры: после панели Tab ведёт в первую доску, панель вкладки — не остановка Tab', async ({ page }) => {
