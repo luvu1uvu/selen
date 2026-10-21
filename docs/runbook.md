@@ -464,6 +464,20 @@ psql -U postgres -d selen -v owner=selen_owner -v app=selen_app -f grants.sql
 | Файл не скачивается, 404 на `/api/v1/attachments/...` при видимой карточке | nginx не видит каталог вложений: проверьте монтирование `/var/www/attachments` (dev) или `alias` в `location /_protected/attachments/` (production, `prod.conf.example`) |
 | Загрузка большого файла — 413 | Лимиты nginx/PHP меньше 100 МБ — см. «Лимит загрузки файлов» в п. 6 |
 | Нужно начать с чистого листа | `make destroy && make up && make fresh` |
+| Сборка образа php: `sha256sum: WARNING: … did NOT match`, `redis.tar.gz: FAILED` | Скачанный с GitHub архив расширения не совпал с суммой в `docker/php/Dockerfile` (LATER-82). Сборку не обходить: сначала понять, почему архив другой (новая версия под тем же тегом, подмена), — ниже «Обновить redis или pcov» |
+
+**Обновить redis или pcov в образе php** (LATER-82; расширения — из исходников GitHub по коммиту тега, не с pecl.php.net):
+1. Новая версия — тег в репозитории расширения: `phpredis/phpredis` (теги вида `6.3.0`), `krakjoe/pcov` (`v1.0.12`).
+2. Коммит тега: `gh api repos/phpredis/phpredis/git/ref/tags/6.3.0 -q '.object.type + " " + .object.sha'`; если тип
+   `tag` (аннотированный тег) — коммит: `gh api repos/phpredis/phpredis/git/tags/SHA -q .object.sha`.
+3. Сумма архива коммита: `curl -fsSL https://github.com/phpredis/phpredis/archive/КОММИТ.tar.gz | shasum -a 256`
+   (pcov — `…/krakjoe/pcov/archive/КОММИТ.tar.gz`).
+4. Для redis — коммит подмодуля liblzf в этом теге: `gh api "repos/phpredis/phpredis/contents/liblzf?ref=6.3.0" -q .sha`,
+   сумма — `curl -fsSL https://github.com/nemequ/liblzf/archive/КОММИТ.tar.gz | shasum -a 256`.
+5. Поменять `ARG` и версии в комментарии `docker/php/Dockerfile`; `make up` пересоберёт образ dev, затем `make test`
+   и `make e2e`; на стенде — `make pm-update` после мёржа.
+
+Архив по коммиту не меняется при переносе тега: `FAILED` при прежнем коммите — повод разбираться, а не пересчитывать сумму.
 
 ## 13. Mac mini как хост
 
