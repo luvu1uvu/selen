@@ -480,16 +480,28 @@ function useCanvasPlacement(
     if (board.collapsed) setCollapsed(board.id, false)
     // Кадр спустя — раскладка уже с развёрнутой доской
     requestAnimationFrame(() => {
-      const content = canvas.firstElementChild
-      const padding = content ? parseFloat(getComputedStyle(content).paddingTop) || 0 : 0
-      hold(canvas, board.id, padding)
+      const slot = canvas.querySelector<HTMLElement>(`[data-board-slot="${CSS.escape(board.id)}"]`)
+      hold(canvas, board.id, slot ? topOffset(canvas, slot) : 0)
       // Фокус — на доску: следующий Tab ведёт в неё, а не к первой доске пространства (U-3 UX-ревью PR 3)
-      canvas
-        .querySelector<HTMLElement>(`[data-board-slot="${CSS.escape(board.id)}"]`)
-        ?.focus({ preventScroll: true })
+      slot?.focus({ preventScroll: true })
     })
   }, [canvasRef, boards, fetching, focusId, location.key, navigationType, page, setCollapsed, hold])
 
   /** «Назад» вернёт место по доске — пиксели useScrollMemory не восстанавливает. */
   return navigationType === 'POP' && anchorOf(location.key, page) !== undefined
+}
+
+/**
+ * Сколько холста оставить над доской из `?board`: зазор между строками ряда (меньший из зазоров над доской), а не поле
+ * холста — поле (16 px) больше зазора (12), и над доской торчала полоска 4 px нижнего края доски выше (U-6 UX-ревью
+ * варианта Б). Доска первой строки первого ряда — на своём поле: прокручивать к ней нечего.
+ */
+function topOffset(canvas: HTMLElement, slot: HTMLElement) {
+  const content = canvas.firstElementChild
+  const padding = content ? parseFloat(getComputedStyle(content).paddingTop) || 0 : 0
+  const gap = slot.parentElement ? parseFloat(getComputedStyle(slot.parentElement).rowGap) || 0 : 0
+  const fromTop = content
+    ? slot.getBoundingClientRect().top - content.getBoundingClientRect().top
+    : Infinity
+  return fromTop <= padding + 1 ? padding : Math.min(padding, gap)
 }

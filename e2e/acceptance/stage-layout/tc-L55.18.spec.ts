@@ -33,9 +33,10 @@ test('ТК-L55.18. Клик по доске в дереве — раскрыва
   await openSpaceBoard(page, SPACE[1], INFRA)
   await expect(page).toHaveURL(/\/spaces\/RFOLD\?board=/)
   await loaded(page, INFRA)
-  // Страница прокручена: «Инфраструктура» — у верха холста под панелью (с отступом холста)
+  // Страница прокручена: «Инфраструктура» — у верха холста под панелью. Отступ — зазор между строками ряда (12 px), а не
+  // поле холста (16 px): при поле над доской торчала полоска 4 px доски выше (решение PM 20.10, пачка LATER-74)
   const space = await canvas(page)
-  await expect.poll(async () => Math.abs((await rect(page, INFRA)).top - space.top - 16)).toBeLessThanOrEqual(2)
+  await expect.poll(async () => Math.abs((await rect(page, INFRA)).top - space.top - 12)).toBeLessThanOrEqual(2)
   expect((await canvas(page)).scrollTop).toBeGreaterThan(500)
   // Доска развёрнута, карточки видны
   await expect(collapseButton(page, INFRA)).toHaveAttribute('aria-expanded', 'true')
