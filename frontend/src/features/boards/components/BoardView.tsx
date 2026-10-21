@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent,
   type RefObject,
 } from 'react'
 import {
@@ -356,6 +357,7 @@ export function BoardView({
         ref={bodyRef}
         className="relative flex flex-1 scrollbar-none flex-col overflow-x-auto [&_*]:scroll-mt-(--board-sticky)"
         data-board-body
+        onFocus={revealFocused}
       >
         {/* Отступы слева и справа — у контейнера (как у строки заголовков, LATER-65); строка дорожки растянута на всю
             ширину блока отрицательными полями */}
@@ -386,6 +388,27 @@ export function BoardView({
 }
 
 const EMPTY: string[] = []
+
+/** Запас до края видимой части тела: поле ячейки — рамка фокуса карточки видна целиком. */
+const FOCUS_MARGIN_PX = 8
+
+/**
+ * Элемент тела доски, получивший фокус с клавиатуры (Tab), — целиком в видимой части тела по горизонтали. Chrome сам
+ * прокручивает только полностью скрытый элемент: у частично видимой карточки (узкая доска, колонка у края) правый край
+ * и рамка фокуса оставались за краем. Тело прокручивается вбок само, холст и окно вбок не двигаются (UX-ревью LATER-81,
+ * U-3). Щелчок мышью доску не сдвигает (фокус не :focus-visible).
+ */
+function revealFocused(event: FocusEvent<HTMLDivElement>) {
+  const body = event.currentTarget
+  const target = event.target
+  if (!(target instanceof HTMLElement) || !target.matches(':focus-visible')) return
+  const view = body.getBoundingClientRect()
+  const left = view.left + FOCUS_MARGIN_PX
+  const right = view.left + body.clientWidth - FOCUS_MARGIN_PX
+  const rect = target.getBoundingClientRect()
+  if (rect.left < left || rect.width > right - left) body.scrollLeft += rect.left - left
+  else if (rect.right > right) body.scrollLeft += rect.right - right
+}
 
 /** Шапка доски (h-12) над закреплёнными заголовками колонок — их высота разная (подколонки). */
 const BOARD_HEADER_PX = 48
