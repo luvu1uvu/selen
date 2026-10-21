@@ -7,6 +7,7 @@ import { sizeParts } from '@/shared/lib/size'
 import type { Attachment, CardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
+import { Hint } from '@/shared/components/Hint'
 import { deleteAttachment } from '../api'
 import { useCardContentMutation } from '../queries'
 import type { UploadProgress } from '../useAttachmentUpload'
@@ -181,25 +182,29 @@ function AttachmentActions({
   const { t } = useTranslation('boards')
   return (
     <span className="ml-auto flex shrink-0 items-center">
-      <Button variant="ghost" size="icon" className="size-6" asChild>
-        <a
-          href={attachment.url}
-          download
-          aria-label={t('attachments.download', { name: attachment.name })}
-        >
-          <Download />
-        </a>
-      </Button>
-      {attachment.permissions.delete && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          aria-label={t('attachments.remove', { name: attachment.name })}
-          onClick={() => onRemove(attachment)}
-        >
-          <Trash2 />
+      <Hint label={t('attachments.download', { name: attachment.name })}>
+        <Button variant="ghost" size="icon" className="size-6" asChild>
+          <a
+            href={attachment.url}
+            download
+            aria-label={t('attachments.download', { name: attachment.name })}
+          >
+            <Download />
+          </a>
         </Button>
+      </Hint>
+      {attachment.permissions.delete && (
+        <Hint label={t('attachments.remove', { name: attachment.name })}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            aria-label={t('attachments.remove', { name: attachment.name })}
+            onClick={() => onRemove(attachment)}
+          >
+            <Trash2 />
+          </Button>
+        </Hint>
       )}
     </span>
   )

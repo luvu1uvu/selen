@@ -6,6 +6,7 @@ import { getErrorMessage } from '@/shared/api/errors'
 import type { CardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { Hint } from '@/shared/components/Hint'
 import { linkApi } from '../api'
 import { useUnsavedText } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
@@ -74,19 +75,21 @@ export function CardLinksSection({
               {link.title || link.url}
             </a>
             {canEdit && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ml-auto size-6"
-                aria-label={t('links.remove', { title: link.title || link.url })}
-                onClick={() =>
-                  remove
-                    .mutateAsync(link.id)
-                    .catch((e) => toast.error(getErrorMessage(e, tc('errors.generic'))))
-                }
-              >
-                <Trash2 />
-              </Button>
+              <Hint label={t('links.remove', { title: link.title || link.url })}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto size-6"
+                  aria-label={t('links.remove', { title: link.title || link.url })}
+                  onClick={() =>
+                    remove
+                      .mutateAsync(link.id)
+                      .catch((e) => toast.error(getErrorMessage(e, tc('errors.generic'))))
+                  }
+                >
+                  <Trash2 />
+                </Button>
+              </Hint>
             )}
           </li>
         ))}

@@ -25,6 +25,7 @@ import type { CardDetail, Checklist, ChecklistItem } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Input } from '@/shared/ui/input'
+import { Hint } from '@/shared/components/Hint'
 import { checklistApi } from '../api'
 import { useUnsavedText } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
@@ -219,15 +220,17 @@ function ChecklistBlock({
           {done}/{checklist.items.length}
         </span>
         {canEdit && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ml-auto size-7"
-            aria-label={t('checklists.remove', { title: checklist.title })}
-            onClick={() => run({ kind: 'remove', id: checklist.id })}
-          >
-            <Trash2 />
-          </Button>
+          <Hint label={t('checklists.remove', { title: checklist.title })}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto size-7"
+              aria-label={t('checklists.remove', { title: checklist.title })}
+              onClick={() => run({ kind: 'remove', id: checklist.id })}
+            >
+              <Trash2 />
+            </Button>
+          </Hint>
         )}
       </div>
       {checklist.items.length > 0 && (
@@ -308,24 +311,26 @@ function ItemRow({
       className={`group flex items-start gap-2 rounded px-1 py-0.5 ${isDragging ? 'bg-muted opacity-60' : ''}`}
     >
       {canEdit && (
-        <button
-          type="button"
-          className="text-muted-foreground mt-0.5 cursor-grab opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label={t('checklists.drag', { text: item.text })}
-          {...attributes}
-          {...listeners}
-          onKeyDown={(event) => {
-            // Alt+↑/↓ — переставить без перетаскивания
-            if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-              event.preventDefault()
-              onMove(event.key === 'ArrowUp' ? -1 : 1)
-              return
-            }
-            listeners?.onKeyDown?.(event)
-          }}
-        >
-          <GripVertical className="size-4" />
-        </button>
+        <Hint label={t('checklists.drag', { text: item.text })}>
+          <button
+            type="button"
+            className="text-muted-foreground mt-0.5 cursor-grab opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            aria-label={t('checklists.drag', { text: item.text })}
+            {...attributes}
+            {...listeners}
+            onKeyDown={(event) => {
+              // Alt+↑/↓ — переставить без перетаскивания
+              if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                event.preventDefault()
+                onMove(event.key === 'ArrowUp' ? -1 : 1)
+                return
+              }
+              listeners?.onKeyDown?.(event)
+            }}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        </Hint>
       )}
       <Checkbox
         className="mt-0.5"
@@ -349,15 +354,17 @@ function ItemRow({
         </span>
       )}
       {canEdit && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-auto size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label={t('checklists.removeItem', { text: item.text })}
-          onClick={() => run({ kind: 'removeItem', id: item.id })}
-        >
-          <Trash2 />
-        </Button>
+        <Hint label={t('checklists.removeItem', { text: item.text })}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            aria-label={t('checklists.removeItem', { text: item.text })}
+            onClick={() => run({ kind: 'removeItem', id: item.id })}
+          >
+            <Trash2 />
+          </Button>
+        </Hint>
       )}
     </li>
   )

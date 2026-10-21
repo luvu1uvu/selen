@@ -8,6 +8,7 @@ import { formatDateTime } from '@/shared/lib/dates'
 import type { CardBlock, CardDetail, CardSummary } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
+import { Hint } from '@/shared/components/Hint'
 import { blockApi } from '../api'
 import { useUnsavedText } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
@@ -181,16 +182,18 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
           <span className="text-muted-foreground text-xs">{t('blocks.byCard')}</span>
           <span className="font-mono text-xs">{blocker.key}</span>
           <span className="truncate">{blocker.title}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6"
-            aria-label={t('blocks.clearCard')}
-            onClick={() => setBlocker(null)}
-          >
-            <X />
-          </Button>
+          <Hint label={t('blocks.clearCard')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              aria-label={t('blocks.clearCard')}
+              onClick={() => setBlocker(null)}
+            >
+              <X />
+            </Button>
+          </Hint>
         </div>
       ) : picking ? (
         <CardPicker

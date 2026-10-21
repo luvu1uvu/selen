@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import type { CardDetail, CardRelation } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
+import { Hint } from '@/shared/components/Hint'
 import { relationApi, type RelationKind } from '../api'
 import { useCardContentMutation } from '../queries'
 import { CardPicker } from './CardPicker'
@@ -55,19 +56,21 @@ export function CardRelationsSection({
             <li key={relation.id} className="flex min-w-0 items-center gap-2 text-sm">
               <RelatedCardView card={relation.card} />
               {canEdit && !relation.card.hidden && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-auto size-6 shrink-0"
-                  aria-label={t('relations.remove', { key: relation.card.key })}
-                  onClick={() =>
-                    remove
-                      .mutateAsync(relation.id)
-                      .catch((error) => toast.error(getErrorMessage(error, tc('errors.generic'))))
-                  }
-                >
-                  <Trash2 />
-                </Button>
+                <Hint label={t('relations.remove', { key: relation.card.key })}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="ml-auto size-6 shrink-0"
+                    aria-label={t('relations.remove', { key: relation.card.key })}
+                    onClick={() =>
+                      remove
+                        .mutateAsync(relation.id)
+                        .catch((error) => toast.error(getErrorMessage(error, tc('errors.generic'))))
+                    }
+                  >
+                    <Trash2 />
+                  </Button>
+                </Hint>
               )}
             </li>
           ))}
