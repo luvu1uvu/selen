@@ -128,14 +128,6 @@
     "description": "Описание",
     "descriptionPlaceholder": "Добавьте описание",
     "saveDescription": "Сохранить описание",
-    "type": "Тип",
-    "location": "Где",
-    "status": "Статус",
-    "createdBy": "Автор: {{name}}, {{date}}",
-    "startedAt": "В работе с {{date}}",
-    "completedAt": "Готово {{date}}",
-    "leadTime": "Время выполнения (lead time): {{value}}",
-    "cycleTime": "Время в работе (cycle time): {{value}}",
     "move": "Переместить…",
     "archive": "Архивировать",
     "restore": "Восстановить",
@@ -152,7 +144,6 @@
     "linkCopied": "Ссылка скопирована",
     "noDescription": "Описания пока нет",
     "editDescription": "Изменить описание",
-    "addDescription": "Добавить описание",
     "actions": "Действия с карточкой «{{title}}»",
     "add": "Добавить в карточку",
     "addChecklist": "Чек-лист",
@@ -174,7 +165,8 @@
     "unsavedConfirm": "Закрыть без сохранения",
     "unsavedCancel": "Продолжить редактирование",
     "emptyDescription": "Добавьте описание…",
-    "restoreFromArchive": "Вернуть из архива"
+    "restoreFromArchive": "Вернуть из архива",
+    "customerButton": "{{name}} — заказчик"
   },
   "moveCard": {
     "title": "Переместить {{key}}",
@@ -241,9 +233,6 @@
     "cancelled": "Перемещение карточки {{card}} отменено."
   },
   "sections": {
-    "people": "Люди",
-    "labels": "Метки",
-    "fields": "Поля",
     "description": "Описание",
     "checklists": "Чек-листы",
     "links": "Ссылки",
@@ -256,32 +245,23 @@
     "history": "История"
   },
   "people": {
-    "customer": "Заказчик",
-    "responsible": "Ответственный",
-    "participants": "Участники",
     "notAssigned": "Не назначен",
     "none": "Нет",
-    "add": "Добавить участника…",
     "remove": "Убрать {{name}} из участников",
     "invited": "Приглашён",
     "deactivated": "Деактивирован",
     "notInSpace": "Не в пространстве"
   },
   "fields": {
-    "due": "Срок",
     "dueDate": "Дата срока",
     "dueTime": "Время срока (необязательно)",
     "clearDue": "Убрать срок",
-    "noDue": "Без срока",
-    "urgent": "Срочно",
-    "estimate": "Оценка, ч",
     "estimatePlaceholder": "Например, 2,5",
     "estimateInvalid": "Оценка — неотрицательное число с шагом 0,5 часа"
   },
   "labels": {
     "company": "Общие метки компании",
     "space": "Метки пространства",
-    "edit": "Метки",
     "none": "Нет меток",
     "empty": "Меток пока нет — их создают администраторы"
   },
@@ -377,8 +357,6 @@
     "remove": "Убрать связь с {{key}}"
   },
   "blocks": {
-    "none": "Не заблокирована",
-    "add": "Заблокировать",
     "submit": "Заблокировать",
     "reason": "Причина блокировки",
     "reasonPlaceholder": "Причина (необязательно, если выбрана блокирующая карточка)",
@@ -393,11 +371,7 @@
     "started": "{{name}}, {{date}}",
     "ended": "снял(а) {{name}}, {{date}}",
     "endedAuto": "снята автоматически {{date}}: блокирующая карточка готова",
-    "endedDeleted": "снята {{date}}: блокирующая карточка удалена",
-    "history_one": "История блокировок: {{count}}",
-    "history_few": "История блокировок: {{count}}",
-    "history_many": "История блокировок: {{count}}",
-    "history_other": "История блокировок: {{count}}"
+    "endedDeleted": "снята {{date}}: блокирующая карточка удалена"
   },
   "picker": {
     "placeholder": "Номер или название",
@@ -440,7 +414,6 @@
   "params": {
     "location": "Расположение",
     "type": "Тип",
-    "changeType": "Сменить тип: {{type}}",
     "responsible": "Ответственный",
     "assign": "Назначить",
     "chooseResponsible": "Выбрать ответственного",
@@ -456,7 +429,9 @@
     "estimate": "План, ч",
     "searchPeople": "Найти по имени",
     "nobody": "Никого не найдено",
-    "selectedPerson": "{{name}} — выбран"
+    "selectedPerson": "{{name}} — выбран",
+    "typeButton": "{{name}} — тип карточки",
+    "responsibleButton": "{{name}} — ответственный"
   },
   "info": {
     "createdBy": "Создал(а)",

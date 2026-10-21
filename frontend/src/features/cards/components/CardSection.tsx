@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { usePersistentState } from '@/shared/lib/usePersistentState'
 import { cn } from '@/shared/lib/utils'
@@ -6,7 +6,8 @@ import { cn } from '@/shared/lib/utils'
 /**
  * Секция окна карточки (README Kaiten, раздел 02): заголовок со стрелкой сворачивания, справа — счётчик и действие
  * секции. Свёрнута или развёрнута — запоминается в браузере для всех карточек сразу (по виду секции). `forceOpen` —
- * пункт «+» добавляет в свёрнутую секцию (чек-лист в свёрнутые «Чек-листы»): она раскрывается.
+ * пункт «+» добавляет в свёрнутую секцию (чек-лист в свёрнутые «Чек-листы»): она раскрывается. Свёрнутая секция
+ * прячет содержимое, а не убирает его: начатый в ней текст не пропадает.
  */
 export function CardSection({
   id,
@@ -28,8 +29,12 @@ export function CardSection({
   children: ReactNode
 }) {
   const [open, setOpen] = usePersistentState(`selen.cardWindow.section.${id}`, defaultOpen)
-  // Пункт «+» раскрывает свёрнутую секцию — и она остаётся раскрытой (подстройка состояния при рендере)
-  if (forceOpen && !open) setOpen(true)
+  // Пункт «+» раскрывает свёрнутую секцию один раз — дальше её снова можно свернуть (подстройка состояния при рендере)
+  const [forced, setForced] = useState(forceOpen)
+  if (forced !== forceOpen) {
+    setForced(forceOpen)
+    if (forceOpen && !open) setOpen(true)
+  }
   const contentId = useId()
 
   return (
@@ -60,11 +65,9 @@ export function CardSection({
         </h3>
         {action}
       </div>
-      {open && (
-        <div id={contentId} className="grid gap-2">
-          {children}
-        </div>
-      )}
+      <div id={contentId} hidden={!open} className="grid gap-2">
+        {children}
+      </div>
     </section>
   )
 }

@@ -184,6 +184,8 @@ export default function RichTextEditor({
               placeholder="https://"
               value={linkUrl}
               autoFocus
+              // Esc закрывает поле ссылки и возвращает в текст — окно карточки этот Esc не перехватывает
+              data-own-escape
               className="h-8"
               aria-invalid={!!linkUrl.trim() && !isAllowedUrl(linkUrl)}
               onChange={(event) => setLinkUrl(event.target.value)}
@@ -192,7 +194,10 @@ export default function RichTextEditor({
                   event.preventDefault()
                   applyLink()
                 }
-                if (event.key === 'Escape') setLinkOpen(false)
+                if (event.key === 'Escape') {
+                  setLinkOpen(false)
+                  editor?.commands.focus()
+                }
               }}
             />
             <Button type="button" size="sm" variant="outline" onClick={applyLink}>

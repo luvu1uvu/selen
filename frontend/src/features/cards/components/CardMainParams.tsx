@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Search, X } from 'lucide-react'
@@ -8,6 +8,7 @@ import { api } from '@/shared/api/client'
 import { getErrorMessage } from '@/shared/api/errors'
 import { DueBadge } from '@/shared/components/DueBadge'
 import { isoToZoned, zonedToIso } from '@/shared/lib/due'
+import { readableTextOn } from '@/shared/lib/palette'
 import type { CardDetail, CardPerson, CardType, Collection } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -24,6 +25,7 @@ import { Label } from '@/shared/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import type { CardUpdate } from '../api'
+import { focusCardWindow } from '../cardWindow'
 import { useCardParticipant, useUpdateCard } from '../queries'
 import { CardLabelsField } from './CardLabelsField'
 import { PersonLine, PersonPicker } from './PersonPicker'
@@ -68,8 +70,8 @@ export function TypeChip({ type }: { type: Pick<CardType, 'name' | 'color'> }) {
     <span className="inline-flex min-w-0 items-center gap-1.5">
       <span
         aria-hidden
-        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white uppercase"
-        style={{ backgroundColor: type.color }}
+        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase"
+        style={{ backgroundColor: type.color, color: readableTextOn(type.color) }}
       >
         {type.name.charAt(0)}
       </span>
@@ -145,7 +147,15 @@ export function CardMainParams({
       <ParamRow label={t('params.labels')}>
         <CardLabelsField card={card} canEdit={canEdit} />
       </ParamRow>
-      <ParamRow label={<Label htmlFor="card-estimate">{t('params.estimate')}</Label>}>
+      <ParamRow
+        label={
+          canEdit ? (
+            <Label htmlFor="card-estimate">{t('params.estimate')}</Label>
+          ) : (
+            t('params.estimate')
+          )
+        }
+      >
         <EstimateField card={card} canEdit={canEdit} />
       </ParamRow>
     </dl>
@@ -153,6 +163,7 @@ export function CardMainParams({
 }
 
 function TypeField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+  const { t } = useTranslation('boards')
   const types = useActiveCardTypes(canEdit)
   const { save, pending } = useSave(card.key)
   if (!canEdit) return <TypeChip type={card.card_type} />
@@ -164,7 +175,13 @@ function TypeField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="-ml-2 max-w-full px-2" disabled={pending}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 max-w-full px-2"
+          disabled={pending}
+          aria-label={t('params.typeButton', { name: card.card_type.name })}
+        >
           <TypeChip type={card.card_type} />
         </Button>
       </DropdownMenuTrigger>
@@ -217,7 +234,14 @@ function ResponsibleField({ card, canEdit }: { card: CardDetail; canEdit: boolea
           : undefined
       }
     >
-      <Button variant="ghost" size="sm" className="-ml-2 h-auto min-h-8 max-w-full px-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2 h-auto min-h-8 max-w-full px-2"
+        aria-label={
+          responsible ? t('params.responsibleButton', { name: responsible.name }) : undefined
+        }
+      >
         {responsible ? (
           <PersonChip person={responsible} />
         ) : (
@@ -413,6 +437,7 @@ function EstimateField({ card, canEdit }: { card: CardDetail; canEdit: boolean }
   const [estimate, setEstimate] = useState(card.estimate_hours?.toString() ?? '')
   const [error, setError] = useState<string | null>(null)
 
+  const cancelled = useRef(false)
   const [synced, setSynced] = useState(card.estimate_hours)
   if (synced !== card.estimate_hours) {
     setSynced(card.estimate_hours)
@@ -423,7 +448,7 @@ function EstimateField({ card, canEdit }: { card: CardDetail; canEdit: boolean }
     return card.estimate_hours === null ? (
       <span className="text-muted-foreground">—</span>
     ) : (
-      <span id="card-estimate">{String(card.estimate_hours).replace('.', ',')}</span>
+      <span>{String(card.estimate_hours).replace('.', ',')}</span>
     )
   }
 
@@ -448,9 +473,22 @@ function EstimateField({ card, canEdit }: { card: CardDetail; canEdit: boolean }
         placeholder={t('fields.estimatePlaceholder')}
         aria-invalid={!!error}
         aria-describedby={error ? 'card-estimate-error' : undefined}
+        // Esc отменяет правку (как в названии), окно его не перехватывает
+        data-own-escape
         onChange={(event) => setEstimate(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
+        onBlur={() => {
+          if (cancelled.current) cancelled.current = false
+          else commit()
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+          if (event.key === 'Escape') {
+            cancelled.current = true
+            setEstimate(card.estimate_hours?.toString() ?? '')
+            setError(null)
+            focusCardWindow(event.currentTarget)
+          }
+        }}
       />
       {error && (
         <p id="card-estimate-error" className="text-destructive text-sm">

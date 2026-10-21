@@ -122,7 +122,7 @@ describe('Карточка: люди, поля, метки', () => {
     const panel = await screen.findByRole('dialog')
 
     expect(within(panel).getByText('Заказчик')).toBeInTheDocument()
-    await userEvent.click(within(panel).getByRole('button', { name: 'Борис' }))
+    await userEvent.click(within(panel).getByRole('button', { name: 'Борис — заказчик' }))
     await userEvent.click(await screen.findByRole('option', { name: 'Вера' }))
 
     await vi.waitFor(() =>
@@ -223,7 +223,7 @@ describe('Карточка: люди, поля, метки', () => {
     ])
     expect(within(section).getByText('Продукт / To Do (Основная)')).toBeInTheDocument()
 
-    await userEvent.click(within(section).getByRole('button', { name: 'Задача' }))
+    await userEvent.click(within(section).getByRole('button', { name: 'Задача — тип карточки' }))
     await userEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Баг' }))
     await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ card_type_id: 'bug' }))
   })

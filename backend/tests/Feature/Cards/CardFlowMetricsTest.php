@@ -1,12 +1,15 @@
 <?php
 
 use App\Actions\Columns\ChangeColumnCategoryAction;
+use App\Actions\Columns\CreateColumnAction;
 use App\Actions\Columns\RenameColumnAction;
+use App\Actions\Lanes\CreateLaneAction;
 use App\Enums\BoardTemplate;
 use App\Enums\ColumnCategory;
 use App\Enums\SpaceRole;
 use App\Enums\TransitionReason;
 use App\Models\CardTransition;
+use App\Services\Cards\CardPlacement;
 use App\Services\Metrics\CardFlowMetrics;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -192,17 +195,56 @@ it('card_transitions — append-only в базе', function (string $sql) {
     'TRUNCATE' => ['TRUNCATE card_transitions'],
 ]);
 
-it('момент перемещения — последний переход в другое место, без смены типа колонки', function () {
+it('момент перемещения — последнее перемещение пользователем в другую колонку, дорожку, доску', function () {
+    $placement = app(CardPlacement::class);
+    $movedAt = fn ($card) => $this->metrics->forCard($card)->movedAt?->toIso8601String();
+    $hoursLater = fn (int $hours) => $this->start->copy()->addHours($hours)->toIso8601String();
+
     at($this, '0 hours');
     $card = makeCard($this->board, 'To Do', $this->user);
-    expect($this->metrics->forCard($card)->movedAt)->toBeNull();
+    makeCard($this->board, 'To Do', $this->user, 'Соседка');
+    expect($movedAt($card))->toBeNull();
 
+    at($this, '+1 hour');
+    moveCard($card, 'In Progress', $this->user);
+    expect($movedAt($card))->toBe($hoursLater(1));
+
+    // Другая дорожка той же колонки
+    at($this, '+2 hours');
+    $lane = app(CreateLaneAction::class)->handle($this->user, $this->board, 'Срочные', null, null);
+    $placement->move($card->fresh(), columnNamed($this->board, 'In Progress'), $lane, $this->user);
+    expect($movedAt($card))->toBe($hoursLater(2));
+
+    // Другая доска пространства
+    at($this, '+3 hours');
+    $other = makeBoard($this->space, $this->user, BoardTemplate::Simple, 'Вторая');
+    $placement->move($card->fresh(), columnNamed($other, 'Review'), firstLane($other), $this->user);
+    expect($movedAt($card))->toBe($hoursLater(3));
+});
+
+it('смена типа колонки, переезд в первую подколонку и перестановка в ячейке — не перемещение', function () {
+    $placement = app(CardPlacement::class);
+    $movedAt = fn ($card) => $this->metrics->forCard($card)->movedAt?->toIso8601String();
+
+    at($this, '0 hours');
+    $card = makeCard($this->board, 'To Do', $this->user);
+    $neighbour = makeCard($this->board, 'In Progress', $this->user, 'Соседка');
     at($this, '+2 hours');
     moveCard($card, 'In Progress', $this->user);
-    expect($this->metrics->forCard($card)->movedAt?->equalTo($this->start->copy()->addHours(2)))->toBeTrue();
+    $moved = $this->start->copy()->addHours(2)->toIso8601String();
 
-    // Смена типа колонки пишет переход, но место карточки прежнее
-    at($this, '+5 hours');
+    at($this, '+3 hours');
     app(ChangeColumnCategoryAction::class)->handle($this->user, columnNamed($this->board, 'In Progress'), ColumnCategory::Done);
-    expect($this->metrics->forCard($card)->movedAt?->equalTo($this->start->copy()->addHours(2)))->toBeTrue();
+    expect($movedAt($card))->toBe($moved);
+
+    // Перестановка внутри ячейки перехода не пишет
+    at($this, '+4 hours');
+    $placement->move($card->fresh(), columnNamed($this->board, 'In Progress'), firstLane($this->board), $this->user, $neighbour->id);
+    expect($movedAt($card))->toBe($moved);
+
+    // Первая подколонка забирает карточки колонки (column_split)
+    at($this, '+5 hours');
+    app(CreateColumnAction::class)->handle($this->user, $this->board, 'Dev', null, columnNamed($this->board, 'In Progress'), null, null);
+    expect(CardTransition::query()->where('card_id', $card->id)->where('reason', 'column_split')->exists())->toBeTrue()
+        ->and($movedAt($card))->toBe($moved);
 });

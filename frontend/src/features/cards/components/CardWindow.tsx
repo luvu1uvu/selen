@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { History, MessageSquare } from 'lucide-react'
 import { useBlocker, useLocation, useNavigate } from 'react-router'
@@ -70,6 +70,8 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
 
   const unsaved = useRef(new Set<string>())
   const discard = useRef(false)
+  // Закрытие уже начато с этой записи истории: повтор (двойной Esc во время перерисовки) ушёл бы ещё на шаг назад
+  const closing = useRef<string | null>(null)
   const api = useMemo<CardWindowApi>(
     () => ({
       setUnsaved: (id, value) => {
@@ -92,9 +94,11 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
   )
 
   const close = useCallback(() => {
+    if (closing.current === location.key) return
+    closing.current = location.key
     if (depth > 0) void navigate(-depth)
     else void navigate(backTo, { replace: true })
-  }, [backTo, depth, navigate])
+  }, [backTo, depth, location.key, navigate])
   // Карточку удалили в корзину — несохранённому тексту некуда сохраняться, вопроса нет
   const closeDeleted = useCallback(() => {
     discard.current = true
@@ -151,7 +155,12 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
       </Dialog>
       <ConfirmDialog
         open={blocker.state === 'blocked'}
-        onOpenChange={(open) => !open && blocker.reset?.()}
+        onOpenChange={(open) => {
+          if (open) return
+          // Остаёмся в окне — следующее закрытие снова возможно
+          closing.current = null
+          blocker.reset?.()
+        }}
         title={t('card.unsavedTitle')}
         description={t('card.unsavedText')}
         confirmLabel={t('card.unsavedConfirm')}
@@ -162,6 +171,8 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
   )
 }
 
+const isRelation = (kind: AddKind) => kind === 'parent' || kind === 'child'
+
 function hasFiles(event: DragEvent) {
   return Array.from(event.dataTransfer.types).includes('Files')
 }
@@ -171,12 +182,28 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
   const { t } = useTranslation('boards')
   const canEdit = card.permissions.edit && !card.archived_at
   const canAttach = card.permissions.comment && !card.archived_at
-  const [adding, setAdding] = useState<AddKind | null>(null)
+  // Открытые формы «+» — каждая своя: начатая причина блокировки не пропадает, если добавить ещё и ссылку
+  const [adding, setAdding] = useState<AddKind[]>([])
   const [moving, setMoving] = useState(false)
-  const [dragDepth, setDragDepth] = useState(0)
+  // Файл над окном: счётчик входов-выходов по элементам — в ref, в состоянии только «да/нет» (меньше перерисовок)
+  const dragDepth = useRef(0)
+  const [dragging, setDragging] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const { upload, uploads } = useAttachmentUpload(card.key)
-  const addDone = () => setAdding(null)
+  const isAdding = (kind: AddKind) => adding.includes(kind)
+  const add = (kind: AddKind) =>
+    setAdding((list) => [
+      ...list.filter((item) => item !== kind && !(isRelation(kind) && isRelation(item))),
+      kind,
+    ])
+  const addDone = (...kinds: AddKind[]) =>
+    setAdding((list) => list.filter((item) => !kinds.includes(item)))
+
+  // Переход к связанной карточке: тело окна пересоздано, ссылка с фокусом исчезла — фокус на окно
+  useEffect(() => {
+    const dialog = document.querySelector<HTMLElement>('[data-card-window]')
+    if (dialog && !dialog.contains(document.activeElement)) dialog.focus()
+  }, [])
 
   const uploadFiles = async (files: File[]) => {
     for (const file of files) {
@@ -184,7 +211,7 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
     }
   }
 
-  const relationKind = adding === 'parent' || adding === 'child' ? adding : null
+  const relationKind = adding.find(isRelation) ?? null
   const ended = card.blocks.filter((block) => block.ended_at).length
   const { parents, children } = card.relations
 
@@ -196,7 +223,8 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
       onDragEnter={(event) => {
         if (!hasFiles(event)) return
         event.preventDefault()
-        setDragDepth((value) => value + 1)
+        dragDepth.current += 1
+        setDragging(true)
       }}
       onDragOver={(event) => {
         if (!hasFiles(event)) return
@@ -204,11 +232,14 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
         event.dataTransfer.dropEffect = canAttach ? 'copy' : 'none'
       }}
       onDragLeave={(event) => {
-        if (hasFiles(event)) setDragDepth((value) => Math.max(0, value - 1))
+        if (!hasFiles(event)) return
+        dragDepth.current = Math.max(0, dragDepth.current - 1)
+        if (dragDepth.current === 0) setDragging(false)
       }}
       onDrop={(event) => {
         if (!hasFiles(event)) return
-        setDragDepth(0)
+        dragDepth.current = 0
+        setDragging(false)
         if (event.defaultPrevented) return
         event.preventDefault()
         if (canAttach) void uploadFiles(Array.from(event.dataTransfer.files))
@@ -222,7 +253,7 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
             card={card}
             canEdit={canEdit}
             canAttach={canAttach}
-            onAdd={setAdding}
+            onAdd={add}
             onPickFiles={() => fileInput.current?.click()}
             onMove={() => setMoving(true)}
             onDeleted={onDeleted}
@@ -230,8 +261,8 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
           <CardActiveBlocks
             card={card}
             canEdit={canEdit}
-            adding={adding === 'block'}
-            onAddDone={addDone}
+            adding={isAdding('block')}
+            onAddDone={() => addDone('block')}
           />
 
           <CardSection id="main" title={t('sections.main')}>
@@ -239,19 +270,19 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
           </CardSection>
           <CardDescriptionSection card={card} canEdit={canEdit} />
 
-          {(card.checklists.length > 0 || (canEdit && adding === 'checklist')) && (
+          {(card.checklists.length > 0 || (canEdit && isAdding('checklist'))) && (
             <CardSection
               id="checklists"
               title={t('sections.checklists')}
               count={card.checklists.length}
-              forceOpen={adding === 'checklist'}
+              forceOpen={isAdding('checklist')}
             >
               <CardChecklistsSection
                 card={card}
                 canEdit={canEdit}
-                adding={adding === 'checklist'}
-                onAdd={() => setAdding('checklist')}
-                onAddDone={addDone}
+                adding={isAdding('checklist')}
+                onAdd={() => add('checklist')}
+                onAddDone={() => addDone('checklist')}
               />
             </CardSection>
           )}
@@ -266,8 +297,8 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
                 card={card}
                 canEdit={canEdit}
                 adding={relationKind}
-                onAdd={setAdding}
-                onAddDone={addDone}
+                onAdd={add}
+                onAddDone={() => addDone('parent', 'child')}
               />
             </CardSection>
           )}
@@ -291,19 +322,19 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
               />
             </CardSection>
           )}
-          {(card.links.length > 0 || (canEdit && adding === 'link')) && (
+          {(card.links.length > 0 || (canEdit && isAdding('link'))) && (
             <CardSection
               id="links"
               title={t('sections.links')}
               count={card.links.length}
-              forceOpen={adding === 'link'}
+              forceOpen={isAdding('link')}
             >
               <CardLinksSection
                 card={card}
                 canEdit={canEdit}
-                adding={adding === 'link'}
-                onAdd={() => setAdding('link')}
-                onAddDone={addDone}
+                adding={isAdding('link')}
+                onAdd={() => add('link')}
+                onAddDone={() => addDone('link')}
               />
             </CardSection>
           )}
@@ -339,7 +370,7 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
         </div>
       </div>
 
-      {canAttach && dragDepth > 0 && (
+      {canAttach && dragging && (
         <div
           aria-hidden
           className="border-primary bg-background/90 pointer-events-none absolute inset-2 flex items-center justify-center rounded-lg border-2 border-dashed text-sm font-medium"

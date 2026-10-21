@@ -112,6 +112,8 @@ export function PersonPicker({
                 <CommandItem
                   key={user.id}
                   value={user.id}
+                  // Пока изменение отправляется, второй выбор ждёт: иначе ответы перепишут друг друга
+                  disabled={disabled}
                   keywords={[user.name]}
                   aria-label={
                     selected.includes(user.id)

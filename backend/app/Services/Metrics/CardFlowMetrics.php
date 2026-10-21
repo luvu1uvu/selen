@@ -18,9 +18,9 @@ use App\Models\CardTransition;
  * - completed_at — последний вход в done, если карточка сейчас в done; иначе null;
  * - lead time = created_at → completed_at; cycle time = first_started_at → completed_at.
  *
- * moved_at — последний переход в другое место (колонка, дорожка, доска; в том числе возврат из архива в другую ячейку
- * и переезд в первую подколонку). Смена типа колонки место не меняет — не перемещение (окно карточки, «Перемещена N
- * назад»).
+ * moved_at — последнее перемещение пользователем в другое место (колонка, дорожка, доска; в том числе возврат из
+ * архива в другую ячейку). Смена типа колонки и переезд в первую подколонку делает не человек — не перемещение (окно
+ * карточки, «Перемещена N назад»); перестановка внутри ячейки перехода не пишет.
  */
 class CardFlowMetrics
 {
@@ -46,7 +46,7 @@ class CardFlowMetrics
                 $firstStartedAt = $transition->moved_at;
             }
 
-            if ($transition->reason === TransitionReason::Manual || $transition->reason === TransitionReason::ColumnSplit) {
+            if ($transition->reason === TransitionReason::Manual) {
                 $movedAt = $transition->moved_at;
             }
 

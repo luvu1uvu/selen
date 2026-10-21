@@ -215,6 +215,104 @@ describe('Окно карточки', () => {
       await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
       expect(router.state.location.pathname).toBe('/boards/board-1')
     })
+    it('переход к связанной карточке: закрытие возвращает к доске одним действием, «Назад» — к предыдущей', async () => {
+      serveCard(
+        makeCardDetail({
+          relations: {
+            parents: [
+              {
+                id: 'r1',
+                card: {
+                  hidden: false,
+                  id: 'c2',
+                  key: 'DEV-2',
+                  title: 'Вторая',
+                  category: 'queue',
+                  archived: false,
+                },
+              },
+            ],
+            children: [],
+            progress: null,
+          },
+        }),
+      )
+      server.use(
+        http.get('*/api/v1/cards/DEV-2', () =>
+          HttpResponse.json({ data: makeCardDetail({ id: 'c2', key: 'DEV-2', title: 'Вторая' }) }),
+        ),
+        http.get('*/api/v1/cards/DEV-2/comments', () => HttpResponse.json({ data: [], users: {} })),
+      )
+      const { router } = renderApp('/boards/board-1')
+      await userEvent.click(await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' }))
+      const first = await screen.findByRole('dialog', { name: 'Первая' })
+
+      await userEvent.click(within(first).getByRole('link', { name: 'DEV-2' }))
+      const second = await screen.findByRole('dialog', { name: 'Вторая' })
+      // Тело окна пересоздано — фокус на окне, а не в body
+      await vi.waitFor(() => expect(second).toHaveFocus())
+
+      await router.navigate(-1)
+      expect(await screen.findByRole('dialog', { name: 'Первая' })).toBeInTheDocument()
+      await router.navigate(1)
+      await screen.findByRole('dialog', { name: 'Вторая' })
+
+      await userEvent.keyboard('{Escape}')
+      await vi.waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+
+    it('по прямой ссылке переход к связанной карточке заменяет адрес — закрытие ведёт на доску', async () => {
+      serveCard(
+        makeCardDetail({
+          relations: {
+            parents: [
+              {
+                id: 'r1',
+                card: {
+                  hidden: false,
+                  id: 'c2',
+                  key: 'DEV-2',
+                  title: 'Вторая',
+                  category: 'queue',
+                  archived: false,
+                },
+              },
+            ],
+            children: [],
+            progress: null,
+          },
+        }),
+      )
+      server.use(
+        http.get('*/api/v1/cards/DEV-2', () =>
+          HttpResponse.json({ data: makeCardDetail({ id: 'c2', key: 'DEV-2', title: 'Вторая' }) }),
+        ),
+        http.get('*/api/v1/cards/DEV-2/comments', () => HttpResponse.json({ data: [], users: {} })),
+      )
+      const { router } = renderApp('/cards/DEV-1')
+      const first = await screen.findByRole('dialog', { name: 'Первая' })
+
+      await userEvent.click(within(first).getByRole('link', { name: 'DEV-2' }))
+      await screen.findByRole('dialog', { name: 'Вторая' })
+      expect(router.state.historyAction).toBe('REPLACE')
+
+      await userEvent.keyboard('{Escape}')
+      await vi.waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
+    })
+
+    it('двойной Esc не уводит дальше доски', async () => {
+      serveCard(makeCardDetail())
+      const { router } = renderApp('/boards/board-1')
+      await userEvent.click(await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' }))
+      const window = await screen.findByRole('dialog')
+
+      fireEvent.keyDown(window, { key: 'Escape' })
+      fireEvent.keyDown(window, { key: 'Escape' })
+      await vi.waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(router.state.location.pathname).toBe('/boards/board-1')
+    })
   })
 
   describe('несохранённый текст', () => {
@@ -257,6 +355,66 @@ describe('Окно карточки', () => {
       await userEvent.click(within(again).getByRole('button', { name: 'Закрыть без сохранения' }))
       await vi.waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
       await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+
+    it('две формы «+» сразу и свёрнутая секция не теряют начатый текст', async () => {
+      serveCard(
+        makeCardDetail({
+          checklists: [{ id: 'ch1', title: 'Релиз', items: [] }],
+        }),
+      )
+      const { router } = renderApp('/cards/DEV-1')
+      const window = await screen.findByRole('dialog')
+
+      // Причина блокировки, потом ещё и ссылка — причина на месте
+      await userEvent.click(
+        within(await openAddMenu(window)).getByRole('menuitem', { name: 'Блокировку…' }),
+      )
+      await userEvent.type(
+        await within(window).findByLabelText('Причина блокировки'),
+        'Ждём доступ',
+      )
+      await userEvent.click(
+        within(await openAddMenu(window)).getByRole('menuitem', { name: 'Ссылку…' }),
+      )
+      expect(await within(window).findByLabelText('Адрес ссылки')).toBeInTheDocument()
+      expect(within(window).getByLabelText('Причина блокировки')).toHaveValue('Ждём доступ')
+
+      // Текст нового пункта в свёрнутых «Чек-листах» остаётся
+      await userEvent.type(within(window).getByLabelText('Новый пункт в «Релиз»'), 'Проверить')
+      await userEvent.click(within(window).getByRole('button', { name: /^Чек-листы/ }))
+      expect(within(window).getByLabelText('Новый пункт в «Релиз»')).not.toBeVisible()
+      await userEvent.click(within(window).getByRole('button', { name: /^Чек-листы/ }))
+      expect(within(window).getByLabelText('Новый пункт в «Релиз»')).toHaveValue('Проверить')
+
+      // Закрытие — с вопросом
+      await userEvent.click(within(window).getByRole('button', { name: 'Закрыть' }))
+      expect(
+        await screen.findByRole('dialog', { name: 'Закрыть без сохранения?' }),
+      ).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/cards/DEV-1')
+    })
+
+    it('сохранённое название — не «несохранённый текст»; Esc в «План, ч» отменяет правку', async () => {
+      const patches = serveCard(makeCardDetail({ estimate_hours: 2 }))
+      const { router } = renderApp('/cards/DEV-1')
+      const window = await screen.findByRole('dialog')
+
+      const estimate = within(window).getByLabelText('План, ч')
+      await userEvent.clear(estimate)
+      await userEvent.type(estimate, '5')
+      await userEvent.keyboard('{Escape}')
+      expect(estimate).toHaveValue('2')
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+      const title = within(window).getByRole('textbox', { name: 'Название' })
+      await userEvent.type(title, '!')
+      await userEvent.click(within(window).getByRole('button', { name: 'Закрыть' }))
+      await vi.waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
+      expect(
+        screen.queryByRole('dialog', { name: 'Закрыть без сохранения?' }),
+      ).not.toBeInTheDocument()
+      expect(patches).toEqual([{ title: 'Первая!' }])
     })
 
     it('без текста окно закрывается сразу, без вопроса', async () => {
@@ -489,7 +647,7 @@ describe('Окно карточки', () => {
       expect(main).toHaveAttribute('aria-expanded', 'true')
       await userEvent.click(main)
       expect(main).toHaveAttribute('aria-expanded', 'false')
-      expect(within(window).queryByText('Расположение')).not.toBeInTheDocument()
+      expect(within(window).getByText('Расположение')).not.toBeVisible()
 
       const info = within(window).getByRole('button', { name: 'Сведения' })
       expect(info).toHaveAttribute('aria-expanded', 'false')

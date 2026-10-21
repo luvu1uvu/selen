@@ -40,7 +40,7 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
   }
 
   return (
-    <header className="grid gap-1.5 pr-8">
+    <header className="grid gap-1.5 pr-10">
       {canEdit ? (
         <>
           <DialogTitle className="sr-only">{card.title}</DialogTitle>
@@ -82,7 +82,12 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
             disabled={update.isPending}
             onSelect={(user) => void changeCustomer(user.id)}
           >
-            <Button variant="ghost" size="sm" className="-ml-1 h-7 px-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-1 h-7 px-1.5"
+              aria-label={t('card.customerButton', { name: card.customer.name })}
+            >
               <PersonLine person={card.customer} compact />
             </Button>
           </PersonPicker>
@@ -151,6 +156,8 @@ function TitleField({ card }: { card: CardDetail }) {
   const { t: tc } = useTranslation()
   const update = useUpdateCard(card.key)
   const [title, setTitle] = useState(card.title)
+  // Сохранение уходит при потере фокуса — в том же событии, что щелчок по ✕: флаг ставим сразу, а не по ответу
+  const [saving, setSaving] = useState(false)
   const cancelled = useRef(false)
   const field = useRef<HTMLTextAreaElement>(null)
 
@@ -160,14 +167,26 @@ function TitleField({ card }: { card: CardDetail }) {
     setSynced(card.title)
     setTitle(card.title)
   }
-  useUnsavedText(title.trim() !== '' && title.trim() !== card.title)
+  // Отправленное название — уже не «несохранённое»: вопрос при закрытии во время сохранения не нужен
+  useUnsavedText(title.trim() !== '' && title.trim() !== card.title && !saving)
 
-  // Высота — по тексту: название переносится на сколько нужно строк
+  // Высота — по тексту: название переносится на сколько нужно строк; окно сузили (поворот телефона) — пересчитать
   useLayoutEffect(() => {
     const element = field.current
     if (!element) return
-    element.style.height = 'auto'
-    element.style.height = `${element.scrollHeight}px`
+    const fit = () => {
+      element.style.height = 'auto'
+      element.style.height = `${element.scrollHeight}px`
+    }
+    fit()
+    let width = element.clientWidth
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth === width) return
+      width = element.clientWidth
+      fit()
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
   }, [title])
 
   const save = async () => {
@@ -176,11 +195,14 @@ function TitleField({ card }: { card: CardDetail }) {
       setTitle(card.title)
       return
     }
+    setSaving(true)
     try {
       await update.mutateAsync({ title: value })
       toast.success(t('card.saved'))
     } catch (error) {
       toast.error(getErrorMessage(error, tc('errors.generic')))
+    } finally {
+      setSaving(false)
     }
   }
 
