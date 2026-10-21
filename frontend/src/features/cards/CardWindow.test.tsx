@@ -349,6 +349,8 @@ describe('Окно карточки', () => {
       )
       expect(router.state.location.pathname).toBe('/cards/DEV-1')
       expect(field).toHaveValue('Черновик')
+      // Курсор снова в поле с несохранённым текстом (просьба PM)
+      await vi.waitFor(() => expect(field).toHaveFocus())
 
       void router.navigate(-1)
       const again = await screen.findByRole('dialog', { name: 'Закрыть без сохранения?' })
@@ -575,6 +577,26 @@ describe('Окно карточки', () => {
       expect(body).toEqual({ board_id: 'board-2', column_id: 'r-done', lane_id: 'r-main' })
     })
 
+    it('после окна «Переместить» фокус на лупе без подсказки — Esc закрывает окно карточки (LATER-94)', async () => {
+      serveCard(makeCardDetail())
+      const { router } = renderApp('/boards/board-1')
+      await userEvent.click(await screen.findByRole('button', { name: 'Открыть DEV-1: Первая' }))
+      const window = await screen.findByRole('dialog', { name: 'Первая' })
+
+      const lupa = within(window).getByRole('button', { name: 'Переместить…' })
+      await userEvent.click(lupa)
+      await screen.findByRole('dialog', { name: 'Переместить DEV-1' })
+      await userEvent.keyboard('{Escape}')
+      await vi.waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Переместить DEV-1' })).not.toBeInTheDocument(),
+      )
+      await vi.waitFor(() => expect(lupa).toHaveFocus())
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+
+      await userEvent.keyboard('{Escape}')
+      await vi.waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
+    })
+
     it('системный администратор удаляет в корзину из «⋯» — окно закрывается, карточку не перезапрашиваем', async () => {
       let deleted = 0
       let fetchedAfterDelete = 0
@@ -695,7 +717,7 @@ describe('Окно карточки', () => {
       const window = await screen.findByRole('dialog')
 
       expect(within(window).getByText('Ждём доступ')).toBeInTheDocument()
-      expect(within(window).getByRole('button', { name: 'Снять' })).toBeInTheDocument()
+      expect(within(window).getByRole('button', { name: 'Снять блокировку' })).toBeInTheDocument()
       const history = within(window).getByRole('region', { name: 'Блокировки' })
       expect(within(history).getByText('Ждали макет')).toBeInTheDocument()
       expect(within(history).queryByText('Ждём доступ')).not.toBeInTheDocument()

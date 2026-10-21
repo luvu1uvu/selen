@@ -19,6 +19,7 @@ export function ConfirmDialog({
   pending = false,
   onConfirm,
   onOpenChange,
+  onCloseAutoFocus,
 }: {
   open: boolean
   title: string
@@ -29,11 +30,13 @@ export function ConfirmDialog({
   pending?: boolean
   onConfirm: () => void
   onOpenChange: (open: boolean) => void
+  /** Куда вернуть фокус после закрытия (по умолчанию — туда, где он был до открытия). */
+  onCloseAutoFocus?: (event: Event) => void
 }) {
   const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent closeLabel={t('actions.close')}>
+      <DialogContent closeLabel={t('actions.close')} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

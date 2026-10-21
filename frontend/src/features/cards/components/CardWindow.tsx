@@ -72,6 +72,8 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
   const discard = useRef(false)
   // Закрытие уже начато с этой записи истории: повтор (двойной Esc во время перерисовки) ушёл бы ещё на шаг назад
   const closing = useRef<string | null>(null)
+  // Последнее поле с текстом, где был фокус: «Продолжить редактирование» возвращает туда (просьба PM к UI-1a)
+  const lastField = useRef<HTMLElement | null>(null)
   const api = useMemo<CardWindowApi>(
     () => ({
       setUnsaved: (id, value) => {
@@ -133,6 +135,20 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
             ;(event.currentTarget as HTMLElement | null)?.focus()
           }}
           onEscapeKeyDown={onEscapeKeyDown}
+          onFocusCapture={(event) => {
+            const target = event.target as Element
+            if (isTextEntry(target)) lastField.current = target
+          }}
+          onKeyDown={(event) => {
+            // Фокус на самом окне (сразу после открытия): Shift+Tab — на последний элемент окна, а не на доску под ним
+            // (LATER-96). С элементов окна Tab и Shift+Tab ходят по кругу сами (FocusScope)
+            if (event.key !== 'Tab' || !event.shiftKey || event.target !== event.currentTarget)
+              return
+            const last = lastTabbable(event.currentTarget)
+            if (!last) return
+            event.preventDefault()
+            last.focus()
+          }}
           onInteractOutside={(event) => {
             // Список подсказки @ и уведомления — вне окна, но щелчок по ним — не «мимо окна»
             const target = event.target
@@ -166,8 +182,28 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
         confirmLabel={t('card.unsavedConfirm')}
         cancelLabel={t('card.unsavedCancel')}
         onConfirm={() => blocker.proceed?.()}
+        onCloseAutoFocus={(event) => {
+          // Остались в окне — курсор снова в поле, где несохранённый текст (закрыли — поля уже нет)
+          const field = lastField.current
+          if (!field?.isConnected) return
+          event.preventDefault()
+          field.focus()
+        }}
       />
     </CardWindowContext.Provider>
+  )
+}
+
+const TABBABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex], [contenteditable="true"]'
+
+/** Последний элемент окна, на который встаёт Tab: видимый и не исключённый из порядка Tab. */
+function lastTabbable(container: HTMLElement): HTMLElement | null {
+  const candidates = Array.from(container.querySelectorAll<HTMLElement>(TABBABLE))
+  return (
+    candidates
+      .reverse()
+      .find((element) => element.tabIndex >= 0 && element.getClientRects().length > 0) ?? null
   )
 }
 

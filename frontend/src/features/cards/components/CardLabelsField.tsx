@@ -31,6 +31,7 @@ export function CardLabelsField({ card, canEdit }: { card: CardDetail; canEdit: 
     const next = checked ? [...current, id] : current.filter((labelId) => labelId !== id)
     try {
       await setLabels.mutateAsync(next)
+      toast.success(t('card.saved'))
     } catch (error) {
       toast.error(getErrorMessage(error, tc('errors.generic')))
     }

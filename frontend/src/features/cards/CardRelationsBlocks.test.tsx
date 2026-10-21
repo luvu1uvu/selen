@@ -200,7 +200,7 @@ describe('Карточка: связи и блокировки', () => {
       within(history).getByText(/снята автоматически .*: блокирующая карточка готова/),
     ).toBeInTheDocument()
 
-    await userEvent.click(within(section).getByRole('button', { name: 'Снять' }))
+    await userEvent.click(within(section).getByRole('button', { name: 'Снять блокировку' }))
     expect(await screen.findByText('Блокировка снята')).toBeInTheDocument()
 
     // Новая — пунктом «+»

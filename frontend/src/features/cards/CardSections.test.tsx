@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import { toast } from 'sonner'
 import type { CardDetail, Label, SpacePerson } from '@/shared/types/api'
 import { makeBoardDetail, makeCardDetail, makeCardHistory } from '@/test/boards'
 import { makeUser, server, signedInAs } from '@/test/server'
@@ -178,6 +179,7 @@ describe('Карточка: люди, поля, метки', () => {
     const calls = serveCard(
       makeCardDetail({ labels: [labels[2]], due_date: '2026-10-01', completed_at: null }),
     )
+    const success = vi.spyOn(toast, 'success')
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
@@ -189,6 +191,9 @@ describe('Карточка: люди, поля, метки', () => {
     expect(within(menu).getByText('Общие метки компании')).toBeInTheDocument()
     expect(within(menu).queryByText('Старая')).not.toBeInTheDocument()
     await userEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Безопасность' }))
+    // Как у остальных полей — уведомление «Сохранено» (LATER-93)
+    await vi.waitFor(() => expect(success).toHaveBeenCalledWith('Сохранено'))
+    success.mockRestore()
 
     await vi.waitFor(() =>
       expect(calls).toEqual([

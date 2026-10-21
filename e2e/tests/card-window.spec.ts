@@ -121,6 +121,8 @@ test('несохранённый текст: первый Esc выводит и�
   await confirm.getByRole('button', { name: 'Продолжить редактирование' }).click()
   await expect(confirm).toBeHidden()
   await expect(comment).toHaveText('Черновик')
+  // Курсор снова в поле комментария — понятно, где продолжать
+  await expect(comment).toBeFocused()
 
   // Щелчок мимо окна — тот же вопрос
   await page.mouse.click(10, 400)
