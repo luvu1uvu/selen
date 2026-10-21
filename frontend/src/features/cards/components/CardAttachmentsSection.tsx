@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download, FileIcon, Paperclip, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -9,29 +9,30 @@ import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import { deleteAttachment } from '../api'
 import { useCardContentMutation } from '../queries'
-import { useAttachmentUpload, type UploadProgress } from '../useAttachmentUpload'
+import type { UploadProgress } from '../useAttachmentUpload'
 
 /**
  * Файлы карточки: картинки — превью (тот же файл, уменьшенный; миниатюры не генерируются) и просмотр
  * в полный размер; видео mp4/webm/mov — встроенный плеер с перемоткой (если браузер не может его
  * воспроизвести — сообщение и кнопка «Скачать»); остальное — скачивание.
  * Прикладывать могут все роли (permissions.comment), удалять — загрузивший, editor и admin.
+ * Загрузку ведёт окно карточки (пункт «+», перетаскивание файла на окно, кнопка секции): `uploads` — её ход.
  */
-export function CardAttachmentsSection({ card }: { card: CardDetail }) {
+export function CardAttachmentsSection({
+  card,
+  canAttach,
+  uploads,
+  onPickFiles,
+}: {
+  card: CardDetail
+  canAttach: boolean
+  uploads: UploadProgress[]
+  onPickFiles: () => void
+}) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
-  const input = useRef<HTMLInputElement>(null)
-  const { upload, uploads } = useAttachmentUpload(card.key)
   const remove = useCardContentMutation((id: string) => deleteAttachment(id))
   const [preview, setPreview] = useState<Attachment | null>(null)
-  const canAttach = card.permissions.comment && !card.archived_at
-
-  const onFiles = async (files: FileList | null) => {
-    for (const file of Array.from(files ?? [])) {
-      if (await upload(file)) toast.success(t('attachments.uploaded', { name: file.name }))
-    }
-    if (input.current) input.current.value = ''
-  }
 
   const onRemove = async (attachment: Attachment) => {
     try {
@@ -48,20 +49,10 @@ export function CardAttachmentsSection({ card }: { card: CardDetail }) {
   return (
     <div className="grid gap-3">
       {canAttach && (
-        <div>
-          <input
-            ref={input}
-            type="file"
-            multiple
-            className="sr-only"
-            aria-label={t('attachments.choose')}
-            onChange={(event) => onFiles(event.target.files)}
-          />
-          <Button variant="outline" size="sm" onClick={() => input.current?.click()}>
-            <Paperclip />
-            {t('attachments.add')}
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" className="justify-self-start" onClick={onPickFiles}>
+          <Paperclip />
+          {t('attachments.add')}
+        </Button>
       )}
       {uploads.map((progress) => (
         <UploadRow key={progress.id} progress={progress} />

@@ -17,10 +17,10 @@ import {
 import { useSetCardLabels } from '../queries'
 
 /**
- * Метки карточки: общие метки компании и метки пространства. Поставить можно только активную метку;
- * уже стоящая архивная остаётся, пока её не снимут.
+ * Метки карточки («Основные параметры» окна): общие метки компании и метки пространства. Поставить можно только
+ * активную метку; уже стоящая архивная остаётся, пока её не снимут.
  */
-export function CardLabelsSection({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+export function CardLabelsField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const labels = useSpaceLabels(card.space.key, canEdit)
@@ -45,7 +45,7 @@ export function CardLabelsSection({ card, canEdit }: { card: CardDetail; canEdit
   ].filter((group) => group.items.length > 0)
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <>
       {card.labels.map((label) => (
         <LabelBadge key={label.id} name={label.name} color={label.color} />
       ))}
@@ -55,9 +55,14 @@ export function CardLabelsSection({ card, canEdit }: { card: CardDetail; canEdit
       {canEdit && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={setLabels.isPending}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground px-2"
+              disabled={setLabels.isPending}
+            >
               <Tags />
-              {t('labels.edit')}
+              {t('params.editLabels')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
@@ -88,6 +93,6 @@ export function CardLabelsSection({ card, canEdit }: { card: CardDetail; canEdit
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-    </div>
+    </>
   )
 }

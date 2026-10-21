@@ -136,7 +136,7 @@
     "completedAt": "Готово {{date}}",
     "leadTime": "Время выполнения (lead time): {{value}}",
     "cycleTime": "Время в работе (cycle time): {{value}}",
-    "move": "Переместить",
+    "move": "Переместить…",
     "archive": "Архивировать",
     "restore": "Восстановить",
     "saved": "Сохранено",
@@ -152,7 +152,29 @@
     "linkCopied": "Ссылка скопирована",
     "noDescription": "Описания пока нет",
     "editDescription": "Изменить описание",
-    "addDescription": "Добавить описание"
+    "addDescription": "Добавить описание",
+    "actions": "Действия с карточкой «{{title}}»",
+    "add": "Добавить в карточку",
+    "addChecklist": "Чек-лист",
+    "addFile": "Файл…",
+    "addLink": "Ссылку…",
+    "addParent": "Родительскую карточку…",
+    "addChild": "Дочернюю карточку…",
+    "addBlock": "Блокировку…",
+    "copyKeyLink": "Скопировать ссылку на карточку",
+    "customer": "Заказчик",
+    "changeCustomer": "Сменить заказчика",
+    "created": "Создана {{time}}",
+    "moved": "Перемещена {{time}}",
+    "justNow": "только что",
+    "createdHint": "{{date}}, {{name}}",
+    "dropFiles": "Отпустите, чтобы приложить файл",
+    "unsavedTitle": "Закрыть без сохранения?",
+    "unsavedText": "Несохранённый текст пропадёт.",
+    "unsavedConfirm": "Закрыть без сохранения",
+    "unsavedCancel": "Продолжить редактирование",
+    "emptyDescription": "Добавьте описание…",
+    "restoreFromArchive": "Вернуть из архива"
   },
   "moveCard": {
     "title": "Переместить {{key}}",
@@ -228,7 +250,10 @@
     "attachments": "Файлы",
     "comments": "Комментарии",
     "blocks": "Блокировки",
-    "relations": "Связи"
+    "relations": "Связи",
+    "main": "Основные параметры",
+    "info": "Сведения",
+    "history": "История"
   },
   "people": {
     "customer": "Заказчик",
@@ -307,7 +332,8 @@
     "newItemPlaceholder": "Добавить пункт, Enter — сохранить",
     "editItem": "Изменить пункт",
     "removeItem": "Удалить пункт «{{text}}»",
-    "drag": "Переставить «{{text}}» (Alt+↑/↓)"
+    "drag": "Переставить «{{text}}» (Alt+↑/↓)",
+    "create": "Создать"
   },
   "links": {
     "none": "Ссылок нет",
@@ -315,7 +341,8 @@
     "title": "Название (необязательно)",
     "add": "Добавить",
     "remove": "Удалить ссылку «{{title}}»",
-    "invalid": "Ссылка должна начинаться с http:// или https://"
+    "invalid": "Ссылка должна начинаться с http:// или https://",
+    "addMore": "Ссылка"
   },
   "attachments": {
     "none": "Файлов нет",
@@ -409,5 +436,34 @@
     "archivedHint": "Архивная доска открывается только для чтения; восстановленная встаёт на прежнее место.",
     "archivedEmpty": "Архивных досок нет",
     "emptyMember": "Доски создаёт администратор пространства."
+  },
+  "params": {
+    "location": "Расположение",
+    "type": "Тип",
+    "changeType": "Сменить тип: {{type}}",
+    "responsible": "Ответственный",
+    "assign": "Назначить",
+    "chooseResponsible": "Выбрать ответственного",
+    "unassign": "Снять ответственного",
+    "participants": "Участники",
+    "addParticipants": "Добавить участников",
+    "due": "Срок",
+    "noDue": "Не задан",
+    "changeDue": "Изменить срок",
+    "urgent": "Срочно",
+    "labels": "Метки",
+    "editLabels": "Изменить метки",
+    "estimate": "План, ч",
+    "searchPeople": "Найти по имени",
+    "nobody": "Никого не найдено",
+    "selectedPerson": "{{name}} — выбран"
+  },
+  "info": {
+    "createdBy": "Создал(а)",
+    "created": "Создана",
+    "started": "Начата",
+    "completed": "Завершена",
+    "leadTime": "Время выполнения (lead time)",
+    "cycleTime": "Время в работе (cycle time)"
   }
 }

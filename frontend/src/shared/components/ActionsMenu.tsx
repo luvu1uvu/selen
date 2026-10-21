@@ -30,12 +30,15 @@ export function ActionsMenu({
   label,
   align = 'end',
   className,
+  icon = <MoreHorizontal />,
   children,
 }: {
   label: string
   align?: 'start' | 'end'
   /** Размер кнопки: на доске и панели пространства — `size-7` (правила вида, раздел 4). */
   className?: string
+  /** Значок кнопки: «⋯» по умолчанию; «+» — меню «Добавить в карточку» окна карточки. */
+  icon?: ReactNode
   children: (opensDialog: OpensDialog) => ReactNode
 }) {
   const pending = useRef<(() => void) | null>(null)
@@ -54,7 +57,7 @@ export function ActionsMenu({
               aria-label={label}
               onFocus={hideHintUnlessKeyboard}
             >
-              <MoreHorizontal />
+              {icon}
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

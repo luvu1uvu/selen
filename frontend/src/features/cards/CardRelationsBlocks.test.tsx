@@ -189,22 +189,24 @@ describe('Карточка: связи и блокировки', () => {
       }),
     )
     renderApp('/cards/DEV-1')
-    const section = within(await screen.findByRole('dialog')).getByRole('region', {
-      name: 'Блокировки',
-    })
+    // Активная — плашкой под рядом действий окна, снятые — секцией «Блокировки»
+    const section = await screen.findByRole('dialog')
+    const history = within(section).getByRole('region', { name: 'Блокировки' })
 
     expect(within(section).getByText('Ждём доступы')).toBeInTheDocument()
     expect(within(section).getByText('Скрытая карточка')).toBeInTheDocument()
-    expect(within(section).getByText('История блокировок: 1')).toBeInTheDocument()
+    expect(within(history).queryByText('Ждём доступы')).not.toBeInTheDocument()
     expect(
-      within(section).getByText(/снята автоматически .*: блокирующая карточка готова/),
+      within(history).getByText(/снята автоматически .*: блокирующая карточка готова/),
     ).toBeInTheDocument()
 
     await userEvent.click(within(section).getByRole('button', { name: 'Снять' }))
     expect(await screen.findByText('Блокировка снята')).toBeInTheDocument()
 
-    await userEvent.click(within(section).getByRole('button', { name: 'Заблокировать' }))
-    await userEvent.click(within(section).getByRole('button', { name: 'Заблокировать' }))
+    // Новая — пунктом «+»
+    await userEvent.click(within(section).getByRole('button', { name: 'Добавить в карточку' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Блокировку…' }))
+    await userEvent.click(await within(section).findByRole('button', { name: 'Заблокировать' }))
     expect(
       within(section).getByText('Укажите причину или выберите блокирующую карточку.'),
     ).toBeInTheDocument()
@@ -243,7 +245,8 @@ describe('Карточка: связи и блокировки', () => {
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
-    expect(within(panel).getByText('Не заблокирована')).toBeInTheDocument()
+    expect(within(panel).getByRole('region', { name: 'Связи' })).toHaveTextContent('Эпик')
+    expect(within(panel).queryByRole('region', { name: 'Блокировки' })).not.toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: 'Заблокировать' })).not.toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: 'Дочерняя' })).not.toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: /^Убрать связь/ })).not.toBeInTheDocument()
@@ -342,9 +345,9 @@ describe('Карточка: лента истории', () => {
       ),
     )
     renderApp('/cards/DEV-1')
-    const history = within(await screen.findByRole('dialog')).getByRole('region', {
-      name: 'История',
-    })
+    const window = await screen.findByRole('dialog')
+    await userEvent.click(within(window).getByRole('tab', { name: 'История' }))
+    const history = within(window).getByRole('tabpanel', { name: 'История' })
 
     const lines = (await within(history).findAllByRole('listitem')).map((li) => li.textContent)
     expect(lines).toHaveLength(7)
@@ -398,9 +401,9 @@ describe('Карточка: лента истории', () => {
       ),
     )
     renderApp('/cards/DEV-1')
-    const history = within(await screen.findByRole('dialog')).getByRole('region', {
-      name: 'История',
-    })
+    const window = await screen.findByRole('dialog')
+    await userEvent.click(within(window).getByRole('tab', { name: 'История' }))
+    const history = within(window).getByRole('tabpanel', { name: 'История' })
 
     const lines = (await within(history).findAllByRole('listitem')).map((li) => li.textContent)
     expect(lines[0]).toContain('Блокировка снята: блокирующая карточка удалена')

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { EditorContent, ReactRenderer, useEditor, useEditorState, type Editor } from '@tiptap/react'
 import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion'
 import {
@@ -22,6 +22,7 @@ import { Input } from '@/shared/ui/input'
 import { isEmptyDoc, type MentionCandidate, type RichTextDoc } from './doc'
 import { buildExtensions, isAllowedUrl } from './extensions'
 import { MentionList, type MentionListHandle } from './MentionList'
+import { RICH_TEXT_POPUP_ATTRIBUTE, setOpenMentionPopup } from './popup'
 
 export interface RichTextEditorProps {
   initial: RichTextDoc | null
@@ -41,6 +42,8 @@ export interface RichTextEditorProps {
   placeholder?: string
   busy?: boolean
   autoFocus?: boolean
+  /** Текст отличается от исходного (несохранённые изменения) — для окна карточки (UI-1a). */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 /**
@@ -60,6 +63,7 @@ export default function RichTextEditor({
   placeholder,
   busy = false,
   autoFocus = false,
+  onDirtyChange,
 }: RichTextEditorProps) {
   const { t } = useTranslation()
   const [live] = useState(() => new EditorBridge(names, onUpload))
@@ -70,6 +74,14 @@ export default function RichTextEditor({
   useEffect(() => {
     live.update(names, onUpload)
   }, [live, onUpload, names])
+
+  // Исходный документ — как его видит редактор (после разбора), чтобы сравнение не зависело от формы initial
+  const baseline = useRef<string | null>(null)
+  const dirty = useRef(false)
+  const reportDirty = useRef(onDirtyChange)
+  useEffect(() => {
+    reportDirty.current = onDirtyChange
+  })
 
   const editor = useEditor({
     immediatelyRender: true,
@@ -110,7 +122,18 @@ export default function RichTextEditor({
         return uploadFiles(files, at)
       },
     },
-    onUpdate: ({ editor }) => setEmpty(isEmptyDoc(editor.getJSON() as RichTextDoc)),
+    onCreate: ({ editor }) => {
+      baseline.current = JSON.stringify(editor.getJSON())
+    },
+    onUpdate: ({ editor }) => {
+      const doc = editor.getJSON() as RichTextDoc
+      setEmpty(isEmptyDoc(doc))
+      const changed = JSON.stringify(doc) !== baseline.current
+      if (changed !== dirty.current) {
+        dirty.current = changed
+        reportDirty.current?.(changed)
+      }
+    },
   })
 
   /** Файлы из буфера/перетаскивания — во вложения карточки; картинки — ещё и в текст. */
@@ -324,12 +347,18 @@ function mentionPopup() {
     renderer?.element.remove()
     renderer?.destroy()
     renderer = null
+    setOpenMentionPopup(null)
   }
 
   return {
     onStart: (props: SuggestionProps<MentionCandidate>) => {
       renderer = new ReactRenderer(MentionList, { props, editor: props.editor })
-      document.body.appendChild(renderer.element)
+      const element = renderer.element as HTMLElement
+      // Список — вне окна: модальное окно отключает указатель у всего вне себя, щелчок по списку — не «мимо окна»
+      element.setAttribute(RICH_TEXT_POPUP_ATTRIBUTE, '')
+      element.style.pointerEvents = 'auto'
+      document.body.appendChild(element)
+      setOpenMentionPopup(close)
       place(props)
     },
     onUpdate: (props: SuggestionProps<MentionCandidate>) => {

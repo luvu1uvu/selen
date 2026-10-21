@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -13,11 +12,23 @@ import { RelatedCardView } from './RelatedCardView'
 /**
  * Родительские и дочерние карточки (в пределах пространства, несколько родителей), прогресс дочерних.
  * Связь со скрытой карточкой показывается, но убрать её может только тот, кто карточку видит.
+ * Новая — пунктом «+» окна или кнопками внизу секции (`adding` — какую связь добавляем).
  */
-export function CardRelationsSection({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+export function CardRelationsSection({
+  card,
+  canEdit,
+  adding,
+  onAdd,
+  onAddDone,
+}: {
+  card: CardDetail
+  canEdit: boolean
+  adding: RelationKind | null
+  onAdd: (kind: RelationKind) => void
+  onAddDone: () => void
+}) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
-  const [adding, setAdding] = useState<RelationKind | null>(null)
   const add = useCardContentMutation((payload: { card: string; kind: RelationKind }) =>
     relationApi.add(card.key, payload),
   )
@@ -28,7 +39,7 @@ export function CardRelationsSection({ card, canEdit }: { card: CardDetail; canE
     if (!adding) return
     try {
       await add.mutateAsync({ card: key, kind: adding })
-      setAdding(null)
+      onAddDone()
       toast.success(t('relations.added'))
     } catch (error) {
       toast.error(getErrorMessage(error, tc('errors.generic')))
@@ -82,7 +93,7 @@ export function CardRelationsSection({ card, canEdit }: { card: CardDetail; canE
             className="bg-muted h-1.5 overflow-hidden rounded"
           >
             <div
-              className="h-full bg-emerald-600"
+              className="bg-success h-full"
               style={{ width: `${(progress.done / progress.total) * 100}%` }}
             />
           </div>
@@ -99,22 +110,17 @@ export function CardRelationsSection({ card, canEdit }: { card: CardDetail; canE
               label={adding === 'parent' ? t('relations.pickParent') : t('relations.pickChild')}
               onPick={(picked) => pick(picked.key)}
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="justify-self-start"
-              onClick={() => setAdding(null)}
-            >
+            <Button variant="ghost" size="sm" className="justify-self-start" onClick={onAddDone}>
               {tc('actions.cancel')}
             </Button>
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => setAdding('parent')}>
+            <Button variant="ghost" size="sm" onClick={() => onAdd('parent')}>
               <Plus />
               {t('relations.addParent')}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setAdding('child')}>
+            <Button variant="ghost" size="sm" onClick={() => onAdd('child')}>
               <Plus />
               {t('relations.addChild')}
             </Button>

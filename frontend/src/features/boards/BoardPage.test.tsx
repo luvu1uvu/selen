@@ -277,7 +277,7 @@ describe('Доска', () => {
 describe('Карточка по ссылке', () => {
   beforeEach(() => signedInAs(makeUser({ role: 'member' })))
 
-  it('открывается в панели поверх своей доски; правка названия сохраняется', async () => {
+  it('открывается в окне поверх своей доски; правка названия сохраняется', async () => {
     let body: unknown
     serveBoard()
     server.use(
@@ -327,10 +327,13 @@ describe('Карточка по ссылке', () => {
     renderApp('/cards/DEV-1')
 
     const panel = await screen.findByRole('dialog')
+    // Метрики — в «Сведениях» (свёрнуты по умолчанию), история — вкладкой
+    await userEvent.click(within(panel).getByRole('button', { name: 'Сведения' }))
+    expect(within(panel).getByText('1 д 3 ч')).toBeInTheDocument()
+    expect(within(panel).getByText('3 ч 10 мин')).toBeInTheDocument()
+    await userEvent.click(within(panel).getByRole('tab', { name: 'История' }))
     expect(await within(panel).findByText('Создана в «To Do»')).toBeInTheDocument()
-    expect(within(panel).getByText(/lead time\): 1 д 3 ч/)).toBeInTheDocument()
-    expect(within(panel).getByText(/cycle time\): 3 ч 10 мин/)).toBeInTheDocument()
-    // Доска под панелью тоже на месте
+    // Доска под окном тоже на месте
     expect(screen.getByRole('heading', { name: 'Продукт', hidden: true })).toBeInTheDocument()
 
     const title = within(panel).getByLabelText('Название')

@@ -133,7 +133,8 @@ describe('Карточка: описание, комментарии, чек-л�
       }),
     ])
     renderApp('/cards/DEV-1')
-    const section = within(await screen.findByRole('dialog')).getByRole('region', {
+    // Комментарии — вкладка внизу окна, открыта по умолчанию
+    const section = within(await screen.findByRole('dialog')).getByRole('tabpanel', {
       name: 'Комментарии',
     })
 
@@ -195,9 +196,14 @@ describe('Карточка: описание, комментарии, чек-л�
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
+    // Новый чек-лист — кнопкой внизу секции; после создания форма закрывается
+    await userEvent.click(within(panel).getByRole('button', { name: 'Чек-лист' }))
     await userEvent.type(
       within(panel).getByLabelText('Название нового чек-листа'),
       'После релиза{Enter}',
+    )
+    await vi.waitFor(() =>
+      expect(within(panel).queryByLabelText('Название нового чек-листа')).not.toBeInTheDocument(),
     )
     await userEvent.type(
       within(panel).getByLabelText('Новый пункт в «Релиз»'),
@@ -221,6 +227,12 @@ describe('Карточка: описание, комментарии, чек-л�
     const calls = serve(makeCardDetail())
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
+
+    // Ссылок нет — секции нет; новая — пунктом «+», фокус сразу в поле адреса
+    expect(within(panel).queryByRole('region', { name: 'Ссылки' })).not.toBeInTheDocument()
+    await userEvent.click(within(panel).getByRole('button', { name: 'Добавить в карточку' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Ссылку…' }))
+    await vi.waitFor(() => expect(within(panel).getByLabelText('Адрес ссылки')).toHaveFocus())
 
     await userEvent.type(within(panel).getByLabelText('Адрес ссылки'), 'javascript:alert(1)')
     await userEvent.click(within(panel).getByRole('button', { name: 'Добавить' }))
@@ -322,7 +334,8 @@ describe('Карточка: описание, комментарии, чек-л�
     expect(await screen.findByRole('dialog', { name: 'screen.png' })).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
 
-    const input = within(section).getByLabelText('Выбрать файлы')
+    // Файлы выбирает окно (пункт «+», кнопка секции, перетаскивание)
+    const input = screen.getByLabelText('Выбрать файлы')
     const big = new File(['x'], 'huge.zip')
     Object.defineProperty(big, 'size', { value: 101 * 1024 * 1024 })
     await userEvent.upload(input, [new File(['data'], 'notes.txt', { type: 'text/plain' }), big])

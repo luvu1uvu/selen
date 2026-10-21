@@ -6,7 +6,7 @@ import { Trash2 } from 'lucide-react'
 import { useCurrentUser } from '@/features/auth/queries'
 import { setCardArchived } from '@/features/cards/api'
 import { useArchivedCards, useCardChanged, useDeleteCard } from '@/features/cards/queries'
-import { useCardPath } from '@/features/cards/useCardPath'
+import { useCardLink } from '@/features/cards/useCardLink'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { Pagination } from '@/shared/components/Pagination'
@@ -41,7 +41,7 @@ export function ArchivedCardsDialog({
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const { data: me } = useCurrentUser()
-  const cardPath = useCardPath()
+  const cardLink = useCardLink()
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const search = useDebouncedValue(query.trim())
@@ -93,7 +93,7 @@ export function ArchivedCardsDialog({
               <div className="grid min-w-0 flex-1">
                 <span className="flex min-w-0 items-baseline gap-2">
                   <Link
-                    to={cardPath(card.key)}
+                    {...cardLink(card.key)}
                     className="shrink-0 font-mono text-xs hover:underline"
                     onClick={onClose}
                   >
