@@ -161,3 +161,25 @@ test('файл, брошенный на окно, становится влож�
   ).toBeVisible()
   await expect(window.getByText('Отпустите, чтобы приложить файл')).toBeHidden()
 })
+
+test('превью картинки с фокусом с клавиатуры — рамка вокруг превью видна (U-3 UX-ревью)', async ({ page }) => {
+  // Непрозрачная картинка 1×1: рамка, нарисованная под картинкой, была бы не видна
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==',
+    'base64',
+  )
+  await page.goto('/cards/QA-3')
+  const window = page.getByRole('dialog', { name: 'Блокирующая задача' })
+  await window.getByLabel('Выбрать файлы').setInputFiles([{ name: 'непрозрачная.png', mimeType: 'image/png', buffer: png }])
+  const preview = window.getByRole('button', { name: 'Открыть непрозрачная.png' })
+  await expect(preview).toBeVisible()
+
+  // Фокус с клавиатуры: Shift+Tab и обратно Tab
+  await preview.focus()
+  await page.keyboard.press('Shift+Tab')
+  await page.keyboard.press('Tab')
+  await expect(preview).toBeFocused()
+  const figure = preview.locator('xpath=ancestor::figure[1]')
+  const ring = await figure.evaluate((element) => getComputedStyle(element).boxShadow)
+  expect(ring).toMatch(/3px/)
+})

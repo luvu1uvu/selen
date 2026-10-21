@@ -67,13 +67,14 @@ export function CardAttachmentsSection({
           {media.map((attachment) => (
             <figure
               key={attachment.id}
-              className="group relative overflow-hidden rounded-md border"
+              // Рамка фокуса превью — у figure: кнопка целиком под картинкой, её рамка была бы не видна, а снаружи кнопки
+              // её срезал бы overflow-hidden (U-3 UX-ревью UI-1a)
+              className="group has-[>button:focus-visible]:ring-ring/50 relative overflow-hidden rounded-md border has-[>button:focus-visible]:ring-[3px]"
             >
               {attachment.kind === 'image' ? (
                 <button
                   type="button"
-                  // Рамка фокуса — внутри: снаружи её срезал бы overflow-hidden у figure (U-3 UX-ревью UI-1a)
-                  className="focus-visible:ring-ring/50 block w-full outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
+                  className="block w-full outline-none"
                   aria-label={t('attachments.open', { name: attachment.name })}
                   onClick={() => setPreview(attachment)}
                 >

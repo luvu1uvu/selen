@@ -344,7 +344,8 @@ function ItemRow({
         <Hint label={t('checklists.drag', { text: item.text })}>
           <button
             type="button"
-            className="text-muted-foreground mt-0.5 cursor-grab opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            // Цель 24 px при значке 16 px; -my-0.5 — строка пункта не становится выше
+            className="text-muted-foreground -my-0.5 inline-flex size-6 shrink-0 cursor-grab items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
             aria-label={t('checklists.drag', { text: item.text })}
             {...attributes}
             {...listeners}
