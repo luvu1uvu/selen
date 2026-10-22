@@ -27,14 +27,17 @@ export function RequireAuth() {
 
 /**
  * Пока браузер открывает файл. Документ (и «Скачать») браузер скачивает, оставаясь на этой странице, — поэтому
- * подсказка и путь в приложение, а не вечная «Загрузка…».
+ * подсказка и путь в приложение, а не вечная «Загрузка…». Оформление — как у экрана ошибки (`ErrorState`).
  */
 function OpeningFile() {
   const { t } = useTranslation()
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-3 p-4 text-center">
-      <p>{t('states.openingFile')}</p>
-      <p className="text-muted-foreground text-sm">{t('states.openingFileHint')}</p>
+    <div
+      role="status"
+      className="flex min-h-svh flex-col items-center justify-center gap-3 p-6 text-center"
+    >
+      <h1 className="text-xl font-semibold">{t('states.openingFile')}</h1>
+      <p className="text-muted-foreground max-w-md">{t('states.openingFileHint')}</p>
       <Button asChild variant="outline">
         <Link to="/" replace>
           {t('errors.toHome')}

@@ -100,8 +100,10 @@ describe('Страница входа', () => {
       await signIn()
 
       // Документ браузер скачивает, оставаясь на странице: не вечная «Загрузка…», а подсказка и путь на главную
-      expect(await screen.findByText('Открываем файл…')).toBeInTheDocument()
-      expect(screen.getByText('Если файл скачался, эту вкладку можно закрыть.')).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Открываем файл…' })).toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Если файл скачался, эту вкладку можно закрыть.',
+      )
       expect(openServerPage).toHaveBeenCalledTimes(1)
       expect(openServerPage).toHaveBeenCalledWith(`${FILE}?download=1`)
 
