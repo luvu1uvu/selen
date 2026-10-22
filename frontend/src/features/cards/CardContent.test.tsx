@@ -30,7 +30,8 @@ const attachment = (overrides: Partial<Attachment>): Attachment => ({
   mime: null,
   size: 2048,
   kind: 'file',
-  url: '/api/v1/attachments/a1',
+  url: '/files/a1',
+  opens_in_browser: false,
   uploaded_by: { id: 'me', name: 'Анна' },
   created_at: '2026-10-01T09:00:00.000000Z',
   permissions: { delete: true },
@@ -270,29 +271,34 @@ describe('Карточка: описание, комментарии, чек-л�
             name: 'screen.png',
             kind: 'image',
             mime: 'image/png',
-            url: '/api/v1/attachments/img',
+            url: '/files/img',
+            opens_in_browser: true,
           }),
           attachment({
             id: 'vid',
             name: 'demo.mp4',
             kind: 'video',
             mime: 'video/mp4',
-            url: '/api/v1/attachments/vid',
+            url: '/files/vid',
+            opens_in_browser: true,
           }),
           attachment({
             id: 'mov',
             name: 'screen.mov',
             kind: 'video',
             mime: 'video/quicktime',
-            url: '/api/v1/attachments/mov',
+            url: '/files/mov',
+            opens_in_browser: true,
           }),
           attachment({
             id: 'doc',
             name: 'spec.pdf',
             size: 3 * 1024 * 1024,
-            url: '/api/v1/attachments/doc',
+            url: '/files/doc',
+            opens_in_browser: true,
             permissions: { delete: false },
           }),
+          attachment({ id: 'docx', name: 'report.docx', url: '/files/docx' }),
         ],
       }),
     )
@@ -301,20 +307,40 @@ describe('Карточка: описание, комментарии, чек-л�
 
     expect(within(section).getByRole('img', { name: 'screen.png' })).toHaveAttribute(
       'src',
-      '/api/v1/attachments/img?inline=1',
+      '/files/img',
     )
-    expect(within(section).getByLabelText('demo.mp4')).toHaveAttribute(
-      'src',
-      '/api/v1/attachments/vid?inline=1',
+    expect(within(section).getByLabelText('demo.mp4')).toHaveAttribute('src', '/files/vid')
+    expect(within(section).getByLabelText('screen.mov')).toHaveAttribute('src', '/files/mov')
+    // Имя: то, что браузер показывает сам (PDF по содержимому, картинка), — в новой вкладке; остальное — скачивание
+    const pdf = within(section).getByRole('link', { name: 'spec.pdf' })
+    expect(pdf).toHaveAttribute('href', '/files/doc')
+    expect(pdf).toHaveAttribute('target', '_blank')
+    expect(pdf).not.toHaveAttribute('download')
+    expect(within(section).getByRole('link', { name: 'screen.png' })).toHaveAttribute(
+      'target',
+      '_blank',
     )
-    expect(within(section).getByLabelText('screen.mov')).toHaveAttribute(
-      'src',
-      '/api/v1/attachments/mov?inline=1',
-    )
-    expect(within(section).getByRole('link', { name: 'spec.pdf' })).toHaveAttribute(
+    const docx = within(section).getByRole('link', { name: 'report.docx' })
+    expect(docx).toHaveAttribute('download')
+    expect(docx).not.toHaveAttribute('target')
+    // «Скачать» — всегда скачиванием; ссылку на файл можно скопировать (UI-1b)
+    expect(within(section).getByRole('link', { name: 'Скачать spec.pdf' })).toHaveAttribute(
       'href',
-      '/api/v1/attachments/doc',
+      '/files/doc?download=1',
     )
+    // В jsdom буфера обмена нет — как у страницы не на https: не «скопирована», а объяснение
+    await userEvent.click(
+      within(section).getByRole('button', { name: 'Скопировать ссылку на spec.pdf' }),
+    )
+    expect(
+      await screen.findByText('Не удалось скопировать: браузер не дал доступа к буферу обмена.'),
+    ).toBeInTheDocument()
+    // setup() даёт буфер обмена
+    await userEvent
+      .setup()
+      .click(within(section).getByRole('button', { name: 'Скопировать ссылку на spec.pdf' }))
+    expect(await screen.findByText('Ссылка на файл скопирована')).toBeInTheDocument()
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/files/doc`)
     expect(within(section).getByText('3 МБ')).toBeInTheDocument()
     expect(
       within(section).queryByRole('button', { name: 'Удалить spec.pdf' }),
@@ -328,7 +354,7 @@ describe('Карточка: описание, комментарии, чек-л�
     )
     expect(within(section).getByRole('link', { name: 'Скачать' })).toHaveAttribute(
       'href',
-      '/api/v1/attachments/mov',
+      '/files/mov?download=1',
     )
     // Загрузился только звук (кодек кадра неизвестен) — тоже фолбэк
     const mp4 = within(section).getByLabelText('demo.mp4')

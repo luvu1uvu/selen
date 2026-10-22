@@ -356,8 +356,9 @@ export interface CardLink {
 }
 
 /**
- * Вложение. Файл — по url (через приложение, с проверкой доступа); картинки и видео показываются
- * встроенно с ?inline=1. mime — только у безопасных встроенных типов.
+ * Вложение. Файл — по url (`/files/{id}`: через приложение, с проверкой доступа при каждом открытии; открывается и
+ * напрямую — UI-1b); картинки, видео и PDF — в браузере, `?download=1` — скачать. mime — только у безопасных встроенных
+ * типов.
  */
 export interface Attachment {
   id: string
@@ -366,6 +367,8 @@ export interface Attachment {
   size: number
   kind: 'image' | 'video' | 'file'
   url: string
+  /** Открывается в браузере (картинки, видео, PDF по содержимому): имя — в новой вкладке, иначе — скачивание. */
+  opens_in_browser: boolean
   uploaded_by: UserRef
   created_at: string
   permissions: { delete: boolean }

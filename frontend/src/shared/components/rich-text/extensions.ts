@@ -11,9 +11,9 @@ export function isAllowedUrl(url: string): boolean {
   return /^(https?:\/\/[^\s]+|mailto:[^\s]+)$/i.test(url.trim())
 }
 
-/** Адрес картинки-вложения (только через приложение, с проверкой доступа). */
+/** Адрес картинки-вложения — ссылка на файл (только через приложение, с проверкой доступа при каждом открытии, UI-1b). */
 export function attachmentImageUrl(attachmentId: string): string {
-  return `/api/v1/attachments/${attachmentId}?inline=1`
+  return `/files/${attachmentId}`
 }
 
 /**

@@ -38,6 +38,15 @@ class Browser
         return $this->request('GET', $uri.($data ? '?'.http_build_query($data) : ''));
     }
 
+    /**
+     * Переход самого браузера — адресная строка, новая вкладка, ссылка из мессенджера (UI-1b): без Referer, Origin,
+     * X-Requested-With и X-Selen-User, Accept — страница; cookie те же.
+     */
+    public function navigate(string $uri): TestResponse
+    {
+        return $this->request('GET', $uri, navigation: true);
+    }
+
     /** @param array<string, mixed> $data */
     public function post(string $uri, array $data = []): TestResponse
     {
@@ -113,7 +122,7 @@ class Browser
      * @param  array<string, mixed>  $data
      * @param  array<string, UploadedFile>  $files  есть файлы — запрос формой (multipart), иначе JSON
      */
-    private function request(string $method, string $uri, array $data = [], array $files = []): TestResponse
+    private function request(string $method, string $uri, array $data = [], array $files = [], bool $navigation = false): TestResponse
     {
         // В production каждый запрос — новый процесс php-fpm; в тестах приложение одно,
         // поэтому сбрасываем всё, что могло запомнить пользователя или сессию прошлого запроса
@@ -122,14 +131,16 @@ class Browser
         app('session')->forgetDrivers();
         app()->forgetInstance('session.store');
 
-        $server = [
-            'HTTP_ACCEPT' => 'application/json',
-            'HTTP_REFERER' => 'http://localhost/',
-            'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest',
-            'REMOTE_ADDR' => $this->ip,
-            ...(is_string($this->tabUser) ? ['HTTP_X_SELEN_USER' => $this->tabUser] : []),
-            ...$this->headers,
-        ];
+        $server = $navigation
+            ? ['HTTP_ACCEPT' => 'text/html,application/xhtml+xml,*/*;q=0.8', 'REMOTE_ADDR' => $this->ip]
+            : [
+                'HTTP_ACCEPT' => 'application/json',
+                'HTTP_REFERER' => 'http://localhost/',
+                'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest',
+                'REMOTE_ADDR' => $this->ip,
+                ...(is_string($this->tabUser) ? ['HTTP_X_SELEN_USER' => $this->tabUser] : []),
+                ...$this->headers,
+            ];
 
         $response = $files === []
             ? $this->test->call($method, $uri, [], $this->cookies, [], ['CONTENT_TYPE' => 'application/json', ...$server],

@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, FileIcon, Paperclip, Trash2 } from 'lucide-react'
+import { Download, FileIcon, Link2, Paperclip, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { copyText } from '@/shared/lib/browser'
 import { sizeParts } from '@/shared/lib/size'
 import type { Attachment, CardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import { Hint } from '@/shared/components/Hint'
 import { deleteAttachment } from '../api'
+import { fileLink } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
 import type { UploadProgress } from '../useAttachmentUpload'
 
@@ -79,7 +81,7 @@ export function CardAttachmentsSection({
                   onClick={() => setPreview(attachment)}
                 >
                   <img
-                    src={`${attachment.url}?inline=1`}
+                    src={attachment.url}
                     alt={attachment.name}
                     loading="lazy"
                     className="aspect-video w-full object-cover"
@@ -89,9 +91,7 @@ export function CardAttachmentsSection({
                 <VideoPlayer attachment={attachment} />
               )}
               <figcaption className="flex items-center gap-1 px-2 py-1 text-xs">
-                <span className="truncate" title={attachment.name}>
-                  {attachment.name}
-                </span>
+                <FileNameLink attachment={attachment} />
                 <AttachmentActions attachment={attachment} onRemove={onRemove} />
               </figcaption>
             </figure>
@@ -104,9 +104,7 @@ export function CardAttachmentsSection({
           {files.map((attachment) => (
             <li key={attachment.id} className="flex items-center gap-2 text-sm">
               <FileIcon className="text-muted-foreground size-4 shrink-0" aria-hidden />
-              <a href={attachment.url} className="truncate hover:underline" download>
-                {attachment.name}
-              </a>
+              <FileNameLink attachment={attachment} />
               <span className="text-muted-foreground shrink-0 text-xs">
                 {(({ value, unit }) => t(`attachments.${unit}`, { value }))(
                   sizeParts(attachment.size),
@@ -125,7 +123,7 @@ export function CardAttachmentsSection({
           </DialogHeader>
           {preview && (
             <img
-              src={`${preview.url}?inline=1`}
+              src={preview.url}
               alt={preview.name}
               className="max-h-[80vh] w-full object-contain"
             />
@@ -152,7 +150,7 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
       >
         <span>{t('attachments.cannotPlay')}</span>
         <Button variant="outline" size="sm" asChild>
-          <a href={attachment.url} download>
+          <a href={downloadUrl(attachment)} download>
             <Download />
             {t('attachments.downloadVideo')}
           </a>
@@ -163,7 +161,7 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
 
   return (
     <video
-      src={`${attachment.url}?inline=1`}
+      src={attachment.url}
       controls
       preload="metadata"
       aria-label={attachment.name}
@@ -171,6 +169,33 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
       onError={() => setFailed(true)}
       onLoadedMetadata={(event) => event.currentTarget.videoWidth === 0 && setFailed(true)}
     />
+  )
+}
+
+/** «Скачать» — всегда скачиванием, даже картинку, видео и PDF, которые по ссылке открываются в браузере. */
+function downloadUrl(attachment: Attachment) {
+  return `${attachment.url}?download=1`
+}
+
+/**
+ * Имя файла — ссылка: то, что браузер показывает сам (картинки, видео, PDF по содержимому), открывается в новой
+ * вкладке, остальное скачивается; «Скачать» — отдельной кнопкой (решение PM 22.10, UI-1b).
+ */
+function FileNameLink({ attachment }: { attachment: Attachment }) {
+  return attachment.opens_in_browser ? (
+    <a
+      href={attachment.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="truncate hover:underline"
+      title={attachment.name}
+    >
+      {attachment.name}
+    </a>
+  ) : (
+    <a href={attachment.url} className="truncate hover:underline" title={attachment.name} download>
+      {attachment.name}
+    </a>
   )
 }
 
@@ -182,12 +207,28 @@ function AttachmentActions({
   onRemove: (attachment: Attachment) => void
 }) {
   const { t } = useTranslation('boards')
+  const { t: tc } = useTranslation()
   return (
     <span className="ml-auto flex shrink-0 items-center">
+      <Hint label={t('attachments.copyLink', { name: attachment.name })}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          aria-label={t('attachments.copyLink', { name: attachment.name })}
+          onClick={async () => {
+            // Ссылку можно отправить коллеге: откроется у того, кто видит карточку (UI-1b, LATER-51)
+            if (await copyText(fileLink(attachment))) toast.success(t('attachments.linkCopied'))
+            else toast.error(tc('errors.copyFailed'))
+          }}
+        >
+          <Link2 />
+        </Button>
+      </Hint>
       <Hint label={t('attachments.download', { name: attachment.name })}>
         <Button variant="ghost" size="icon" className="size-6" asChild>
           <a
-            href={attachment.url}
+            href={downloadUrl(attachment)}
             download
             aria-label={t('attachments.download', { name: attachment.name })}
           >
