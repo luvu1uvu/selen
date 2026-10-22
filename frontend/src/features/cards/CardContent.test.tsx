@@ -30,7 +30,7 @@ const attachment = (overrides: Partial<Attachment>): Attachment => ({
   mime: null,
   size: 2048,
   kind: 'file',
-  url: '/api/v1/attachments/a1',
+  url: '/files/a1',
   uploaded_by: { id: 'me', name: 'Анна' },
   created_at: '2026-10-01T09:00:00.000000Z',
   permissions: { delete: true },
@@ -270,27 +270,27 @@ describe('Карточка: описание, комментарии, чек-л�
             name: 'screen.png',
             kind: 'image',
             mime: 'image/png',
-            url: '/api/v1/attachments/img',
+            url: '/files/img',
           }),
           attachment({
             id: 'vid',
             name: 'demo.mp4',
             kind: 'video',
             mime: 'video/mp4',
-            url: '/api/v1/attachments/vid',
+            url: '/files/vid',
           }),
           attachment({
             id: 'mov',
             name: 'screen.mov',
             kind: 'video',
             mime: 'video/quicktime',
-            url: '/api/v1/attachments/mov',
+            url: '/files/mov',
           }),
           attachment({
             id: 'doc',
             name: 'spec.pdf',
             size: 3 * 1024 * 1024,
-            url: '/api/v1/attachments/doc',
+            url: '/files/doc',
             permissions: { delete: false },
           }),
         ],
@@ -301,20 +301,23 @@ describe('Карточка: описание, комментарии, чек-л�
 
     expect(within(section).getByRole('img', { name: 'screen.png' })).toHaveAttribute(
       'src',
-      '/api/v1/attachments/img?inline=1',
+      '/files/img',
     )
-    expect(within(section).getByLabelText('demo.mp4')).toHaveAttribute(
-      'src',
-      '/api/v1/attachments/vid?inline=1',
-    )
-    expect(within(section).getByLabelText('screen.mov')).toHaveAttribute(
-      'src',
-      '/api/v1/attachments/mov?inline=1',
-    )
+    expect(within(section).getByLabelText('demo.mp4')).toHaveAttribute('src', '/files/vid')
+    expect(within(section).getByLabelText('screen.mov')).toHaveAttribute('src', '/files/mov')
     expect(within(section).getByRole('link', { name: 'spec.pdf' })).toHaveAttribute(
       'href',
-      '/api/v1/attachments/doc',
+      '/files/doc',
     )
+    // «Скачать» — всегда скачиванием; ссылку на файл можно скопировать (UI-1b)
+    expect(within(section).getByRole('link', { name: 'Скачать spec.pdf' })).toHaveAttribute(
+      'href',
+      '/files/doc?download=1',
+    )
+    await userEvent.click(
+      within(section).getByRole('button', { name: 'Скопировать ссылку на spec.pdf' }),
+    )
+    expect(await screen.findByText('Ссылка на файл скопирована')).toBeInTheDocument()
     expect(within(section).getByText('3 МБ')).toBeInTheDocument()
     expect(
       within(section).queryByRole('button', { name: 'Удалить spec.pdf' }),
@@ -328,7 +331,7 @@ describe('Карточка: описание, комментарии, чек-л�
     )
     expect(within(section).getByRole('link', { name: 'Скачать' })).toHaveAttribute(
       'href',
-      '/api/v1/attachments/mov',
+      '/files/mov?download=1',
     )
     // Загрузился только звук (кодек кадра неизвестен) — тоже фолбэк
     const mp4 = within(section).getByLabelText('demo.mp4')

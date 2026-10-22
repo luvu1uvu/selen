@@ -1,8 +1,17 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { makeUser, server } from '@/test/server'
+import { openServerPage } from '@/shared/lib/browser'
+import { makeUser, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
+
+// Переход к файлу — браузерный (страницу отдаёт сервер): в jsdom его нет, проверяем вызов
+vi.mock('@/shared/lib/browser', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/shared/lib/browser')>()),
+  openServerPage: vi.fn(),
+}))
+
+const FILE = '/files/01ja0000000000000000000000'
 
 describe('Страница входа', () => {
   it('показывает ошибки валидации на клиенте', async () => {
@@ -74,5 +83,40 @@ describe('Страница входа', () => {
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('Слишком много попыток входа'),
     )
+  })
+
+  describe('ссылка на файл (UI-1b, LATER-51)', () => {
+    beforeEach(() => vi.mocked(openServerPage).mockClear())
+
+    async function signIn() {
+      server.use(http.post('*/api/v1/auth/login', () => HttpResponse.json({ data: makeUser() })))
+      await userEvent.type(await screen.findByLabelText('Email'), 'admin@selen.test')
+      await userEvent.type(screen.getByLabelText('Пароль'), 'correct-password')
+      await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+    }
+
+    it('пришёл по ссылке на файл — после входа браузер открывает файл', async () => {
+      renderApp(`/login?next=${encodeURIComponent(`${FILE}?download=1`)}`)
+      await signIn()
+
+      await waitFor(() => expect(openServerPage).toHaveBeenCalledWith(`${FILE}?download=1`))
+    })
+
+    it('чужой адрес в next игнорируется — главная, без перехода', async () => {
+      for (const next of ['https://evil.example/files/x', '//evil.example', '/admin/users']) {
+        const { unmount } = renderApp(`/login?next=${encodeURIComponent(next)}`)
+        await signIn()
+        expect(await screen.findByRole('heading', { name: 'Пространства' })).toBeInTheDocument()
+        unmount()
+      }
+      expect(openServerPage).not.toHaveBeenCalled()
+    })
+
+    it('уже вошедший на /login?next=… — сразу к файлу', async () => {
+      signedInAs(makeUser())
+      renderApp(`/login?next=${encodeURIComponent(FILE)}`)
+
+      await waitFor(() => expect(openServerPage).toHaveBeenCalledWith(FILE))
+    })
   })
 })

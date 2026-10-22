@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, FileIcon, Paperclip, Trash2 } from 'lucide-react'
+import { Download, FileIcon, Link2, Paperclip, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { sizeParts } from '@/shared/lib/size'
@@ -79,7 +79,7 @@ export function CardAttachmentsSection({
                   onClick={() => setPreview(attachment)}
                 >
                   <img
-                    src={`${attachment.url}?inline=1`}
+                    src={attachment.url}
                     alt={attachment.name}
                     loading="lazy"
                     className="aspect-video w-full object-cover"
@@ -125,7 +125,7 @@ export function CardAttachmentsSection({
           </DialogHeader>
           {preview && (
             <img
-              src={`${preview.url}?inline=1`}
+              src={preview.url}
               alt={preview.name}
               className="max-h-[80vh] w-full object-contain"
             />
@@ -152,7 +152,7 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
       >
         <span>{t('attachments.cannotPlay')}</span>
         <Button variant="outline" size="sm" asChild>
-          <a href={attachment.url} download>
+          <a href={downloadUrl(attachment)} download>
             <Download />
             {t('attachments.downloadVideo')}
           </a>
@@ -163,7 +163,7 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
 
   return (
     <video
-      src={`${attachment.url}?inline=1`}
+      src={attachment.url}
       controls
       preload="metadata"
       aria-label={attachment.name}
@@ -172,6 +172,11 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
       onLoadedMetadata={(event) => event.currentTarget.videoWidth === 0 && setFailed(true)}
     />
   )
+}
+
+/** «Скачать» — всегда скачиванием, даже картинку, видео и PDF, которые по ссылке открываются в браузере. */
+function downloadUrl(attachment: Attachment) {
+  return `${attachment.url}?download=1`
 }
 
 function AttachmentActions({
@@ -184,10 +189,25 @@ function AttachmentActions({
   const { t } = useTranslation('boards')
   return (
     <span className="ml-auto flex shrink-0 items-center">
+      <Hint label={t('attachments.copyLink', { name: attachment.name })}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          aria-label={t('attachments.copyLink', { name: attachment.name })}
+          onClick={async () => {
+            // Ссылку можно отправить коллеге: откроется у того, кто видит карточку (UI-1b, LATER-51)
+            await navigator.clipboard?.writeText(`${window.location.origin}${attachment.url}`)
+            toast.success(t('attachments.linkCopied'))
+          }}
+        >
+          <Link2 />
+        </Button>
+      </Hint>
       <Hint label={t('attachments.download', { name: attachment.name })}>
         <Button variant="ghost" size="icon" className="size-6" asChild>
           <a
-            href={attachment.url}
+            href={downloadUrl(attachment)}
             download
             aria-label={t('attachments.download', { name: attachment.name })}
           >

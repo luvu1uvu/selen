@@ -71,7 +71,7 @@ function spyUploads() {
         mime: null,
         size: 4,
         kind: 'file',
-        url: '/api/v1/attachments/a1',
+        url: '/files/a1',
         uploaded_by: { id: 'me', name: 'Анна' },
         created_at: '2026-10-01T09:00:00.000000Z',
         permissions: { delete: true },
