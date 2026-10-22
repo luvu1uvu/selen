@@ -283,5 +283,8 @@ Dev — эта копия (`4271c12`), `make fresh`, `anna@selen.test`; окна
 
 ## Дальше
 
-- Приёмка: `make dev-take` — после UI-1b, с разрешения PM; тестировщик (ТК-L91.1–7, автотесты —
-  `e2e/acceptance/stage-L91/`), `ux-reviewer` (контраст до и после), PR.
+- Приёмка пройдена (тестировщик, `ux-reviewer`); `make lint`, `make test` (backend 1532, frontend 49 файлов),
+  `make e2e` (195) — зелёные. PR в main, CI; мёрж — после «принято» PM.
+- Ответы PM: U-1, U-6, U-7 UX-ревью; LATER-106 — «Не баг — решение PM»?
+- После мёржа: `make pm-bug-move KEY=LATER-91 TO=Сделано`, напомнить PM про `make pm-update`; LATER-101, LATER-107,
+  LATER-108 — отдельными задачами.
