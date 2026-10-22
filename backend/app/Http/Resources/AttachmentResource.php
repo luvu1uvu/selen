@@ -10,8 +10,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Вложение карточки. Файл — по адресу url (через приложение, с проверкой доступа); для картинок и видео
- * клиент добавляет ?inline=1. Ожидает загруженные uploader, card.
+ * Вложение карточки. Файл — по адресу url (/files/{id} — через приложение, с проверкой доступа при каждом открытии;
+ * картинки, видео и PDF — в браузере, ?download=1 — скачать). Ожидает загруженные uploader, card.
  *
  * @mixin Attachment
  */
@@ -32,7 +32,10 @@ class AttachmentResource extends JsonResource
             'mime' => isset(AttachmentFiles::INLINE_TYPES[$this->mime]) ? $this->mime : null,
             'size' => $this->size,
             'kind' => $this->kind,
-            'url' => "/api/v1/attachments/{$this->id}",
+            // Ссылка на файл — веб-маршрут на сессии (UI-1b, LATER-51): открывается и напрямую (новая вкладка, мессенджер)
+            'url' => "/files/{$this->id}",
+            // Имя такого файла открывает его в новой вкладке, остальные — скачиваются (решение PM 22.10)
+            'opens_in_browser' => AttachmentFiles::opensInBrowser($this->mime),
             'uploaded_by' => ['id' => $this->uploader->id, 'name' => $this->uploader->name],
             'created_at' => $this->created_at->format('Y-m-d\TH:i:s.u\Z'),
             'permissions' => ['delete' => Gate::forUser($user)->allows('delete', $this->resource)],

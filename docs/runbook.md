@@ -466,7 +466,8 @@ psql -U postgres -d selen -v owner=selen_owner -v app=selen_app -f grants.sql
 | После изменения `.env` ничего не поменялось | Контейнеры читают `.env` при создании: `make restart` |
 | Права на файлы (Linux) | Makefile передаёт ваш UID/GID в контейнеры; запускайте `make`, а не `docker compose` напрямую при первой сборке |
 | `composer.json not found` / пустые папки в контейнере | Colima монтирует в VM только домашний каталог — проект должен лежать внутри `~` |
-| Файл не скачивается, 404 на `/api/v1/attachments/...` при видимой карточке | nginx не видит каталог вложений: проверьте монтирование `/var/www/attachments` (dev) или `alias` в `location /_protected/attachments/` (production, `prod.conf.example`) |
+| Файл не скачивается, 404 на `/files/...` (или `/api/v1/attachments/...`) при видимой карточке | nginx не видит каталог вложений: проверьте монтирование `/var/www/attachments` (dev) или `alias` в `location /_protected/attachments/` и `/_protected/attachments-pdf/` (production, `prod.conf.example`) |
+| Ссылка на файл `/files/...` показывает «Страница не найдена» Selen | nginx запущен со старой конфигурацией, без `/files` (UI-1b): он читает её только при старте — `make restart` (стенд — `make pm-update` перезапускает nginx сам) |
 | Загрузка большого файла — 413 | Лимиты nginx/PHP меньше 100 МБ — см. «Лимит загрузки файлов» в п. 6 |
 | Нужно начать с чистого листа | `make destroy && make up && make fresh` |
 | Сборка образа php: `sha256sum: WARNING: … did NOT match`, `redis.tar.gz: FAILED` | Скачанный с GitHub архив расширения не совпал с суммой в `docker/php/Dockerfile` (LATER-82). Сборку не обходить: сначала понять, почему архив другой (новая версия под тем же тегом, подмена), — ниже «Обновить redis или pcov» |

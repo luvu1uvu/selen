@@ -52,6 +52,11 @@ export function cardLink(key: string) {
   return `${window.location.origin}/cards/${key}`
 }
 
+/** Ссылка на файл вложения: откроется у того, кто видит карточку, — в браузере или скачиванием (UI-1b, LATER-51). */
+export function fileLink(attachment: { url: string }) {
+  return `${window.location.origin}${attachment.url}`
+}
+
 /** Перевести фокус на само окно карточки — так Esc выводит из поля, не закрывая окна (CardWindow). */
 export function focusCardWindow(from: Element | null) {
   from?.closest<HTMLElement>('[data-card-window]')?.focus()

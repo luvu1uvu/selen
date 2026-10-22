@@ -36,7 +36,7 @@ describe('документ визуального редактора', () => {
     expect(isAllowedUrl('javascript:alert(1)')).toBe(false)
     expect(isAllowedUrl('data:text/html,<b>')).toBe(false)
     expect(isAllowedUrl('https://a.ru/ x')).toBe(false)
-    expect(attachmentImageUrl('a1')).toBe('/api/v1/attachments/a1?inline=1')
+    expect(attachmentImageUrl('a1')).toBe('/files/a1')
   })
 })
 
@@ -81,10 +81,7 @@ describe('просмотр', () => {
       'rel',
       'noopener noreferrer nofollow',
     )
-    expect(screen.getByRole('img', { name: 'схема' })).toHaveAttribute(
-      'src',
-      '/api/v1/attachments/a1?inline=1',
-    )
+    expect(screen.getByRole('img', { name: 'схема' })).toHaveAttribute('src', '/files/a1')
   })
 })
 

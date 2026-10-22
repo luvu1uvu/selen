@@ -55,7 +55,8 @@ Artisan: `docker compose exec php php artisan <команда>` — это dev �
 ## Структура репозитория
 
 ```
-backend/                 Laravel (только API /api/v1, без Blade-страниц)
+backend/                 Laravel: API — только /api/v1; веб-маршрут — только выдача файлов /files/{id} (ADR-0010);
+                         Blade-страниц нет
   app/Actions/           бизнес-логика: один класс = одно действие (handle())
   app/Services/          переиспользуемые сервисы (Access/SpaceAccessResolver, EventRecorder, UserSessions, InvitationIssuer)
   app/Http/Controllers/Api/V1/   тонкие контроллеры

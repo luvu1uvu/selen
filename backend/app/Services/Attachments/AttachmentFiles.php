@@ -16,8 +16,8 @@ use Symfony\Component\HttpFoundation\Response;
  * Файлы вложений: сохранение и безопасная отдача (docs/adr/0010-attachments.md).
  *
  * - Тип определяется по содержимому (finfo), не по расширению и не по заголовку браузера.
- * - Встроенно (inline) отдаются только картинки и видео из белого списка. Всё остальное, включая SVG,
- *   HTML и XML, — только скачиванием и как application/octet-stream.
+ * - Встроенно (inline) отдаются только картинки и видео из белого списка; по ссылке на файл (/files/{id}) — ещё
+ *   и PDF (по содержимому). Всё остальное, включая SVG, HTML и XML, — только скачиванием и как application/octet-stream.
  * - Локальный диск: файл отдаёт nginx по X-Accel-Redirect (Range-запросы, перемотка видео);
  *   S3: короткая временная ссылка. Доступ к карточке проверяется до вызова.
  */
@@ -35,6 +35,12 @@ class AttachmentFiles
         // показывает сообщение и кнопку «Скачать» вместо плеера
         'video/quicktime' => 'video',
     ];
+
+    /** PDF по содержимому (finfo при загрузке) — по ссылке на файл открывается в браузере (UI-1b, решение PM 21.10). */
+    public const PDF = 'application/pdf';
+
+    /** CSP для PDF, открытого в браузере: без sandbox (с ним Chrome PDF не показывает), встроенный просмотрщик — object-src. */
+    public const PDF_CSP = "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
     /**
      * Сохранить загруженный файл на диск вложений. Возвращает атрибуты для модели Attachment.
@@ -93,10 +99,32 @@ class AttachmentFiles
         return trim($ascii) === '' ? 'file' : $ascii;
     }
 
-    /** Ответ с файлом. inline — по желанию клиента, но только для типов из белого списка. */
+    /** Открывается ли файл по ссылке (/files/{id}) в браузере: картинки и видео из белого списка и PDF по содержимому. */
+    public static function opensInBrowser(string $mime): bool
+    {
+        return $mime === self::PDF || isset(self::INLINE_TYPES[$mime]);
+    }
+
+    /** Ответ с файлом для приложения (/api/v1/attachments/{id}). inline — по желанию клиента, только для белого списка. */
     public function response(Attachment $attachment, bool $inline): Response
     {
-        $inline = $inline && isset(self::INLINE_TYPES[$attachment->mime]);
+        return $this->respond($attachment, $inline && isset(self::INLINE_TYPES[$attachment->mime]), false);
+    }
+
+    /**
+     * Ответ по ссылке на файл (/files/{id}, UI-1b, LATER-51): картинки и видео из белого списка и PDF (тип — по
+     * содержимому, не по имени) — в браузере, остальное — скачиванием; $download — всегда скачать.
+     */
+    public function linkResponse(Attachment $attachment, bool $download): Response
+    {
+        $pdf = $attachment->mime === self::PDF;
+        $inline = ! $download && self::opensInBrowser($attachment->mime);
+
+        return $this->respond($attachment, $inline, $inline && $pdf);
+    }
+
+    private function respond(Attachment $attachment, bool $inline, bool $pdf): Response
+    {
         $disposition = HeaderUtils::makeDisposition(
             $inline ? HeaderUtils::DISPOSITION_INLINE : HeaderUtils::DISPOSITION_ATTACHMENT,
             $attachment->name,
@@ -116,13 +144,18 @@ class AttachmentFiles
         }
 
         // Тело пустое: файл отдаёт nginx из internal-location (Range-запросы — его забота)
+        // Защитные заголовки у отданного файла ставит location nginx (у PDF — свой, PDF_CSP); здесь — те же для ясности
         return new Response('', 200, [
             'Content-Type' => $type,
             'Content-Disposition' => $disposition,
-            'X-Accel-Redirect' => config('selen.attachments.x_accel_prefix').$attachment->path,
+            'X-Accel-Redirect' => config($pdf ? 'selen.attachments.x_accel_pdf_prefix' : 'selen.attachments.x_accel_prefix')
+                .$attachment->path,
             'X-Content-Type-Options' => 'nosniff',
-            'Content-Security-Policy' => "default-src 'none'; sandbox",
-            'Cache-Control' => 'private, max-age=3600',
+            'Content-Security-Policy' => $pdf ? self::PDF_CSP : "default-src 'none'; sandbox",
+            // Браузер переспрашивает сервер при каждом открытии — права проверяются каждый раз (выход, потеря доступа,
+            // корзина), а неизменённый файл nginx не передаёт заново: 304 по ETag/Last-Modified (UI-1b). Этот заголовок
+            // nginx передаёт как есть — в location его не задаём
+            'Cache-Control' => 'private, no-cache',
         ]);
     }
 }

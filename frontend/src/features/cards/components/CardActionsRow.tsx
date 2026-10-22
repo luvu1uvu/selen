@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { copyText } from '@/shared/lib/browser'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import type { CardDetail } from '@/shared/types/api'
@@ -49,8 +50,8 @@ export function CardActionsRow({
   }
 
   const copyLink = async () => {
-    await navigator.clipboard?.writeText(cardLink(card.key))
-    toast.success(t('card.linkCopied'))
+    if (await copyText(cardLink(card.key))) toast.success(t('card.linkCopied'))
+    else toast.error(tc('errors.copyFailed'))
   }
 
   const confirmDelete = async () => {
