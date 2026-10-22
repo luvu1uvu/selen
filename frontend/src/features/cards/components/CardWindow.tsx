@@ -301,8 +301,25 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
             onAddDone={() => addDone('block')}
           />
 
-          <CardSection id="main" title={t('sections.main')}>
-            <CardMainParams card={card} canEdit={canEdit} onMove={() => setMoving(true)} />
+          <CardSection
+            id="main"
+            title={t('sections.main')}
+            forceOpen={isAdding('due') || isAdding('labels')}
+          >
+            <CardMainParams
+              card={card}
+              canEdit={canEdit}
+              onMove={() => setMoving(true)}
+              adding={adding}
+              onAddDone={(kind) => {
+                addDone(kind)
+                // Срок или метки так и не задали — строка пропала вместе с кнопкой, куда вернулся бы фокус: на окно
+                requestAnimationFrame(() => {
+                  const dialog = document.querySelector<HTMLElement>('[data-card-window]')
+                  if (dialog && !dialog.contains(document.activeElement)) dialog.focus()
+                })
+              }}
+            />
           </CardSection>
           <CardDescriptionSection card={card} canEdit={canEdit} />
 

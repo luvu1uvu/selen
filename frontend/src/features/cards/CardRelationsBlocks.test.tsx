@@ -205,7 +205,7 @@ describe('Карточка: связи и блокировки', () => {
 
     // Новая — пунктом «+»
     await userEvent.click(within(section).getByRole('button', { name: 'Добавить в карточку' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Блокировку…' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Блокировка' }))
     await userEvent.click(await within(section).findByRole('button', { name: 'Заблокировать' }))
     expect(
       within(section).getByText('Укажите причину или выберите блокирующую карточку.'),

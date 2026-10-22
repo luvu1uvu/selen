@@ -122,7 +122,8 @@ describe('«Структура» и дерево в сайдбаре', () => {
     const nav = await screen.findByRole('navigation', { name: 'Дерево' })
     await waitFor(() => expect(treeLinks()).toHaveLength(3))
 
-    await user.click(screen.getByRole('button', { name: 'Создать папку' }))
+    // Кнопка появляется с данными «Структуры» (свой запрос) — ждём её, а не только дерево: под нагрузкой не успевала
+    await user.click(await screen.findByRole('button', { name: 'Создать папку' }))
     const dialog = await screen.findByRole('dialog', { name: 'Новая папка' })
     await user.type(within(dialog).getByLabelText('Название'), 'Архитектура')
     await user.click(within(dialog).getByRole('button', { name: 'Создать' }))

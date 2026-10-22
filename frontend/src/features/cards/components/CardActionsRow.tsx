@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
@@ -9,10 +8,11 @@ import type { CardDetail } from '@/shared/types/api'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
 import { cardLink, type AddKind } from '../cardWindow'
 import { useDeleteCard, useSetCardArchived } from '../queries'
+import { CardAddMenu } from './CardAddMenu'
 
 /**
  * Ряд действий окна карточки (README Kaiten, раздел 02): линия во всю ширину, на левом конце — круглая «+» (добавить
- * в карточку), на правом — «⋯» (действия с карточкой). Кнопки этапов 7 и 10 («→ Следующая колонка», «!», «поделиться»,
+ * в карточку, две колонки как в Kaiten — CardAddMenu), на правом — «⋯» (действия с карточкой). Кнопки этапов 7 и 10 («→ Следующая колонка», «!», «поделиться»,
  * ⚡) встанут справа перед «⋯». Пункты — только разрешённые: нет ни одного — нет и кнопки.
  */
 export function CardActionsRow({
@@ -68,41 +68,12 @@ export function CardActionsRow({
     <div className="relative flex items-center">
       <div aria-hidden className="bg-border absolute inset-x-0 top-1/2 h-px" />
       {(canEdit || canAttach) && (
-        <ActionsMenu
-          label={t('card.add')}
-          align="start"
-          icon={<Plus />}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground relative rounded-full shadow-md"
-        >
-          {(opensDialog) => (
-            <>
-              {canEdit && (
-                <DropdownMenuItem onSelect={opensDialog(() => onAdd('checklist'))}>
-                  {t('card.addChecklist')}
-                </DropdownMenuItem>
-              )}
-              {canAttach && (
-                <DropdownMenuItem onSelect={onPickFiles}>{t('card.addFile')}</DropdownMenuItem>
-              )}
-              {canEdit && (
-                <>
-                  <DropdownMenuItem onSelect={opensDialog(() => onAdd('link'))}>
-                    {t('card.addLink')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={opensDialog(() => onAdd('parent'))}>
-                    {t('card.addParent')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={opensDialog(() => onAdd('child'))}>
-                    {t('card.addChild')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={opensDialog(() => onAdd('block'))}>
-                    {t('card.addBlock')}
-                  </DropdownMenuItem>
-                </>
-              )}
-            </>
-          )}
-        </ActionsMenu>
+        <CardAddMenu
+          canEdit={canEdit}
+          canAttach={canAttach}
+          onAdd={onAdd}
+          onPickFiles={onPickFiles}
+        />
       )}
       <div className="relative ml-auto flex items-center gap-2">
         <ActionsMenu

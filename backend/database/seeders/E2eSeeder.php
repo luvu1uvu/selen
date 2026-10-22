@@ -291,6 +291,8 @@ class E2eSeeder extends Seeder
         app(UpdateCardAction::class)->handle($editor, $create('Своя карточка подрядчика'), ['responsible_id' => $restricted->id]);
         $create('Чужая для подрядчика');
         $create('Просто карточка');
+        // ТК-UI1.27 (LATER-97): срок и метки задаются через «+» — карточка без них
+        $create('Срок и метки через плюс');
     }
 
     /** Страница пространства рядами (ADR-0019, PR 3 пакета): пространства ROWS и ARRANGE — см. описание класса. */

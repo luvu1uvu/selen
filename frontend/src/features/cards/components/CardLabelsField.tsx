@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Tags } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,14 +19,32 @@ import { useSetCardLabels } from '../queries'
 
 /**
  * Метки карточки («Основные параметры» окна): общие метки компании и метки пространства. Поставить можно только
- * активную метку; уже стоящая архивная остаётся, пока её не снимут.
+ * активную метку; уже стоящая архивная остаётся, пока её не снимут. Пока меток нет, строки нет — метки добавляют через
+ * «+» (LATER-97): `autoOpen` сразу открывает список, `onClose` — список закрыли.
  */
-export function CardLabelsField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+export function CardLabelsField({
+  card,
+  canEdit,
+  autoOpen = false,
+  onClose,
+}: {
+  card: CardDetail
+  canEdit: boolean
+  autoOpen?: boolean
+  onClose?: () => void
+}) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const labels = useSpaceLabels(card.space.key, canEdit)
   const setLabels = useSetCardLabels(card.key)
   const current = card.labels.map((label) => label.id)
+  const [open, setOpen] = useState(autoOpen)
+  // «+» → «Метки» при уже видной строке — снова открыть список (подстройка состояния при рендере)
+  const [requested, setRequested] = useState(autoOpen)
+  if (requested !== autoOpen) {
+    setRequested(autoOpen)
+    if (autoOpen) setOpen(true)
+  }
 
   const toggle = async (id: string, checked: boolean) => {
     const next = checked ? [...current, id] : current.filter((labelId) => labelId !== id)
@@ -50,11 +69,14 @@ export function CardLabelsField({ card, canEdit }: { card: CardDetail; canEdit: 
       {card.labels.map((label) => (
         <LabelBadge key={label.id} name={label.name} color={label.color} />
       ))}
-      {!canEdit && card.labels.length === 0 && (
-        <span className="text-muted-foreground text-sm">{t('labels.none')}</span>
-      )}
       {canEdit && (
-        <DropdownMenu>
+        <DropdownMenu
+          open={open}
+          onOpenChange={(next) => {
+            setOpen(next)
+            if (!next) onClose?.()
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"

@@ -146,12 +146,6 @@
     "editDescription": "Изменить описание",
     "actions": "Действия с карточкой «{{title}}»",
     "add": "Добавить в карточку",
-    "addChecklist": "Чек-лист",
-    "addFile": "Файл…",
-    "addLink": "Ссылку…",
-    "addParent": "Родительскую карточку…",
-    "addChild": "Дочернюю карточку…",
-    "addBlock": "Блокировку…",
     "copyKeyLink": "Скопировать ссылку на карточку",
     "customer": "Заказчик",
     "changeCustomer": "Сменить заказчика",
@@ -166,7 +160,25 @@
     "unsavedCancel": "Продолжить редактирование",
     "emptyDescription": "Добавьте описание…",
     "restoreFromArchive": "Вернуть из архива",
-    "customerButton": "{{name}} — заказчик"
+    "customerButton": "{{name}} — заказчик",
+    "addMenu": {
+      "main": "Основное",
+      "relations": "Связи",
+      "other": "Остальное",
+      "due": "Срок",
+      "labels": "Метки",
+      "checklist": "Чек-лист",
+      "link": "Ссылка",
+      "file": "Загрузить файл",
+      "parent": "Родительская карточка",
+      "child": "Дочерняя карточка",
+      "block": "Блокировка",
+      "fields": "Поля",
+      "fieldsSearch": "Найти поле",
+      "fieldsSearchPlaceholder": "Найти…",
+      "fieldsCreate": "Создать новое поле",
+      "fieldsLater": "Пользовательские поля появятся позже"
+    }
   },
   "moveCard": {
     "title": "Переместить {{key}}",
@@ -245,8 +257,6 @@
     "history": "История"
   },
   "people": {
-    "notAssigned": "Не назначен",
-    "none": "Нет",
     "remove": "Убрать {{name}} из участников",
     "invited": "Приглашён",
     "deactivated": "Деактивирован",
@@ -262,7 +272,6 @@
   "labels": {
     "company": "Общие метки компании",
     "space": "Метки пространства",
-    "none": "Нет меток",
     "empty": "Меток пока нет — их создают администраторы"
   },
   "due": {
@@ -427,7 +436,6 @@
     "participants": "Участники",
     "addParticipants": "Добавить участников",
     "due": "Срок",
-    "noDue": "Не задан",
     "changeDue": "Изменить срок",
     "urgent": "Срочно",
     "labels": "Метки",
@@ -437,7 +445,9 @@
     "nobody": "Никого не найдено",
     "selectedPerson": "{{name}} — выбран",
     "typeButton": "{{name}} — тип карточки",
-    "responsibleButton": "{{name}} — ответственный"
+    "responsibleButton": "{{name}} — ответственный",
+    "empty": "—",
+    "setDue": "Задать срок"
   },
   "info": {
     "createdBy": "Создал(а)",

@@ -238,7 +238,7 @@ describe('Карточка: описание, комментарии, чек-л�
     // Ссылок нет — секции нет; новая — пунктом «+», фокус сразу в поле адреса
     expect(within(panel).queryByRole('region', { name: 'Ссылки' })).not.toBeInTheDocument()
     await userEvent.click(within(panel).getByRole('button', { name: 'Добавить в карточку' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Ссылку…' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Ссылка' }))
     await vi.waitFor(() => expect(within(panel).getByLabelText('Адрес ссылки')).toHaveFocus())
 
     await userEvent.type(within(panel).getByLabelText('Адрес ссылки'), 'javascript:alert(1)')

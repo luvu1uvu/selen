@@ -138,7 +138,9 @@ describe('Карточка: люди, поля, метки', () => {
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
-    await userEvent.click(within(panel).getByRole('button', { name: 'Не задан' }))
+    // Срока нет — строки нет; добавить — через «+» (LATER-97)
+    await userEvent.click(within(panel).getByRole('button', { name: 'Добавить в карточку' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Срок' }))
     const date = await screen.findByLabelText('Дата срока')
     await userEvent.type(date, '2026-10-20')
     await vi.waitFor(() =>
@@ -216,16 +218,7 @@ describe('Карточка: люди, поля, метки', () => {
       within(section)
         .getAllByRole('term')
         .map((term) => term.textContent),
-    ).toEqual([
-      'Расположение',
-      'Тип',
-      'Ответственный',
-      'Участники',
-      'Срок',
-      'Срочно',
-      'Метки',
-      'План, ч',
-    ])
+    ).toEqual(['Расположение', 'Тип', 'Ответственный', 'Участники', 'Срочно', 'План, ч'])
     expect(within(section).getByText('Продукт / To Do (Основная)')).toBeInTheDocument()
 
     await userEvent.click(within(section).getByRole('button', { name: 'Задача — тип карточки' }))

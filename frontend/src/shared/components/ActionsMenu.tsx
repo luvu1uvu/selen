@@ -32,6 +32,7 @@ export function ActionsMenu({
   align = 'end',
   className,
   icon = <MoreHorizontal />,
+  contentClassName,
   children,
 }: {
   label: string
@@ -40,6 +41,8 @@ export function ActionsMenu({
   className?: string
   /** Значок кнопки: «⋯» по умолчанию; «+» — меню «Добавить в карточку» окна карточки. */
   icon?: ReactNode
+  /** Классы списка меню (например, две колонки меню «+» окна карточки). */
+  contentClassName?: string
   children: (opensDialog: OpensDialog) => ReactNode
 }) {
   const pending = useRef<(() => void) | null>(null)
@@ -68,6 +71,7 @@ export function ActionsMenu({
       </Tooltip>
       <DropdownMenuContent
         align={align}
+        className={contentClassName}
         onCloseAutoFocus={(event) => {
           // Фокус на «⋯» возвращаем сами и без подсказки: открытая подсказка забрала бы следующий Esc у окна под
           // меню (U-5 UX-ревью UI-1a, как LATER-94)

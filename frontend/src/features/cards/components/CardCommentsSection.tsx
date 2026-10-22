@@ -1,17 +1,16 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { useCurrentUser } from '@/features/auth/queries'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { UserAvatar } from '@/shared/components/UserAvatar'
 import type { RichTextDoc } from '@/shared/components/rich-text/doc'
-import { formatDateTime } from '@/shared/lib/dates'
 import type { CardDetail, Comment } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { useCommentMutation, useComments, useMentionableLoader } from '../queries'
 import { useAttachmentUpload } from '../useAttachmentUpload'
 import { LazyRichTextEditor, LazyRichTextView } from './RichText'
+import { TimeAgo } from './TimeAgo'
 
 /**
  * Комментарии — от старых к новым. Писать могут все роли (включая commenter); свой — изменить
@@ -108,7 +107,6 @@ function CommentItem({
   onDelete: () => Promise<boolean>
 }) {
   const { t } = useTranslation('boards')
-  const { data: me } = useCurrentUser()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
 
@@ -118,7 +116,8 @@ function CommentItem({
       <div className="grid min-w-0 flex-1 gap-1">
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
           <span className="text-foreground font-medium">{comment.author.name}</span>
-          <span>{formatDateTime(comment.created_at, me?.timezone)}</span>
+          {/* Относительное время, точное — в подсказке (решение PM 22.10) */}
+          <TimeAgo at={comment.created_at} />
           {comment.edited_at && !comment.deleted_at && <span>{t('comments.edited')}</span>}
         </div>
         {comment.body === null ? (

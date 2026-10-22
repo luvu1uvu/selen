@@ -25,9 +25,11 @@ import { Label } from '@/shared/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import type { CardUpdate } from '../api'
-import { focusCardWindow } from '../cardWindow'
+import type { CustomFieldOption } from '../customFields'
+import { focusCardWindow, type AddKind } from '../cardWindow'
 import { useCardParticipant, useUpdateCard } from '../queries'
 import { CardLabelsField } from './CardLabelsField'
+import { EmptyValue } from './EmptyValue'
 import { PersonLine, PersonPicker } from './PersonPicker'
 
 function useActiveCardTypes(enabled: boolean) {
@@ -97,13 +99,25 @@ export function CardMainParams({
   card,
   canEdit,
   onMove,
+  adding = [],
+  onAddDone,
+  typeFields = [],
 }: {
   card: CardDetail
   canEdit: boolean
   /** Открыть окно переноса (лупа у «Расположения»). */
   onMove: () => void
+  /** Срок или метки, выбранные в «+» (LATER-97): строка видна и сразу открывает выбор. */
+  adding?: AddKind[]
+  onAddDone?: (kind: 'due' | 'labels') => void
+  /** Поля типа карточки — строками в конце (этап 5 подключит данные; сейчас пусто). */
+  typeFields?: CustomFieldOption[]
 }) {
   const { t } = useTranslation('boards')
+  // Срок и метки, пока не заданы, скрыты — их добавляют через «+»; расположение, тип, люди видны всегда (LATER-97)
+  const hasDue = card.due_date !== null || card.due_at !== null
+  const addingDue = canEdit && adding.includes('due')
+  const addingLabels = canEdit && adding.includes('labels')
   const column = card.column.parent_name
     ? `${card.column.parent_name} / ${card.column.name}`
     : card.column.name
@@ -141,15 +155,29 @@ export function CardMainParams({
       <ParamRow label={t('params.participants')}>
         <ParticipantsField card={card} canEdit={canEdit} />
       </ParamRow>
-      <ParamRow label={t('params.due')}>
-        <DueField card={card} canEdit={canEdit} />
-      </ParamRow>
+      {(hasDue || addingDue) && (
+        <ParamRow label={t('params.due')}>
+          <DueField
+            card={card}
+            canEdit={canEdit}
+            autoOpen={addingDue}
+            onClose={() => onAddDone?.('due')}
+          />
+        </ParamRow>
+      )}
       <ParamRow label={<Label htmlFor="card-urgent">{t('params.urgent')}</Label>}>
         <UrgentField card={card} canEdit={canEdit} />
       </ParamRow>
-      <ParamRow label={t('params.labels')}>
-        <CardLabelsField card={card} canEdit={canEdit} />
-      </ParamRow>
+      {(card.labels.length > 0 || addingLabels) && (
+        <ParamRow label={t('params.labels')}>
+          <CardLabelsField
+            card={card}
+            canEdit={canEdit}
+            autoOpen={addingLabels}
+            onClose={() => onAddDone?.('labels')}
+          />
+        </ParamRow>
+      )}
       <ParamRow
         label={
           canEdit ? (
@@ -161,6 +189,12 @@ export function CardMainParams({
       >
         <EstimateField card={card} canEdit={canEdit} />
       </ParamRow>
+      {/* Этап 5: значение и правка пользовательского поля */}
+      {typeFields.map((field) => (
+        <ParamRow key={field.id} label={field.name}>
+          <EmptyValue />
+        </ParamRow>
+      ))}
     </dl>
   )
 }
@@ -210,11 +244,7 @@ function ResponsibleField({ card, canEdit }: { card: CardDetail; canEdit: boolea
   const { save, pending } = useSave(card.key)
   const responsible = card.responsible
   if (!canEdit) {
-    return responsible ? (
-      <PersonChip person={responsible} />
-    ) : (
-      <span className="text-muted-foreground">{t('people.notAssigned')}</span>
-    )
+    return responsible ? <PersonChip person={responsible} /> : <EmptyValue />
   }
   return (
     <PersonPicker
@@ -282,9 +312,7 @@ function ParticipantsField({ card, canEdit }: { card: CardDetail; canEdit: boole
 
   return (
     <>
-      {card.participants.length === 0 && !canEdit && (
-        <span className="text-muted-foreground">{t('people.none')}</span>
-      )}
+      {card.participants.length === 0 && !canEdit && <EmptyValue />}
       {card.participants.map((person) => (
         <span
           key={person.id}
@@ -339,12 +367,34 @@ function dueInputs(card: CardDetail, timeZone?: string): { date: string; time: s
  * Срок: дата и необязательное время. Время вводится в часовом поясе из профиля, на сервер уходит в UTC.
  * Значение — бейдж срока, как на фасаде; у редактора щелчок открывает поля даты и времени.
  */
-function DueField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+function DueField({
+  card,
+  canEdit,
+  autoOpen = false,
+  onClose,
+}: {
+  card: CardDetail
+  canEdit: boolean
+  /** «+» → «Срок»: сразу открыть поля даты и времени. */
+  autoOpen?: boolean
+  onClose?: () => void
+}) {
   const { t } = useTranslation('boards')
   const { data: me } = useCurrentUser()
   const timeZone = me?.timezone
   const { save, pending } = useSave(card.key)
   const [due, setDue] = useState(() => dueInputs(card, timeZone))
+  const [open, setOpen] = useState(autoOpen)
+  // «+» → «Срок» при уже видной строке — снова открыть (подстройка состояния при рендере)
+  const [requested, setRequested] = useState(autoOpen)
+  if (requested !== autoOpen) {
+    setRequested(autoOpen)
+    if (autoOpen) setOpen(true)
+  }
+  const openChange = (next: boolean) => {
+    setOpen(next)
+    if (!next) onClose?.()
+  }
 
   // Карточка изменилась на сервере — подтягиваем поля (паттерн «подстройка состояния при рендере»)
   const serverKey = `${card.due_date}|${card.due_at}|${timeZone}`
@@ -355,12 +405,8 @@ function DueField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
   }
 
   const hasDue = card.due_date !== null || card.due_at !== null
-  const value = hasDue ? (
-    <DueBadge card={card} now={new Date()} timeZone={timeZone} />
-  ) : (
-    <span className="text-muted-foreground">{t('params.noDue')}</span>
-  )
-  if (!canEdit) return value
+  const badge = hasDue ? <DueBadge card={card} now={new Date()} timeZone={timeZone} /> : null
+  if (!canEdit) return badge ?? <EmptyValue />
 
   const saveDue = (date: string, time: string) => {
     setDue({ date, time })
@@ -371,17 +417,26 @@ function DueField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
   }
 
   return (
-    <Popover>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="-ml-2 px-2">
-              {value}
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{t('params.changeDue')}</TooltipContent>
-      </Tooltip>
+    <Popover open={open} onOpenChange={openChange}>
+      {/* Срока нет — кнопка-действие «Задать срок»; есть — бейдж срока с подсказкой «Изменить срок» */}
+      {badge ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="-ml-2 px-2">
+                {badge}
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{t('params.changeDue')}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 px-2">
+            {t('params.setDue')}
+          </Button>
+        </PopoverTrigger>
+      )}
       <PopoverContent align="start" className="grid w-auto gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Input
@@ -411,7 +466,12 @@ function DueField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
             variant="ghost"
             size="sm"
             className="justify-self-start"
-            onClick={() => saveDue('', '')}
+            onClick={async () => {
+              // Срока нет — строка пропадёт вместе с кнопкой, на которую вернулся бы фокус: фокус — на окно карточки
+              openChange(false)
+              await saveDue('', '')
+              document.querySelector<HTMLElement>('[data-card-window]')?.focus()
+            }}
           >
             {t('fields.clearDue')}
           </Button>
@@ -449,7 +509,7 @@ function EstimateField({ card, canEdit }: { card: CardDetail; canEdit: boolean }
 
   if (!canEdit) {
     return card.estimate_hours === null ? (
-      <span className="text-muted-foreground">—</span>
+      <EmptyValue />
     ) : (
       <span>{String(card.estimate_hours).replace('.', ',')}</span>
     )
