@@ -1,0 +1,71 @@
+# Стек проверок backend — Pint, Larastan, Pest (make test-backend, make lint, make fix; scripts/test-stack.sh).
+# Проверки идут по коду этой рабочей копии, а не через dev: dev работает с кодом той копии, из которой его подняли
+# (LATER-92, docs/runbook.md, «Параллельные сессии»). Проект — selen-test-<папка копии> (scripts/parallel.sh project
+# test): у каждой копии своя база selen_testing. Стек удаляется после команды.
+# Postgres — тот же образ и те же init-скрипты, что у dev: роли selen_owner / selen_app, владение и права
+# (docs/adr/0016-db-roles.md) — как в dev и CI. База — в памяти (tmpfs). Переменные php — как в CI
+# (.github/workflows/ci.yml), остальное задаёт phpunit.xml. Пароли — только для тестов, не секреты.
+name: selen-test
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      # Основная база не нужна тестам — её имя как у dev, чтобы 01-testing-db.sql создал selen_testing рядом
+      POSTGRES_DB: selen
+      POSTGRES_USER: selen
+      POSTGRES_PASSWORD: secret
+      SELEN_DB_OWNER: selen_owner
+      SELEN_DB_OWNER_PASSWORD: secret
+      SELEN_DB_APP: selen_app
+      SELEN_DB_APP_PASSWORD: secret
+      TZ: UTC
+      PGTZ: UTC
+    tmpfs:
+      - /var/lib/postgresql
+    volumes:
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./docker/postgres/sql:/selen-sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U selen -d selen_testing"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:8-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  php:
+    build:
+      context: ./docker/php
+      args:
+        UID: ${HOST_UID:-1000}
+        GID: ${HOST_GID:-1000}
+    image: selen-php:dev
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: selen_app
+      DB_PASSWORD: secret
+      DB_OWNER_USERNAME: selen_owner
+      DB_OWNER_PASSWORD: secret
+      REDIS_HOST: redis
+    volumes:
+      - ./backend:/var/www/backend
+      # Пустой .env поверх файла копии: окружение — только отсюда и из phpunit.xml, как в CI
+      - ./docker/e2e/empty.env:/var/www/backend/.env:ro
+      # Только чтение: тесты сверяют каталог событий с frontend (EventTypeCatalogTest) и читают отложенные задачи PM
+      # (PmStandCommandsTest) — как в dev
+      - ./frontend:/var/www/frontend:ro
+      - ./docs/pm:/var/www/docs/pm:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

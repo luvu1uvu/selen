@@ -403,6 +403,10 @@ worktree_keep_reason() {
   # grep без строк — код 1 (файлов вне git нет), код 2 — сбой: тогда «оставить»
   extra="$(sed -n 's/^!! //p' <<< "$status" | { grep -Ev "$REGENERABLE_RE" || [[ $? -eq 1 ]]; })" \
     || { echo "не удалось проверить файлы вне git"; return; }
+  # .env — ссылка на .env основной копии (make up / make dev-take в рабочей копии, LATER-92): удалить ссылку не жалко
+  if [[ -L "$path/.env" && "$(readlink "$path/.env")" == "$MAIN_DIR/.env" ]]; then
+    extra="$(grep -Fvx .env <<< "$extra" || true)"
+  fi
   [[ -z "$extra" ]] || { echo "есть файлы вне git (например, ${extra%%$'\n'*})"; return; }
   unpushed="$(git -C "$path" rev-list -n 1 HEAD --not --remotes 2> /dev/null)" \
     || { echo "не удалось проверить коммиты (git rev-list)"; return; }
@@ -579,6 +583,8 @@ cmd_status() {
   echo "Remote Control:   $(agent_state "$LABEL_RC")"
   echo "Агент бэкапов:    $(agent_state "$LABEL_BACKUP")"
   echo "Копии сессий:     $(worktrees_summary)"
+  # Из какой рабочей копии поднят dev (параллельные сессии, LATER-92); сбой проверки статус не роняет
+  echo "Dev:              $("$ROOT_DIR/scripts/parallel.sh" dev-summary 2> /dev/null || echo 'не удалось проверить')"
   echo
 
   last_ok="$(state_get BACKUP_LAST_OK)"

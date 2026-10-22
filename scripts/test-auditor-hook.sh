@@ -63,6 +63,7 @@ bash_case 0 'ls -la ~/.config/selen'
 bash_case 0 'stat -f %Sp:%Su:%N .env'
 bash_case 0 'make audit-deps' "$WT"
 bash_case 0 'make test'
+bash_case 0 'make lint' "$WT"
 read_case 0 "$MAIN/backend/app/Code.php"
 read_case 0 "$MAIN/.env.example"
 grep_case 0 "$MAIN/backend/app" content
@@ -74,7 +75,7 @@ grep_case 0 "$PM/.env" count
 bash_case 2 'echo security-auditor-hook-check'
 bash_case 2 'git log' "$PM"
 bash_case 2 'git log' "$MAIN/.claude/worktrees/../../../pm"
-bash_case 2 'make test' "$WT"
+bash_case 2 'make test' "$PM"
 bash_case 2 'make host-status'
 bash_case 2 'make test FOO=1'
 bash_case 2 'cat .env'

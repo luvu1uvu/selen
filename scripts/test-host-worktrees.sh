@@ -104,6 +104,10 @@ new_copy bridge-cse_other && lock bridge-cse_other "test"
 new_copy funny-blackburn-abc123 claude/funny-blackburn-abc123
 new_copy feature-x
 new_copy bridge-cse_env && touch "$WORKTREES_DIR/bridge-cse_env/.env"
+# .env — ссылка на .env основной копии (make up / make dev-take, LATER-92) удалению не мешает; ссылка на другой файл — мешает
+echo "APP_KEY=test" > "$MAIN/.env"
+new_copy bridge-cse_envlink && ln -s "$MAIN/.env" "$WORKTREES_DIR/bridge-cse_envlink/.env"
+new_copy bridge-cse_envother && ln -s "$TMP/other.env" "$WORKTREES_DIR/bridge-cse_envother/.env"
 new_copy bridge-cse_dump && mkdir -p "$WORKTREES_DIR/bridge-cse_dump/backups"
 touch "$WORKTREES_DIR/bridge-cse_dump/backups/selen-2026-10-19.dump"
 new_copy bridge-cse_dirty && echo "*.tmp" >> "$WORKTREES_DIR/bridge-cse_dirty/.gitignore"
@@ -119,7 +123,7 @@ mkdir -p "$WORKTREES_DIR/x" && new_copy x/bridge-cse_nested
 
 total=$((total + 1))
 summary="$(worktrees_summary)"
-[[ "$summary" == "17, из них завершённых без изменений — 4: make host-worktrees-clean" ]] \
+[[ "$summary" == "19, из них завершённых без изменений — 5: make host-worktrees-clean" ]] \
   || fail "make host-status: «${summary}»"
 
 run_clean
@@ -137,6 +141,10 @@ kept bridge-cse_other "заблокирована не сервером Remote C
 kept funny-blackburn-abc123 "не Remote Control" "копия сессии приложения Claude"
 kept feature-x "не Remote Control" "копия claude --worktree"
 kept bridge-cse_env "есть файлы вне git (например, .env)" ".env в копии"
+removed bridge-cse_envlink ".env — ссылка на .env основной копии"
+total=$((total + 1))
+[[ "$(cat "$MAIN/.env" 2> /dev/null)" == "APP_KEY=test" ]] || fail "удалена ссылка — пропал .env основной копии"
+kept bridge-cse_envother "есть файлы вне git (например, .env)" ".env — ссылка не на основную копию"
 kept bridge-cse_dump "есть файлы вне git (например, backups/)" "дамп в копии"
 kept bridge-cse_dirty "есть незакоммиченные изменения" "изменённый файл"
 kept bridge-cse_unpushed "есть коммиты, которых нет на GitHub" "коммит не на GitHub"

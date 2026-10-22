@@ -25,7 +25,7 @@ make up              # поднять окружение (первый запу�
 make fresh           # пересоздать БД: миграции + демо-данные (ВСЁ УДАЛЯЕТСЯ, включая файлы вложений)
 make migrate         # новые миграции — под владельцем схемы (--database=pgsql_owner)
 make db-roles        # перевести старую базу на роли selen_owner / selen_app (один раз; повтор безопасен)
-make test            # все тесты (backend с покрытием + frontend с порогом покрытия 77 %)
+make test            # все тесты (backend с покрытием + frontend с порогом покрытия 77 %); dev не нужен
 make e2e             # тесты в браузере (Playwright) на изолированном стеке, dev-база не трогается
 make perf            # замер производительности: доска на 300 карточек и пространство 5×200 (production-сборка, ~5 мин)
 make metrics SPACE=DEV DAYS=60   # сводка lead/cycle time по доскам (проверка метрик)
@@ -41,6 +41,7 @@ make pm-bug-show KEY=LATER-12 | pm-bugs-list | pm-bug-comment KEY=... TEXT="..."
 make pm-task FILE=task.json   # карточка работы без карточки на стенде → «Бэклог», «Взято в работу»
 make pm-owner-show | pm-transfer-ownership EMAIL=...   # Владелец стенда (ADR-0017)
 make audit-deps      # уязвимости зависимостей (composer, npm frontend и e2e): падает на high/critical, как CI «Security»
+make dev-status      # из какой рабочей копии поднят dev; make dev-take — забрать dev (только с разрешения PM)
 make help            # полный список
 ```
 
@@ -48,7 +49,8 @@ make help            # полный список
 Роли базы (ADR-0016): приложение и тесты — `selen_app` (только данные), миграции и бэкапы — `selen_owner`,
 суперпользователь `selen` — только `make db-roles`.
 Стенд PM (постоянная копия на коде main, ADR-0014): http://127.0.0.1:8081, письма http://127.0.0.1:8026.
-Artisan: `docker compose exec php php artisan <команда>`. npm: `docker compose run --rm node npm <команда>`.
+Artisan: `docker compose exec php php artisan <команда>` — это dev той копии, из которой он поднят (`make dev-status`);
+один тест backend — `./scripts/test-stack.sh --db vendor/bin/pest --filter=…`. npm: `docker compose run --rm node npm <команда>`.
 
 ## Структура репозитория
 
@@ -69,7 +71,8 @@ frontend/src/
 e2e/                     Playwright: tests/*.spec.ts, acceptance/stage-N/ (тест-кейс → автотест), конфиг;
                          стек — docker-compose.e2e.yml, данные — E2eSeeder
 docker/                  Dockerfile php, конфиги nginx, init-скрипты postgres, docker/e2e (окружение E2E)
-scripts/                 backup.sh, restore.sh, backup-verify.sh, deps-audit.sh (make audit-deps)
+scripts/                 backup.sh, restore.sh, backup-verify.sh, deps-audit.sh (make audit-deps), parallel.sh (замок
+                         на dev, имена стеков копии), test-stack.sh (стек проверок backend — docker-compose.test.yml)
 docs/                    architecture.md, runbook.md, adr/, stages/, ui-reference/ (референсы Kaiten),
                          ui-guidelines.md (правила вида), pm/deferred.yaml (отложенные задачи PM → доска «Бэклог»
                          стенда), security/ (отчёты аудитов)
@@ -233,8 +236,21 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
   субагентов на подэтап — два (ревьюер и тестировщик), аудитор безопасности, когда он положен (ниже), и UX/UI-ревьюер,
   когда меняется интерфейс; другие — только если основная сессия заметно раздувается. `ux-reviewer` — как и аудитор:
   только из `~/dev/selen` или его рабочих копий (hook работает, только если Claude Code доверяет папке; без hook агент
-  браузер не открывает); из нового или изменённого описания — со следующей сессии. Dev показывает код `~/dev/selen` —
-  ревью (как и тестировщик) смотрит ветку, только если она там и стоит.
+  браузер не открывает); из нового или изменённого описания — со следующей сессии. Dev показывает код той копии, из
+  которой поднят (`make dev-status`): тестировщика и ревью звать, только когда dev поднят из своей копии; чужой — просить
+  PM разрешить `make dev-take` («Параллельные сессии»).
+- **Параллельные сессии** (LATER-92; runbook, раздел 15). Сессии работают одновременно, каждая — в своей рабочей копии.
+  - **Одна папка — одна сессия**, в том числе основная `~/dev/selen`: вторая сессия — в своей копии
+    (`.claude/worktrees/…`). Две сессии в одной папке замок не различит — у них общий код.
+  - **Dev (http://localhost:8080) — у одной копии за раз.** Цели Makefile, которые работают с dev, сначала проверяют,
+    из какой копии он поднят (замок): чужая — отказ с объяснением. Забрать dev — `make dev-take`, **только
+    с разрешения PM**; **разрешение на dev-take PM может дать сразу в задании**. Новая цель Makefile, которая работает
+    с dev (`$(PHP)`, `$(ARTISAN)`, `$(DC) up/down/exec`, скрипты бэкапа), — с `$(DEV_LOCK) $@` первой строкой рецепта
+    (иначе упадёт `scripts/test-parallel.sh`).
+  - Тесты и линтеры (`make test`, `make lint`, `make fix`) и E2E работают в любой копии без dev — в стеках своей копии.
+    `docker compose exec php …` — всегда dev, в том числе чужой копии; для тестов — `./scripts/test-stack.sh`.
+  - Стенд — только `make pm-*`, одна сессия за раз.
+  - Бэклог (`docs/pm/deferred.yaml`) и дорожную карту (`docs/roadmap.md`) правит одна сессия, остальные просят PM.
 - **Аудит безопасности** — агент `security-auditor` (`.claude/agents/`, ADR-0020): только читает код и выполняет
   команды из белого списка, ничего не меняет.
   - **Когда:** полный аудит — в конце каждого этапа (до отчёта этапа) и перед пилотом, отчёт —

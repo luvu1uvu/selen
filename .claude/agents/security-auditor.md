@@ -52,8 +52,8 @@ hooks:
   - `ls`, `stat`, `wc`, `pwd` — права и размеры файлов (`stat -f %Sp:%Su:%N <файл>`, `ls -l <файл>`);
   - `make audit-deps` — уязвимости зависимостей (composer, npm frontend и e2e; порог high/critical, как в CI);
   - `make host-status` — Colima, стенд, Tailscale (Funnel), порты не на 127.0.0.1, бэкапы (только на Mac mini);
-  - `make test`, `make lint` — только из `~/dev/selen` (контейнеры dev смонтировали её) и только если без прогона
-    не подтвердить находку.
+  - `make test`, `make lint` — из своей копии (проверки идут в её стеке, а не в dev — LATER-92) и только если без
+    прогона не подтвердить находку.
 - **Секреты не читать:** `.env*` (кроме `*.example`), `~/.config/selen/*`, пароль restic, дампы и бэкапы, кеш
   конфигурации Laravel (`backend/bootstrap/cache`), файлы вложений (`backend/storage/app`) — hook запретит. Права —
   `stat -f %Sp:%Su:%N <файл>` или `ls -l`; значение настройки — Grep с `output_mode: count` (например,

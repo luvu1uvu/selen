@@ -176,9 +176,11 @@ case "${words[0]}" in
         exit 0
         ;;
       test | test-backend | test-frontend | lint)
-        # Контейнеры dev смонтировали основную копию, а не рабочую копию сессии
-        [[ "$cwd" == "$MAIN_DIR" ]] || deny "make ${sub} — только из ${MAIN_DIR}: контейнеры dev работают с её кодом."
-        exit 0
+        # Проверки идут в стеке своей копии, а не в dev (LATER-92) — из основной копии или рабочей копии сессии
+        case "$cwd" in
+          "$MAIN_DIR" | "$MAIN_DIR"/.claude/worktrees/?*) exit 0 ;;
+        esac
+        deny "make ${sub} — только из ${MAIN_DIR} или её рабочих копий (.claude/worktrees/…)."
         ;;
     esac
     ;;

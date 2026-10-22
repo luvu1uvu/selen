@@ -3,10 +3,11 @@
 # пространства из 5 досок по 200 карточек рядами (space.perf.ts). Production-сборка фронтенда, демо-данные
 # DemoSeeder + BoardsDemoSeeder + PerfSpaceSeeder. Запуск: make perf.
 # Методика и как читать результат — docs/runbook.md, раздел «Производительность доски».
+# Стек — тот же, что у make e2e этой рабочей копии (проект selen-e2e-<папка>, LATER-92).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-E2E=(docker compose -f docker-compose.e2e.yml)
+E2E=(docker compose -p "$(./scripts/parallel.sh project e2e)" -f docker-compose.e2e.yml)
 trap '"${E2E[@]}" down -v --remove-orphans >/dev/null 2>&1 || true; rm -rf e2e/.attachments' EXIT
 # Каталог вложений стека создаём от имени пользователя хоста — php в контейнере пишет под тем же UID
 rm -rf e2e/.attachments && mkdir -p e2e/.attachments
