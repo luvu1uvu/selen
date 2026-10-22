@@ -16,6 +16,9 @@ const SPACE = ['RARCH', 'Архивные доски приёмки'] as const
 test('ТК-L55.19. Архив досок и страница одной доски @tc-L55.19', async ({ page }) => {
   await openSpace(page, ...SPACE)
   await expect.poll(() => layout(page)).toEqual(START_LAYOUT)
+  // Меню — у загруженной доски, как у PM в тест-кейсе. У доски, которая ещё грузится, шапка — заглушка, и открытое в ней
+  // меню пропадает вместе с ней, когда приходят данные: так тест падал в CI (LATER-92, журнал infra-parallel-sessions)
+  await loaded(page, DUTY)
 
   // 1. «⋯» в шапке «Дежурства» → «Архивировать доску…» → «Архивировать»
   await block(page, DUTY).getByRole('button', { name: `Действия с доской «${DUTY}»` }).click()

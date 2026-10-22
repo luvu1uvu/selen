@@ -16,3 +16,6 @@ perl -ne 'if (!/^\s*#/ && /\$[A-Za-z_][A-Za-z0-9_]*(?=[^\x00-\x7F])/) { print "$
 
 # Очистка рабочих копий сессий (make host-worktrees-clean): перепроверка после «y», только копии Remote Control (LATER-69)
 ./scripts/test-host-worktrees.sh
+
+# Параллельные сессии: замок на dev и его сообщения, .env рабочей копии, имена стеков, замок у целей Makefile (LATER-92)
+./scripts/test-parallel.sh
