@@ -306,6 +306,11 @@ Dev — эта копия (`4271c12`), `make fresh`, `anna@selen.test`; окна
 4. **LATER-107 и LATER-108 — в пачку UX-2 (LATER-98)**, дописать комментарием (дописано 22.10).
 5. После правок — зелёный CI в обоих прогонах, затем ждать «принято».
 
+**Почему у вкладок свой флажок, а не только `focus-visible`** (вопрос PM 22.10): Radix `Tabs` в `onMouseDown` сам вызывает
+`event.currentTarget.focus()` (`@radix-ui/react-tabs`), и Chromium считает такой фокус `:focus-visible` — вкладки и
+раньше были только на `focus-visible:ring-[3px]`, и E2E `focus-ring.spec.ts` без пометки `data-pointer-focus` падает
+на настоящем щелчке мышью.
+
 ## Проблемы
 
 - **Нестабильный тест backend** `DeleteStructureTest` («пространство → …», 22.10): `board_ids` в событии
