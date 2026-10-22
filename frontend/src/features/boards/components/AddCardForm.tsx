@@ -75,7 +75,7 @@ export function AddCardForm({
 
   return (
     <div
-      className="border-input bg-card focus-within:border-ring focus-within:ring-ring min-w-0 overflow-hidden rounded-md border shadow-xs focus-within:ring-[3px]"
+      className="border-input bg-card focus-within:border-ring focus-within:ring-ring min-w-0 overflow-hidden rounded-md border shadow-xs focus-within:ring-2"
       // Закрываем, только если фокус ушёл за пределы формы (не на её кнопки), а название пустое
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget) && !title.trim()) onClose()

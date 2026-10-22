@@ -181,7 +181,7 @@ function TitleField({ card }: { card: CardDetail }) {
       maxLength={500}
       aria-label={t('card.title')}
       data-own-escape
-      className="hover:border-input focus-visible:border-ring focus-visible:ring-ring -mx-1.5 w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-xl leading-snug font-semibold outline-none focus-visible:ring-[3px]"
+      className="hover:border-input focus-visible:border-ring focus-visible:ring-ring -mx-1.5 w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-xl leading-snug font-semibold outline-none focus-visible:ring-2"
       onChange={(event) => setTitle(event.target.value.replace(/\s*\n\s*/g, ' '))}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
