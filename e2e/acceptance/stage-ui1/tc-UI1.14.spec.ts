@@ -3,7 +3,7 @@ import { authFile } from '../../tests/helpers'
 import { openCard } from './helpers'
 
 /**
- * ТК-UI1.14: «+» → «Дочернюю карточку…» — в секции «Связи» дочерние с номерами и полоса «Готово дочерних: 1 из 2»;
+ * ТК-UI1.14: «+» → «Дочерняя карточка» — в секции «Связи» дочерние с номерами и полоса «Готово дочерних: 1 из 2»;
  * щелчок по номеру дочерней открывает её окно, «Назад» возвращает к родителю. Новая карточка → WIN-8 «Для связей»,
  * карточка из Done → WIN-10 «Дочерняя готовая», из To Do → WIN-9 «Дочерняя в To Do» (E2eSeeder); Анна → e2e-editor.
  */
@@ -11,7 +11,7 @@ test.use({ storageState: authFile('e2e-editor@selen.test') })
 
 async function addChild(page: Page, window: Locator, title: string) {
   await window.getByRole('button', { name: 'Добавить в карточку' }).click()
-  await page.getByRole('menuitem', { name: 'Дочернюю карточку…' }).click()
+  await page.getByRole('menuitem', { name: 'Дочерняя карточка' }).click()
   const search = window.getByRole('textbox', { name: 'Найти дочернюю карточку' })
   await expect(search).toBeFocused()
   await search.fill(title)
@@ -26,7 +26,7 @@ test('ТК-UI1.14. «+» → «Дочернюю карточку» и прогр
   const window = await openCard(page, 'Для связей')
   const parentUrl = page.url()
 
-  // 1. «+» → «Дочернюю карточку…» → карточка из Done; 2. ещё раз — из To Do
+  // 1. «+» → «Дочерняя карточка» → карточка из Done; 2. ещё раз — из To Do
   await addChild(page, window, 'Дочерняя готовая')
   await addChild(page, window, 'Дочерняя в To Do')
 

@@ -17,9 +17,9 @@ const WHO_WHEN = /E2E Редактор, \d{1,2} \S+ \d{4} г\., \d{2}:\d{2}/
 test('ТК-UI1.15. Блокировка: плашка вверху и история @tc-UI1.15', async ({ page }) => {
   let window = await openCard(page, 'Для блокировки')
 
-  // 1. «+» → «Блокировку…» → причина «Ждём доступ» → «Заблокировать»
+  // 1. «+» → «Блокировка» → причина «Ждём доступ» → «Заблокировать»
   await window.getByRole('button', { name: 'Добавить в карточку' }).click()
-  await page.getByRole('menuitem', { name: 'Блокировку…' }).click()
+  await page.getByRole('menuitem', { name: 'Блокировка' }).click()
   const reason = window.getByRole('textbox', { name: 'Причина блокировки' })
   await expect(reason).toBeFocused()
   await reason.fill('Ждём доступ')

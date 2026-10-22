@@ -4,7 +4,7 @@ import { menuItems, param } from './helpers'
 
 /**
  * ТК-UI1.19: комментатор видит окно без правки — название и поля текстом, без полей ввода, лупы у «Расположения» нет;
- * «+» — только «Файл…», «⋯» — только «Скопировать ссылку»; комментарий написать можно. Вера (комментатор
+ * «+» — только «Загрузить файл», «⋯» — только «Скопировать ссылку»; комментарий написать можно. Вера (комментатор
  * в «Разработке») → e2e-editor, комментатор в MOB «Мобильные приложения»; доска «Продукт» → «Релизы», карточка MOB-1
  * (E2eSeeder).
  */
@@ -32,9 +32,9 @@ test('ТК-UI1.19. Комментатор видит окно без правк�
   await expect(main.getByRole('checkbox', { name: 'Срочно' })).toBeDisabled()
   await expect(window.getByRole('button', { name: /заказчик$/ })).toHaveCount(0)
 
-  // «+» — только «Файл…»
+  // «+» — только «Загрузить файл»
   await window.getByRole('button', { name: 'Добавить в карточку' }).click()
-  expect(await menuItems(page)).toEqual(['Файл…'])
+  expect(await menuItems(page)).toEqual(['Загрузить файл'])
   await page.keyboard.press('Escape')
   await expect(page.getByRole('menu')).toHaveCount(0)
 

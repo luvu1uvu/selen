@@ -12,7 +12,8 @@ import {
 
 /**
  * ТК-UI1.7: «Основные параметры» — две колонки «поле — значение» в порядке Расположение, Тип, Ответственный,
- * Участники, Срок, Срочно, Метки, План, ч; каждое поле правится, после каждого изменения — «Сохранено»; на плитке —
+ * Участники, Срок, Срочно, Метки, План, ч; срок и метки, пока не заданы, скрыты и добавляются через «+» (LATER-97);
+ * каждое поле правится, после каждого изменения — «Сохранено»; на плитке —
  * ответственный, срок, метка, срочность, новый тип. Карточка без ответственного → WIN-3 «Поля правятся» (E2eSeeder);
  * Анна → e2e-editor; «Борис Петров» → E2E Администратор, «Вера Иванова» → E2E Подрядчик, метка — «Окно».
  *
@@ -34,15 +35,14 @@ test('ТК-UI1.7. «Основные параметры»: поля читают
   await trackToasts(page)
   const main = window.getByRole('region', { name: 'Основные параметры' })
 
-  // Две колонки: слева названия полей, справа значения; порядок полей
+  // Две колонки: слева названия полей, справа значения; порядок полей. Срока и меток у карточки нет — их строк нет
+  // (LATER-97: добавляются через «+»)
   await expect(main.locator('dt')).toHaveText([
     'Расположение',
     'Тип',
     'Ответственный',
     'Участники',
-    'Срок',
     'Срочно',
-    'Метки',
     'План, ч',
   ])
   for (const name of ['Расположение', 'Ответственный', 'План, ч']) {
@@ -74,7 +74,8 @@ test('ТК-UI1.7. «Основные параметры»: поля читают
   await expect(param(main, 'Участники')).toContainText('E2E Подрядчик')
 
   // 4. «Срок» → завтрашняя дата; «Срочно»; «Метки» → «Окно»; «План, ч» → 2,5, Enter
-  await param(main, 'Срок').getByRole('button').click()
+  await window.getByRole('button', { name: 'Добавить в карточку' }).click()
+  await page.getByRole('menuitem', { name: 'Срок' }).click()
   await expectNewToast(page, 'Сохранено', () =>
     page.getByRole('textbox', { name: 'Дата срока' }).fill(tomorrow()),
   )
@@ -87,7 +88,8 @@ test('ТК-UI1.7. «Основные параметры»: поля читают
   )
   await expect(main.getByRole('checkbox', { name: 'Срочно' })).toBeChecked()
 
-  await main.getByRole('button', { name: 'Изменить метки' }).click()
+  await window.getByRole('button', { name: 'Добавить в карточку' }).click()
+  await page.getByRole('menuitem', { name: 'Метки' }).click()
   const beforeLabels = await toastCount(page)
   const label = page.getByRole('menuitemcheckbox', { name: 'Окно' })
   await label.click()

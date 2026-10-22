@@ -3,7 +3,7 @@ import { authFile } from '../../tests/helpers'
 import { openCard, PNG_BASE64 } from './helpers'
 
 /**
- * ТК-UI1.12: «+» → «Файл…» сразу открывает выбор файла; после загрузки — уведомление и секция «Файлы» с превью
+ * ТК-UI1.12: «+» → «Загрузить файл» сразу открывает выбор файла; после загрузки — уведомление и секция «Файлы» с превью
  * картинки; щелчок по превью открывает картинку крупно. Новая карточка без файлов → WIN-6 «Для файла из меню»
  * (E2eSeeder); Анна → e2e-editor; картинка с компьютера — PNG, выбранный в окне выбора файла (Playwright).
  */
@@ -15,10 +15,10 @@ test('ТК-UI1.12. «+» → «Файл» @tc-UI1.12', async ({ page }) => {
   const window = await openCard(page, 'Для файла из меню')
   await expect(window.getByRole('region', { name: 'Файлы' })).toHaveCount(0)
 
-  // 1. «+» → «Файл…» — сразу открылся выбор файла; выбрать картинку
+  // 1. «+» → «Загрузить файл» — сразу открылся выбор файла; выбрать картинку
   await window.getByRole('button', { name: 'Добавить в карточку' }).click()
   const chooser = page.waitForEvent('filechooser')
-  await page.getByRole('menuitem', { name: 'Файл…' }).click()
+  await page.getByRole('menuitem', { name: 'Загрузить файл' }).click()
   await (
     await chooser
   ).setFiles({ name: NAME, mimeType: 'image/png', buffer: Buffer.from(PNG_BASE64, 'base64') })

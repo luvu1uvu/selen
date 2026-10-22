@@ -3,7 +3,7 @@ import { authFile } from '../../tests/helpers'
 import { openCard } from './helpers'
 
 /**
- * ТК-UI1.13: «+» → «Ссылку…» — появляется секция «Ссылки» со ссылкой, которая открывается в новой вкладке. Новая
+ * ТК-UI1.13: «+» → «Ссылка» — появляется секция «Ссылки» со ссылкой, которая открывается в новой вкладке. Новая
  * карточка → WIN-7 «Для ссылки» (E2eSeeder); Анна → e2e-editor. Саму example.com тест не открывает (внешний адрес
  * из изолированного стека недоступен) — проверяет, что ссылка ведёт туда и открывается в новой вкладке.
  */
@@ -13,9 +13,9 @@ test('ТК-UI1.13. «+» → «Ссылку» @tc-UI1.13', async ({ page }) => {
   const window = await openCard(page, 'Для ссылки')
   await expect(window.getByRole('region', { name: 'Ссылки' })).toHaveCount(0)
 
-  // 1. «+» → «Ссылку…» → адрес https://example.com, название «Пример» → «Добавить»
+  // 1. «+» → «Ссылка» → адрес https://example.com, название «Пример» → «Добавить»
   await window.getByRole('button', { name: 'Добавить в карточку' }).click()
-  await page.getByRole('menuitem', { name: 'Ссылку…' }).click()
+  await page.getByRole('menuitem', { name: 'Ссылка' }).click()
   const links = window.getByRole('region', { name: 'Ссылки' })
   const url = links.getByRole('textbox', { name: 'Адрес ссылки' })
   await expect(url).toBeFocused()

@@ -13,7 +13,7 @@ test('блокировка карточкой снимается автомат�
   await page.goto('/cards/QA-1')
   const blocks = page.getByRole('dialog')
   await blocks.getByRole('button', { name: 'Добавить в карточку' }).click()
-  await page.getByRole('menuitem', { name: 'Блокировку…' }).click()
+  await page.getByRole('menuitem', { name: 'Блокировка' }).click()
   await blocks.getByRole('button', { name: 'Выбрать блокирующую карточку' }).click()
   await blocks.getByLabel('Найти блокирующую карточку').fill('блокирующая')
   await blocks.getByRole('button', { name: /QA-3/ }).click()
