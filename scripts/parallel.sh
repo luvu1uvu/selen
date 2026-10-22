@@ -70,14 +70,15 @@ dev_started() {
 }
 
 # Программы, которые сейчас работают в копии (их текущий каталог — в ней, но не во вложенной .claude/worktrees/…):
-# «claude, zsh». Подсказка PM, занята ли та копия; lsof нет — пусто
+# «claude, zsh» — не больше пяти имён. Подсказка PM, занята ли та копия; lsof нет — пусто. Имя вида «2.1.301» — процесс
+# Claude Code (так он себя называет), в подсказке — «claude»
 copy_processes() {
   command -v lsof > /dev/null || return 0
   { lsof -nP -a -d cwd -Fcn 2> /dev/null || true; } | awk -v dir="$1" '
-    /^c/ { cmd = substr($0, 2) }
+    /^c/ { cmd = substr($0, 2); if (cmd ~ /^[0-9][0-9.]*$/) cmd = "claude" }
     /^n/ { cwd = substr($0, 2)
            if ((cwd == dir || index(cwd, dir "/") == 1) && index(cwd, dir "/.claude/worktrees/") != 1) print cmd }' \
-    | sort -u | paste -sd ',' - | sed 's/,/, /g'
+    | sort -u | awk '{ if (NR <= 5) out = out (NR > 1 ? ", " : "") $0 } END { if (NR > 5) out = out ", …"; print out }'
 }
 
 # Основная копия (та, где лежит .git); не git — код 1
