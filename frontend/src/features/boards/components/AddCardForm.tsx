@@ -82,7 +82,9 @@ export function AddCardForm({
       }}
     >
       {lanes && lanes.length > 1 && (
-        <div className="has-[:focus-visible]:bg-muted/60 relative flex h-8 min-w-0 items-center border-b px-3 text-xs">
+        // Фокус с клавиатуры на выборе дорожки — своя рамка внутри формы: у всей формы она одна и та же и для поля, и
+        // для выбора, а один фон muted/60 — 1,05:1 к белому (U-3 UX-ревью LATER-91)
+        <div className="has-[:focus-visible]:bg-muted/60 has-[:focus-visible]:ring-ring relative flex h-8 min-w-0 items-center border-b px-3 text-xs has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset">
           <span className="min-w-0 flex-1 truncate pr-6" data-slot="lane-value" aria-hidden>
             {lanes.find((lane) => lane.id === laneId)?.name}
           </span>
