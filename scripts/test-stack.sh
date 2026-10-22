@@ -22,8 +22,20 @@ if [[ "${1:-}" == "--db" ]]; then
 fi
 [[ $# -gt 0 ]] || { echo "Укажите команду: ./scripts/test-stack.sh [--db] vendor/bin/pest …" >&2; exit 1; }
 
-STACK=(docker compose -p "$(./scripts/parallel.sh project test)-$$" -f docker-compose.test.yml)
+BASE="$(./scripts/parallel.sh project test)"
+# Стеки этой копии, брошенные убитой командой (SIGKILL — trap не сработал): процесса с номером из имени уже нет
+projects="$(docker ps -a --filter label=com.docker.compose.project \
+  --format '{{.Label "com.docker.compose.project"}}' 2> /dev/null | sort -u || true)"
+while IFS= read -r project; do
+  [[ "$project" =~ ^${BASE}-([0-9]+)$ ]] || continue
+  kill -0 "${BASH_REMATCH[1]}" 2> /dev/null \
+    || docker compose -p "$project" -f docker-compose.test.yml down -v --remove-orphans > /dev/null 2>&1 || true
+done <<< "$projects"
+
+STACK=(docker compose -p "${BASE}-$$" -f docker-compose.test.yml)
 trap '"${STACK[@]}" down -v --remove-orphans > /dev/null 2>&1 || true' EXIT
 
-test -d backend/vendor || "${STACK[@]}" run --rm --no-deps -T php composer install --no-interaction --no-progress
+# Зависимостей ещё нет (новая копия) — сначала composer install; команда composer ставит их сама
+[[ -d backend/vendor || "$1" == composer ]] \
+  || "${STACK[@]}" run --rm --no-deps -T php composer install --no-interaction --no-progress
 "${STACK[@]}" run --rm ${DEPS[@]+"${DEPS[@]}"} -T php "$@"

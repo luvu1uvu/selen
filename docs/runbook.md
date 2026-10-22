@@ -108,7 +108,7 @@ Git переносит только код. Со старой машины во�
 | Один тест backend | `./scripts/test-stack.sh --db vendor/bin/pest --filter=LoginTest` |
 | Из какой рабочей копии поднят dev / забрать dev | `make dev-status` / `make dev-take` (раздел 15) |
 | Artisan | `docker compose exec php php artisan <команда>` (dev той копии, из которой он поднят) |
-| Добавить PHP-пакет | `docker compose exec php composer require <пакет>` |
+| Добавить PHP-пакет | `./scripts/test-stack.sh composer require <пакет>` (в папке своей копии; `docker compose exec` попал бы в копию, из которой поднят dev) |
 | Добавить npm-пакет | `docker compose run --rm node npm install <пакет>` |
 | Всё удалить вместе с данными | `make destroy` |
 
@@ -462,7 +462,7 @@ psql -U postgres -d selen -v owner=selen_owner -v app=selen_app -f grants.sql
 | Страница не обновляется при правке frontend | В Docker на macOS события файловой системы не доходят до контейнера, поэтому Vite опрашивает файлы (`VITE_USE_POLLING=true`, по умолчанию; правка видна через 1–2 с, ~3 % CPU). Проверьте, что в `.env` не осталось `VITE_USE_POLLING=false` (старые `.env` из этапа 0), затем `docker compose up -d node` |
 | 419 / «CSRF token mismatch» | Открыт не тот адрес. Хост должен быть в `SANCTUM_STATEFUL_DOMAINS` (по умолчанию `localhost:8080`, `127.0.0.1:8080`) |
 | Письма не приходят в Mailpit | Письма уходят через очередь: проверьте сервис `queue` (`docker compose logs queue`) |
-| `make test` ругается на базу `selen_testing` | База создаётся при первой инициализации тома postgres. Если том старый: `docker compose exec postgres createdb -U selen selen_testing` |
+| Тесты в dev (`docker compose exec php vendor/bin/pest`) ругаются на базу `selen_testing` | База создаётся при первой инициализации тома postgres. Если том старый: `docker compose exec postgres createdb -U selen selen_testing`. `make test` от этого не зависит: у стека проверок своя база (раздел 15) |
 | После изменения `.env` ничего не поменялось | Контейнеры читают `.env` при создании: `make restart` |
 | Права на файлы (Linux) | Makefile передаёт ваш UID/GID в контейнеры; запускайте `make`, а не `docker compose` напрямую при первой сборке |
 | `composer.json not found` / пустые папки в контейнере | Colima монтирует в VM только домашний каталог — проект должен лежать внутри `~` |
@@ -480,7 +480,8 @@ psql -U postgres -d selen -v owner=selen_owner -v app=selen_app -f grants.sql
 4. Для redis — коммит подмодуля liblzf в этом теге: `gh api "repos/phpredis/phpredis/contents/liblzf?ref=6.3.0" -q .sha`,
    сумма — `curl -fsSL https://github.com/nemequ/liblzf/archive/КОММИТ.tar.gz | shasum -a 256`.
 5. Поменять `ARG` и версии в комментарии `docker/php/Dockerfile`; `make up` пересоберёт образ dev, затем `make test`
-   и `make e2e`; на стенде — `make pm-update` после мёржа.
+   и `make e2e`; на стенде — `make pm-update` после мёржа. Образ `selen-php:dev` один на машине (раздел 15): пока
+   ветка не смёржена, сборка из неё меняет его и для других копий.
 
 Архив по коммиту не меняется при переносе тега: `FAILED` при прежнем коммите — повод разбираться, а не пересчитывать сумму.
 
@@ -680,13 +681,15 @@ PM (его можно дать сразу в задании); стенд — т�
 | Тесты и линтеры frontend | `docker compose run node` — папка копии | |
 | E2E и `make perf` | стек `selen-e2e-<папка>`, порт — случайный (раздел 8) | |
 | Dev: http://localhost:8080, его база, Redis, Mailpit | | работает с кодом той копии, из которой поднят |
-| Образ `selen-php:dev` | | ветка, которая меняет `docker/php/Dockerfile`, пересобирает его для всех |
+| Образ `selen-php:dev` | | собирают `make up`, `make dev-take` и `make e2e` (`--build`) из своей копии; стек проверок берёт готовый. Ветка, которая меняет `docker/php/Dockerfile`, этой сборкой меняет образ для всех копий, а в копии без dev её тесты идут на образе, собранном последним, — пока не прогнан её `make e2e` |
 
 **Замок на dev.** Цели, которые работают с dev, — `up`, `restart`, `down`, `destroy`, `shell`, `fresh`, `migrate`,
 `db-roles`, `admin`, `metrics`, `backup`, `restore`, `backup-verify` — сначала проверяют, из какой копии поднят dev
 (`scripts/parallel.sh dev-check`): по источнику тома `/var/www/backend` работающего контейнера php, по точному пути —
-`~/dev/selen` и `~/dev/selen/.claude/worktrees/x` разные копии. Своя копия, dev не запущен или docker не ответил —
-команда выполняется как раньше. Чужая — отказ:
+`~/dev/selen` и `~/dev/selen/.claude/worktrees/x` разные копии (регистр букв — как на диске). Своя копия или dev
+не запущен — команда выполняется как раньше. Docker не ответил за 10 с — отказ «проверьте Colima и повторите»: команда
+пошла бы в тот же docker вслепую. Цель dev в стенде `~/dev/selen-pm` или копии вне `.claude/worktrees` — отказ «это не
+копия для dev». Чужая копия — отказ:
 
 ```
 Попросите PM разрешить make dev-take или дождитесь, пока та сессия закончит.
@@ -702,19 +705,23 @@ Dev (http://localhost:8080) поднят из другой рабочей коп
 
 «В той копии сейчас ничего не запущено» — подсказка, что dev, скорее всего, остался от завершённой сессии; решение
 забрать его всё равно за PM. Список целей с замком сверяет `scripts/test-parallel.sh` (`make lint`, CI): новая цель
-с `docker compose exec` или `up` без замка роняет проверку. `docker compose exec php …` напрямую замок не проверяет —
-это dev той копии, которая его подняла.
+с `docker compose exec` или `up` без замка роняет проверку. `docker compose up | down | exec` напрямую замок не проверяет:
+dev — только через цели Makefile, `exec` — это dev той копии, которая его подняла.
 
 **Забрать dev — `make dev-take`** (сессия — только с разрешения PM):
 1. Если у копии нет `.env` — создаёт ссылку на `.env` основной копии (ниже).
-2. Останавливает контейнеры dev (данные базы и Redis остаются) и поднимает dev из этой копии (`make up`).
+2. Собирает образ php из этой копии, останавливает контейнеры dev (данные базы и Redis остаются; идущие проверки
+   frontend других сессий — одноразовые контейнеры `node` — не трогает) и поднимает dev из этой копии (`make up`).
 3. Ветки отличаются миграциями — `make migrate`. Файлы вложений лежат в папке копии, поэтому у картинок демо-данных
    после смены копии нет файлов — `make fresh` (данные dev сотрутся).
 
-**`.env` рабочей копии — ссылка на `.env` основной** (`make up`, `make dev-take`): один источник секретов, пароли базы
-dev совпадают (её роли созданы паролями основной копии). В git ссылка не попадает (`.gitignore`), очистке копий сессий
-не мешает (раздел 13). Если в копии уже свой `.env` с другими настройками базы, `make dev-take` останавливается
-и подсказывает `rm .env && ln -s ~/dev/selen/.env .env`. Тестам, линтерам и E2E `.env` не нужен.
+**`.env` рабочей копии — ссылка на `.env` основной** (`make up`, `make dev-take`; только в `.claude/worktrees/…` и
+только если в `.env` основной есть `APP_KEY`): один источник секретов, пароли базы dev совпадают (её роли созданы
+паролями основной копии). **Не правьте `.env` в рабочей копии** — изменится `.env` основной копии и dev, кто бы его ни
+держал; новая переменная — в `.env.example`, сам `.env` правит PM или сессия основной копии. В git ссылка не попадает
+(`.gitignore`), очистке копий сессий не мешает (раздел 13). Если в копии уже свой `.env` с другими настройками базы,
+цели dev и `make dev-take` останавливаются и подсказывают `rm .env && ln -s ~/dev/selen/.env .env`. Тестам, линтерам
+и E2E `.env` не нужен. Новый `.env` из шаблона — с правами 600.
 
 **Новая рабочая копия:** зависимости — `make install` (composer — в стеке проверок, npm — `docker compose run node`);
 тесты backend и E2E ставят composer-зависимости сами, если их нет.
@@ -722,9 +729,10 @@ dev совпадают (её роли созданы паролями основ
 **Одна папка — одна сессия и для тестов:** два прогона Pest в одной копии одновременно мешают друг другу — `Storage::fake`
 пишет файлы в её `backend/storage/framework/testing` (так было и до стеков проверок). Копии друг другу не мешают.
 
-**Остался стек от прерванной команды.** `make e2e-down` — E2E-стек этой копии. Стек проверок удаляется сам; если
-процесс убили — `docker compose ls`, затем `docker compose -p <имя> down -v`. Стек старого образца `selen-e2e` (до
-LATER-92) — `docker compose -p selen-e2e down -v`.
+**Остался стек от прерванной команды.** `make e2e-down` — E2E-стек этой копии. Стек проверок удаляется сам, а брошенный
+убитой командой (процесса с номером из имени уже нет) убирает следующий запуск в этой копии; вручную — `docker compose
+ls`, затем `docker compose -p <имя> down -v`. Стек старого образца `selen-e2e` (до LATER-92) — `docker compose -p
+selen-e2e down -v`. Пустой `backend/.env` в копии — точка монтирования, которую создаёт docker; очистке копий не мешает.
 
 `make host-status` показывает строку «Dev: поднят из ~/dev/selen/.claude/worktrees/… — ветка …, с …» (или
 «не запущен»); `make dev-status` — то же из копии сессии, с пометкой «из этой копии» или «из другой».

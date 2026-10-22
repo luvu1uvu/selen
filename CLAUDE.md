@@ -247,8 +247,11 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
     с разрешения PM**; **разрешение на dev-take PM может дать сразу в задании**. Новая цель Makefile, которая работает
     с dev (`$(PHP)`, `$(ARTISAN)`, `$(DC) up/down/exec`, скрипты бэкапа), — с `$(DEV_LOCK) $@` первой строкой рецепта
     (иначе упадёт `scripts/test-parallel.sh`).
+  - Dev — только через цели Makefile: `docker compose up | down | exec` напрямую замок не проверяет, а `exec` — это dev
+    любой копии, которая его подняла; тесты, composer — `./scripts/test-stack.sh` (runbook, раздел 15).
   - Тесты и линтеры (`make test`, `make lint`, `make fix`) и E2E работают в любой копии без dev — в стеках своей копии.
-    `docker compose exec php …` — всегда dev, в том числе чужой копии; для тестов — `./scripts/test-stack.sh`.
+  - `.env` рабочей копии — ссылка на `.env` основной: **не правьте его в копии** (изменится `.env` основной и dev);
+    новая переменная — в `.env.example`.
   - Стенд — только `make pm-*`, одна сессия за раз.
   - Бэклог (`docs/pm/deferred.yaml`) и дорожную карту (`docs/roadmap.md`) правит одна сессия, остальные просят PM.
 - **Аудит безопасности** — агент `security-auditor` (`.claude/agents/`, ADR-0020): только читает код и выполняет

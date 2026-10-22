@@ -13,8 +13,9 @@ ARTISAN  := $(PHP) php artisan
 NODE_RUN := $(DC) run --rm --no-deps -T node
 # Проверки backend (Pint, Larastan, Pest) — в стеке проверок этой копии, не в dev (docker-compose.test.yml, LATER-92)
 TEST_STACK := ./scripts/test-stack.sh
-# Замок на dev (параллельные сессии, docs/runbook.md): первой строкой целей, которые работают с dev, — dev поднят
-# из другой рабочей копии → отказ с объяснением. Цели без замка в dev не ходят (своя копия, свой стек)
+# Замок на dev (параллельные сессии, docs/runbook.md): первой строкой целей, которые работают с dev или меняют его, —
+# dev поднят из другой рабочей копии → отказ с объяснением. Без замка — цели, которые dev не меняют: logs (чтение),
+# key (.env копии), проверки frontend (одноразовый контейнер node с папкой этой копии)
 DEV_LOCK := @./scripts/parallel.sh dev-check
 
 .PHONY: help
@@ -80,6 +81,7 @@ dev-status: ## Из какой рабочей копии поднят dev (па�
 # «Параллельные сессии»). Сессия выполняет только с разрешения PM: другая сессия потеряет dev посреди работы
 .PHONY: dev-take
 dev-take: .env ## Забрать dev: пересоздать из этой копии — только с разрешения PM
+	$(DC) build php
 	@./scripts/parallel.sh dev-take
 	@$(MAKE) --no-print-directory up
 	@echo "Dev поднят из этой копии. Ветки отличаются миграциями — make migrate; картинок демо-данных нет (файлы"

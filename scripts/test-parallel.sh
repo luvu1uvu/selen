@@ -8,6 +8,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 
+# Процесс, работающий внутри копии (как процесс сессии); stop_busy — завершить все такие процессы
+busy() { (cd "$1" && exec sleep 300) & echo "$!" >> "$TMP/busy.pids"; disown "$!"; sleep 1; }
+stop_busy() { [[ ! -f "$TMP/busy.pids" ]] || { kill $(cat "$TMP/busy.pids") 2> /dev/null || true; rm -f "$TMP/busy.pids"; }; }
+
 TMP="$(mktemp -d)"
 trap 'stop_busy; rm -rf "$TMP"' EXIT
 # Настоящий путь (macOS: /var → /private/var): так его видят git, lsof и pwd -P
@@ -35,9 +39,6 @@ EOF
 chmod +x "$TMP/bin/docker"
 export PATH="$TMP/bin:$PATH"
 
-# Процесс, работающий внутри копии (как процесс сессии); stop_busy — завершить все такие процессы
-busy() { (cd "$1" && exec sleep 300) & echo "$!" >> "$TMP/busy.pids"; disown "$!"; sleep 1; }
-stop_busy() { [[ ! -f "$TMP/busy.pids" ]] || { kill $(cat "$TMP/busy.pids") 2> /dev/null || true; rm -f "$TMP/busy.pids"; }; }
 failed=0
 total=0
 fail() { failed=$((failed + 1)); echo "ПРОВАЛ: $*"; }
@@ -102,11 +103,24 @@ ln -s "$MAIN" "$TMP/link"
 dev_from "$TMP/link"
 run "$MAIN" dev-check fresh
 expect 0 "dev поднят по пути через симлинк на эту копию"
+# Регистр букв в пути: APFS его не различает — dev, поднятый по пути в другом регистре, — та же копия
+if [[ -d "$HOME/DEV/SELEN" ]]; then
+  dev_from "$HOME/DEV/SELEN"
+  run "$MAIN" dev-check fresh
+  expect 0 "dev поднят по пути в другом регистре (APFS)"
+fi
+
+# --- Замок: проверить нельзя — отказ (команда пошла бы в тот же docker вслепую) --------------------------------
 touch "$TMP/docker.fail"
 run "$WT" dev-check fresh
-expect 0 "docker не ответил — без проверки"
-silent "docker не ответил"
+expect 1 "docker не ответил"
+has err "docker не ответил за 10 с" "docker не ответил: почему"
+has err "colima status" "docker не ответил: что делать"
 rm -f "$TMP/docker.fail"
+echo abc123 > "$TMP/dev.id" && echo "" > "$TMP/dev.source"
+run "$WT" dev-check fresh
+expect 1 "у контейнера php нет тома кода"
+has err "нет тома /var/www/backend" "нет тома: почему"
 
 # --- Замок: dev чужой копии -----------------------------------------------------------------------------------
 dev_from "$MAIN"
@@ -163,7 +177,13 @@ total=$((total + 1)); [[ "$(cat "$TMP/out")" == "поднят из ~/dev/selen �
 # --- .env: в рабочей копии — ссылка на .env основной -------------------------------------------------------------
 run "$MAIN" env
 total=$((total + 1)); [[ -f "$MAIN/.env" && ! -L "$MAIN/.env" ]] || fail "основная копия: .env не создан из шаблона"
-echo "DB_PASSWORD=mainmainmain" > "$MAIN/.env"
+total=$((total + 1))
+[[ "$(ls -l "$MAIN/.env" | cut -c1-10)" == "-rw-------" ]] || fail ".env из шаблона — не 600: $(ls -l "$MAIN/.env" | cut -c1-10)"
+# .env основной копии без APP_KEY (не настроен) — рабочая копия получает свой из шаблона: make key по ссылке не работает
+run "$WT" env
+total=$((total + 1)); [[ -f "$WT/.env" && ! -L "$WT/.env" ]] || fail "основная без APP_KEY: в рабочей копии не свой .env"
+rm "$WT/.env"
+printf '%s\n' 'DB_PASSWORD=mainmainmain' 'APP_KEY=base64:dGVzdA==' > "$MAIN/.env"
 run "$WT" env
 total=$((total + 1)); [[ "$(readlink "$WT/.env")" == "$MAIN/.env" ]] || fail "рабочая копия: .env не ссылка на основной"
 has out "ссылка на .env основной копии (~/dev/selen/.env)" "сообщение о ссылке"
@@ -195,7 +215,9 @@ rm -f "$TMP/docker.log"
 run "$WT" dev-take
 expect 0 "dev-take из рабочей копии"
 has out "Забираю dev у копии ~/dev/selen — ветка main" "dev-take: у кого"
-total=$((total + 1)); grep -q "down --remove-orphans" "$TMP/docker.log" 2> /dev/null || fail "dev-take не остановил чужой dev"
+total=$((total + 1)); grep -q " down$" "$TMP/docker.log" 2> /dev/null || fail "dev-take не остановил чужой dev: $(cat "$TMP/docker.log" 2> /dev/null)"
+# Без --remove-orphans: он убил бы идущие одноразовые контейнеры проекта — проверки frontend других сессий
+total=$((total + 1)); ! grep -q "remove-orphans" "$TMP/docker.log" || fail "dev-take убирает одноразовые контейнеры других сессий"
 rm -f "$TMP/docker.log"
 dev_from "$WT"
 run "$WT" dev-take
@@ -204,6 +226,27 @@ total=$((total + 1)); [[ ! -f "$TMP/docker.log" ]] || fail "dev-take остан�
 dev_down
 run "$WT" dev-take
 has out "Dev не запущен" "dev-take: dev не запущен"
+
+# Свой .env с другими настройками базы — замок и для make up, когда dev не запущен
+rm "$WT/.env" && echo "DB_PASSWORD=copycopycopy" > "$WT/.env"
+run "$WT" dev-check up
+expect 1 "make up со своим .env с другими паролями базы"
+has err "настройки базы в нём не те" "make up: другой .env"
+rm "$WT/.env"
+
+# --- Стенд (~/dev/selen-pm — git worktree того же репозитория, но не копия для dev) -----------------------------
+PM="$HOME/dev/selen-pm"
+git -C "$MAIN" worktree add -q -b pm-stand "$PM"
+run "$PM" env
+total=$((total + 1)); [[ -f "$PM/.env" && ! -L "$PM/.env" ]] || fail "стенд: .env — ссылка на .env dev"
+dev_down
+run "$PM" dev-check fresh
+expect 1 "стенд: цель dev"
+has err "Это не копия для dev" "стенд: почему"
+rm -f "$TMP/docker.log"
+run "$PM" dev-take
+expect 1 "стенд: dev-take"
+total=$((total + 1)); [[ ! -f "$TMP/docker.log" ]] || fail "dev-take со стенда тронул dev"
 
 # --- Makefile: каждая цель, которая работает с dev, — с замком первой строкой ---------------------------------------
 # Работа с dev: exec в контейнер ($(PHP), $(ARTISAN), $(DC) exec), up / down / build / stop / restart проекта dev,

@@ -37,8 +37,9 @@ new_repo() {
   git init -q --bare "$TMP/$1/origin.git"
   git init -q "$MAIN"
   printf '%s\n' '.env' '/backups/' 'node_modules/' '.DS_Store' '/.claude/worktrees/' > "$MAIN/.gitignore"
-  mkdir -p "$MAIN/frontend" && echo '{}' > "$MAIN/frontend/package.json"
-  git -C "$MAIN" add .gitignore frontend
+  mkdir -p "$MAIN/frontend" "$MAIN/backend" && echo '{}' > "$MAIN/frontend/package.json"
+  echo '{}' > "$MAIN/backend/composer.json"
+  git -C "$MAIN" add .gitignore frontend backend
   git -C "$MAIN" commit -qm init
   git -C "$MAIN" remote add origin "$TMP/$1/origin.git"
   git -C "$MAIN" push -q origin HEAD:main
@@ -108,6 +109,9 @@ new_copy bridge-cse_env && touch "$WORKTREES_DIR/bridge-cse_env/.env"
 echo "APP_KEY=test" > "$MAIN/.env"
 new_copy bridge-cse_envlink && ln -s "$MAIN/.env" "$WORKTREES_DIR/bridge-cse_envlink/.env"
 new_copy bridge-cse_envother && ln -s "$TMP/other.env" "$WORKTREES_DIR/bridge-cse_envother/.env"
+# Пустой backend/.env — точка монтирования docker (стеки проверок и E2E) — не мешает; с содержимым — мешает
+new_copy bridge-cse_mountenv && touch "$WORKTREES_DIR/bridge-cse_mountenv/backend/.env"
+new_copy bridge-cse_backendenv && echo "APP_KEY=x" > "$WORKTREES_DIR/bridge-cse_backendenv/backend/.env"
 new_copy bridge-cse_dump && mkdir -p "$WORKTREES_DIR/bridge-cse_dump/backups"
 touch "$WORKTREES_DIR/bridge-cse_dump/backups/selen-2026-10-19.dump"
 new_copy bridge-cse_dirty && echo "*.tmp" >> "$WORKTREES_DIR/bridge-cse_dirty/.gitignore"
@@ -123,7 +127,7 @@ mkdir -p "$WORKTREES_DIR/x" && new_copy x/bridge-cse_nested
 
 total=$((total + 1))
 summary="$(worktrees_summary)"
-[[ "$summary" == "19, из них завершённых без изменений — 5: make host-worktrees-clean" ]] \
+[[ "$summary" == "21, из них завершённых без изменений — 6: make host-worktrees-clean" ]] \
   || fail "make host-status: «${summary}»"
 
 run_clean
@@ -145,6 +149,8 @@ removed bridge-cse_envlink ".env — ссылка на .env основной к�
 total=$((total + 1))
 [[ "$(cat "$MAIN/.env" 2> /dev/null)" == "APP_KEY=test" ]] || fail "удалена ссылка — пропал .env основной копии"
 kept bridge-cse_envother "есть файлы вне git (например, .env)" ".env — ссылка не на основную копию"
+removed bridge-cse_mountenv "пустой backend/.env — точка монтирования docker"
+kept bridge-cse_backendenv "есть файлы вне git (например, backend/.env)" "backend/.env с содержимым"
 kept bridge-cse_dump "есть файлы вне git (например, backups/)" "дамп в копии"
 kept bridge-cse_dirty "есть незакоммиченные изменения" "изменённый файл"
 kept bridge-cse_unpushed "есть коммиты, которых нет на GitHub" "коммит не на GitHub"

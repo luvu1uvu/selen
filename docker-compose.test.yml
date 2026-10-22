@@ -27,7 +27,8 @@ services:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - ./docker/postgres/sql:/selen-sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U selen -d selen_testing"]
+      # По TCP: через unix-сокет pg_isready отвечает «готов» ещё во время init-скриптов (сервер init слушает только сокет)
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U selen -d selen_testing"]
       interval: 2s
       timeout: 3s
       retries: 30
