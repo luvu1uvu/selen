@@ -135,50 +135,53 @@ function describeEvent(
 }
 
 /**
- * Лента истории карточки: перемещения (card_transitions) и изменения (журнал событий) — новые сверху.
- * Карточки, которых зритель не видит, сервер уже заменил на «Скрытая карточка».
+ * Лента истории карточки (вкладка «История» окна): перемещения (card_transitions) и изменения (журнал событий) —
+ * новые сверху. Грузится, когда вкладку открыли. Карточки, которых зритель не видит, сервер уже заменил на «Скрытая
+ * карточка».
  */
 export function CardHistory({ cardKey }: { cardKey: string }) {
   const { t } = useTranslation('boards')
+  const { t: tc } = useTranslation()
   const { t: tAdmin } = useTranslation('admin')
   const { data: me } = useCurrentUser()
   const history = useCardHistory(cardKey)
   const refs = history.data?.refs
 
+  if (history.isPending)
+    return <p className="text-muted-foreground text-sm">{tc('states.loading')}</p>
+  if (history.isError) return <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
+
   return (
-    <section className="grid gap-2" aria-label={t('history.title')}>
-      <h3 className="text-sm font-semibold">{t('history.title')}</h3>
-      <ol className="grid gap-2">
-        {refs &&
-          history.data?.data.map((item) => {
-            const lines =
-              item.kind === 'transition'
-                ? [describeTransition(item.transition, t)]
-                : describeEvent(item, refs, t, tAdmin, me?.timezone)
-            const actor = item.kind === 'transition' ? item.transition.actor : item.actor
-            return (
-              <li key={item.id} className="border-l-2 pl-3 text-sm">
-                {lines.map((line, index) => (
-                  <div key={index} className="break-words">
-                    {line}
-                  </div>
-                ))}
-                <div className="text-muted-foreground text-xs">
-                  {formatDateTime(item.at, me?.timezone)} · {actor?.name ?? t('history.system')}
-                  {item.kind === 'transition' && (
-                    <>
-                      {' · '}
-                      {t(`categories.${item.transition.to_category}`)}
-                      {item.transition.reason !== 'manual' &&
-                        item.transition.reason !== 'created' &&
-                        ` · ${t(`history.reasons.${item.transition.reason}`)}`}
-                    </>
-                  )}
+    <ol className="grid gap-2" aria-label={t('history.title')}>
+      {refs &&
+        history.data?.data.map((item) => {
+          const lines =
+            item.kind === 'transition'
+              ? [describeTransition(item.transition, t)]
+              : describeEvent(item, refs, t, tAdmin, me?.timezone)
+          const actor = item.kind === 'transition' ? item.transition.actor : item.actor
+          return (
+            <li key={item.id} className="border-l-2 pl-3 text-sm">
+              {lines.map((line, index) => (
+                <div key={index} className="break-words">
+                  {line}
                 </div>
-              </li>
-            )
-          })}
-      </ol>
-    </section>
+              ))}
+              <div className="text-muted-foreground text-xs">
+                {formatDateTime(item.at, me?.timezone)} · {actor?.name ?? t('history.system')}
+                {item.kind === 'transition' && (
+                  <>
+                    {' · '}
+                    {t(`categories.${item.transition.to_category}`)}
+                    {item.transition.reason !== 'manual' &&
+                      item.transition.reason !== 'created' &&
+                      ` · ${t(`history.reasons.${item.transition.reason}`)}`}
+                  </>
+                )}
+              </div>
+            </li>
+          )
+        })}
+    </ol>
   )
 }

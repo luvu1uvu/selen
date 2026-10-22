@@ -9,9 +9,11 @@ test.use({ storageState: authFile('e2e-editor@selen.test') })
 
 test('блокировка карточкой снимается автоматически; лента истории; архив карточек', async ({ page }) => {
   // QA-1 блокирует QA-3 — выбор через поиск по названию
+  // Окно карточки (UI-1a): новая блокировка — пунктом «+», форма и активная блокировка — под рядом действий
   await page.goto('/cards/QA-1')
-  const blocks = page.getByRole('dialog').getByRole('region', { name: 'Блокировки' })
-  await blocks.getByRole('button', { name: 'Заблокировать' }).click()
+  const blocks = page.getByRole('dialog')
+  await blocks.getByRole('button', { name: 'Добавить в карточку' }).click()
+  await page.getByRole('menuitem', { name: 'Блокировка' }).click()
   await blocks.getByRole('button', { name: 'Выбрать блокирующую карточку' }).click()
   await blocks.getByLabel('Найти блокирующую карточку').fill('блокирующая')
   await blocks.getByRole('button', { name: /QA-3/ }).click()
@@ -25,7 +27,8 @@ test('блокировка карточкой снимается автомат�
 
   // QA-3 → Done через диалог перемещения
   await page.goto('/cards/QA-3')
-  await page.getByRole('dialog').getByRole('button', { name: 'Переместить' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: /^Действия с карточкой/ }).click()
+  await page.getByRole('menuitem', { name: 'Переместить…' }).click()
   const move = page.getByRole('dialog', { name: 'Переместить QA-3' })
   await move.getByLabel('Колонка').selectOption({ label: 'Done' })
   await move.getByRole('button', { name: 'Переместить' }).click()
@@ -34,9 +37,11 @@ test('блокировка карточкой снимается автомат�
   // Блокировка QA-1 снята сама, эпизод — в истории блокировок и в ленте
   await page.goto('/cards/QA-1')
   const panel = page.getByRole('dialog')
-  await expect(panel.getByRole('region', { name: 'Блокировки' }).getByText('Не заблокирована')).toBeVisible()
-  await expect(panel.getByText('История блокировок: 1')).toBeVisible()
-  const history = panel.getByRole('region', { name: 'История' })
+  // Активной блокировки нет, снятая — в секции «Блокировки»; лента — вкладка «История»
+  await expect(panel.getByRole('button', { name: 'Снять' })).toHaveCount(0)
+  await expect(panel.getByRole('region', { name: 'Блокировки' }).getByText(/снята автоматически/)).toBeVisible()
+  await panel.getByRole('tab', { name: 'История' }).click()
+  const history = panel.getByRole('tabpanel', { name: 'История' })
   await expect(history.getByText('Блокировка снята автоматически: QA-3 «Блокирующая задача» готова')).toBeVisible()
   await expect(history.getByText('Блокирует: QA-3 «Блокирующая задача»')).toBeVisible()
   await page.keyboard.press('Escape')

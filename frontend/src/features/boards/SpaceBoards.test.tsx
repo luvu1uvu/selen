@@ -333,8 +333,15 @@ describe('Страница пространства: доски рядами', (
 
   it('карточка открывается поверх пространства и закрывается обратно', async () => {
     serve()
+    // Ответ на запрос карточки тест отдаёт сам — после того как окно открылось. Иначе одно ожидание (3 с) покрывало
+    // всю цепочку «адрес → окно → запрос → 404 → окно закрыто → уведомление», и на загруженном CI её не хватало
+    let respond!: () => void
+    const responded = new Promise<void>((resolve) => (respond = resolve))
     server.use(
-      http.get('*/api/v1/cards/DEV-12', () => HttpResponse.json({ message: '' }, { status: 404 })),
+      http.get('*/api/v1/cards/DEV-12', async () => {
+        await responded
+        return HttpResponse.json({ message: '' }, { status: 404 })
+      }),
     )
     const { router } = renderApp('/spaces/DEV')
 
@@ -342,8 +349,13 @@ describe('Страница пространства: доски рядами', (
       within(await loaded('Продукт')).getByRole('button', { name: /^Открыть DEV-12/ }),
     )
     expect(router.state.location.pathname).toBe('/spaces/DEV/cards/DEV-12')
+    // Окно открылось поверх пространства и ждёт карточку
+    expect(await screen.findByRole('dialog', { name: 'DEV-12' })).toHaveTextContent('Загрузка…')
+
     // Карточки нет — окна нет: сообщение и обратно на пространство, доски на месте
+    respond()
     expect(await screen.findByText('Карточка не найдена')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await waitFor(() => expect(router.state.location.pathname).toBe('/spaces/DEV'))
     expect(await region('Продукт')).toBeInTheDocument()
   })

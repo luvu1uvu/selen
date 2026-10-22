@@ -8,33 +8,47 @@ import { formatDateTime } from '@/shared/lib/dates'
 import type { CardBlock, CardDetail, CardSummary } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
+import { Hint } from '@/shared/components/Hint'
 import { blockApi } from '../api'
+import { useUnsavedText } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
 import { CardPicker } from './CardPicker'
 import { RelatedCardView } from './RelatedCardView'
 
 /**
- * Блокировки (ADR-0011): активные — заметным блоком со снятием, ниже — история эпизодов.
- * Причина — текст и/или блокирующая карточка; блокировка карточкой снимется сама, когда та станет готова.
+ * Активные блокировки (ADR-0011) — заметной плашкой сразу под рядом действий окна (README Kaiten, раздел 02: заблокированную
+ * карточку видно сразу), со снятием. Новая блокировка — пунктом «+» окна (`adding` — форма открыта). Причина — текст
+ * и/или блокирующая карточка; блокировка карточкой снимется сама, когда та станет готова.
  */
-export function CardBlocksSection({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+export function CardActiveBlocks({
+  card,
+  canEdit,
+  adding,
+  onAddDone,
+}: {
+  card: CardDetail
+  canEdit: boolean
+  adding: boolean
+  onAddDone: () => void
+}) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
-  const [adding, setAdding] = useState(false)
   const resolve = useCardContentMutation((id: string) => blockApi.resolve(id))
   const active = card.blocks.filter((block) => !block.ended_at)
-  const ended = card.blocks.filter((block) => block.ended_at)
+  if (active.length === 0 && !(canEdit && adding)) return null
 
   return (
-    <div className="grid gap-3">
-      {active.length === 0 && !adding && (
-        <span className="text-muted-foreground text-sm">{t('blocks.none')}</span>
-      )}
+    <div className="grid gap-2">
       {active.map((block) => (
         <div
           key={block.id}
-          className="grid gap-1 rounded-md border border-red-300 bg-red-50 p-2 text-sm dark:border-red-900 dark:bg-red-950/40"
+          // Белый фон и красная полоса слева: на розовой заливке текст был ниже 4,5:1 (U-1 UX-ревью UI-1a)
+          className="border-destructive/40 border-l-destructive bg-background grid gap-1 rounded-md border border-l-4 p-3 text-sm"
         >
+          <span className="text-destructive flex items-center gap-1.5 font-medium">
+            <Ban className="size-4" aria-hidden />
+            {t('facade.blocked')}
+          </span>
           <BlockCause block={block} />
           <div className="flex items-center gap-2">
             <BlockMeta block={block} />
@@ -57,38 +71,23 @@ export function CardBlocksSection({ card, canEdit }: { card: CardDetail; canEdit
           </div>
         </div>
       ))}
-
-      {canEdit &&
-        (adding ? (
-          <BlockForm card={card} onDone={() => setAdding(false)} />
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="justify-self-start"
-            onClick={() => setAdding(true)}
-          >
-            <Ban />
-            {t('blocks.add')}
-          </Button>
-        ))}
-
-      {ended.length > 0 && (
-        <details className="text-sm">
-          <summary className="text-muted-foreground cursor-pointer text-xs">
-            {t('blocks.history', { count: ended.length })}
-          </summary>
-          <ul className="mt-2 grid gap-2">
-            {ended.map((block) => (
-              <li key={block.id} className="grid gap-0.5 border-l-2 pl-3">
-                <BlockCause block={block} />
-                <BlockMeta block={block} />
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      {canEdit && adding && <BlockForm card={card} onDone={onAddDone} />}
     </div>
+  )
+}
+
+/** История эпизодов блокировки (снятые) — секция «Блокировки» окна. */
+export function CardBlocksHistory({ card }: { card: CardDetail }) {
+  const ended = card.blocks.filter((block) => block.ended_at)
+  return (
+    <ul className="grid gap-2 text-sm">
+      {ended.map((block) => (
+        <li key={block.id} className="grid gap-0.5 border-l-2 pl-3">
+          <BlockCause block={block} />
+          <BlockMeta block={block} />
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -139,6 +138,7 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
   const [blocker, setBlocker] = useState<CardSummary | null>(null)
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useUnsavedText(reason.trim() !== '')
   const add = useCardContentMutation(
     (payload: { reason: string | null; blocking_card: string | null }) =>
       blockApi.add(card.key, payload),
@@ -168,6 +168,7 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
     >
       <Textarea
         value={reason}
+        autoFocus
         maxLength={1000}
         rows={2}
         aria-label={t('blocks.reason')}
@@ -182,16 +183,18 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
           <span className="text-muted-foreground text-xs">{t('blocks.byCard')}</span>
           <span className="font-mono text-xs">{blocker.key}</span>
           <span className="truncate">{blocker.title}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6"
-            aria-label={t('blocks.clearCard')}
-            onClick={() => setBlocker(null)}
-          >
-            <X />
-          </Button>
+          <Hint label={t('blocks.clearCard')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              aria-label={t('blocks.clearCard')}
+              onClick={() => setBlocker(null)}
+            >
+              <X />
+            </Button>
+          </Hint>
         </div>
       ) : picking ? (
         <CardPicker

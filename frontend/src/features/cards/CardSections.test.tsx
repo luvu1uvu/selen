@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import { toast } from 'sonner'
 import type { CardDetail, Label, SpacePerson } from '@/shared/types/api'
 import { makeBoardDetail, makeCardDetail, makeCardHistory } from '@/test/boards'
 import { makeUser, server, signedInAs } from '@/test/server'
@@ -84,12 +85,27 @@ describe('Карточка: люди, поля, метки', () => {
     expect(within(panel).getByText('Деактивирован')).toBeInTheDocument()
     expect(within(panel).getByText('Не в пространстве')).toBeInTheDocument()
 
-    const responsible = within(panel).getByLabelText('Ответственный')
-    await within(responsible).findByRole('option', { name: 'Вера' })
-    expect(within(responsible).queryByRole('option', { name: 'Глеб' })).not.toBeInTheDocument()
-    await userEvent.selectOptions(responsible, 'u2')
+    // Ответственный — из списка с поиском; деактивированного там нет
+    await userEvent.click(within(panel).getByRole('button', { name: 'Назначить' }))
+    const responsible = await screen.findByRole('listbox')
+    expect(await within(responsible).findByRole('option', { name: 'Вера' })).toBeInTheDocument()
+    expect(within(responsible).queryByRole('option', { name: /Глеб/ })).not.toBeInTheDocument()
+    await userEvent.type(screen.getByRole('combobox', { name: 'Выбрать ответственного' }), 'вер')
+    expect(within(responsible).queryByRole('option', { name: 'Борис' })).not.toBeInTheDocument()
+    await userEvent.click(within(responsible).getByRole('option', { name: 'Вера' }))
+    await vi.waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument())
 
-    await userEvent.selectOptions(within(panel).getByLabelText('Добавить участника…'), 'u1')
+    // Участники: список не закрывается после выбора; уже назначенный — с галочкой; Esc закрывает только список
+    await userEvent.click(within(panel).getByRole('button', { name: 'Добавить участников' }))
+    const participants = await screen.findByRole('listbox')
+    expect(
+      await within(participants).findByRole('option', { name: 'Глеб — выбран' }),
+    ).toBeInTheDocument()
+    await userEvent.click(within(participants).getByRole('option', { name: 'Борис' }))
+    await userEvent.keyboard('{Escape}')
+    await vi.waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument())
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
     await userEvent.click(within(panel).getByRole('button', { name: 'Убрать Глеб из участников' }))
 
     await vi.waitFor(() =>
@@ -101,31 +117,50 @@ describe('Карточка: люди, поля, метки', () => {
     )
   })
 
+  it('заказчик — в строке под названием, меняется выбором из списка', async () => {
+    const calls = serveCard(makeCardDetail())
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    expect(within(panel).getByText('Заказчик')).toBeInTheDocument()
+    await userEvent.click(within(panel).getByRole('button', { name: 'Борис — заказчик' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Вера' }))
+
+    await vi.waitFor(() =>
+      expect(calls).toEqual([
+        { method: 'PATCH', path: '/api/v1/cards/DEV-1', body: { customer_id: 'u2' } },
+      ]),
+    )
+  })
+
   it('срок: дата без времени; время — в часовом поясе профиля, на сервер — UTC', async () => {
     const calls = serveCard(makeCardDetail())
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
-    const date = within(panel).getByLabelText('Дата срока')
+    // Срока нет — строки нет; добавить — через «+» (LATER-97)
+    await userEvent.click(within(panel).getByRole('button', { name: 'Добавить в карточку' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Срок' }))
+    const date = await screen.findByLabelText('Дата срока')
     await userEvent.type(date, '2026-10-20')
     await vi.waitFor(() =>
       expect(calls.at(-1)?.body).toEqual({ due_date: '2026-10-20', due_at: null }),
     )
 
-    const time = within(panel).getByLabelText('Время срока (необязательно)')
+    const time = screen.getByLabelText('Время срока (необязательно)')
     await vi.waitFor(() => expect(time).toBeEnabled())
     await userEvent.type(time, '18:30')
     await userEvent.tab()
     await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ due_at: '2026-10-20T15:30:00Z' }))
   })
 
-  it('«Срочно» и оценка с шагом 0,5 часа', async () => {
+  it('«Срочно» и план с шагом 0,5 часа', async () => {
     const calls = serveCard(makeCardDetail())
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
     await userEvent.click(within(panel).getByRole('checkbox', { name: 'Срочно' }))
-    const estimate = within(panel).getByLabelText('Оценка, ч')
+    const estimate = within(panel).getByLabelText('План, ч')
     await userEvent.type(estimate, '0,3')
     await userEvent.tab()
     expect(await within(panel).findByText(/шагом 0,5 часа/)).toBeInTheDocument()
@@ -146,17 +181,21 @@ describe('Карточка: люди, поля, метки', () => {
     const calls = serveCard(
       makeCardDetail({ labels: [labels[2]], due_date: '2026-10-01', completed_at: null }),
     )
+    const success = vi.spyOn(toast, 'success')
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
     // Просроченный срок подсвечен
     expect(within(panel).getAllByText(/Просрочено/).length).toBeGreaterThan(0)
 
-    await userEvent.click(within(panel).getByRole('button', { name: 'Метки' }))
+    await userEvent.click(within(panel).getByRole('button', { name: 'Изменить метки' }))
     const menu = await screen.findByRole('menu')
     expect(within(menu).getByText('Общие метки компании')).toBeInTheDocument()
     expect(within(menu).queryByText('Старая')).not.toBeInTheDocument()
     await userEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Безопасность' }))
+    // Как у остальных полей — уведомление «Сохранено» (LATER-93)
+    await vi.waitFor(() => expect(success).toHaveBeenCalledWith('Сохранено'))
+    success.mockRestore()
 
     await vi.waitFor(() =>
       expect(calls).toEqual([
@@ -169,12 +208,30 @@ describe('Карточка: люди, поля, метки', () => {
     )
   })
 
+  it('«Основные параметры» — строки «поле — значение» по порядку; тип меняется из списка', async () => {
+    const calls = serveCard(makeCardDetail())
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    const section = within(panel).getByRole('region', { name: 'Основные параметры' })
+    expect(
+      within(section)
+        .getAllByRole('term')
+        .map((term) => term.textContent),
+    ).toEqual(['Расположение', 'Тип', 'Ответственный', 'Участники', 'Срочно', 'План, ч'])
+    expect(within(section).getByText('Продукт / To Do (Основная)')).toBeInTheDocument()
+
+    await userEvent.click(within(section).getByRole('button', { name: 'Задача — тип карточки' }))
+    await userEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Баг' }))
+    await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ card_type_id: 'bug' }))
+  })
+
   it('без права правки — люди и поля только для чтения', async () => {
     serveCard(
       makeCardDetail({
         permissions: { edit: false, comment: true, restricted: true, delete: false },
         responsible: { id: 'u2', name: 'Вера', status: 'invited', in_space: true },
-        estimate_hours: 6,
+        estimate_hours: 6.5,
       }),
     )
     renderApp('/cards/DEV-1')
@@ -182,10 +239,15 @@ describe('Карточка: люди, поля, метки', () => {
 
     expect(within(panel).getByText('Вера')).toBeInTheDocument()
     expect(within(panel).getByText('Приглашён')).toBeInTheDocument()
-    expect(within(panel).queryByLabelText('Ответственный')).not.toBeInTheDocument()
-    expect(within(panel).queryByRole('button', { name: 'Метки' })).not.toBeInTheDocument()
-    expect(within(panel).getByLabelText('Оценка, ч')).toBeDisabled()
-    expect(within(panel).getByLabelText('Оценка, ч')).toHaveValue('6')
+    expect(within(panel).queryByRole('button', { name: 'Назначить' })).not.toBeInTheDocument()
+    expect(within(panel).queryByRole('button', { name: /Вера/ })).not.toBeInTheDocument()
+    expect(within(panel).queryByRole('button', { name: 'Изменить метки' })).not.toBeInTheDocument()
+    expect(
+      within(panel).queryByRole('button', { name: 'Добавить участников' }),
+    ).not.toBeInTheDocument()
+    expect(within(panel).queryByLabelText('План, ч')).not.toBeInTheDocument()
+    expect(within(panel).getByText('6,5')).toBeInTheDocument()
+    expect(within(panel).getByRole('checkbox', { name: 'Срочно' })).toBeDisabled()
   })
 })
 

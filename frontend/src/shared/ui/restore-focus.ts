@@ -1,6 +1,27 @@
 import { useRef } from 'react'
 
 /** Последний элемент с фокусом вне окон и меню — куда вернуть фокус, если окно сразу отдало его своему полю. */
+let restoring = false
+
+/**
+ * Фокус вернулся на кнопку после закрытия окна (не пользователь перешёл на неё): подсказка Tooltip этой кнопки не
+ * открывается — иначе следующий Esc закрыл бы подсказку, а не окно под ней (LATER-94).
+ */
+export function isRestoringFocus() {
+  return restoring
+}
+
+/** Вернуть фокус на кнопку так, чтобы её подсказка не открылась (окно или меню закрылось, а не пользователь перешёл). */
+export function restoreFocusQuietly(target: HTMLElement | null) {
+  if (!target?.isConnected) return
+  restoring = true
+  try {
+    target.focus({ preventScroll: true })
+  } finally {
+    restoring = false
+  }
+}
+
 let lastOutside: HTMLElement | null = null
 if (typeof document !== 'undefined') {
   document.addEventListener(
@@ -39,7 +60,7 @@ export function useRestoreFocus(onCloseAutoFocus?: (event: Event) => void) {
       previous.current = null
       if (!target?.isConnected) return
       event.preventDefault()
-      target.focus({ preventScroll: true })
+      restoreFocusQuietly(target)
     },
   }
 }

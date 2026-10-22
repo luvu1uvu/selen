@@ -39,7 +39,8 @@ test('вложения: загрузка, превью, скачивание ч�
   const panel = page.getByRole('dialog')
   const files = panel.getByRole('region', { name: 'Файлы' })
 
-  await files.getByLabel('Выбрать файлы').setInputFiles([
+  // Окно карточки (UI-1a): файлы выбирает окно (пункт «+», перетаскивание), секция «Файлы» появляется с первым файлом
+  await panel.getByLabel('Выбрать файлы').setInputFiles([
     { name: imageName, mimeType: 'image/png', buffer: PNG },
     { name: svgName, mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>') },
     { name: movName, mimeType: 'video/quicktime', buffer: MOV },

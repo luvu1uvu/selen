@@ -1,7 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
-import { CardPanel } from '@/features/cards/components/CardPanel'
+import { OPEN_FROM_PAGE } from '@/features/cards/cardWindow'
+import { CardWindow } from '@/features/cards/components/CardWindow'
 import { useCard } from '@/features/cards/queries'
 import { getErrorStatus } from '@/shared/api/errors'
 import { NotFoundState } from '@/shared/components/NotFoundState'
@@ -106,12 +107,12 @@ export function BoardPage() {
                 </span>
               </>
             }
-            onOpenCard={(key) => navigate(`/cards/${key}`)}
+            onOpenCard={(key) => navigate(`/cards/${key}`, { state: OPEN_FROM_PAGE })}
           />
         </div>
       </div>
 
-      {cardKey && <CardPanel cardKey={cardKey} onClose={() => navigate(`/boards/${board.id}`)} />}
+      {cardKey && <CardWindow cardKey={cardKey} backTo={`/boards/${board.id}`} />}
     </>
   )
 }

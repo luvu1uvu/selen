@@ -110,6 +110,9 @@ describe('Карточка: описание, комментарии, чек-л�
     expect(
       await within(section).findByRole('toolbar', { name: 'Форматирование' }),
     ).toBeInTheDocument()
+    // Значки панели — с подсказкой (U-4 UX-ревью UI-1a)
+    await userEvent.hover(within(section).getByRole('button', { name: 'Жирный' }))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Жирный')
     await userEvent.click(within(section).getByRole('button', { name: 'Сохранить описание' }))
 
     await vi.waitFor(() => expect(calls).toHaveLength(1))
@@ -133,7 +136,8 @@ describe('Карточка: описание, комментарии, чек-л�
       }),
     ])
     renderApp('/cards/DEV-1')
-    const section = within(await screen.findByRole('dialog')).getByRole('region', {
+    // Комментарии — вкладка внизу окна, открыта по умолчанию
+    const section = within(await screen.findByRole('dialog')).getByRole('tabpanel', {
       name: 'Комментарии',
     })
 
@@ -195,16 +199,25 @@ describe('Карточка: описание, комментарии, чек-л�
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
+    // Новый чек-лист — кнопкой внизу секции; после создания форма закрывается
+    await userEvent.click(within(panel).getByRole('button', { name: 'Чек-лист' }))
     await userEvent.type(
       within(panel).getByLabelText('Название нового чек-листа'),
       'После релиза{Enter}',
+    )
+    await vi.waitFor(() =>
+      expect(within(panel).queryByLabelText('Название нового чек-листа')).not.toBeInTheDocument(),
     )
     await userEvent.type(
       within(panel).getByLabelText('Новый пункт в «Релиз»'),
       'Документация{Enter}',
     )
     await userEvent.click(within(panel).getByRole('checkbox', { name: 'Тесты' }))
-    within(panel).getByRole('button', { name: 'Переставить «Тесты» (Alt+↑/↓)' }).focus()
+    // Ручка перестановки — по-русски для экранного диктора (U-2 UX-ревью UI-1a)
+    const grip = within(panel).getByRole('button', { name: 'Переставить «Тесты» (Alt+↑/↓)' })
+    expect(grip).toHaveAttribute('aria-roledescription', 'пункт чек-листа')
+    expect(grip).toHaveAccessibleDescription(/^Чтобы переставить пункт, нажмите пробел/)
+    grip.focus()
     await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}')
 
     await vi.waitFor(() =>
@@ -221,6 +234,12 @@ describe('Карточка: описание, комментарии, чек-л�
     const calls = serve(makeCardDetail())
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
+
+    // Ссылок нет — секции нет; новая — пунктом «+», фокус сразу в поле адреса
+    expect(within(panel).queryByRole('region', { name: 'Ссылки' })).not.toBeInTheDocument()
+    await userEvent.click(within(panel).getByRole('button', { name: 'Добавить в карточку' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Ссылка' }))
+    await vi.waitFor(() => expect(within(panel).getByLabelText('Адрес ссылки')).toHaveFocus())
 
     await userEvent.type(within(panel).getByLabelText('Адрес ссылки'), 'javascript:alert(1)')
     await userEvent.click(within(panel).getByRole('button', { name: 'Добавить' }))
@@ -322,7 +341,8 @@ describe('Карточка: описание, комментарии, чек-л�
     expect(await screen.findByRole('dialog', { name: 'screen.png' })).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
 
-    const input = within(section).getByLabelText('Выбрать файлы')
+    // Файлы выбирает окно (пункт «+», кнопка секции, перетаскивание)
+    const input = screen.getByLabelText('Выбрать файлы')
     const big = new File(['x'], 'huge.zip')
     Object.defineProperty(big, 'size', { value: 101 * 1024 * 1024 })
     await userEvent.upload(input, [new File(['data'], 'notes.txt', { type: 'text/plain' }), big])

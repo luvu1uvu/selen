@@ -24,5 +24,7 @@ test('пользователь с ограничением видит тольк
   // Своя карточка открывается, в ней видно, что он ответственный
   await page.goto('/cards/QA-2')
   const panel = page.getByRole('dialog')
-  await expect(panel.getByLabel('Ответственный').locator('option:checked')).toHaveText('E2E Подрядчик')
+  // Окно карточки (UI-1a): ответственный — строка «Основных параметров»
+  const responsible = panel.locator('dt', { hasText: 'Ответственный' }).locator('xpath=following-sibling::dd')
+  await expect(responsible).toContainText('E2E Подрядчик')
 })

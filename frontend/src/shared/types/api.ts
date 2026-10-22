@@ -253,6 +253,8 @@ export interface CardDetail {
   created_at: string
   first_started_at: string | null
   completed_at: string | null
+  /** Последнее перемещение в другое место (колонка, дорожка, доска); null — карточку не перемещали. */
+  moved_at: string | null
   archived_at: string | null
   /** Из истории переходов, секунды; null — карточка не завершена. */
   metrics: { lead_time_seconds: number | null; cycle_time_seconds: number | null }

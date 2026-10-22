@@ -7,7 +7,8 @@ import { ArchivedBoardsDialog } from '@/features/boards/components/ArchivedBoard
 import { CreateBoardDialog } from '@/features/boards/components/CreateBoardDialog'
 import { SpaceBoardsCanvas } from '@/features/boards/components/SpaceBoardsCanvas'
 import { useSpaceBoards } from '@/features/boards/queries'
-import { CardPanel } from '@/features/cards/components/CardPanel'
+import { OPEN_FROM_PAGE } from '@/features/cards/cardWindow'
+import { CardWindow } from '@/features/cards/components/CardWindow'
 import { useCard } from '@/features/cards/queries'
 import { SpaceLabelsPanel } from '@/features/labels/components/SpaceLabelsPanel'
 import { getErrorStatus } from '@/shared/api/errors'
@@ -41,10 +42,14 @@ export function SpacePage() {
   // Список досок — вместе с пространством, а не после него: холст ждал бы два запроса подряд
   useSpaceBoards(spaceKey)
   const openCard = useCallback(
-    (key: string) => navigate(`/spaces/${spaceKey}/cards/${key}`),
+    (key: string) => navigate(`/spaces/${spaceKey}/cards/${key}`, { state: OPEN_FROM_PAGE }),
     [navigate, spaceKey],
   )
-  const closeCard = useCallback(() => navigate(`/spaces/${spaceKey}`), [navigate, spaceKey])
+  // Карточки нет или нет доступа — обратно на пространство, без записи в истории
+  const closeCard = useCallback(
+    () => navigate(`/spaces/${spaceKey}`, { replace: true }),
+    [navigate, spaceKey],
+  )
   // Вкладка — своя у страницы, но переход в другое пространство и к доске (?board=ID — из дерева, новая доска)
   // открывает «Доски»: иначе адрес и дерево сменились бы, а на экране остались участники
   const location = useLocation()
@@ -114,7 +119,7 @@ export function SpacePage() {
         </TabsContent>
       </Tabs>
 
-      {cardKey && <SpaceCard cardKey={cardKey} onClose={closeCard} />}
+      {cardKey && <SpaceCard cardKey={cardKey} spaceKey={spaceKey} onClose={closeCard} />}
     </>
   )
 }
@@ -263,7 +268,15 @@ function SpaceInfo({ space }: { space: Space }) {
 }
 
 /** Карточка поверх пространства. Нет её или нет доступа — окна нет: сообщение и обратно на пространство. */
-function SpaceCard({ cardKey, onClose }: { cardKey: string; onClose: () => void }) {
+function SpaceCard({
+  cardKey,
+  spaceKey,
+  onClose,
+}: {
+  cardKey: string
+  spaceKey: string
+  onClose: () => void
+}) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const cardQuery = useCard(cardKey)
@@ -277,7 +290,7 @@ function SpaceCard({ cardKey, onClose }: { cardKey: string; onClose: () => void 
     onClose()
   }, [failed, cardQuery.error, onClose, t, tc])
 
-  return failed ? null : <CardPanel cardKey={cardKey} onClose={onClose} />
+  return failed ? null : <CardWindow cardKey={cardKey} backTo={`/spaces/${spaceKey}`} />
 }
 
 /** Сообщение вместо страницы: страница-холст без отступов каркаса — отступы свои. */

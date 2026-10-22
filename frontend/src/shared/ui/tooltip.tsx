@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { cn } from '@/shared/lib/utils'
+import { isRestoringFocus } from './restore-focus'
 
 /**
  * Всплывающая подсказка (shadcn/ui, Radix Tooltip): видна при наведении и при фокусе с клавиатуры, в отличие от
@@ -27,8 +28,21 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
   )
 }
 
-function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+/** Фокус, который вернуло закрытое окно, подсказку не открывает (LATER-94); наведение и Tab — как обычно. */
+function TooltipTrigger({
+  onFocus,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      onFocus={(event) => {
+        onFocus?.(event)
+        if (isRestoringFocus()) event.preventDefault()
+      }}
+      {...props}
+    />
+  )
 }
 
 function TooltipContent({

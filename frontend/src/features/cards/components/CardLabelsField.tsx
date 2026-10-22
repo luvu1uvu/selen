@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Tags } from 'lucide-react'
 import { toast } from 'sonner'
@@ -17,20 +18,39 @@ import {
 import { useSetCardLabels } from '../queries'
 
 /**
- * Метки карточки: общие метки компании и метки пространства. Поставить можно только активную метку;
- * уже стоящая архивная остаётся, пока её не снимут.
+ * Метки карточки («Основные параметры» окна): общие метки компании и метки пространства. Поставить можно только
+ * активную метку; уже стоящая архивная остаётся, пока её не снимут. Пока меток нет, строки нет — метки добавляют через
+ * «+» (LATER-97): `autoOpen` сразу открывает список, `onClose` — список закрыли.
  */
-export function CardLabelsSection({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+export function CardLabelsField({
+  card,
+  canEdit,
+  autoOpen = false,
+  onClose,
+}: {
+  card: CardDetail
+  canEdit: boolean
+  autoOpen?: boolean
+  onClose?: () => void
+}) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const labels = useSpaceLabels(card.space.key, canEdit)
   const setLabels = useSetCardLabels(card.key)
   const current = card.labels.map((label) => label.id)
+  const [open, setOpen] = useState(autoOpen)
+  // «+» → «Метки» при уже видной строке — снова открыть список (подстройка состояния при рендере)
+  const [requested, setRequested] = useState(autoOpen)
+  if (requested !== autoOpen) {
+    setRequested(autoOpen)
+    if (autoOpen) setOpen(true)
+  }
 
   const toggle = async (id: string, checked: boolean) => {
     const next = checked ? [...current, id] : current.filter((labelId) => labelId !== id)
     try {
       await setLabels.mutateAsync(next)
+      toast.success(t('card.saved'))
     } catch (error) {
       toast.error(getErrorMessage(error, tc('errors.generic')))
     }
@@ -45,19 +65,28 @@ export function CardLabelsSection({ card, canEdit }: { card: CardDetail; canEdit
   ].filter((group) => group.items.length > 0)
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <>
       {card.labels.map((label) => (
         <LabelBadge key={label.id} name={label.name} color={label.color} />
       ))}
-      {!canEdit && card.labels.length === 0 && (
-        <span className="text-muted-foreground text-sm">{t('labels.none')}</span>
-      )}
       {canEdit && (
-        <DropdownMenu>
+        <DropdownMenu
+          open={open}
+          onOpenChange={(next) => {
+            setOpen(next)
+            if (!next) onClose?.()
+          }}
+        >
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={setLabels.isPending}>
+            <Button
+              variant="ghost"
+              size="sm"
+              // Значок вровень с левым краем значений «Основных параметров» (U-7 UX-ревью UI-1a)
+              className="text-muted-foreground -ml-2 px-2 has-[>svg]:px-2"
+              disabled={setLabels.isPending}
+            >
               <Tags />
-              {t('labels.edit')}
+              {t('params.editLabels')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
@@ -88,6 +117,6 @@ export function CardLabelsSection({ card, canEdit }: { card: CardDetail; canEdit
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-    </div>
+    </>
   )
 }

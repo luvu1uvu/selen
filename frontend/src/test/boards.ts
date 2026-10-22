@@ -107,6 +107,7 @@ export function makeCardDetail(overrides: Partial<CardDetail> = {}): CardDetail 
     created_at: '2026-10-01T09:00:00.000000Z',
     first_started_at: null,
     completed_at: null,
+    moved_at: null,
     archived_at: null,
     metrics: { lead_time_seconds: null, cycle_time_seconds: null },
     permissions: { edit: true, comment: true, restricted: false, delete: false },

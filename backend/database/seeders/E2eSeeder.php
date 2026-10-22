@@ -5,9 +5,11 @@ namespace Database\Seeders;
 use App\Actions\Boards\CreateBoardAction;
 use App\Actions\Boards\MoveBoardAction;
 use App\Actions\Cards\CreateCardAction;
+use App\Actions\Cards\MoveCardAction;
 use App\Actions\Cards\SetCardArchivedAction;
 use App\Actions\Cards\UpdateCardAction;
 use App\Actions\Columns\CreateColumnAction;
+use App\Actions\Comments\AddCommentAction;
 use App\Actions\Groups\SaveGroupAction;
 use App\Actions\Labels\SaveLabelAction;
 use App\Actions\Lanes\CreateLaneAction;
@@ -70,6 +72,7 @@ use Illuminate\Database\Seeder;
  * Пачка UX-1 (acceptance/stage-ux1): в LAYOUT — «Длинные названия» (ТК-L74.1), в QA — метка «Бэкенд» (ТК-L80.1), MOB-1 —
  * ТК-L76.1 и ТК-L78.1.
  * Пустая папка «E2E Пустая» с вложенной «E2E Вложенная пустая» — в дереве видна только Владельцу (тест-кейсы 3c).
+ * Приёмка UI-1a (окно карточки, acceptance/stage-ui1): пространство WIN «Окно карточки» — см. cardWindow().
  */
 class E2eSeeder extends Seeder
 {
@@ -233,6 +236,63 @@ class E2eSeeder extends Seeder
 
         $empty = app(CreateFolderAction::class)->handle($admin, 'E2E Пустая', null, null);
         app(CreateFolderAction::class)->handle($admin, 'E2E Вложенная пустая', null, $empty->id);
+
+        // Приёмка UI-1a — окно карточки (acceptance/stage-ui1, ТК-UI1.*): своё пространство, тест-кейсы меняют карточки
+        $this->cardWindow($admin, $editor, $restricted);
+    }
+
+    /**
+     * Окно карточки (UI-1a, приёмочные тесты ТК-UI1.*, e2e/acceptance/stage-ui1): пространство WIN «Окно карточки» —
+     * e2e-admin (администратор, он же системный — ТК-UI1.17), e2e-editor (editor — Анна тест-кейсов), e2e-restricted
+     * (editor «только свои карточки» — Жанна, ТК-UI1.20); метка пространства «Окно» (ТК-UI1.7); доска «Окно» (шаблон
+     * «Разработка»). У каждого тест-кейса, который меняет карточку, — своя карточка; номера — по порядку создания:
+     * WIN-1 «Готовая с комментариями» — перенесена из To Do в Done («Перемещена…»), два комментария (ТК-UI1.5, ТК-UI1.18);
+     * WIN-2 «Название правится» (ТК-UI1.6); WIN-3 «Поля правятся» — без ответственного (ТК-UI1.7); WIN-4 «Переносится
+     * в работу» (ТК-UI1.8); WIN-5 «Для чек-листа» (ТК-UI1.11); WIN-6 «Для файла из меню» (ТК-UI1.12); WIN-7 «Для ссылки»
+     * (ТК-UI1.13); WIN-8 «Для связей», WIN-9 «Дочерняя в To Do», WIN-10 «Дочерняя готовая» — в Done (ТК-UI1.14); WIN-11
+     * «Для блокировки» (ТК-UI1.15); WIN-12 «Архивируется и возвращается» (ТК-UI1.16); WIN-13 «Удаляется в корзину»
+     * (ТК-UI1.17); WIN-14 «Для файла перетаскиванием» (ТК-UI1.24); WIN-15 «Лежит в архиве» — в архиве (ТК-UI1.25);
+     * WIN-16 «Своя карточка подрядчика» — ответственный e2e-restricted, WIN-17 «Чужая для подрядчика» (ТК-UI1.20);
+     * WIN-18 «Просто карточка» — тест-кейсы её только открывают (ТК-UI1.9, .21, .22, .23, .25).
+     */
+    private function cardWindow(User $admin, User $editor, User $restricted): void
+    {
+        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Окно карточки', 'key' => 'WIN'], [$admin]);
+        app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
+        app(AddSpaceMemberAction::class)->handle($admin, $space, $restricted, SpaceRole::Editor);
+        app(SetSpaceMemberRestrictionAction::class)->handle($admin, $space, $restricted, true);
+        app(SaveLabelAction::class)->handle($admin, ['name' => 'Окно', 'color' => '#0ea5e9'], space: $space);
+
+        $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Окно'], BoardTemplate::Development);
+        $lane = Lane::query()->where('board_id', $board->id)->sole();
+        $column = fn (string $name) => BoardColumn::query()->where('board_id', $board->id)->where('name', $name)->sole();
+        $create = fn (string $title, string $columnName = 'To Do') => app(CreateCardAction::class)
+            ->handle($editor, $board, ['title' => $title], $column($columnName), $lane);
+
+        $done = $create('Готовая с комментариями');
+        app(MoveCardAction::class)->handle($editor, $done, $column('Done'), $lane, null, null);
+        foreach (['Первый комментарий', 'Второй комментарий'] as $text) {
+            app(AddCommentAction::class)->handle($admin, $done, [
+                'type' => 'doc',
+                'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => $text]]]],
+            ]);
+        }
+        foreach ([
+            'Название правится', 'Поля правятся', 'Переносится в работу', 'Для чек-листа', 'Для файла из меню', 'Для ссылки',
+            'Для связей', 'Дочерняя в To Do',
+        ] as $title) {
+            $create($title);
+        }
+        $create('Дочерняя готовая', 'Done');
+        foreach (['Для блокировки', 'Архивируется и возвращается', 'Удаляется в корзину', 'Для файла перетаскиванием'] as $title) {
+            $create($title);
+        }
+        app(SetCardArchivedAction::class)->handle($editor, $create('Лежит в архиве'), true);
+        app(UpdateCardAction::class)->handle($editor, $create('Своя карточка подрядчика'), ['responsible_id' => $restricted->id]);
+        $create('Чужая для подрядчика');
+        $create('Просто карточка');
+        // ТК-UI1.27 (LATER-97): срок и метки задаются через «+» — карточка без них
+        $create('Срок и метки через плюс');
     }
 
     /** Страница пространства рядами (ADR-0019, PR 3 пакета): пространства ROWS и ARRANGE — см. описание класса. */

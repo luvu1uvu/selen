@@ -128,15 +128,7 @@
     "description": "Описание",
     "descriptionPlaceholder": "Добавьте описание",
     "saveDescription": "Сохранить описание",
-    "type": "Тип",
-    "location": "Где",
-    "status": "Статус",
-    "createdBy": "Автор: {{name}}, {{date}}",
-    "startedAt": "В работе с {{date}}",
-    "completedAt": "Готово {{date}}",
-    "leadTime": "Время выполнения (lead time): {{value}}",
-    "cycleTime": "Время в работе (cycle time): {{value}}",
-    "move": "Переместить",
+    "move": "Переместить…",
     "archive": "Архивировать",
     "restore": "Восстановить",
     "saved": "Сохранено",
@@ -152,7 +144,41 @@
     "linkCopied": "Ссылка скопирована",
     "noDescription": "Описания пока нет",
     "editDescription": "Изменить описание",
-    "addDescription": "Добавить описание"
+    "actions": "Действия с карточкой «{{title}}»",
+    "add": "Добавить в карточку",
+    "copyKeyLink": "Скопировать ссылку на карточку",
+    "customer": "Заказчик",
+    "changeCustomer": "Сменить заказчика",
+    "created": "Создана {{time}}",
+    "moved": "Перемещена {{time}}",
+    "justNow": "только что",
+    "createdHint": "{{date}}, {{name}}",
+    "dropFiles": "Отпустите, чтобы приложить файл",
+    "unsavedTitle": "Закрыть без сохранения?",
+    "unsavedText": "Несохранённый текст пропадёт.",
+    "unsavedConfirm": "Закрыть без сохранения",
+    "unsavedCancel": "Продолжить редактирование",
+    "emptyDescription": "Добавьте описание…",
+    "restoreFromArchive": "Вернуть из архива",
+    "customerButton": "{{name}} — заказчик",
+    "addMenu": {
+      "main": "Основное",
+      "relations": "Связи",
+      "other": "Остальное",
+      "due": "Срок",
+      "labels": "Метки",
+      "checklist": "Чек-лист",
+      "link": "Ссылка",
+      "file": "Загрузить файл",
+      "parent": "Родительская карточка",
+      "child": "Дочерняя карточка",
+      "block": "Блокировка",
+      "fields": "Поля",
+      "fieldsSearch": "Найти поле",
+      "fieldsSearchPlaceholder": "Найти…",
+      "fieldsCreate": "Создать новое поле",
+      "fieldsLater": "Пользовательские поля появятся позже"
+    }
   },
   "moveCard": {
     "title": "Переместить {{key}}",
@@ -219,45 +245,33 @@
     "cancelled": "Перемещение карточки {{card}} отменено."
   },
   "sections": {
-    "people": "Люди",
-    "labels": "Метки",
-    "fields": "Поля",
     "description": "Описание",
     "checklists": "Чек-листы",
     "links": "Ссылки",
     "attachments": "Файлы",
     "comments": "Комментарии",
     "blocks": "Блокировки",
-    "relations": "Связи"
+    "relations": "Связи",
+    "main": "Основные параметры",
+    "info": "Сведения",
+    "history": "История"
   },
   "people": {
-    "customer": "Заказчик",
-    "responsible": "Ответственный",
-    "participants": "Участники",
-    "notAssigned": "Не назначен",
-    "none": "Нет",
-    "add": "Добавить участника…",
     "remove": "Убрать {{name}} из участников",
     "invited": "Приглашён",
     "deactivated": "Деактивирован",
     "notInSpace": "Не в пространстве"
   },
   "fields": {
-    "due": "Срок",
     "dueDate": "Дата срока",
     "dueTime": "Время срока (необязательно)",
     "clearDue": "Убрать срок",
-    "noDue": "Без срока",
-    "urgent": "Срочно",
-    "estimate": "Оценка, ч",
     "estimatePlaceholder": "Например, 2,5",
     "estimateInvalid": "Оценка — неотрицательное число с шагом 0,5 часа"
   },
   "labels": {
     "company": "Общие метки компании",
     "space": "Метки пространства",
-    "edit": "Метки",
-    "none": "Нет меток",
     "empty": "Меток пока нет — их создают администраторы"
   },
   "due": {
@@ -307,7 +321,14 @@
     "newItemPlaceholder": "Добавить пункт, Enter — сохранить",
     "editItem": "Изменить пункт",
     "removeItem": "Удалить пункт «{{text}}»",
-    "drag": "Переставить «{{text}}» (Alt+↑/↓)"
+    "drag": "Переставить «{{text}}» (Alt+↑/↓)",
+    "create": "Создать",
+    "dndRole": "пункт чек-листа",
+    "dndInstructions": "Чтобы переставить пункт, нажмите пробел, стрелками вверх и вниз выберите место и нажмите пробел ещё раз, Esc — отмена. Alt+↑/↓ — переставить сразу.",
+    "dndPickedUp": "Пункт «{{text}}» взят.",
+    "dndOver": "Пункт «{{text}}» на месте {{position}}.",
+    "dndDropped": "Пункт «{{text}}» поставлен на место {{position}}.",
+    "dndCancelled": "Перестановка пункта «{{text}}» отменена."
   },
   "links": {
     "none": "Ссылок нет",
@@ -315,7 +336,8 @@
     "title": "Название (необязательно)",
     "add": "Добавить",
     "remove": "Удалить ссылку «{{title}}»",
-    "invalid": "Ссылка должна начинаться с http:// или https://"
+    "invalid": "Ссылка должна начинаться с http:// или https://",
+    "addMore": "Ссылка"
   },
   "attachments": {
     "none": "Файлов нет",
@@ -350,8 +372,6 @@
     "remove": "Убрать связь с {{key}}"
   },
   "blocks": {
-    "none": "Не заблокирована",
-    "add": "Заблокировать",
     "submit": "Заблокировать",
     "reason": "Причина блокировки",
     "reasonPlaceholder": "Причина (необязательно, если выбрана блокирующая карточка)",
@@ -361,16 +381,12 @@
     "clearCard": "Убрать блокирующую карточку",
     "causeRequired": "Укажите причину или выберите блокирующую карточку.",
     "added": "Карточка заблокирована",
-    "resolve": "Снять",
+    "resolve": "Снять блокировку",
     "resolved": "Блокировка снята",
     "started": "{{name}}, {{date}}",
     "ended": "снял(а) {{name}}, {{date}}",
     "endedAuto": "снята автоматически {{date}}: блокирующая карточка готова",
-    "endedDeleted": "снята {{date}}: блокирующая карточка удалена",
-    "history_one": "История блокировок: {{count}}",
-    "history_few": "История блокировок: {{count}}",
-    "history_many": "История блокировок: {{count}}",
-    "history_other": "История блокировок: {{count}}"
+    "endedDeleted": "снята {{date}}: блокирующая карточка удалена"
   },
   "picker": {
     "placeholder": "Номер или название",
@@ -409,5 +425,36 @@
     "archivedHint": "Архивная доска открывается только для чтения; восстановленная встаёт на прежнее место.",
     "archivedEmpty": "Архивных досок нет",
     "emptyMember": "Доски создаёт администратор пространства."
+  },
+  "params": {
+    "location": "Расположение",
+    "type": "Тип",
+    "responsible": "Ответственный",
+    "assign": "Назначить",
+    "chooseResponsible": "Выбрать ответственного",
+    "unassign": "Снять ответственного",
+    "participants": "Участники",
+    "addParticipants": "Добавить участников",
+    "due": "Срок",
+    "changeDue": "Изменить срок",
+    "urgent": "Срочно",
+    "labels": "Метки",
+    "editLabels": "Изменить метки",
+    "estimate": "План, ч",
+    "searchPeople": "Найти по имени",
+    "nobody": "Никого не найдено",
+    "selectedPerson": "{{name}} — выбран",
+    "typeButton": "{{name}} — тип карточки",
+    "responsibleButton": "{{name}} — ответственный",
+    "empty": "—",
+    "setDue": "Задать срок"
+  },
+  "info": {
+    "createdBy": "Создал(а)",
+    "created": "Создана",
+    "started": "Начата",
+    "completed": "Завершена",
+    "leadTime": "Время выполнения (lead time)",
+    "cycleTime": "Время в работе (cycle time)"
   }
 }

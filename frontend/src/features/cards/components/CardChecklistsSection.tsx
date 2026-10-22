@@ -6,7 +6,10 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DragCancelEvent,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   arrayMove,
@@ -25,7 +28,9 @@ import type { CardDetail, Checklist, ChecklistItem } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Input } from '@/shared/ui/input'
+import { Hint } from '@/shared/components/Hint'
 import { checklistApi } from '../api'
+import { useUnsavedText } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
 
 type Action =
@@ -40,11 +45,27 @@ type Action =
 /**
  * Чек-листы: несколько на карточку, пункты с отметкой, правкой, перестановкой (перетаскивание
  * или Alt+↑/↓) и удалением. Меняют editor и admin; прогресс виден на фасаде карточки.
+ * Новый чек-лист — пунктом «+» окна или кнопкой внизу секции (`adding` — форма открыта); после создания
+ * фокус — в поле нового пункта.
  */
-export function CardChecklistsSection({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+export function CardChecklistsSection({
+  card,
+  canEdit,
+  adding,
+  onAdd,
+  onAddDone,
+}: {
+  card: CardDetail
+  canEdit: boolean
+  adding: boolean
+  onAdd: () => void
+  onAddDone: () => void
+}) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const [title, setTitle] = useState('')
+  const [created, setCreated] = useState<string | null>(null)
+  useUnsavedText(adding && title.trim() !== '')
   const mutate = useCardContentMutation((action: Action) => {
     switch (action.kind) {
       case 'add':
@@ -67,15 +88,15 @@ export function CardChecklistsSection({ card, canEdit }: { card: CardDetail; can
     }
   })
 
-  const run = async (action: Action) => {
+  const send = async (action: Action) => {
     try {
-      await mutate.mutateAsync(action)
-      return true
+      return await mutate.mutateAsync(action)
     } catch (error) {
       toast.error(getErrorMessage(error, tc('errors.generic')))
-      return false
+      return null
     }
   }
+  const run = async (action: Action) => (await send(action)) !== null
 
   return (
     <div className="grid gap-4">
@@ -83,29 +104,56 @@ export function CardChecklistsSection({ card, canEdit }: { card: CardDetail; can
         <span className="text-muted-foreground text-sm">{t('checklists.none')}</span>
       )}
       {card.checklists.map((checklist) => (
-        <ChecklistBlock key={checklist.id} checklist={checklist} canEdit={canEdit} run={run} />
+        <ChecklistBlock
+          key={checklist.id}
+          checklist={checklist}
+          canEdit={canEdit}
+          focusNewItem={checklist.id === created}
+          run={run}
+        />
       ))}
-      {canEdit && (
-        <form
-          className="flex gap-2"
-          onSubmit={async (event) => {
-            event.preventDefault()
-            if (title.trim() && (await run({ kind: 'add', title: title.trim() }))) setTitle('')
-          }}
-        >
-          <Input
-            aria-label={t('checklists.newTitle')}
-            placeholder={t('checklists.newTitle')}
-            value={title}
-            maxLength={200}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-          <Button type="submit" variant="outline" disabled={!title.trim() || mutate.isPending}>
+      {canEdit &&
+        (adding ? (
+          <form
+            className="flex gap-2"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              if (!title.trim()) return
+              const detail = await send({ kind: 'add', title: title.trim() })
+              if (!detail) return
+              setTitle('')
+              setCreated(detail.checklists.at(-1)?.id ?? null)
+              onAddDone()
+            }}
+          >
+            <Input
+              aria-label={t('checklists.newTitle')}
+              placeholder={t('checklists.newTitle')}
+              value={title}
+              maxLength={200}
+              autoFocus
+              onChange={(event) => setTitle(event.target.value)}
+            />
+            <Button type="submit" variant="outline" disabled={!title.trim() || mutate.isPending}>
+              {t('checklists.create')}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setTitle('')
+                onAddDone()
+              }}
+            >
+              {tc('actions.cancel')}
+            </Button>
+          </form>
+        ) : (
+          <Button variant="ghost" size="sm" className="justify-self-start" onClick={onAdd}>
             <Plus />
             {t('checklists.add')}
           </Button>
-        </form>
-      )}
+        ))}
     </div>
   )
 }
@@ -113,14 +161,18 @@ export function CardChecklistsSection({ card, canEdit }: { card: CardDetail; can
 function ChecklistBlock({
   checklist,
   canEdit,
+  focusNewItem,
   run,
 }: {
   checklist: Checklist
   canEdit: boolean
+  /** Чек-лист только что создан — фокус в поле нового пункта. */
+  focusNewItem: boolean
   run: (action: Action) => Promise<boolean>
 }) {
   const { t } = useTranslation('boards')
   const [text, setText] = useState('')
+  useUnsavedText(text.trim() !== '')
   const [order, setOrder] = useState(checklist.items)
   // Сервер прислал новый порядок — показываем его (паттерн «подстройка состояния при рендере»)
   const [synced, setSynced] = useState(checklist.items)
@@ -141,6 +193,27 @@ function ChecklistBlock({
     setOrder(next)
     const ids = next.map((item) => item.id)
     void run({ kind: 'moveItem', id, ...neighboursAt(ids, to) })
+  }
+
+  const itemText = (id: string | number) => order.find((item) => item.id === id)?.text ?? ''
+  const position = (id: string | number) => order.findIndex((item) => item.id === id) + 1
+  // Подсказка и объявления для экранного диктора — по-русски, как на доске (U-2 UX-ревью UI-1a)
+  const accessibility = {
+    screenReaderInstructions: { draggable: t('checklists.dndInstructions') },
+    announcements: {
+      onDragStart: ({ active }: DragStartEvent) =>
+        t('checklists.dndPickedUp', { text: itemText(active.id) }),
+      onDragOver: ({ active, over }: DragOverEvent) =>
+        over
+          ? t('checklists.dndOver', { text: itemText(active.id), position: position(over.id) })
+          : undefined,
+      onDragEnd: ({ active, over }: DragEndEvent) =>
+        over
+          ? t('checklists.dndDropped', { text: itemText(active.id), position: position(over.id) })
+          : t('checklists.dndCancelled', { text: itemText(active.id) }),
+      onDragCancel: ({ active }: DragCancelEvent) =>
+        t('checklists.dndCancelled', { text: itemText(active.id) }),
+    },
   }
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
@@ -171,26 +244,33 @@ function ChecklistBlock({
           {done}/{checklist.items.length}
         </span>
         {canEdit && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ml-auto size-7"
-            aria-label={t('checklists.remove', { title: checklist.title })}
-            onClick={() => run({ kind: 'remove', id: checklist.id })}
-          >
-            <Trash2 />
-          </Button>
+          <Hint label={t('checklists.remove', { title: checklist.title })}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto size-7"
+              aria-label={t('checklists.remove', { title: checklist.title })}
+              onClick={() => run({ kind: 'remove', id: checklist.id })}
+            >
+              <Trash2 />
+            </Button>
+          </Hint>
         )}
       </div>
       {checklist.items.length > 0 && (
         <div className="bg-muted h-1 overflow-hidden rounded" aria-hidden>
           <div
-            className="h-full bg-emerald-500"
+            className="bg-success h-full"
             style={{ width: `${(done / checklist.items.length) * 100}%` }}
           />
         </div>
       )}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        accessibility={accessibility}
+        onDragEnd={onDragEnd}
+      >
         <SortableContext
           items={order.map((item) => item.id)}
           strategy={verticalListSortingStrategy}
@@ -227,6 +307,7 @@ function ChecklistBlock({
             value={text}
             maxLength={1000}
             className="h-8"
+            autoFocus={focusNewItem}
             onChange={(event) => setText(event.target.value)}
           />
         </form>
@@ -250,6 +331,7 @@ function ItemRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
     disabled: !canEdit,
+    attributes: { roleDescription: t('checklists.dndRole') },
   })
 
   return (
@@ -259,24 +341,27 @@ function ItemRow({
       className={`group flex items-start gap-2 rounded px-1 py-0.5 ${isDragging ? 'bg-muted opacity-60' : ''}`}
     >
       {canEdit && (
-        <button
-          type="button"
-          className="text-muted-foreground mt-0.5 cursor-grab opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label={t('checklists.drag', { text: item.text })}
-          {...attributes}
-          {...listeners}
-          onKeyDown={(event) => {
-            // Alt+↑/↓ — переставить без перетаскивания
-            if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-              event.preventDefault()
-              onMove(event.key === 'ArrowUp' ? -1 : 1)
-              return
-            }
-            listeners?.onKeyDown?.(event)
-          }}
-        >
-          <GripVertical className="size-4" />
-        </button>
+        <Hint label={t('checklists.drag', { text: item.text })}>
+          <button
+            type="button"
+            // Цель 24 px при значке 16 px; -my-0.5 — строка пункта не становится выше
+            className="text-muted-foreground -my-0.5 inline-flex size-6 shrink-0 cursor-grab items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            aria-label={t('checklists.drag', { text: item.text })}
+            {...attributes}
+            {...listeners}
+            onKeyDown={(event) => {
+              // Alt+↑/↓ — переставить без перетаскивания
+              if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                event.preventDefault()
+                onMove(event.key === 'ArrowUp' ? -1 : 1)
+                return
+              }
+              listeners?.onKeyDown?.(event)
+            }}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        </Hint>
       )}
       <Checkbox
         className="mt-0.5"
@@ -300,15 +385,17 @@ function ItemRow({
         </span>
       )}
       {canEdit && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-auto size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label={t('checklists.removeItem', { text: item.text })}
-          onClick={() => run({ kind: 'removeItem', id: item.id })}
-        >
-          <Trash2 />
-        </Button>
+        <Hint label={t('checklists.removeItem', { text: item.text })}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            aria-label={t('checklists.removeItem', { text: item.text })}
+            onClick={() => run({ kind: 'removeItem', id: item.id })}
+          >
+            <Trash2 />
+          </Button>
+        </Hint>
       )}
     </li>
   )
@@ -352,6 +439,8 @@ function EditableText({
       aria-label={label}
       value={draft}
       autoFocus
+      // Esc здесь отменяет правку сам — окно карточки его не перехватывает (CardWindow)
+      data-own-escape
       className="h-7 flex-1"
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
