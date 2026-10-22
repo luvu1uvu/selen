@@ -36,9 +36,11 @@ test('ТК-L91.6. Инициалы на аватарах читаются @tc-L9
     .getByRole('button')
     .click()
   const list = page.getByRole('listbox')
-  await expect(list.getByRole('option').first()).toBeVisible()
+  // Первый пункт списка появляется раньше людей: при полном прогоне make e2e аватаров в нём ещё не было (0) — ждём их
+  await expect
+    .poll(async () => (await avatarsIn(list)).length, { message: 'аватары в списке ответственных' })
+    .toBeGreaterThanOrEqual(4)
   const inList = await avatarsIn(list)
-  expect(inList.length, 'аватары в списке ответственных').toBeGreaterThanOrEqual(4)
   expectReadable(inList, 'список ответственных')
   await page.keyboard.press('Escape')
 })
