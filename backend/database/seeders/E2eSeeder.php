@@ -4,9 +4,11 @@ namespace Database\Seeders;
 
 use App\Actions\Boards\CreateBoardAction;
 use App\Actions\Boards\MoveBoardAction;
+use App\Actions\CardBlocks\BlockCardAction;
 use App\Actions\Cards\CreateCardAction;
 use App\Actions\Cards\MoveCardAction;
 use App\Actions\Cards\SetCardArchivedAction;
+use App\Actions\Cards\SyncCardLabelsAction;
 use App\Actions\Cards\UpdateCardAction;
 use App\Actions\Columns\CreateColumnAction;
 use App\Actions\Comments\AddCommentAction;
@@ -73,6 +75,7 @@ use Illuminate\Database\Seeder;
  * ТК-L76.1 и ТК-L78.1.
  * Пустая папка «E2E Пустая» с вложенной «E2E Вложенная пустая» — в дереве видна только Владельцу (тест-кейсы 3c).
  * Приёмка UI-1a (окно карточки, acceptance/stage-ui1): пространство WIN «Окно карточки» — см. cardWindow().
+ * Приёмка LATER-91 (подготовка к тёмной теме, acceptance/stage-L91): пространство THEME «Тёмная тема» — см. themePrep().
  */
 class E2eSeeder extends Seeder
 {
@@ -89,7 +92,7 @@ class E2eSeeder extends Seeder
         User::factory()->create(['name' => 'E2E Аналитик', 'email' => 'e2e-analyst@selen.test']);
         // ТК-3.26 (acceptance/stage-3): Владелец назначает его администратором и снимает. Не входит в систему —
         // смена его роли не задевает сохранённые входы других тестов
-        User::factory()->create(['name' => 'E2E Кандидат', 'email' => 'e2e-candidate@selen.test']);
+        $candidate = User::factory()->create(['name' => 'E2E Кандидат', 'email' => 'e2e-candidate@selen.test']);
 
         $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Сквозные тесты', 'key' => 'QA'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
@@ -239,6 +242,72 @@ class E2eSeeder extends Seeder
 
         // Приёмка UI-1a — окно карточки (acceptance/stage-ui1, ТК-UI1.*): своё пространство, тест-кейсы меняют карточки
         $this->cardWindow($admin, $editor, $restricted);
+
+        // Приёмка LATER-91 — подготовка к тёмной теме (acceptance/stage-L91, ТК-L91.3–L91.6)
+        $this->themePrep($admin, $editor, $restricted, $candidate);
+    }
+
+    /**
+     * Подготовка к тёмной теме (LATER-91, приёмочные тесты ТК-L91.3–L91.6, e2e/acceptance/stage-L91): пространство THEME
+     * «Тёмная тема» вместо «Разработки» демо-данных — e2e-admin администратор (Анна тест-кейсов: заводит метку,
+     * ТК-L91.4), e2e-editor, e2e-restricted и e2e-candidate — редакторы (их аватары — у ответственных, ТК-L91.6; без
+     * режима «только свои»). Метки пространства — цвета демо-данных (ТК-L91.4): «Бэкенд» зелёная, «Клиент» жёлтая,
+     * «Техдолг» серая, «Фронтенд» синяя, «Безопасность» красная. Доска «Вид» (шаблон «Разработка» — точки всех трёх
+     * категорий, дорожки «Основная» и пустая «Срочные» — полосы дорожек; ТК-L91.3, .5, .6): в To Do дорожки «Основная»
+     * THEME-1 «Заблокированная» (блокировка текстом),
+     * THEME-2 «Срочная», THEME-3 «Просроченная» (срок 3 дня назад), THEME-4 «Со сроком» (через неделю), в Done
+     * THEME-5 «Готова в срок» и THEME-6 «Готова после срока»; THEME-7 «Для новой метки» в To Do — без ответственного,
+     * ТК-L91.4 ставит ей новую метку, ТК-L91.6 открывает список ответственных. Остальные тест-кейсы карточки только
+     * смотрят.
+     */
+    private function themePrep(User $admin, User $editor, User $restricted, User $candidate): void
+    {
+        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Тёмная тема', 'key' => 'THEME'], [$admin]);
+        foreach ([$editor, $restricted, $candidate] as $member) {
+            app(AddSpaceMemberAction::class)->handle($admin, $space, $member, SpaceRole::Editor);
+        }
+        $labels = [];
+        foreach ([
+            'Бэкенд' => '#22c55e', 'Клиент' => '#f59e0b', 'Техдолг' => '#64748b', 'Фронтенд' => '#3b82f6', 'Безопасность' => '#ef4444',
+        ] as $name => $color) {
+            $labels[$name] = app(SaveLabelAction::class)->handle($admin, ['name' => $name, 'color' => $color], space: $space)->id;
+        }
+
+        $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Вид'], BoardTemplate::Development);
+        $lane = Lane::query()->where('board_id', $board->id)->sole();
+        // Вторая дорожка — чтобы были видны полосы дорожек (у доски с одной дорожкой полосы нет)
+        app(CreateLaneAction::class)->handle($admin, $board, 'Срочные', null, null);
+        $column = fn (string $name) => BoardColumn::query()->where('board_id', $board->id)->where('name', $name)->sole();
+        $update = app(UpdateCardAction::class);
+        /**
+         * Карточка в To Do (или перенесённая в колонку $done) с ответственным и метками.
+         *
+         * @param  list<string>  $cardLabels
+         * @param  array<string, mixed>  $fields
+         */
+        $card = function (string $title, User $responsible, array $cardLabels, array $fields = [], ?string $done = null) use ($editor, $board, $lane, $column, $labels, $update) {
+            $card = app(CreateCardAction::class)->handle($editor, $board, ['title' => $title], $column('To Do'), $lane);
+            if ($fields !== []) {
+                $update->handle($editor, $card, $fields);
+            }
+            if ($done !== null) {
+                app(MoveCardAction::class)->handle($editor, $card, $column($done), $lane, null, null);
+            }
+            $update->handle($editor, $card, ['responsible_id' => $responsible->id]);
+            app(SyncCardLabelsAction::class)->handle($editor, $card, array_map(fn (string $name) => $labels[$name], $cardLabels));
+
+            return $card;
+        };
+
+        $blocked = $card('Заблокированная', $admin, ['Бэкенд']);
+        app(BlockCardAction::class)->handle($editor, $blocked, 'Ждём доступ к стенду', false, null);
+        $card('Срочная', $editor, ['Клиент'], ['is_urgent' => true]);
+        $card('Просроченная', $restricted, ['Техдолг'], ['due_date' => now()->subDays(3)->toDateString()]);
+        $card('Со сроком', $candidate, ['Фронтенд', 'Безопасность'], ['due_date' => now()->addWeek()->toDateString()]);
+        $card('Готова в срок', $admin, ['Бэкенд'], ['due_date' => now()->addWeek()->toDateString()], 'Done');
+        $card('Готова после срока', $editor, ['Клиент'], ['due_date' => now()->subDays(3)->toDateString()], 'Done');
+        $last = app(CreateCardAction::class)->handle($editor, $board, ['title' => 'Для новой метки'], $column('To Do'), $lane);
+        app(SyncCardLabelsAction::class)->handle($editor, $last, [$labels['Фронтенд']]);
     }
 
     /**
