@@ -19,14 +19,20 @@ const COLOR_CHECKS = [
     String.raw`\b(${COLOR_UTILITY})(-[a-z]+)?-((${PALETTE})-\d{2,3}|white|black)\b`,
     `Цвет палитры Tailwind в компоненте — ${TOKENS_ONLY}.`,
   ],
-  // bg-[#fff], shadow-[0_1px_rgba(0,0,0,.1)], bg-[color-mix(...)]
+  // Переменная палитры в обход класса: bg-(--color-red-500), [color:var(--color-emerald-700)], style
   [
-    String.raw`\[[^\]\s]*(#[0-9a-f]{3,8}\b|(rgba?|hsla?|oklch|oklab|lab|lch|hwb|color-mix)\()`,
-    `Произвольный цвет в классе — ${TOKENS_ONLY}.`,
+    String.raw`--color-((${PALETTE})-\d{2,3}|white|black)\b`,
+    `Цвет палитры Tailwind в компоненте — ${TOKENS_ONLY}.`,
   ],
-  // style={{ color: '#fff' }}, массивы цветов
+  // bg-[color-mix(...)], shadow-[0_1px_rgba(0,0,0,.1)], boxShadow: '0 0 0 1px rgba(...)'
   [
-    String.raw`^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$`,
+    String.raw`(?<![a-z0-9])(rgba?|hsla?|oklch|oklab|lab|lch|hwb|color-mix)\(`,
+    `Цвет функцией (rgb(), oklch(), color-mix()…) в компоненте — ${TOKENS_ONLY}.`,
+  ],
+  // style={{ color: '#fff' }}, border: '1px solid #ddd', bg-[#fff], [--x:#fff], массивы цветов. Якорь вида #add-button
+  // (дальше буква, цифра, «-» или «_») — не цвет
+  [
+    String.raw`(^|[\s(,:\[_])#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})(?![\w-])`,
     `Цвет hex в компоненте — ${TOKENS_ONLY}; цвета данных (метки, типы, аватары) — в shared/lib/palette.ts.`,
   ],
   // ring-ring/50 приносит npx shadcn add: рамка фокуса с прозрачностью — меньше 3:1
@@ -70,6 +76,8 @@ export default tseslint.config(
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/shared/lib/palette.ts'],
     rules: {
+      // Правило задаётся для src один раз: другой блок с no-restricted-syntax заменил бы проверку цветов целиком —
+      // новые ограничения синтаксиса добавлять в этот же массив
       'no-restricted-syntax': [
         'error',
         ...COLOR_CHECKS.flatMap(([pattern, message]) => [

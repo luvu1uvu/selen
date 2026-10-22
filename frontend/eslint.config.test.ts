@@ -28,6 +28,10 @@ describe('проверка цветов в eslint.config.js', () => {
     'bg-[#ff0000]',
     'bg-[color-mix(in_oklab,var(--color-muted)_40%,white)]',
     'shadow-[0_1px_2px_rgba(0,0,0,0.1)]',
+    'shadow-[0_0_0_1px_#ddd]',
+    '[--edge:#fff]',
+    'bg-(--color-red-500)',
+    '[color:var(--color-emerald-700)]',
     'focus-visible:ring-ring/50',
     'outline-ring/50',
   ])('ловит «%s» в className', async (className) => {
@@ -43,6 +47,9 @@ describe('проверка цветов в eslint.config.js', () => {
     ).toBe(1)
     expect(await colorErrors('const c = `px-1 ${x} bg-slate-500`\n')).toBe(1)
     expect(await colorErrors(`const d = <span style={{ color: '#fff' }} />\n`)).toBe(1)
+    expect(await colorErrors(`const e = { border: '1px solid #ddd' }\n`)).toBe(1)
+    expect(await colorErrors(`const f = { boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.1)' }\n`)).toBe(1)
+    expect(await colorErrors(`const g = { color: 'var(--color-red-500)' }\n`)).toBe(1)
   })
 
   it('пропускает токены и не-цвета', async () => {
@@ -55,6 +62,10 @@ describe('проверка цветов в eslint.config.js', () => {
     ]
     for (const className of tokens) expect(await colorErrors(component(className))).toBe(0)
     expect(await colorErrors(`const link = '#comments'\n`)).toBe(0)
+    expect(await colorErrors(component('[&_#add-button]:hidden'))).toBe(0)
+    expect(
+      await colorErrors(`const h = { color: 'var(--color-danger)', label: 'Collab(1)' }\n`),
+    ).toBe(0)
   })
 
   it('исключения: палитры меток и аватаров, тесты, строка с причиной', async () => {
