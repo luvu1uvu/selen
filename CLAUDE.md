@@ -164,7 +164,8 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
    `withoutMiddleware('tab-user')` и строка в `SessionUserMatchTest`.
 10. **Правила вида — `docs/ui-guidelines.md`** (ADR-0023): цвета — только токены, шкала отступов, размеры, скругления,
     шрифт, состояния, тексты, контраст. Раскладка и поведение — по README Kaiten (правило 7), облик — по этому файлу.
-    Новое правило вида или изменённое значение — строкой в файле в том же PR.
+    Новое правило вида или изменённое значение — строкой в файле в том же PR. Цвет палитры Tailwind, hex и рамку фокуса
+    с прозрачностью в компоненте ловит `make lint` (ESLint, LATER-91); исключения — правила вида, раздел 2.
 
 ### Процесс
 - Коммиты маленькие и осмысленные, **Conventional Commits** (`feat:`, `fix:`, `docs:`...); текст — на русском.
@@ -352,7 +353,8 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
   считаются истёкшими. Сдвиг больше чем на 480 минут завершает сессию (так и задумано).
 - `npx shadcn add ...` (CLI 2026) не разрешает наш алиас `utils` и **ставит посторонний npm-пакет `cn`**
   с импортом `from "cn"`. После добавления компонента: откатить `package.json`/`package-lock.json`,
-  заменить импорт на `@/shared/lib/utils`, прогнать `make fix`.
+  заменить импорт на `@/shared/lib/utils`, прогнать `make fix`. Цвета компонента (`text-white`, `bg-black/50`,
+  `ring-ring/50`) заменить токенами — иначе `make lint` упадёт (правила вида, раздел 2).
 - `pest --parallel` сейчас не работает (несовместимость pest 5.3 и paratest) — запускаем в один поток.
 - **Права файлов на macOS не проверяются** (Docker Desktop/Colima): то, что nginx не может прочитать файл,
   видно только на Linux (CI, production). Файлы вложений — 0644/0755 (`visibility: public` у диска `attachments`).
