@@ -147,7 +147,8 @@ class AttachmentFiles
             'X-Content-Type-Options' => 'nosniff',
             'Content-Security-Policy' => $pdf ? self::PDF_CSP : "default-src 'none'; sandbox",
             // Браузер переспрашивает сервер при каждом открытии — права проверяются каждый раз (выход, потеря доступа,
-            // корзина), а неизменённый файл nginx не передаёт заново: 304 по ETag/Last-Modified (UI-1b)
+            // корзина), а неизменённый файл nginx не передаёт заново: 304 по ETag/Last-Modified (UI-1b). Этот заголовок
+            // nginx передаёт как есть — в location его не задаём
             'Cache-Control' => 'private, no-cache',
         ]);
     }

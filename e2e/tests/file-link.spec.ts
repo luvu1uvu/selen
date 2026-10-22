@@ -97,7 +97,8 @@ test('PDF по содержимому — в браузере с CSP без sand
   expect(pdf.headers()['content-disposition']).toMatch(/^inline;/)
   expect(pdf.headers()['content-security-policy']).toBe(PDF_CSP)
   expect(pdf.headers()['x-content-type-options']).toBe('nosniff')
-  expect(pdf.headers()['cache-control']).toContain('no-cache')
+  // Один заголовок — из ответа Laravel (nginx его передаёт; свой не добавляет, иначе двоится)
+  expect(pdf.headers()['cache-control']).toBe('no-cache, private')
   expect((await pdf.body()).length).toBe(PDF.length)
   // Повторное открытие: сервер снова проверяет права, неизменённый файл — 304 без тела
   const etag = pdf.headers()['etag']
