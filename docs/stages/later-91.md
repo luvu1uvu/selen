@@ -283,8 +283,9 @@ Dev — эта копия (`4271c12`), `make fresh`, `anna@selen.test`; окна
 
 ## Дальше
 
-- Приёмка пройдена (тестировщик, `ux-reviewer`); `make lint`, `make test` (backend 1532, frontend 49 файлов),
-  `make e2e` (195) — зелёные. PR в main, CI; мёрж — после «принято» PM.
+- Приёмка пройдена (тестировщик, `ux-reviewer`). В ветку влит свежий main (UI-1b, #22, #23) без конфликтов; после
+  слияния `make lint`, `make test` (backend 1551, frontend 51 файл), `make e2e` (205) — зелёные. PR в main, CI; мёрж —
+  после «принято» PM.
 - Ответы PM: U-1, U-6, U-7 UX-ревью; LATER-106 — «Не баг — решение PM»?
 - После мёржа: `make pm-bug-move KEY=LATER-91 TO=Сделано`, напомнить PM про `make pm-update`; LATER-101, LATER-107,
   LATER-108 — отдельными задачами.
