@@ -29,6 +29,9 @@ use Illuminate\Support\Facades\Storage;
 | а маршруты карточки — для смешанных источников (личный commenter + группа editor «только свои»).
 | Встроенная группа «Все сотрудники» (состав вычисляется): commenter и editor — как лично, «только свои» — чужая
 | карточка 404, деактивированный — 404.
+|
+| Путь — от /api/v1; веб-маршрут, который браузер открывает сам (ссылка на файл /files/{id}, UI-1b), — от корня («/…»).
+| Запросы матрицы — с Accept: application/json: 404 у всех одинаковый JSON (bootstrap/app.php).
 */
 
 /**
@@ -111,6 +114,8 @@ function spaceEndpoints(): array
         ['DELETE', 'card-links/{link}', 'editor'],
         ['POST', 'cards/{card}/attachments', 'member'],
         ['GET', 'attachments/{attachment}', 'member'],
+        // Ссылка на файл, которую браузер открывает сам (UI-1b, веб-маршрут вне /api/v1 — путь от корня)
+        ['GET', '/files/{attachment}', 'member'],
         // Удаляет загрузивший (в матрице — другой человек), editor или admin
         ['DELETE', 'attachments/{attachment}', 'editor'],
 
@@ -128,7 +133,7 @@ function spaceEndpoints(): array
 const SPACE_ROUTE_PREFIXES = [
     'api/v1/spaces/{space', 'api/v1/boards/', 'api/v1/columns/', 'api/v1/lanes/', 'api/v1/cards/', 'api/v1/labels/',
     'api/v1/comments/', 'api/v1/checklists/', 'api/v1/checklist-items/', 'api/v1/card-links/', 'api/v1/attachments/',
-    'api/v1/card-blocks/',
+    'api/v1/card-blocks/', 'files/',
 ];
 
 /** Объекты внутри карточки: доступ к ним — через карточку (ADR-0008). */
@@ -186,7 +191,7 @@ beforeEach(function () {
             }
         }
 
-        $uri = '/api/v1/'.strtr($path, [
+        $uri = (str_starts_with($path, '/') ? '' : '/api/v1/').strtr($path, [
             '{space}' => $this->space->key,
             '{user}' => $this->target->id,
             '{board}' => $this->board->id,
@@ -395,11 +400,15 @@ it('ответ для чужого ресурса неотличим от нес
 it('все маршруты содержимого пространств есть в матрице доступа', function () {
     $covered = array_keys(spaceEndpoints());
 
+    // Веб-маршрут (вне /api/v1) с объектом карточки в адресе — тоже содержимое пространства, даже с новым префиксом
     $routes = collect(Route::getRoutes()->getRoutes())
-        ->filter(fn ($route) => collect(SPACE_ROUTE_PREFIXES)->contains(fn ($prefix) => str_starts_with($route->uri(), $prefix)))
+        ->filter(fn ($route) => collect(SPACE_ROUTE_PREFIXES)->contains(fn ($prefix) => str_starts_with($route->uri(), $prefix))
+            || (! str_starts_with($route->uri(), 'api/') && collect(CARD_CONTENT_PLACEHOLDERS)->contains(fn ($p) => str_contains($route->uri(), $p))))
         ->flatMap(fn ($route) => collect($route->methods())
             ->reject(fn ($method) => $method === 'HEAD')
-            ->map(fn ($method) => $method.' '.str_replace(['api/v1/', '{space:key}'], ['', '{space}'], $route->uri())))
+            ->map(fn ($method) => $method.' '.str_replace('{space:key}', '{space}', str_starts_with($route->uri(), 'api/v1/')
+                ? substr($route->uri(), strlen('api/v1/'))
+                : '/'.$route->uri())))
         ->values()
         ->all();
 

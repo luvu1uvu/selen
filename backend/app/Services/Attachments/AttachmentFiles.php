@@ -36,6 +36,12 @@ class AttachmentFiles
         'video/quicktime' => 'video',
     ];
 
+    /** PDF по содержимому (finfo при загрузке) — по ссылке на файл открывается в браузере (UI-1b, решение PM 21.10). */
+    public const PDF = 'application/pdf';
+
+    /** CSP для PDF, открытого в браузере: без sandbox (с ним Chrome PDF не показывает), встроенный просмотрщик — object-src. */
+    public const PDF_CSP = "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
     /**
      * Сохранить загруженный файл на диск вложений. Возвращает атрибуты для модели Attachment.
      *
@@ -93,12 +99,6 @@ class AttachmentFiles
         return trim($ascii) === '' ? 'file' : $ascii;
     }
 
-    /** PDF по содержимому (finfo при загрузке) — по ссылке на файл открывается в браузере (UI-1b, решение PM 21.10). */
-    public const PDF = 'application/pdf';
-
-    /** CSP для PDF, открытого в браузере: без sandbox (с ним Chrome PDF не показывает), встроенный просмотрщик — object-src. */
-    public const PDF_CSP = "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
-
     /** Ответ с файлом для приложения (/api/v1/attachments/{id}). inline — по желанию клиента, только для белого списка. */
     public function response(Attachment $attachment, bool $inline): Response
     {
@@ -146,7 +146,9 @@ class AttachmentFiles
                 .$attachment->path,
             'X-Content-Type-Options' => 'nosniff',
             'Content-Security-Policy' => $pdf ? self::PDF_CSP : "default-src 'none'; sandbox",
-            'Cache-Control' => 'private, max-age=3600',
+            // Браузер переспрашивает сервер при каждом открытии — права проверяются каждый раз (выход, потеря доступа,
+            // корзина), а неизменённый файл nginx не передаёт заново: 304 по ETag/Last-Modified (UI-1b)
+            'Cache-Control' => 'private, no-cache',
         ]);
     }
 }

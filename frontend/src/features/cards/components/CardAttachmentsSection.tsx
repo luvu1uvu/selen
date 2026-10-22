@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next'
 import { Download, FileIcon, Link2, Paperclip, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
+import { copyText } from '@/shared/lib/browser'
 import { sizeParts } from '@/shared/lib/size'
 import type { Attachment, CardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import { Hint } from '@/shared/components/Hint'
 import { deleteAttachment } from '../api'
+import { fileLink } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
 import type { UploadProgress } from '../useAttachmentUpload'
 
@@ -187,6 +189,7 @@ function AttachmentActions({
   onRemove: (attachment: Attachment) => void
 }) {
   const { t } = useTranslation('boards')
+  const { t: tc } = useTranslation()
   return (
     <span className="ml-auto flex shrink-0 items-center">
       <Hint label={t('attachments.copyLink', { name: attachment.name })}>
@@ -197,8 +200,8 @@ function AttachmentActions({
           aria-label={t('attachments.copyLink', { name: attachment.name })}
           onClick={async () => {
             // Ссылку можно отправить коллеге: откроется у того, кто видит карточку (UI-1b, LATER-51)
-            await navigator.clipboard?.writeText(`${window.location.origin}${attachment.url}`)
-            toast.success(t('attachments.linkCopied'))
+            if (await copyText(fileLink(attachment))) toast.success(t('attachments.linkCopied'))
+            else toast.error(tc('errors.copyFailed'))
           }}
         >
           <Link2 />

@@ -12,7 +12,7 @@ import { Checkbox } from '@/shared/ui/checkbox'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { fileReturnPath, openServerPage } from '@/shared/lib/browser'
+import { fileReturnPath } from '@/shared/lib/browser'
 import { useLogin } from '../queries'
 import { emailSchema } from '../schemas'
 
@@ -56,10 +56,8 @@ export function LoginPage() {
     setFormError(null)
     try {
       await loginMutation.mutateAsync(values)
-      // На вход привела ссылка на файл — к файлу: его отдаёт сервер, не SPA (UI-1b)
-      const file = fileReturnPath(location.search)
-      if (file) openServerPage(file)
-      else navigate(state.from ?? '/', { replace: true })
+      // На вход привела ссылка на файл — к файлу отправит RequireGuest, как только узнает пользователя (UI-1b)
+      if (!fileReturnPath(location.search)) navigate(state.from ?? '/', { replace: true })
     } catch (error) {
       if (!applyValidationErrors(error, setError)) {
         setFormError(getErrorMessage(error, tc('errors.generic')))

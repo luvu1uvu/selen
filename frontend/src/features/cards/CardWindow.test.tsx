@@ -133,13 +133,16 @@ describe('Окно карточки', () => {
     })
 
     it('не перемещали — только «Создана»; номер копирует ссылку на карточку', async () => {
+      // setup() даёт буфер обмена (в jsdom его нет — копирование сообщило бы об ошибке)
+      const user = userEvent.setup()
       serveCard(makeCardDetail({ moved_at: null }))
       renderApp('/cards/DEV-1')
       const window = await screen.findByRole('dialog')
 
       expect(within(window).queryByText(/^Перемещена/)).not.toBeInTheDocument()
-      await userEvent.click(within(window).getByRole('button', { name: /^DEV-1\./ }))
+      await user.click(within(window).getByRole('button', { name: /^DEV-1\./ }))
       expect(await screen.findByText('Ссылка скопирована')).toBeInTheDocument()
+      expect(await navigator.clipboard.readText()).toBe(`${location.origin}/cards/DEV-1`)
     })
 
     it('название правится на месте: Enter сохраняет, Esc отменяет правку и не закрывает окно', async () => {

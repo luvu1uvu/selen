@@ -67,8 +67,9 @@ test('вложения: загрузка, превью, скачивание ч�
   expect(part.headers['content-range']).toBe(`bytes 0-9/${PNG.length}`)
   expect(part.length).toBe(10)
 
+  // SVG и по ссылке на файл (UI-1b) в браузере не открывается
   const svgUrl = (await svgLink.getAttribute('href'))!
-  const svg = await fetchFile(page, `${svgUrl}?inline=1`)
+  const svg = await fetchFile(page, svgUrl)
   expect(svg.status).toBe(200)
   expect(svg.headers['content-type']).toBe('application/octet-stream')
   expect(svg.headers['content-disposition']).toMatch(/^attachment;/)
@@ -77,8 +78,11 @@ test('вложения: загрузка, превью, скачивание ч�
   // Видео с Mac: заглушка-файл в Chromium не воспроизводится — вместо плеера сообщение и «Скачать»;
   // сам файл отдаётся inline как video/quicktime (настоящую запись экрана браузер покажет в плеере)
   await expect(files.getByRole('status')).toContainText('Браузер не может воспроизвести это видео')
-  const movUrl = (await files.getByRole('link', { name: 'Скачать', exact: true }).getAttribute('href'))!
-  const movInline = await fetchFile(page, `${movUrl}?inline=1`)
+  // «Скачать» — ссылка на файл с ?download=1 (UI-1b): скачиванием; сама ссылка на файл — в браузере
+  const movDownloadUrl = (await files.getByRole('link', { name: 'Скачать', exact: true }).getAttribute('href'))!
+  expect(movDownloadUrl).toMatch(/^\/files\/[0-9a-z]{26}\?download=1$/)
+  expect((await fetchFile(page, movDownloadUrl)).headers['content-disposition']).toMatch(/^attachment;/)
+  const movInline = await fetchFile(page, movDownloadUrl.replace('?download=1', ''))
   expect(movInline.status).toBe(200)
   expect(movInline.headers['content-type']).toBe('video/quicktime')
   expect(movInline.headers['content-disposition']).toMatch(/^inline;/)

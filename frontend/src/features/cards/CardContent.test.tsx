@@ -314,10 +314,19 @@ describe('Карточка: описание, комментарии, чек-л�
       'href',
       '/files/doc?download=1',
     )
+    // В jsdom буфера обмена нет — как у страницы не на https: не «скопирована», а объяснение
     await userEvent.click(
       within(section).getByRole('button', { name: 'Скопировать ссылку на spec.pdf' }),
     )
+    expect(
+      await screen.findByText('Не удалось скопировать: браузер не дал доступа к буферу обмена.'),
+    ).toBeInTheDocument()
+    // setup() даёт буфер обмена
+    await userEvent
+      .setup()
+      .click(within(section).getByRole('button', { name: 'Скопировать ссылку на spec.pdf' }))
     expect(await screen.findByText('Ссылка на файл скопирована')).toBeInTheDocument()
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/files/doc`)
     expect(within(section).getByText('3 МБ')).toBeInTheDocument()
     expect(
       within(section).queryByRole('button', { name: 'Удалить spec.pdf' }),

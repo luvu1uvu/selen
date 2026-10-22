@@ -95,11 +95,19 @@ describe('Страница входа', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
     }
 
-    it('пришёл по ссылке на файл — после входа браузер открывает файл', async () => {
+    it('пришёл по ссылке на файл — после входа браузер открывает файл один раз', async () => {
       renderApp(`/login?next=${encodeURIComponent(`${FILE}?download=1`)}`)
       await signIn()
 
-      await waitFor(() => expect(openServerPage).toHaveBeenCalledWith(`${FILE}?download=1`))
+      // Документ браузер скачивает, оставаясь на странице: не вечная «Загрузка…», а подсказка и путь на главную
+      expect(await screen.findByText('Открываем файл…')).toBeInTheDocument()
+      expect(screen.getByText('Если файл скачался, эту вкладку можно закрыть.')).toBeInTheDocument()
+      expect(openServerPage).toHaveBeenCalledTimes(1)
+      expect(openServerPage).toHaveBeenCalledWith(`${FILE}?download=1`)
+
+      await userEvent.click(screen.getByRole('link', { name: 'На главную' }))
+      expect(await screen.findByRole('heading', { name: 'Пространства' })).toBeInTheDocument()
+      expect(openServerPage).toHaveBeenCalledTimes(1)
     })
 
     it('чужой адрес в next игнорируется — главная, без перехода', async () => {
@@ -117,6 +125,8 @@ describe('Страница входа', () => {
       renderApp(`/login?next=${encodeURIComponent(FILE)}`)
 
       await waitFor(() => expect(openServerPage).toHaveBeenCalledWith(FILE))
+      expect(await screen.findByText('Открываем файл…')).toBeInTheDocument()
+      expect(openServerPage).toHaveBeenCalledTimes(1)
     })
   })
 })

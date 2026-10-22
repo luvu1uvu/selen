@@ -23,4 +23,18 @@ class FileController extends Controller
 
         return $files->linkResponse($attachment, $request->boolean('download'));
     }
+
+    /**
+     * Страница входа с возвратом к файлу — для гостя и деактивированного (bootstrap/app.php, EnsureUserIsActive).
+     * Адрес возврата — из маршрута, а не из запроса: лишние параметры (utm, ?download=true) не мешают возврату, страница
+     * входа принимает только `/files/<id>[?download=1]`. До привязки модели {attachment} — строка из адреса.
+     */
+    public static function loginUrl(Request $request): string
+    {
+        $attachment = $request->route('attachment');
+        $id = $attachment instanceof Attachment ? $attachment->id : (string) $attachment;
+        $file = '/files/'.rawurlencode($id).($request->boolean('download') ? '?download=1' : '');
+
+        return '/login?next='.rawurlencode($file);
+    }
 }

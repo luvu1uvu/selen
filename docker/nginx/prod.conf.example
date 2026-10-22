@@ -1,5 +1,6 @@
 # ПРИМЕР production-конфигурации nginx (будет доработан на этапе деплоя).
 #   /api, /sanctum, /up → php-fpm
+#   /files/{id}         → php-fpm: ссылка на файл вложения, которую открывает браузер (UI-1b)
 #   всё остальное       → собранная SPA (frontend/dist), с fallback на index.html
 # TLS, заголовки безопасности и кеширование статики настраиваются на этапе деплоя.
 
@@ -47,12 +48,14 @@ server {
     # Файлы вложений: Laravel проверяет доступ к карточке и отвечает X-Accel-Redirect, файл отдаёт nginx
     # (Range-запросы и перемотка видео). Снаружи location недоступен. Content-Type и Content-Disposition
     # nginx берёт из ответа Laravel; защитные заголовки — здесь (заголовки ответа Laravel сюда не доходят).
+    # no-cache: браузер переспрашивает при каждом открытии — Laravel проверяет права, неизменённый файл nginx
+    # отдаёт ответом 304 (ETag/Last-Modified), без повторной передачи (UI-1b).
     location /_protected/attachments/ {
         internal;
         alias /var/www/backend/storage/app/private/attachments/;
         add_header X-Content-Type-Options nosniff always;
         add_header Content-Security-Policy "default-src 'none'; sandbox" always;
-        add_header Cache-Control "private, max-age=3600" always;
+        add_header Cache-Control "private, no-cache" always;
     }
 
     # Тот же каталог — для PDF, открытого в браузере по ссылке /files/{id} (тип — по содержимому, решение PM 21.10):
@@ -63,7 +66,7 @@ server {
         alias /var/www/backend/storage/app/private/attachments/;
         add_header X-Content-Type-Options nosniff always;
         add_header Content-Security-Policy "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
-        add_header Cache-Control "private, max-age=3600" always;
+        add_header Cache-Control "private, no-cache" always;
     }
 
     location / {

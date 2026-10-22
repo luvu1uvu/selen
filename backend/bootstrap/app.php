@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FileController;
 use App\Http\Middleware\EnsureSessionUserMatches;
 use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Foundation\Application;
@@ -36,7 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // API без редиректов на страницу входа: гость получает 401 JSON. Ссылка на файл (/files/{id}, UI-1b) — на вход
         // с возвратом к файлу: страница входа принимает только next вида /files/<id>
         $middleware->redirectGuestsTo(fn (Request $request) => $request->routeIs('files.show')
-            ? '/login?next='.rawurlencode($request->getRequestUri())
+            ? FileController::loginUrl($request)
             : null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -45,9 +46,11 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         // Любой 404 в API выглядит одинаково: «не существует» и «чужое пространство» неотличимы,
-        // а имя модели и ключ из запроса в ответ не попадают (docs/adr/0005-space-access.md).
+        // а имя модели и ключ из запроса в ответ не попадают (docs/adr/0005-space-access.md). Так же — любой 404 в JSON
+        // (ссылка на файл /files/{id} с Accept: application/json, UI-1b); страница 404 и так одна (errors::404, без текста
+        // исключения — и с APP_DEBUG).
         $exceptions->render(function (HttpExceptionInterface $e, Request $request) {
-            if ($e->getStatusCode() === 404 && $request->is('api/*')) {
+            if ($e->getStatusCode() === 404 && ($request->is('api/*') || $request->expectsJson())) {
                 return response()->json(['message' => __('selen.not_found')], 404);
             }
 

@@ -43,7 +43,9 @@ it('вошедший с доступом открывает ссылку нап�
         ->and($response->headers->get('Content-Type'))->toBe('image/png')
         ->and($response->headers->get('Content-Disposition'))->toStartWith('inline;')
         ->and($response->headers->get('X-Content-Type-Options'))->toBe('nosniff')
-        ->and($response->headers->get('Content-Security-Policy'))->toBe("default-src 'none'; sandbox");
+        ->and($response->headers->get('Content-Security-Policy'))->toBe("default-src 'none'; sandbox")
+        // Браузер переспрашивает при каждом открытии: права проверяются каждый раз, неизменённый файл — 304 от nginx
+        ->and($response->headers->get('Cache-Control'))->toContain('no-cache')->toContain('private');
 
     // Защита API не ослаблена: тот же файл через /api/v1 без Referer/Origin — 401, как раньше
     $browser->navigate("/api/v1/attachments/{$this->image->id}")->assertUnauthorized();
@@ -57,6 +59,12 @@ it('без входа — страница входа с адресом файл
         ->assertRedirect('/login?next='.rawurlencode("/files/{$this->image->id}"));
     browser()->navigate("/files/{$this->image->id}?download=1")
         ->assertRedirect('/login?next='.rawurlencode("/files/{$this->image->id}?download=1"));
+
+    // Адрес возврата — из маршрута: лишние параметры ссылки (метки мессенджера, ?download=true) возврату не мешают
+    browser()->navigate("/files/{$this->image->id}?utm_source=tg&download=true")
+        ->assertRedirect('/login?next='.rawurlencode("/files/{$this->image->id}?download=1"));
+    browser()->navigate("/files/{$this->image->id}?utm_source=tg")
+        ->assertRedirect('/login?next='.rawurlencode("/files/{$this->image->id}"));
 });
 
 it('нет доступа, «только свои», корзина, удалённое вложение, нет такого — одинаковый 404 без названий', function () {
@@ -70,23 +78,31 @@ it('нет доступа, «только свои», корзина, удалё
     $inTrash = makeAttachment($trashedCard, $this->editor, 'в-корзине.png', PNG_1X1, 'image/png');
     $trashedCard->forceFill(['deleted_at' => now(), 'deleted_by' => admin()->id])->save();
 
-    $missing = signedIn($this->editor)->navigate('/files/01ja0000000000000000000000')->assertNotFound();
+    // Вход формой — не больше 5 раз в минуту на пользователя: браузер каждого — один на все проверки
+    $browsers = [$this->editor->id => signedIn($this->editor)];
+    $as = fn (User $user) => $browsers[$user->id] ??= signedIn($user);
+    $missing = $as($this->editor)->navigate('/files/01ja0000000000000000000000')->assertNotFound();
     $cases = [
-        'не участник' => [$outsider, $this->image],
-        'только свои — чужая карточка' => [$restricted, $this->image],
-        'вложение удалено' => [$this->editor, $removed],
-        'карточка в корзине' => [$this->editor, $inTrash],
+        'не участник' => [$outsider, $this->image, $this->card],
+        'только свои — чужая карточка' => [$restricted, $this->image, $this->card],
+        'вложение удалено' => [$this->editor, $removed, $this->card],
+        'карточка в корзине' => [$this->editor, $inTrash, $trashedCard],
     ];
-    foreach ($cases as $case => [$user, $attachment]) {
-        $response = signedIn($user)->navigate("/files/{$attachment->id}")->assertNotFound();
+    foreach ($cases as $case => [$user, $attachment, $card]) {
+        $response = $as($user)->navigate("/files/{$attachment->id}")->assertNotFound();
         expect($response->getContent(), $case)->toBe($missing->getContent())
             ->not->toContain($attachment->name)
-            ->not->toContain($this->card->title);
+            ->not->toContain($card->title);
+
+        // Запрос с Accept: application/json (скрипт, XHR) — тот же JSON, что у «нет такого», без имени модели и id
+        $as($user)->get("/files/{$attachment->id}")->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
     }
+    $as($this->editor)->get('/files/01ja0000000000000000000000')
+        ->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
 
     // Своя карточка у пользователя с ограничением — открывается
     $this->card->forceFill(['responsible_id' => $restricted->id])->save();
-    signedIn($restricted)->navigate("/files/{$this->image->id}")->assertOk();
+    $as($restricted)->navigate("/files/{$this->image->id}")->assertOk();
 });
 
 it('PDF по содержимому — в браузере, со своей CSP без sandbox; «.pdf» по имени, а внутри HTML — только скачивание', function () {
@@ -119,6 +135,22 @@ it('PDF по содержимому — в браузере, со своей CSP
         ->toStartWith('attachment;');
 });
 
+it('PDF определяется при загрузке по содержимому: настоящий — в браузере, HTML с именем «.pdf» — скачиванием', function () {
+    $upload = fn (string $name, string $content) => $this->actingAs($this->editor)
+        ->post("/api/v1/cards/DEV-{$this->card->number}/attachments", ['file' => uploadedFile($name, $content)], ['Accept' => 'application/json'])
+        ->assertCreated()->json('data.id');
+    $pdf = $upload('скан', "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
+    $fake = $upload('отчёт.pdf', '<html><body><script>alert(1)</script></body></html>');
+    $browser = signedIn($this->editor);
+
+    expect($browser->navigate("/files/{$pdf}")->headers->get('Content-Type'))->toBe(AttachmentFiles::PDF)
+        ->and($browser->navigate("/files/{$pdf}")->headers->get('Content-Disposition'))->toStartWith('inline;');
+    $response = $browser->navigate("/files/{$fake}");
+    expect($response->headers->get('Content-Type'))->toBe('application/octet-stream')
+        ->and($response->headers->get('Content-Disposition'))->toStartWith('attachment;')
+        ->and($response->headers->get('Content-Security-Policy'))->toBe("default-src 'none'; sandbox");
+});
+
 it('деактивированный с уцелевшей сессией — как без входа: страница входа, сессия завершена', function () {
     $browser = signedIn($this->editor);
     // Деактивация удаляет сессии; здесь — «уцелевшая», как в ADR-0002 («второй рубеж»)
@@ -130,12 +162,14 @@ it('деактивированный с уцелевшей сессией — к
 });
 
 it('веб-маршрут один — ссылка на файл; без проверки пользователя вкладки и с лимитом запросов', function () {
+    // Маршруты локального диска Laravel (storage.local*, подписанные ссылки) не считаем: их уберёт отдельная задача
+    // (аудит 2026-10, S-9), и этот тест ей мешать не должен
     $web = collect(Route::getRoutes()->getRoutes())
-        ->reject(fn ($route) => str_starts_with($route->uri(), 'api/'))
+        ->reject(fn ($route) => str_starts_with($route->uri(), 'api/') || str_starts_with((string) $route->getName(), 'storage.local'))
         ->map(fn ($route) => $route->getName() ?? $route->uri())
         ->values()->all();
-    // Служебные: CSRF-cookie Sanctum, health check, локальный диск Laravel (подписанные ссылки, диск local)
-    expect($web)->toEqualCanonicalizing(['files.show', 'sanctum.csrf-cookie', 'up', 'storage.local', 'storage.local.upload']);
+    // Служебные: CSRF-cookie Sanctum, health check
+    expect($web)->toEqualCanonicalizing(['files.show', 'sanctum.csrf-cookie', 'up']);
 
     $route = Route::getRoutes()->getByName('files.show');
     expect($route->gatherMiddleware())->toContain('web', 'auth', 'active', 'throttle:files')
