@@ -1,6 +1,10 @@
+import { readableTextOn } from '@/shared/lib/palette'
 import { cn } from '@/shared/lib/utils'
 
-/** Метка карточки: цветная плашка с названием (на доске — компактная). */
+/**
+ * Метка карточки: цветная плашка с названием (на доске — компактная). Цвет метки — любой, текст — белый или чёрный,
+ * что контрастнее (решение PM 21.10, LATER-89).
+ */
 export function LabelBadge({
   name,
   color,
@@ -16,11 +20,11 @@ export function LabelBadge({
     <span
       title={name}
       className={cn(
-        'inline-flex max-w-full items-center truncate rounded font-medium text-white',
+        'inline-flex max-w-full items-center truncate rounded font-medium',
         compact ? 'h-4 px-1.5 text-[10px] leading-4' : 'px-2 py-0.5 text-xs',
         className,
       )}
-      style={{ backgroundColor: color }}
+      style={{ backgroundColor: color, color: readableTextOn(color) }}
     >
       <span className="truncate">{name}</span>
     </span>

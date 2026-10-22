@@ -59,7 +59,7 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="focus-visible:ring-ring/50 inline-flex min-h-6 items-center rounded-sm font-mono text-xs outline-none hover:underline focus-visible:ring-[3px]"
+              className="focus-visible:ring-ring inline-flex min-h-6 items-center rounded-sm font-mono text-xs outline-none hover:underline focus-visible:ring-[3px]"
               aria-label={`${card.key}. ${t('card.copyKeyLink')}`}
               onClick={copyLink}
             >
@@ -180,7 +180,7 @@ function TitleField({ card }: { card: CardDetail }) {
       maxLength={500}
       aria-label={t('card.title')}
       data-own-escape
-      className="hover:border-input focus-visible:border-ring focus-visible:ring-ring/50 -mx-1.5 w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-xl leading-snug font-semibold outline-none focus-visible:ring-[3px]"
+      className="hover:border-input focus-visible:border-ring focus-visible:ring-ring -mx-1.5 w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-xl leading-snug font-semibold outline-none focus-visible:ring-[3px]"
       onChange={(event) => setTitle(event.target.value.replace(/\s*\n\s*/g, ' '))}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {

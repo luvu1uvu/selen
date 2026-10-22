@@ -37,9 +37,8 @@ export const CardTileView = memo(function CardTileView({
     <div
       className={cn(
         'bg-card rounded-md border border-l-4 px-3 py-2 text-left text-sm shadow-xs',
-        card.is_urgent && 'ring-1 ring-red-300',
-        card.is_blocked &&
-          'border-red-400 bg-red-50 ring-1 ring-red-400 dark:border-red-800 dark:bg-red-950/40',
+        card.is_urgent && 'ring-danger-outline/50 ring-1',
+        card.is_blocked && 'border-danger-outline bg-danger-surface ring-danger-outline ring-1',
         className,
       )}
       style={{ borderLeftColor: type?.color }}
@@ -49,7 +48,7 @@ export const CardTileView = memo(function CardTileView({
           <span className="font-mono">{card.key}</span>
           {card.is_blocked && (
             <span
-              className="inline-flex items-center gap-0.5 font-medium text-red-700 dark:text-red-400"
+              className="text-danger inline-flex items-center gap-0.5 font-medium"
               title={t('facade.blocked')}
             >
               <Ban className="size-3" aria-hidden />
@@ -72,7 +71,7 @@ export const CardTileView = memo(function CardTileView({
         <div className="mt-1.5 flex items-center gap-1.5">
           {card.is_urgent && (
             <span
-              className="inline-flex items-center gap-0.5 text-xs font-medium text-red-700"
+              className="text-danger inline-flex items-center gap-0.5 text-xs font-medium"
               title={t('facade.urgent')}
             >
               <Flame className="size-3" aria-hidden />
@@ -134,7 +133,7 @@ function Counter({
       title={label}
       className={cn(
         'text-muted-foreground inline-flex items-center gap-0.5 text-xs [&_svg]:size-3',
-        done && 'text-emerald-700',
+        done && 'text-success',
       )}
     >
       {icon}

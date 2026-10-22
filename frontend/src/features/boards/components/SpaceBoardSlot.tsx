@@ -172,7 +172,7 @@ function CollapsedBoard(props: SpaceBoardSlotProps) {
   return (
     <section
       aria-label={board.name}
-      className="bg-background max-rows:w-full w-fit max-w-full overflow-clip rounded-xl border"
+      className="bg-board max-rows:w-full w-fit max-w-full overflow-clip rounded-xl border"
       data-board-block={board.id}
       data-board-collapsed
     >
@@ -207,7 +207,7 @@ function BoardPlaceholder(props: SpaceBoardSlotProps & { failed?: boolean }) {
     <section
       aria-label={board.name}
       aria-busy={!failed}
-      className="bg-background flex min-h-60 w-full flex-col overflow-clip rounded-xl border"
+      className="bg-board flex min-h-60 w-full flex-col overflow-clip rounded-xl border"
       style={
         failed
           ? undefined

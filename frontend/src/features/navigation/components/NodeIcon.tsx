@@ -67,7 +67,7 @@ export function HiddenFromTreeMark() {
           role="img"
           aria-label={label}
           tabIndex={0}
-          className="focus-visible:ring-ring/50 flex shrink-0 rounded-sm outline-none focus-visible:ring-[3px]"
+          className="focus-visible:ring-ring flex shrink-0 rounded-sm outline-none focus-visible:ring-[3px]"
         >
           <EyeOff aria-hidden className="text-muted-foreground/70 size-3.5" />
         </span>

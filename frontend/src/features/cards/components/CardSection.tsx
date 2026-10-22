@@ -45,7 +45,7 @@ export function CardSection({
             type="button"
             aria-expanded={open}
             aria-controls={contentId}
-            className="hover:bg-accent focus-visible:ring-ring/50 -ml-1.5 inline-flex h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold outline-none focus-visible:ring-[3px]"
+            className="hover:bg-accent focus-visible:ring-ring -ml-1.5 inline-flex h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-sm font-semibold outline-none focus-visible:ring-[3px]"
             onClick={() => setOpen(!open)}
           >
             <ChevronDown

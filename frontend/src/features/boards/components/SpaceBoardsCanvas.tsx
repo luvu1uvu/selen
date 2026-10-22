@@ -108,7 +108,7 @@ export function SpaceBoardsCanvas({
             <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
           )}
           {boardsQuery.isSuccess && rows.length === 0 && (
-            <div className="text-muted-foreground bg-background flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center text-sm">
+            <div className="text-muted-foreground bg-board flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center text-sm">
               <LayoutGrid className="size-8" />
               <p>{t('list.empty')}</p>
               <p>{canManage ? t('layout.emptyHint') : t('layout.emptyMember')}</p>
@@ -154,7 +154,7 @@ export function SpaceBoardsCanvas({
         </div>
         <DragOverlay dropAnimation={null}>
           {activeBoard && (
-            <div className="bg-background flex h-12 w-max max-w-80 items-center gap-1.5 rounded-xl border px-3 opacity-80 shadow-lg">
+            <div className="bg-board flex h-12 w-max max-w-80 items-center gap-1.5 rounded-xl border px-3 opacity-80 shadow-lg">
               <GripVertical className="text-muted-foreground size-4 shrink-0" />
               <span className="truncate text-base font-semibold">{activeBoard.name}</span>
             </div>

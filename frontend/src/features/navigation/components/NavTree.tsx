@@ -107,7 +107,7 @@ export function NavTree({
             <div className="group/row relative">
               <button
                 type="button"
-                className={cn(rowClass, node.empty && 'text-muted-foreground/70')}
+                className={cn(rowClass, node.empty && 'text-muted-foreground')}
                 style={{ paddingLeft: indent(depth) }}
                 onClick={() => onToggle(node.id)}
                 aria-expanded={expanded}

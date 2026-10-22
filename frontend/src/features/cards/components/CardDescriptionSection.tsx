@@ -80,7 +80,7 @@ export function CardDescriptionSection({ card, canEdit }: { card: CardDetail; ca
       ) : canEdit ? (
         <button
           type="button"
-          className="text-muted-foreground border-input hover:border-ring hover:text-foreground focus-visible:ring-ring/50 min-h-16 rounded-md border border-dashed px-3 py-2 text-left text-sm outline-none focus-visible:ring-[3px]"
+          className="text-muted-foreground border-input hover:border-ring hover:text-foreground focus-visible:ring-ring min-h-16 rounded-md border border-dashed px-3 py-2 text-left text-sm outline-none focus-visible:ring-[3px]"
           onClick={() => setEditing(true)}
         >
           {t('card.emptyDescription')}

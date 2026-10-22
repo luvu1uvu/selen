@@ -191,7 +191,7 @@ export function AppLayout() {
 
   return (
     <div className="flex h-svh overflow-hidden">
-      {menuOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={closeMenu} />}
+      {menuOpen && <div className="bg-overlay fixed inset-0 z-30 md:hidden" onClick={closeMenu} />}
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex transition-transform md:sticky md:top-0 md:h-svh md:translate-x-0',

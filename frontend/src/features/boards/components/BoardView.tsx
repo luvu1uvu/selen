@@ -309,7 +309,7 @@ export function BoardView({
       accessibility={accessibility}
     >
       {/* Заголовки колонок: закреплены под шапкой доски (h-12), сдвигаются вбок вместе с телом */}
-      <div ref={stickyRef} className="bg-background sticky top-12 z-10 border-b">
+      <div ref={stickyRef} className="bg-board sticky top-12 z-10 border-b">
         {/* Фокус Tab на точке или «⋯» колонки у края — строка сдвигается к ней, тело — следом (useSyncedScrollLeft) */}
         <div
           ref={headerRef}
@@ -527,7 +527,7 @@ function EdgeShade({
     <div
       aria-hidden
       className={cn(
-        'from-foreground/15 pointer-events-none absolute z-[6] w-6 to-transparent transition-opacity',
+        'from-edge-shade pointer-events-none absolute z-[6] w-6 to-transparent transition-opacity',
         side === 'start' ? 'left-0 bg-linear-to-r' : 'right-0 bg-linear-to-l',
         visible ? 'opacity-100' : 'opacity-0',
         className,
@@ -609,7 +609,7 @@ function BoardScrollbar({
       // contain: inline-size — распорка полосы (ширина содержимого тела) не влияет на ширину блока доски: иначе блок,
       // хоть раз ставший шире колонок, сам держал эту ширину через полосу (LATER-66)
       className={cn(
-        'bg-background/90 sticky bottom-0 z-10 [scrollbar-width:thin] overflow-x-auto overflow-y-hidden [contain:inline-size]',
+        'bg-board/90 sticky bottom-0 z-10 [scrollbar-width:thin] overflow-x-auto overflow-y-hidden [contain:inline-size]',
         hidden ? 'hidden' : size.overflows ? 'min-h-3' : 'invisible h-0',
       )}
       data-board-scrollbar
