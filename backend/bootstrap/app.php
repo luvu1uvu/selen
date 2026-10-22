@@ -33,8 +33,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'active' => EnsureUserIsActive::class,
             'tab-user' => EnsureSessionUserMatches::class,
         ]);
-        // API без редиректов на страницу входа: гость получает 401 JSON
-        $middleware->redirectGuestsTo(fn () => null);
+        // API без редиректов на страницу входа: гость получает 401 JSON. Ссылка на файл (/files/{id}, UI-1b) — на вход
+        // с возвратом к файлу: страница входа принимает только next вида /files/<id>
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->routeIs('files.show')
+            ? '/login?next='.rawurlencode($request->getRequestUri())
+            : null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -149,4 +149,7 @@ it('каждый маршрут вошедших сверяет пользова
     foreach ($routes->reject($isAuthenticated) as $route) {
         expect($checked($route))->toBeFalse($route->uri());
     }
+
+    // Ссылка на файл /files/{id} (UI-1b): её открывает сам браузер — веб-маршрут без проверки пользователя вкладки
+    expect($checked(Route::getRoutes()->getByName('files.show')))->toBeFalse();
 });

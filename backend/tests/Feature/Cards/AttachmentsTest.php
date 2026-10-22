@@ -35,7 +35,7 @@ it('загружает файл: тип по содержимому, а не п�
         ->assertJsonPath('data.kind', 'image')
         ->assertJsonPath('data.mime', 'image/png')
         ->assertJsonPath('data.name', 'отчёт.docx')
-        ->assertJsonPath('data.url', fn ($url) => str_starts_with($url, '/api/v1/attachments/'));
+        ->assertJsonPath('data.url', fn ($url) => str_starts_with($url, '/files/'));
 
     $attachment = Attachment::query()->sole();
     expect($attachment->path)->toStartWith($this->card->id.'/')->not->toContain('отчёт')

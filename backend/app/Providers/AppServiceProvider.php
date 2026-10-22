@@ -108,6 +108,10 @@ class AppServiceProvider extends ServiceProvider
             ->by((string) $request->user()?->getAuthIdentifier())
             ->response($tooMany('selen.throttle')));
 
+        // Ссылки на файлы (/files/{id}, UI-1b): картинки окна карточки грузятся по ним же — запас на десятки за раз
+        RateLimiter::for('files', fn (Request $request) => Limit::perMinute(600)
+            ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
+
         // Страница приглашения: защита от перебора токенов
         RateLimiter::for('invitations', fn (Request $request) => Limit::perMinute(20)
             ->by($request->ip())

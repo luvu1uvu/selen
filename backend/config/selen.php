@@ -42,6 +42,9 @@ return [
         'max_kb' => 102400,
         // Префикс internal-location nginx для отдачи локальных файлов (X-Accel-Redirect)
         'x_accel_prefix' => '/_protected/attachments/',
+        // Тот же каталог для PDF, открытых в браузере по ссылке /files/{id} (UI-1b, LATER-51): у этого location nginx
+        // своя CSP без sandbox — иначе Chrome не показывает PDF
+        'x_accel_pdf_prefix' => '/_protected/attachments-pdf/',
         // Срок жизни временной ссылки на файл в S3, минут
         'temporary_url_minutes' => 5,
     ],

@@ -22,6 +22,11 @@ class EnsureUserIsActive
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
+            // Ссылка на файл открыта браузером (UI-1b) — как без входа: на страницу входа
+            if ($request->routeIs('files.show')) {
+                return redirect('/login?next='.rawurlencode($request->getRequestUri()));
+            }
+
             return response()->json(['message' => __('selen.auth.deactivated')], Response::HTTP_UNAUTHORIZED);
         }
 

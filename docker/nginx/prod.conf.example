@@ -27,7 +27,8 @@ server {
         fastcgi_read_timeout 300s;
     }
 
-    location ~ ^/(api|sanctum|up)(/|$) {
+    # /files/{id} — ссылка на файл вложения, которую открывает сам браузер (UI-1b, LATER-51): веб-маршрут Laravel
+    location ~ ^/(api|sanctum|up|files)(/|$) {
         fastcgi_pass php:9000;
         include fastcgi_params;
         fastcgi_param HTTP_X_FORWARDED_FOR $proxy_add_x_forwarded_for;
@@ -51,6 +52,17 @@ server {
         alias /var/www/backend/storage/app/private/attachments/;
         add_header X-Content-Type-Options nosniff always;
         add_header Content-Security-Policy "default-src 'none'; sandbox" always;
+        add_header Cache-Control "private, max-age=3600" always;
+    }
+
+    # Тот же каталог — для PDF, открытого в браузере по ссылке /files/{id} (тип — по содержимому, решение PM 21.10):
+    # без sandbox (с ним Chrome PDF не показывает), встроенный просмотрщик — object-src 'self'
+    # (AttachmentFiles::PDF_CSP); nosniff — как у остальных файлов
+    location /_protected/attachments-pdf/ {
+        internal;
+        alias /var/www/backend/storage/app/private/attachments/;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Content-Security-Policy "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
         add_header Cache-Control "private, max-age=3600" always;
     }
 
