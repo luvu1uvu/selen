@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { authFile, openBoard, openHome } from '../../tests/helpers'
+import { loaded } from './rows'
 
 /**
  * ТК-L50.11 (решения PM 1–2 из плана пакета): шапка доски — в одну строку. Описание доски (две строки) — во
@@ -31,6 +32,9 @@ test('ТК-L50.11. Описание доски — за ⓘ, архив карт
   await expect(page.getByRole('heading', { name: 'С описанием' })).toBeVisible()
   await expect(page.getByText('Первая строка описания')).toHaveCount(0)
   const board = page.getByRole('region', { name: 'С описанием' })
+  // ⓘ и «⋯» — у загруженной доски: у доски, которая ещё грузится, шапка — заглушка, и открытое в ней окно пропадает
+  // вместе с ней, когда приходят данные (так тест однажды упал в CI 21.10; LATER-92, журнал infra-parallel-sessions)
+  await loaded(page, 'С описанием')
 
   // 2. ⓘ рядом с названием: всплывающее окно с описанием, переносы строк сохранены, текст выделяется
   await board.getByRole('button', { name: 'Описание доски' }).click()
