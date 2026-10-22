@@ -47,11 +47,18 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Любой 404 в API выглядит одинаково: «не существует» и «чужое пространство» неотличимы,
         // а имя модели и ключ из запроса в ответ не попадают (docs/adr/0005-space-access.md). Так же — любой 404 в JSON
-        // (ссылка на файл /files/{id} с Accept: application/json, UI-1b); страница 404 и так одна (errors::404, без текста
-        // исключения — и с APP_DEBUG).
+        // (ссылка на файл /files/{id} с Accept: application/json, UI-1b).
         $exceptions->render(function (HttpExceptionInterface $e, Request $request) {
-            if ($e->getStatusCode() === 404 && ($request->is('api/*') || $request->expectsJson())) {
+            if ($e->getStatusCode() !== 404) {
+                return null;
+            }
+            if ($request->is('api/*') || $request->expectsJson()) {
                 return response()->json(['message' => __('selen.not_found')], 404);
+            }
+            // Ссылка на файл, открытая браузером: нет такого, нет доступа, корзина, файл удалён — одна страница Selen
+            // «Файл не найден или нет доступа» с путём на главную (UI-1b, решение PM 22.10)
+            if ($request->is('files', 'files/*')) {
+                return redirect(config('selen.frontend_paths.file_not_found'));
             }
 
             return null;

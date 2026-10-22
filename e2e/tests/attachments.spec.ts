@@ -19,6 +19,7 @@ async function fetchFile(page: Page, url: string, headers: Record<string, string
       const pick = ['content-type', 'content-disposition', 'content-range', 'x-content-type-options', 'content-security-policy']
       return {
         status: response.status,
+        url: response.url,
         headers: Object.fromEntries(pick.map((h) => [h, response.headers.get(h)])),
         length: body.byteLength,
       }
@@ -96,8 +97,10 @@ test('вложения: загрузка, превью, скачивание ч�
   // Internal-location nginx снаружи недоступен
   expect((await fetchFile(page, '/_protected/attachments/x')).status).toBe(404)
 
-  // Посторонний — 404 и на файл, и на карточку
+  // Посторонний файл не получает: ссылка ведёт на страницу Selen «Файл не найден или нет доступа» (решение PM 22.10)
   const outsider = await pageAs(browser, 'e2e-outsider@selen.test')
-  expect((await fetchFile(outsider, imageUrl)).status).toBe(404)
+  const foreign = await fetchFile(outsider, imageUrl)
+  expect(foreign.url).toMatch(/\/file-not-found$/)
+  expect(foreign.headers['content-type']).toMatch(/^text\/html/)
   await outsider.context().close()
 })

@@ -367,6 +367,8 @@ export interface Attachment {
   size: number
   kind: 'image' | 'video' | 'file'
   url: string
+  /** Открывается в браузере (картинки, видео, PDF по содержимому): имя — в новой вкладке, иначе — скачивание. */
+  opens_in_browser: boolean
   uploaded_by: UserRef
   created_at: string
   permissions: { delete: boolean }

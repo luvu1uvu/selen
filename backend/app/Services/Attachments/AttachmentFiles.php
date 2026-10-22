@@ -99,6 +99,12 @@ class AttachmentFiles
         return trim($ascii) === '' ? 'file' : $ascii;
     }
 
+    /** Открывается ли файл по ссылке (/files/{id}) в браузере: картинки и видео из белого списка и PDF по содержимому. */
+    public static function opensInBrowser(string $mime): bool
+    {
+        return $mime === self::PDF || isset(self::INLINE_TYPES[$mime]);
+    }
+
     /** Ответ с файлом для приложения (/api/v1/attachments/{id}). inline — по желанию клиента, только для белого списка. */
     public function response(Attachment $attachment, bool $inline): Response
     {
@@ -112,7 +118,7 @@ class AttachmentFiles
     public function linkResponse(Attachment $attachment, bool $download): Response
     {
         $pdf = $attachment->mime === self::PDF;
-        $inline = ! $download && ($pdf || isset(self::INLINE_TYPES[$attachment->mime]));
+        $inline = ! $download && self::opensInBrowser($attachment->mime);
 
         return $this->respond($attachment, $inline, $inline && $pdf);
     }

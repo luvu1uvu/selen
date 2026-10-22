@@ -31,6 +31,7 @@ const attachment = (overrides: Partial<Attachment>): Attachment => ({
   size: 2048,
   kind: 'file',
   url: '/files/a1',
+  opens_in_browser: false,
   uploaded_by: { id: 'me', name: 'Анна' },
   created_at: '2026-10-01T09:00:00.000000Z',
   permissions: { delete: true },
@@ -271,6 +272,7 @@ describe('Карточка: описание, комментарии, чек-л�
             kind: 'image',
             mime: 'image/png',
             url: '/files/img',
+            opens_in_browser: true,
           }),
           attachment({
             id: 'vid',
@@ -278,6 +280,7 @@ describe('Карточка: описание, комментарии, чек-л�
             kind: 'video',
             mime: 'video/mp4',
             url: '/files/vid',
+            opens_in_browser: true,
           }),
           attachment({
             id: 'mov',
@@ -285,14 +288,17 @@ describe('Карточка: описание, комментарии, чек-л�
             kind: 'video',
             mime: 'video/quicktime',
             url: '/files/mov',
+            opens_in_browser: true,
           }),
           attachment({
             id: 'doc',
             name: 'spec.pdf',
             size: 3 * 1024 * 1024,
             url: '/files/doc',
+            opens_in_browser: true,
             permissions: { delete: false },
           }),
+          attachment({ id: 'docx', name: 'report.docx', url: '/files/docx' }),
         ],
       }),
     )
@@ -305,10 +311,18 @@ describe('Карточка: описание, комментарии, чек-л�
     )
     expect(within(section).getByLabelText('demo.mp4')).toHaveAttribute('src', '/files/vid')
     expect(within(section).getByLabelText('screen.mov')).toHaveAttribute('src', '/files/mov')
-    expect(within(section).getByRole('link', { name: 'spec.pdf' })).toHaveAttribute(
-      'href',
-      '/files/doc',
+    // Имя: то, что браузер показывает сам (PDF по содержимому, картинка), — в новой вкладке; остальное — скачивание
+    const pdf = within(section).getByRole('link', { name: 'spec.pdf' })
+    expect(pdf).toHaveAttribute('href', '/files/doc')
+    expect(pdf).toHaveAttribute('target', '_blank')
+    expect(pdf).not.toHaveAttribute('download')
+    expect(within(section).getByRole('link', { name: 'screen.png' })).toHaveAttribute(
+      'target',
+      '_blank',
     )
+    const docx = within(section).getByRole('link', { name: 'report.docx' })
+    expect(docx).toHaveAttribute('download')
+    expect(docx).not.toHaveAttribute('target')
     // «Скачать» — всегда скачиванием; ссылку на файл можно скопировать (UI-1b)
     expect(within(section).getByRole('link', { name: 'Скачать spec.pdf' })).toHaveAttribute(
       'href',

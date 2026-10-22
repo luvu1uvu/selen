@@ -4,6 +4,7 @@ import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage'
 import { AcceptInvitationPage } from '@/features/invitations/AcceptInvitationPage'
 import { ProfilePage } from '@/features/profile/ProfilePage'
+import { FileNotFoundPage } from '@/pages/FileNotFoundPage'
 import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { RequireAdmin, RequireAuth, RequireGuest } from './guards'
@@ -30,7 +31,7 @@ const spacePage = async () => ({
 const canvas: RouteHandle = { canvas: true }
 
 /**
- * Карта маршрутов SPA. Ссылки из писем (приглашение, сброс пароля) формирует backend —
+ * Карта маршрутов SPA. Ссылки из писем (приглашение, сброс пароля) и адрес «файл не найден» формирует backend —
  * при изменении путей здесь обновите config/selen.php → frontend_paths.
  *
  * Непойманная ошибка — экран RouteError, а не белый экран: внутри каркаса — на месте страницы
@@ -67,6 +68,8 @@ export const routes: RouteObject[] = [
             children: [
               { path: '/', element: <HomePage /> },
               { path: '/profile', element: <ProfilePage /> },
+              // Ссылка на файл не открылась — сюда отправляет сервер (config/selen.php → frontend_paths, UI-1b)
+              { path: '/file-not-found', element: <FileNotFoundPage /> },
               // Пространство — все его доски рядами на холсте (ADR-0019); карточка — поверх, со своим адресом
               { path: '/spaces/:spaceKey', lazy: spacePage, handle: canvas },
               { path: '/spaces/:spaceKey/cards/:cardKey', lazy: spacePage, handle: canvas },

@@ -72,6 +72,7 @@ function spyUploads() {
         size: 4,
         kind: 'file',
         url: '/files/a1',
+        opens_in_browser: false,
         uploaded_by: { id: 'me', name: 'Анна' },
         created_at: '2026-10-01T09:00:00.000000Z',
         permissions: { delete: true },

@@ -88,6 +88,9 @@ test('PDF по содержимому — в браузере с CSP без sand
   ])
   const files = window.getByRole('region', { name: 'Файлы' })
   const href = async (name: string) => (await files.getByRole('link', { name, exact: true }).getAttribute('href'))!
+  // Имя PDF открывает его в новой вкладке, имя «.pdf» с HTML внутри — скачивает (решение PM 22.10)
+  await expect(files.getByRole('link', { name: pdfName, exact: true })).toHaveAttribute('target', '_blank')
+  await expect(files.getByRole('link', { name: fakeName, exact: true })).toHaveAttribute('download', '')
 
   // Запрос с cookie сессии, без признаков SPA — как переход браузера по ссылке
   const pdfLink = await href(pdfName)

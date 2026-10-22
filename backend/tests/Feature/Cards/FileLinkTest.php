@@ -42,6 +42,8 @@ it('вошедший с доступом открывает ссылку нап�
     expect($response->headers->get('X-Accel-Redirect'))->toBe('/_protected/attachments/'.$this->image->path)
         ->and($response->headers->get('Content-Type'))->toBe('image/png')
         ->and($response->headers->get('Content-Disposition'))->toStartWith('inline;')
+        // Имя файла — в Content-Disposition (filename* в UTF-8): его показывают сохранение и вкладка PDF, в адресе — id
+        ->and($response->headers->get('Content-Disposition'))->toContain("filename*=utf-8''".rawurlencode('скриншот.png'))
         ->and($response->headers->get('X-Content-Type-Options'))->toBe('nosniff')
         ->and($response->headers->get('Content-Security-Policy'))->toBe("default-src 'none'; sandbox")
         // Браузер переспрашивает при каждом открытии: права проверяются каждый раз, неизменённый файл — 304 от nginx
@@ -67,7 +69,7 @@ it('без входа — страница входа с адресом файл
         ->assertRedirect('/login?next='.rawurlencode("/files/{$this->image->id}"));
 });
 
-it('нет доступа, «только свои», корзина, удалённое вложение, нет такого — одинаковый 404 без названий', function () {
+it('нет доступа, «только свои», корзина, удалённое вложение, нет такого — одна страница «не найдено» без названий', function () {
     $outsider = member();
     $restricted = member();
     addToSpace($this->space, $restricted, SpaceRole::Editor);
@@ -81,7 +83,8 @@ it('нет доступа, «только свои», корзина, удалё
     // Вход формой — не больше 5 раз в минуту на пользователя: браузер каждого — один на все проверки
     $browsers = [$this->editor->id => signedIn($this->editor)];
     $as = fn (User $user) => $browsers[$user->id] ??= signedIn($user);
-    $missing = $as($this->editor)->navigate('/files/01ja0000000000000000000000')->assertNotFound();
+    // Браузер — на страницу Selen «Файл не найден или нет доступа», одну для всех случаев (решение PM 22.10)
+    $missing = $as($this->editor)->navigate('/files/01ja0000000000000000000000')->assertRedirect('/file-not-found');
     $cases = [
         'не участник' => [$outsider, $this->image, $this->card],
         'только свои — чужая карточка' => [$restricted, $this->image, $this->card],
@@ -89,7 +92,7 @@ it('нет доступа, «только свои», корзина, удалё
         'карточка в корзине' => [$this->editor, $inTrash, $trashedCard],
     ];
     foreach ($cases as $case => [$user, $attachment, $card]) {
-        $response = $as($user)->navigate("/files/{$attachment->id}")->assertNotFound();
+        $response = $as($user)->navigate("/files/{$attachment->id}")->assertRedirect('/file-not-found');
         expect($response->getContent(), $case)->toBe($missing->getContent())
             ->not->toContain($attachment->name)
             ->not->toContain($card->title);
@@ -114,6 +117,7 @@ it('PDF по содержимому — в браузере, со своей CSP
     $response = $browser->navigate("/files/{$pdf->id}")->assertOk();
     expect($response->headers->get('Content-Type'))->toBe('application/pdf')
         ->and($response->headers->get('Content-Disposition'))->toStartWith('inline;')
+        ->and($response->headers->get('Content-Disposition'))->toContain("filename*=utf-8''".rawurlencode('договор.pdf'))
         ->and($response->headers->get('X-Accel-Redirect'))->toBe('/_protected/attachments-pdf/'.$pdf->path)
         ->and($response->headers->get('Content-Security-Policy'))->toBe(AttachmentFiles::PDF_CSP)
         ->and($response->headers->get('X-Content-Type-Options'))->toBe('nosniff');
@@ -138,10 +142,13 @@ it('PDF по содержимому — в браузере, со своей CSP
 it('PDF определяется при загрузке по содержимому: настоящий — в браузере, HTML с именем «.pdf» — скачиванием', function () {
     $upload = fn (string $name, string $content) => $this->actingAs($this->editor)
         ->post("/api/v1/cards/DEV-{$this->card->number}/attachments", ['file' => uploadedFile($name, $content)], ['Accept' => 'application/json'])
-        ->assertCreated()->json('data.id');
-    $pdf = $upload('скан', "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
-    $fake = $upload('отчёт.pdf', '<html><body><script>alert(1)</script></body></html>');
+        ->assertCreated()->json('data');
+    ['id' => $pdf, 'opens_in_browser' => $pdfOpens] = $upload('скан', "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
+    ['id' => $fake, 'opens_in_browser' => $fakeOpens] = $upload('отчёт.pdf', '<html><body><script>alert(1)</script></body></html>');
     $browser = signedIn($this->editor);
+
+    // Признак для интерфейса: имя такого файла открывает его в новой вкладке, остальные — скачиваются
+    expect($pdfOpens)->toBeTrue()->and($fakeOpens)->toBeFalse();
 
     expect($browser->navigate("/files/{$pdf}")->headers->get('Content-Type'))->toBe(AttachmentFiles::PDF)
         ->and($browser->navigate("/files/{$pdf}")->headers->get('Content-Disposition'))->toStartWith('inline;');

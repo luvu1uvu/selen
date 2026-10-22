@@ -16,6 +16,8 @@ return [
     'frontend_paths' => [
         'invitation' => '/invitations/{token}',
         'password_reset' => '/reset-password/{token}?email={email}',
+        // Ссылка на файл (/files/{id}): нет такого или нет доступа — одна страница Selen (UI-1b, решение PM 22.10)
+        'file_not_found' => '/file-not-found',
     ],
 
     'invitations' => [

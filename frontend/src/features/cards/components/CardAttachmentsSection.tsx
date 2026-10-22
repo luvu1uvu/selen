@@ -91,9 +91,7 @@ export function CardAttachmentsSection({
                 <VideoPlayer attachment={attachment} />
               )}
               <figcaption className="flex items-center gap-1 px-2 py-1 text-xs">
-                <span className="truncate" title={attachment.name}>
-                  {attachment.name}
-                </span>
+                <FileNameLink attachment={attachment} />
                 <AttachmentActions attachment={attachment} onRemove={onRemove} />
               </figcaption>
             </figure>
@@ -106,9 +104,7 @@ export function CardAttachmentsSection({
           {files.map((attachment) => (
             <li key={attachment.id} className="flex items-center gap-2 text-sm">
               <FileIcon className="text-muted-foreground size-4 shrink-0" aria-hidden />
-              <a href={attachment.url} className="truncate hover:underline" download>
-                {attachment.name}
-              </a>
+              <FileNameLink attachment={attachment} />
               <span className="text-muted-foreground shrink-0 text-xs">
                 {(({ value, unit }) => t(`attachments.${unit}`, { value }))(
                   sizeParts(attachment.size),
@@ -179,6 +175,28 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
 /** «Скачать» — всегда скачиванием, даже картинку, видео и PDF, которые по ссылке открываются в браузере. */
 function downloadUrl(attachment: Attachment) {
   return `${attachment.url}?download=1`
+}
+
+/**
+ * Имя файла — ссылка: то, что браузер показывает сам (картинки, видео, PDF по содержимому), открывается в новой
+ * вкладке, остальное скачивается; «Скачать» — отдельной кнопкой (решение PM 22.10, UI-1b).
+ */
+function FileNameLink({ attachment }: { attachment: Attachment }) {
+  return attachment.opens_in_browser ? (
+    <a
+      href={attachment.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="truncate hover:underline"
+      title={attachment.name}
+    >
+      {attachment.name}
+    </a>
+  ) : (
+    <a href={attachment.url} className="truncate hover:underline" title={attachment.name} download>
+      {attachment.name}
+    </a>
+  )
 }
 
 function AttachmentActions({

@@ -34,6 +34,8 @@ class AttachmentResource extends JsonResource
             'kind' => $this->kind,
             // Ссылка на файл — веб-маршрут на сессии (UI-1b, LATER-51): открывается и напрямую (новая вкладка, мессенджер)
             'url' => "/files/{$this->id}",
+            // Имя такого файла открывает его в новой вкладке, остальные — скачиваются (решение PM 22.10)
+            'opens_in_browser' => AttachmentFiles::opensInBrowser($this->mime),
             'uploaded_by' => ['id' => $this->uploader->id, 'name' => $this->uploader->name],
             'created_at' => $this->created_at->format('Y-m-d\TH:i:s.u\Z'),
             'permissions' => ['delete' => Gate::forUser($user)->allows('delete', $this->resource)],
