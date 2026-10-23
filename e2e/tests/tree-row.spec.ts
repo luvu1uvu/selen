@@ -44,14 +44,14 @@ async function expand(row: Locator) {
 }
 
 /** Название строки обрезано: текст шире своего места, правый край строки — в пределах дерева. */
-async function expectTruncated(page: Page, row: Locator, name: string) {
+async function expectTruncated(page: Page, row: Locator, name: string, container: Locator = tree(page)) {
   const text = row.getByText(name, { exact: true })
   const sizes = await text.evaluate((element) => ({ scroll: element.scrollWidth, client: element.clientWidth }))
   expect(sizes.scroll, `«${name}» обрезано`).toBeGreaterThan(sizes.client)
   expect(sizes.client, `«${name}»: видно хотя бы несколько букв`).toBeGreaterThan(30)
-  const navBox = (await tree(page).boundingBox())!
+  const containerBox = (await container.boundingBox())!
   const rowBox = (await row.boundingBox())!
-  expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(navBox.x + navBox.width + 0.5)
+  expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(containerBox.x + containerBox.width + 0.5)
 }
 
 test('длинные названия — «…» без прокрутки вбок, полное название в подсказке (LATER-109)', async ({ page }) => {
@@ -142,4 +142,25 @@ test('значок «доступно всем» — с фокусом и под
   await space.hover()
   await add.click()
   await expect(page.getByRole('menuitem', { name: 'Доску' })).toBeVisible()
+})
+
+test('«Структура» на узком экране — длинное название не растягивает страницу (найдено при LATER-109)', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/admin/structure')
+  const row = page.getByRole('listitem').filter({ hasText: FOLDER })
+  await expect(row).toBeVisible()
+
+  const main = page.locator('main')
+  const widths = await main.evaluate((element) => ({ scroll: element.scrollWidth, client: element.clientWidth }))
+  expect(widths.scroll).toBeLessThanOrEqual(widths.client)
+  await expectTruncated(page, row, FOLDER, main)
+  // «⋯» строки — в пределах экрана по ширине (строка может быть ниже первого экрана — к ней прокручиваем)
+  const menu = row.getByRole('button', { name: /^Действия с/ })
+  await menu.scrollIntoViewIfNeeded()
+  const box = (await menu.boundingBox())!
+  expect(box.x + box.width).toBeLessThanOrEqual(375)
+
+  // Полное название — в подсказке: обрезанное название получает фокус
+  await row.getByText(FOLDER, { exact: true }).focus()
+  await expect(tooltip(page, FOLDER)).toHaveText(FOLDER)
 })

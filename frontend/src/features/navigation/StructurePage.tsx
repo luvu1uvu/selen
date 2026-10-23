@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import {
@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
+import { TruncatedText, TruncatedTrigger } from '@/shared/components/TruncatedText'
 import type { AdminNavNode } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -56,7 +57,9 @@ export function StructurePage() {
     )
 
   return (
-    <div className="grid gap-6">
+    // Одна колонка minmax(0, 1fr): у колонки auto ширину задавало бы самое длинное название строки — на узком экране
+    // страница растягивалась вбок, «⋯» уходили за край (как дерево, LATER-109)
+    <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <h1 className="text-2xl font-semibold">{t('structure.title')}</h1>
@@ -109,15 +112,12 @@ export function StructurePage() {
                 <NodeIcon kind={node.type} icon={node.icon} />
                 {node.everyone && <EveryoneMark folder={node.type === 'folder'} />}
                 {inMyTree && !inMyTree.has(node.id) && <HiddenFromTreeMark />}
-                <span className={node.type === 'folder' ? 'truncate font-medium' : 'truncate'}>
-                  {node.type === 'space' && node.space ? (
-                    <Link to={`/spaces/${node.space.key}`} className="hover:underline">
-                      {name}
-                    </Link>
-                  ) : (
-                    name
-                  )}
-                </span>
+                {/* Обрезанное название — целиком в подсказке (правила вида, раздел 6) */}
+                {node.type === 'space' && node.space ? (
+                  <SpaceName name={name} spaceKey={node.space.key} />
+                ) : (
+                  <TruncatedText text={name} className="font-medium" />
+                )}
                 {node.space && (
                   <Badge
                     variant="secondary"
@@ -258,5 +258,19 @@ export function StructurePage() {
         }}
       />
     </div>
+  )
+}
+
+/** Название пространства — ссылка; обрезанное — целиком в подсказке у ссылки (`TruncatedTrigger`). */
+function SpaceName({ name, spaceKey }: { name: string; spaceKey: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  return (
+    <span ref={ref} className="truncate">
+      <TruncatedTrigger text={name} nameRef={ref}>
+        <Link to={`/spaces/${spaceKey}`} className="hover:underline">
+          {name}
+        </Link>
+      </TruncatedTrigger>
+    </span>
   )
 }
