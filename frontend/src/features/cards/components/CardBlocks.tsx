@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Ban, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -7,6 +7,7 @@ import { getErrorMessage } from '@/shared/api/errors'
 import { formatDateTime } from '@/shared/lib/dates'
 import type { CardBlock, CardDetail, CardSummary } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
+import { useReturnFocusOnClose } from '@/shared/ui/restore-focus'
 import { Textarea } from '@/shared/ui/textarea'
 import { Hint } from '@/shared/components/Hint'
 import { blockApi } from '../api'
@@ -38,18 +39,24 @@ export function CardActiveBlocks({
   if (active.length === 0 && !(canEdit && adding)) return null
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-2">
       {active.map((block) => (
         <div
           key={block.id}
           // Белый фон и красная полоса слева: на розовой заливке текст был ниже 4,5:1 (U-1 UX-ревью UI-1a)
           className="border-destructive/40 border-l-destructive bg-background grid gap-1 rounded-md border border-l-4 p-3 text-sm"
         >
-          <span className="text-destructive flex items-center gap-1.5 font-medium">
-            <Ban className="size-4" aria-hidden />
-            {t('facade.blocked')}
+          {/* Заблокирована карточкой — она в заголовке плашки: «Заблокирована карточкой DEV-…» (V-2 UX-ревью UI-1a) */}
+          <span className="text-destructive flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
+            <Ban className="size-4 shrink-0" aria-hidden />
+            {block.blocking_card ? t('blocks.blockedByCard') : t('facade.blocked')}
+            {block.blocking_card && (
+              <span className="text-foreground min-w-0 font-normal">
+                <RelatedCardView card={block.blocking_card} />
+              </span>
+            )}
           </span>
-          <BlockCause block={block} />
+          {block.reason && <span className="break-words whitespace-pre-line">{block.reason}</span>}
           <div className="flex items-center gap-2">
             <BlockMeta block={block} />
             {canEdit && (
@@ -80,9 +87,9 @@ export function CardActiveBlocks({
 export function CardBlocksHistory({ card }: { card: CardDetail }) {
   const ended = card.blocks.filter((block) => block.ended_at)
   return (
-    <ul className="grid gap-2 text-sm">
+    <ul className="grid grid-cols-1 gap-2 text-sm">
       {ended.map((block) => (
-        <li key={block.id} className="grid gap-0.5 border-l-2 pl-3">
+        <li key={block.id} className="grid grid-cols-1 gap-0.5 border-l-2 pl-3">
           <BlockCause block={block} />
           <BlockMeta block={block} />
         </li>
@@ -94,7 +101,7 @@ export function CardBlocksHistory({ card }: { card: CardDetail }) {
 function BlockCause({ block }: { block: CardBlock }) {
   const { t } = useTranslation('boards')
   return (
-    <div className="grid gap-0.5">
+    <div className="grid grid-cols-1 gap-0.5">
       {block.blocking_card && (
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="text-muted-foreground shrink-0 text-xs">{t('blocks.byCard')}</span>
@@ -130,10 +137,19 @@ function BlockMeta({ block }: { block: CardBlock }) {
   )
 }
 
-/** Новая блокировка: текст причины и/или блокирующая карточка — хотя бы одно. */
+/**
+ * Новая блокировка: текст причины и/или блокирующая карточка — хотя бы одно. Форма — в рамке с заголовком «Новая
+ * блокировка» (V-1 UX-ревью UI-1a); «Отмена» и «Заблокировать» возвращают фокус на «+», который её открыл (U-9).
+ */
 function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
+  const titleId = useId()
+  const returnFocus = useReturnFocusOnClose()
+  const done = () => {
+    returnFocus()
+    onDone()
+  }
   const [reason, setReason] = useState('')
   const [blocker, setBlocker] = useState<CardSummary | null>(null)
   const [picking, setPicking] = useState(false)
@@ -152,7 +168,7 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
     try {
       await add.mutateAsync({ reason: reason.trim() || null, blocking_card: blocker?.key ?? null })
       toast.success(t('blocks.added'))
-      onDone()
+      done()
     } catch (e) {
       toast.error(getErrorMessage(e, tc('errors.generic')))
     }
@@ -160,12 +176,16 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
 
   return (
     <form
-      className="grid gap-2"
+      className="grid grid-cols-1 gap-2 rounded-md border p-3"
+      aria-labelledby={titleId}
       onSubmit={(event) => {
         event.preventDefault()
         void submit()
       }}
     >
+      <h3 id={titleId} className="text-sm font-medium">
+        {t('blocks.newTitle')}
+      </h3>
       <Textarea
         value={reason}
         autoFocus
@@ -223,7 +243,7 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
         <Button type="submit" size="sm" disabled={add.isPending}>
           {t('blocks.submit')}
         </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onDone}>
+        <Button type="button" variant="ghost" size="sm" onClick={done}>
           {tc('actions.cancel')}
         </Button>
       </div>

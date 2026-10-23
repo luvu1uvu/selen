@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactElement, type RefObject } from 'react'
 import { cn } from '@/shared/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
@@ -36,6 +36,34 @@ export function TruncatedText({
         </Tag>
       </TooltipTrigger>
       {truncated && <TooltipContent className="max-w-sm break-words">{text}</TooltipContent>}
+    </Tooltip>
+  )
+}
+
+/**
+ * Название внутри ссылки или кнопки во всю строку (строка дерева, LATER-109): полное название в подсказке показывает
+ * сама строка — по наведению и по фокусу, если название в ней обрезано (`nameRef` — элемент названия с `truncate`).
+ * Своей остановки Tab у названия нет: фокусируемое внутри ссылки недопустимо, а строка и так получает фокус.
+ */
+export function TruncatedTrigger({
+  text,
+  nameRef,
+  children,
+}: {
+  text: string
+  nameRef: RefObject<HTMLElement | null>
+  children: ReactElement
+}) {
+  const truncated = useTruncated(nameRef, text)
+  const [open, setOpen] = useState(false)
+  return (
+    <Tooltip open={truncated && open} onOpenChange={setOpen}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      {truncated && (
+        <TooltipContent side="right" className="max-w-sm break-words">
+          {text}
+        </TooltipContent>
+      )}
     </Tooltip>
   )
 }

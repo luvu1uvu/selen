@@ -19,9 +19,11 @@ test('ТК-UI1.26. Меню «+» — как в Kaiten, две колонки @t
 
   // Слева — группы системных пунктов, справа — «Поля»; колонки рядом
   const group = (name: string) => menu.getByRole('group', { name, exact: true })
+  // «План, ч» — пункт «Основного» (пачка UX-2, решение PM 22.10)
   await expect(group('Основное').getByRole('menuitem')).toHaveText([
     'Срок',
     'Метки',
+    'План, ч',
     'Чек-лист',
     'Ссылка',
     'Загрузить файл',

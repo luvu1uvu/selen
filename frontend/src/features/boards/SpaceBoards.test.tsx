@@ -310,6 +310,71 @@ describe('Страница пространства: доски рядами', (
     expect(restored).toBe('b-old')
   })
 
+  describe('доска загрузилась, пока открыты её «⋯» или ⓘ (LATER-99)', () => {
+    /** Ответ доски «Продукт» придержан до release(): пока его нет, у доски шапка-заглушка. */
+    function holdBoard() {
+      let release!: () => void
+      const held = new Promise<void>((resolve) => (release = resolve))
+      serve([board('b-product', 'Продукт', 'r1', { description: 'Шаблон задачи' })])
+      server.use(
+        http.get('*/api/v1/boards/b-product', async () => {
+          await held
+          return HttpResponse.json({
+            data: makeBoardDetail({
+              id: 'b-product',
+              name: 'Продукт',
+              description: 'Шаблон задачи',
+            }),
+          })
+        }),
+      )
+      return () => act(release)
+    }
+
+    it('меню «⋯» остаётся открытым — уже с пунктами загруженной доски', async () => {
+      const release = holdBoard()
+      const user = userEvent.setup()
+      renderApp('/spaces/DEV')
+
+      const placeholder = await region('Продукт')
+      expect(placeholder).toHaveAttribute('aria-busy', 'true')
+      await user.click(
+        within(placeholder).getByRole('button', { name: 'Действия с доской «Продукт»' }),
+      )
+      expect(await screen.findByRole('menuitem', { name: 'Переставить' })).toBeInTheDocument()
+
+      await release()
+      await loaded('Продукт')
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+      expect(await screen.findByRole('menuitem', { name: 'Добавить колонку' })).toBeInTheDocument()
+
+      // Закрытое меню возвращает фокус на «⋯» загруженной доски
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+      expect(
+        within(screen.getByRole('region', { name: 'Продукт' })).getByRole('button', {
+          name: 'Действия с доской «Продукт»',
+        }),
+      ).toHaveFocus()
+    })
+
+    it('окно описания ⓘ остаётся открытым', async () => {
+      const release = holdBoard()
+      const user = userEvent.setup()
+      renderApp('/spaces/DEV')
+
+      const placeholder = await region('Продукт')
+      await user.click(
+        within(placeholder).getByRole('button', { name: 'Описание доски «Продукт»' }),
+      )
+      expect(await screen.findByText('Шаблон задачи', { selector: 'p' })).toBeInTheDocument()
+
+      await release()
+      await loaded('Продукт')
+      expect(screen.getByText('Шаблон задачи', { selector: 'p' })).toBeInTheDocument()
+    })
+  })
+
   it('архивирует доску из её меню после подтверждения', async () => {
     let archived = ''
     serve()

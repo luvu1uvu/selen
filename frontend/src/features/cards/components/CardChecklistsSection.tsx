@@ -99,7 +99,7 @@ export function CardChecklistsSection({
   const run = async (action: Action) => (await send(action)) !== null
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {card.checklists.length === 0 && !canEdit && (
         <span className="text-muted-foreground text-sm">{t('checklists.none')}</span>
       )}
@@ -149,7 +149,7 @@ export function CardChecklistsSection({
             </Button>
           </form>
         ) : (
-          <Button variant="ghost" size="sm" className="justify-self-start" onClick={onAdd}>
+          <Button variant="ghost" size="sm" className="-ml-2.5 justify-self-start" onClick={onAdd}>
             <Plus />
             {t('checklists.add')}
           </Button>
@@ -225,7 +225,7 @@ function ChecklistBlock({
   }
 
   return (
-    <section className="grid gap-2" aria-label={checklist.title}>
+    <section className="grid grid-cols-1 gap-2" aria-label={checklist.title}>
       <div className="flex items-center gap-2">
         {canEdit ? (
           <EditableText
@@ -275,7 +275,7 @@ function ChecklistBlock({
           items={order.map((item) => item.id)}
           strategy={verticalListSortingStrategy}
         >
-          <ul className="grid gap-1">
+          <ul className="grid grid-cols-1 gap-1">
             {order.map((item, index) => (
               <ItemRow
                 key={item.id}

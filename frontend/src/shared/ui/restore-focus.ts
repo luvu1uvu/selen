@@ -1,4 +1,31 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState, type FocusEvent } from 'react'
+
+/**
+ * Встроенная форма (новая карточка, блокировка): в момент её открытия фокус ещё на кнопке, которая её открыла, — её и
+ * запоминаем. Возвращённая функция — перед закрытием «Отменой», Esc или после сохранения: когда формы уже нет, фокус
+ * вернётся на эту кнопку (LATER-107, U-9 UX-ревью UI-1a), а не в body или на окно — иначе Tab уводит в начало. Ушли
+ * из формы сами (щелчок мимо, Tab) — фокус не трогаем. Кнопка на время формы должна остаться в документе (скрытая —
+ * можно: фокус ставится после того, как форма убрана).
+ */
+export function useReturnFocusOnClose() {
+  const [opener] = useState(() =>
+    document.activeElement instanceof HTMLButtonElement ? document.activeElement : null,
+  )
+  const returning = useRef(false)
+  useEffect(() => () => void (returning.current && restoreFocusQuietly(opener)), [opener])
+  return () => {
+    returning.current = true
+  }
+}
+
+/**
+ * Подсказка кнопки меню («⋯», «+») по фокусу — только при фокусе с клавиатуры. После пункта, выбранного мышью, меню
+ * возвращает фокус на кнопку, и подсказка висела бы, пока фокус не уйдёт: указатель над кнопкой не возвращался.
+ * Отменённое событие фокуса Radix Tooltip пропускает; наведение подсказку открывает, как раньше.
+ */
+export function hideHintUnlessKeyboard(event: FocusEvent<HTMLElement>) {
+  if (!event.currentTarget.matches(':focus-visible')) event.preventDefault()
+}
 
 /** Последний элемент с фокусом вне окон и меню — куда вернуть фокус, если окно сразу отдало его своему полю. */
 let restoring = false

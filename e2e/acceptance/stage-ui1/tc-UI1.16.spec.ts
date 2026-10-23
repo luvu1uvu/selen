@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
-import { menuItems, openCard, tile } from './helpers'
+import { menuItems, openCard, param, tile } from './helpers'
 
 /**
  * ТК-UI1.16: действия с карточкой — в меню «⋯»: «Переместить…», «Архивировать», «Скопировать ссылку», без «Удалить…»
@@ -30,7 +30,9 @@ test('ТК-UI1.16. «⋯»: архивировать и вернуть @tc-UI1.1
   const main = window.getByRole('region', { name: 'Основные параметры' })
   await expect(main.getByRole('button', { name: 'Переместить…' })).toHaveCount(0)
   await expect(main.getByRole('button', { name: 'Назначить' })).toHaveCount(0)
-  await expect(main.getByRole('checkbox', { name: 'Срочно' })).toBeDisabled()
+  // Пачка UX-2 (решение PM 22.10): «Срочно» без права правки — текстом «Да» / «Нет», а не недоступным флажком (V-5)
+  await expect(main.getByRole('checkbox', { name: 'Срочно' })).toHaveCount(0)
+  await expect(param(main, 'Срочно')).toHaveText('Нет')
   await expect(tile(page, TITLE)).toHaveCount(0)
 
   // 3. «⋯» → «Вернуть из архива»: карточка снова на доске, поля правятся

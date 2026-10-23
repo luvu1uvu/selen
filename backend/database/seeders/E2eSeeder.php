@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Attachments\UploadAttachmentAction;
 use App\Actions\Boards\CreateBoardAction;
 use App\Actions\Boards\MoveBoardAction;
 use App\Actions\CardBlocks\BlockCardAction;
@@ -11,6 +12,8 @@ use App\Actions\Cards\MoveCardAction;
 use App\Actions\Cards\SetCardArchivedAction;
 use App\Actions\Cards\SyncCardLabelsAction;
 use App\Actions\Cards\UpdateCardAction;
+use App\Actions\Checklists\AddChecklistAction;
+use App\Actions\Checklists\AddChecklistItemAction;
 use App\Actions\Columns\CreateColumnAction;
 use App\Actions\Comments\AddCommentAction;
 use App\Actions\Groups\AddGroupMemberAction;
@@ -34,6 +37,7 @@ use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Http\UploadedFile;
 
 /**
  * Данные для E2E-тестов (make e2e): только в изолированном стеке docker-compose.e2e.yml.
@@ -77,15 +81,30 @@ use Illuminate\Database\Seeder;
  * Пачка UX-1 (acceptance/stage-ux1): в LAYOUT — «Длинные названия» (ТК-L74.1), в QA — метка «Бэкенд» (ТК-L80.1), MOB-1 —
  * ТК-L76.1 и ТК-L78.1.
  * Пустая папка «E2E Пустая» с вложенной «E2E Вложенная пустая» — в дереве видна только Владельцу (тест-кейсы 3c).
+ * Пачка UX-2 (LATER-109, tree-row.spec, acceptance/stage-ux2): в корне — папка с длинным названием, в ней такая же папка,
+ * в ней пространство LONGTREE с доской (названия — константы LONG_*; видит только администратор).
  * Приёмка UI-1a (окно карточки, acceptance/stage-ui1): пространство WIN «Окно карточки» — см. cardWindow().
  * Приёмка LATER-91 (подготовка к тёмной теме, acceptance/stage-L91): пространство THEME «Тёмная тема» — см. themePrep().
  * Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4): пространства RROLES, RREAD, RGROUPS, RALL, RINTERN,
  * группы «E2E Руководители», «E2E Подрядчики», архивная «E2E Стажёры» — см. rights2().
+ * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  */
 class E2eSeeder extends Seeder
 {
     /** Дорожка с длинным названием на доске «Дорожки» (add-card.spec, LATER-49). */
     public const LONG_LANE = 'Очень длинное название дорожки для проверки многоточия в форме';
+
+    /** Дерево с длинными названиями (пачка UX-2, LATER-109): папка → папка → пространство LONGTREE → доска. */
+    public const LONG_FOLDER = 'E2E Папка с очень длинным названием, которое не помещается в дерево';
+
+    public const LONG_SUBFOLDER = 'E2E Вложенная папка с очень длинным названием для многоточия';
+
+    public const LONG_SPACE = 'E2E Пространство с очень длинным названием для проверки многоточия';
+
+    public const LONG_BOARD = 'E2E Доска с очень длинным названием на самом глубоком уровне дерева';
+
+    /** Картинка 1×1 для вложения карточки (пачка UX-2, uxBatch2). */
+    private const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
     public function run(): void
     {
@@ -245,6 +264,15 @@ class E2eSeeder extends Seeder
         $empty = app(CreateFolderAction::class)->handle($admin, 'E2E Пустая', null, null);
         app(CreateFolderAction::class)->handle($admin, 'E2E Вложенная пустая', null, $empty->id);
 
+        // Пачка UX-2 (LATER-109): длинные названия на всех уровнях дерева — папка, в ней папка, в ней пространство
+        // LONGTREE (только администратор) с доской
+        $longFolder = app(CreateFolderAction::class)->handle($admin, self::LONG_FOLDER, null, null);
+        $longSubfolder = app(CreateFolderAction::class)->handle($admin, self::LONG_SUBFOLDER, null, $longFolder->id);
+        $longSpace = app(CreateSpaceAction::class)->handle($admin, ['name' => self::LONG_SPACE, 'key' => 'LONGTREE'], [$admin]);
+        app(CreateBoardAction::class)->handle($admin, $longSpace, ['name' => self::LONG_BOARD], BoardTemplate::Empty);
+        $longNode = NavNode::query()->where('space_id', $longSpace->id)->sole();
+        app(MoveNavNodeAction::class)->handle($admin, $longNode, $longSubfolder->id, null, null);
+
         // Приёмка UI-1a — окно карточки (acceptance/stage-ui1, ТК-UI1.*): своё пространство, тест-кейсы меняют карточки
         $this->cardWindow($admin, $editor, $restricted);
 
@@ -253,6 +281,9 @@ class E2eSeeder extends Seeder
 
         // Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4)
         $this->rights2($admin, $editor, $restricted, $outsider);
+
+        // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
+        $this->uxBatch2($admin, $editor);
     }
 
     /**
@@ -327,6 +358,50 @@ class E2eSeeder extends Seeder
         $archive = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: стажёры', 'key' => 'RINTERN'], [$admin]);
         $grant->handle($admin, $archive, $interns, SpaceRole::Commenter);
         app(SetGroupArchivedAction::class)->handle($admin, $interns, true);
+    }
+
+    /**
+     * Пачка UX-2 (LATER-98, приёмочные тесты e2e/acceptance/stage-ux2): пространство UXB «Пачка UX-2» вместо карточек
+     * «Разработки» демо-данных — e2e-admin администратор (Борис тест-кейсов: создал карточки, ответственный),
+     * e2e-editor — редактор (Анна тест-кейсов). Доска «Продукт» (шаблон «Разработка»). Номера — по порядку создания:
+     * UXB-1 «Как DEV-41» — перенесена из To Do в Done («Перемещена…»), ответственный e2e-admin, чек-лист «Перед
+     * релизом» и файл «скриншот-41.png» (ТК-L102.1, L103.1, L98.3, L98.4, L98.5, L98.7, L98.11; ТК-L98.3 прикладывает
+     * к ней ещё файл); UXB-2 «Снять ответственного» — ответственный e2e-admin (ТК-L98.8); UXB-3 «План через плюс» —
+     * без плана (ТК-L98.1); UXB-4 «История плана» — план 3 задан и стёрт (ТК-L98.9); UXB-5 «Без описания» — тест-кейсы
+     * открывают формы и отменяют (ТК-L98.6, L98.13); UXB-6 «Блокирующая» и UXB-7 «Блокируется карточкой» (ТК-L98.10);
+     * UXB-8 «Для ссылки» (ТК-L98.12).
+     */
+    private function uxBatch2(User $admin, User $editor): void
+    {
+        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Пачка UX-2', 'key' => 'UXB'], [$admin]);
+        app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
+        $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Продукт'], BoardTemplate::Development);
+        $lane = Lane::query()->where('board_id', $board->id)->sole();
+        $column = fn (string $name) => BoardColumn::query()->where('board_id', $board->id)->where('name', $name)->sole();
+        $create = fn (string $title) => app(CreateCardAction::class)->handle($admin, $board, ['title' => $title], $column('To Do'), $lane);
+        $update = app(UpdateCardAction::class);
+
+        $window = $create('Как DEV-41');
+        app(MoveCardAction::class)->handle($admin, $window, $column('Done'), $lane, null, null);
+        $update->handle($admin, $window, ['responsible_id' => $admin->id]);
+        $checklist = app(AddChecklistAction::class)->handle($admin, $window, 'Перед релизом');
+        foreach (['Обновить документацию', 'Проверить миграции'] as $item) {
+            app(AddChecklistItemAction::class)->handle($admin, $checklist, $item);
+        }
+        $png = tempnam(sys_get_temp_dir(), 'e2e');
+        file_put_contents($png, base64_decode(self::PNG));
+        app(UploadAttachmentAction::class)->handle($admin, $window, new UploadedFile($png, 'скриншот-41.png', 'image/png', null, true));
+        @unlink($png);
+
+        $update->handle($admin, $create('Снять ответственного'), ['responsible_id' => $admin->id]);
+        $create('План через плюс');
+        $history = $create('История плана');
+        $update->handle($editor, $history, ['estimate_hours' => 3]);
+        $update->handle($editor, $history, ['estimate_hours' => null]);
+        $create('Без описания');
+        $create('Блокирующая');
+        $create('Блокируется карточкой');
+        $create('Для ссылки');
     }
 
     /**

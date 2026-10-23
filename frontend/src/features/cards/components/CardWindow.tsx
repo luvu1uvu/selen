@@ -45,6 +45,23 @@ const NON_TEXT_INPUTS = new Set([
   'image',
 ])
 
+/**
+ * Окно закрылось, а фокусу некуда вернуться (окно открыли по прямой ссылке — до него фокуса на странице не было): фокус —
+ * на плитку этой карточки, если она на доске, а не в body (U-10 UX-ревью UI-1a). Страница под окном после закрытия
+ * может ещё дорисовываться — несколько кадров ждём плитку; фокус уже где-то есть (вернули на плитку, с которой открыли,
+ * пользователь щёлкнул) — не трогаем.
+ */
+function focusTileAfterClose(cardKey: string) {
+  let frames = 30
+  const attempt = () => {
+    if (document.activeElement && document.activeElement !== document.body) return
+    const tile = document.querySelector<HTMLElement>(`[data-card-tile="${CSS.escape(cardKey)}"]`)
+    if (tile) tile.focus()
+    else if (--frames > 0) requestAnimationFrame(attempt)
+  }
+  requestAnimationFrame(attempt)
+}
+
 /** Поле, в котором печатают текст: первый Esc в нём выводит из поля, а не закрывает окно. */
 function isTextEntry(element: Element | null): element is HTMLElement {
   if (!(element instanceof HTMLElement)) return false
@@ -126,6 +143,8 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
         <DialogContent
           data-card-window
           closeLabel={tc('actions.close')}
+          // ✕ — вровень со строкой названия: её центр — 20 px поля и половина строки (U-12 UX-ревью UI-1a)
+          closeClassName="top-5"
           // Окно у верха экрана, высота — по содержимому, не выше экрана (прокручивается содержимое). 4rem — поля
           // сверху и снизу, как у верхнего края; на узком экране окно — на весь экран
           className="top-4 flex max-h-[calc(100dvh-2rem)] translate-y-0 flex-col gap-0 overflow-hidden p-0 outline-none max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:rounded-none max-sm:border-0 sm:top-8 sm:max-h-[calc(100dvh-4rem)] sm:max-w-3xl"
@@ -135,6 +154,7 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
             ;(event.currentTarget as HTMLElement | null)?.focus()
           }}
           onEscapeKeyDown={onEscapeKeyDown}
+          onCloseAutoFocus={() => focusTileAfterClose(cardKey)}
           onFocusCapture={(event) => {
             const target = event.target as Element
             if (isTextEntry(target)) lastField.current = target
@@ -150,19 +170,16 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
             last.focus()
           }}
           onInteractOutside={(event) => {
-            // Список подсказки @ и уведомления — вне окна, но щелчок по ним — не «мимо окна»
+            // Список подсказки @ — вне окна, но щелчок по нему — не «мимо окна» (уведомления — так у всех окон, DialogContent)
             const target = event.target
-            if (
-              target instanceof Element &&
-              target.closest(`[${RICH_TEXT_POPUP_ATTRIBUTE}], [data-sonner-toaster]`)
-            )
+            if (target instanceof Element && target.closest(`[${RICH_TEXT_POPUP_ATTRIBUTE}]`))
               event.preventDefault()
           }}
         >
           {card ? (
             <CardWindowBody key={card.key} card={card} onDeleted={closeDeleted} />
           ) : (
-            <div className="grid gap-2 p-6">
+            <div className="grid grid-cols-1 gap-2 p-6">
               <DialogTitle className="font-mono text-base">{cardKey}</DialogTitle>
               <DialogDescription>{tc('states.loading')}</DialogDescription>
             </div>
@@ -282,7 +299,9 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
       }}
     >
       <div className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-4 px-4 pt-5 pb-6 sm:px-6">
+        {/* Сетки окна — одна колонка minmax(0, 1fr) (grid-cols-1): у колонки auto ширину задавала бы самая длинная
+            строка (ссылка, плашка блокировки), «…» не срабатывало, и окно прокручивалось вбок (U-1 UX-ревью пачки UX-2) */}
+        <div className="grid grid-cols-1 gap-4 px-4 pt-5 pb-6 sm:px-6">
           <CardWindowHeader card={card} canEdit={canEdit} />
           {card.archived_at && <Alert>{t('card.archived')}</Alert>}
           <CardActionsRow
@@ -304,7 +323,7 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
           <CardSection
             id="main"
             title={t('sections.main')}
-            forceOpen={isAdding('due') || isAdding('labels')}
+            forceOpen={isAdding('due') || isAdding('labels') || isAdding('estimate')}
           >
             <CardMainParams
               card={card}
@@ -313,7 +332,7 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
               adding={adding}
               onAddDone={(kind) => {
                 addDone(kind)
-                // Срок или метки так и не задали — строка пропала вместе с кнопкой, куда вернулся бы фокус: на окно
+                // Срок, метки или план так и не задали — строка пропала вместе с кнопкой, куда вернулся бы фокус: на окно
                 requestAnimationFrame(() => {
                   const dialog = document.querySelector<HTMLElement>('[data-card-window]')
                   if (dialog && !dialog.contains(document.activeElement)) dialog.focus()

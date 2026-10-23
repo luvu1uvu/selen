@@ -107,8 +107,15 @@ describe('Админка: «Структура»', () => {
     expect(within(rows[4]).queryByRole('button')).not.toBeInTheDocument()
     expect(within(rows[4]).queryByRole('link')).not.toBeInTheDocument()
     expect(rows[4]).toHaveStyle({ paddingLeft: '36px' })
-    expect(rows[0]).toHaveTextContent('Все пространства папки доступны всем сотрудникам')
-    expect(rows[1]).toHaveTextContent('Доступно всем сотрудникам')
+    // Значок «доступно всем» — с подсказкой Tooltip, подпись для экранного диктора — у значка (LATER-88)
+    expect(
+      within(rows[0]).getByRole('img', {
+        name: 'Все пространства папки доступны всем сотрудникам',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(rows[1]).getByRole('img', { name: 'Доступно всем сотрудникам' }),
+    ).toBeInTheDocument()
     expect(within(rows[1]).getByRole('link', { name: 'iOS' })).toHaveAttribute(
       'href',
       '/spaces/IOS',

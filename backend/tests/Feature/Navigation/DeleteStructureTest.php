@@ -14,6 +14,7 @@ use App\Models\Label;
 use App\Models\Lane;
 use App\Models\NavNode;
 use App\Models\Space;
+use App\Support\FractionalIndex;
 
 /*
 | Удаление навсегда из дерева (LATER-43, ADR-0013 «Изменения»): только пустая папка и пространство, в котором
@@ -99,6 +100,20 @@ describe('пространство', function () {
 
         // Бывший участник пространства больше его не видит
         $this->actingAs($member)->getJson("/api/v1/spaces/{$space->key}")->assertNotFound();
+    });
+
+    it('доски в событии — по возрастанию id, как бы PostgreSQL ни отдал строки (LATER-101)', function () {
+        $space = space(['key' => 'TMP']);
+        $first = makeBoard($space, $this->admin);
+        $second = makeBoard($space, $this->admin);
+        // Доски — каждая в своём ряду, с одинаковой позицией; ничья в индексе (space_id, position) решается тем, где
+        // лежит строка, — отсюда «то так, то наоборот». Первая доска с позицией позже второй без ORDER BY пришла бы второй
+        $first->forceFill(['position' => FractionalIndex::between($second->position, null)])->save();
+
+        $this->deleteJson("/api/v1/admin/spaces/{$space->id}")->assertNoContent();
+
+        expect(EventLogEntry::query()->where('event_type', 'space.deleted')->sole()->payload)
+            ->toEqual(['board_ids' => [$first->id, $second->id]]);
     });
 
     it('с карточками (в том числе архивными) — 422 с числом карточек, ничего не удалено', function () {

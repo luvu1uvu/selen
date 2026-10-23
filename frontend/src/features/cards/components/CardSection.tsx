@@ -38,7 +38,7 @@ export function CardSection({
   const contentId = useId()
 
   return (
-    <section className="grid gap-2" aria-label={title}>
+    <section className="grid grid-cols-1 gap-2" aria-label={title}>
       <div className="flex min-h-8 items-center gap-2">
         <h3 className="min-w-0 flex-1">
           <button
@@ -69,7 +69,7 @@ export function CardSection({
         </h3>
         {action}
       </div>
-      <div id={contentId} hidden={!open} className="grid gap-2">
+      <div id={contentId} hidden={!open} className="grid grid-cols-1 gap-2">
         {children}
       </div>
     </section>

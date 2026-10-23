@@ -37,7 +37,8 @@ test('ТК-UI1.5. Шапка окна: название, номер, заказ�
   // 2. Навести указатель на серую строку — подсказка с точными датой и временем
   await created.hover()
   const exact = await created.getAttribute('aria-description')
-  expect(exact).toMatch(/^\d{1,2} \S+ \d{4} г\., \d{2}:\d{2}, E2E Редактор$/)
+  // Кто создал — словами: «… · создал(а) ФИО» (пачка UX-2, V-4 UX-ревью UI-1a; было «…, ФИО»)
+  expect(exact).toMatch(/^\d{1,2} \S+ \d{4} г\., \d{2}:\d{2} · создал\(а\) E2E Редактор$/)
   await expectHint(page, exact!)
   await moved.hover()
   const movedExact = await moved.getAttribute('aria-description')

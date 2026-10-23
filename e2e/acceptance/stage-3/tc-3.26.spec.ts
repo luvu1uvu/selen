@@ -22,7 +22,10 @@ test('ТК-3.26. Владелец назначает и снимает адми�
   const row = userRow(adminPage, CANDIDATE)
   await expect(roleCell(adminPage, CANDIDATE)).toHaveText('Администратор')
   await expect(row.getByRole('button', { name: 'Действия с пользователем' })).toHaveCount(0)
-  await expect(row.getByTitle(ACTIONS_ONLY_OWNER)).toBeVisible()
+  // Подсказка ключа — Tooltip, а не title (LATER-85): тест проверяет видимую подсказку с причиной
+  await row.getByRole('link', { name: 'Доступ к пространствам' }).hover()
+  await expect(adminPage.getByRole('tooltip').filter({ hasText: ACTIONS_ONLY_OWNER })).toBeAttached()
+  await adminPage.keyboard.press('Escape')
 
   // 3. Владелец: «⋯» → «Сделать участником»
   await userRow(ownerPage, CANDIDATE).getByRole('button', { name: 'Действия с пользователем' }).click()

@@ -32,7 +32,7 @@ test('ТК-UI1.12. «+» → «Файл» @tc-UI1.12', async ({ page }) => {
   const small = (await preview.boundingBox())!
 
   // Щелчок по превью открывает картинку крупно
-  await files.getByRole('button', { name: `Открыть ${NAME}` }).click()
+  await files.getByRole('button', { name: `Открыть «${NAME}»` }).click()
   const viewer = page.getByRole('dialog', { name: NAME })
   await expect(viewer).toBeVisible()
   const large = (await viewer.getByRole('img', { name: NAME }).boundingBox())!

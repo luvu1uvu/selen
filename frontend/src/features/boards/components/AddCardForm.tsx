@@ -6,11 +6,13 @@ import { useCreateCard } from '@/features/cards/queries'
 import { getErrorMessage } from '@/shared/api/errors'
 import type { Lane } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
+import { useReturnFocusOnClose } from '@/shared/ui/restore-focus'
 import { Textarea } from '@/shared/ui/textarea'
 
 /**
  * Форма новой карточки в ячейке: Enter или «Создать» — создать (форма остаётся открытой для следующей),
- * Esc или «Отмена» — закрыть. Кнопки — внутри области названия (LATER-42).
+ * Esc или «Отмена» — закрыть, и фокус вернётся на кнопку, которая открыла форму («+» колонки или «+ Карточка» ячейки,
+ * LATER-107); ушли из пустой формы сами — фокус не трогаем. Кнопки — внутри области названия (LATER-42).
  *
  * place — куда встаёт карточка: «end» — в конец ячейки (кнопка под последней карточкой), «start» — в начало
  * (кнопка «+» в заголовке колонки, LATER-44). Если дорожек несколько, форма «в начало» даёт выбрать дорожку.
@@ -47,9 +49,12 @@ export function AddCardForm({
   const [title, setTitle] = useState('')
   const [laneId, setLaneId] = useState(initialLaneId)
   const createCard = useCreateCard(boardId)
+  // Esc и «Отмена» — фокус на кнопку, которая открыла форму (её «+ Карточка», пока форма открыта, скрыта)
+  const returnFocus = useReturnFocusOnClose()
 
   const close = () => {
     setTitle('')
+    returnFocus()
     onClose()
   }
 

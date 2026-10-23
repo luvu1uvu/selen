@@ -24,7 +24,8 @@ test('ТК-UI1.21. Узкий экран — окно на весь экран @
 
   // Поля «Основных параметров» — название над значением
   const main = window.getByRole('region', { name: 'Основные параметры' })
-  for (const name of ['Расположение', 'Тип', 'Ответственный', 'План, ч']) {
+  // Пачка UX-2 (решение PM 22.10): «План, ч», пока не задан, скрыт — вместо него проверяется «Срочно» (строка есть всегда)
+  for (const name of ['Расположение', 'Тип', 'Ответственный', 'Срочно']) {
     const label = (await main.locator('dt', { hasText: name }).boundingBox())!
     const value = (await param(main, name).boundingBox())!
     expect(value.y, name).toBeGreaterThanOrEqual(label.y + label.height - 1)

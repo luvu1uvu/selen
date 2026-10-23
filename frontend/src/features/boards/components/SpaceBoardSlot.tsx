@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type CSSProperties,
   type MouseEvent,
   type RefObject,
@@ -12,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/shared/lib/utils'
 import type { SpaceBoard } from '@/shared/types/api'
 import type { BoardMoveTarget } from '../api'
+import { BoardPopupsContext, type BoardPopup } from '../boardPopups'
 import {
   boardEstimatedHeight,
   boardLayoutMoves,
@@ -62,33 +64,37 @@ export const SpaceBoardSlot = memo(function SpaceBoardSlot(props: SpaceBoardSlot
   useScrollAnchorFallback(slotRef)
 
   useKeepCollapseFocus(slotRef)
+  // Открытые «⋯» и ⓘ шапки переживают замену заглушки загруженной доской (LATER-99)
+  const popup = useState<BoardPopup>(null)
 
   return (
     // tabIndex −1: доска из дерева получает фокус (без рамки) — следующий Tab ведёт в неё (U-3 UX-ревью PR 3)
-    <div
-      ref={slotRef}
-      tabIndex={-1}
-      className={cn(
-        'max-rows:w-full rows:max-w-full rows:flex-none min-w-0 outline-none',
-        board.collapsed ? 'rows:w-fit' : 'rows:w-(--slot-w)',
-        props.concealed && 'invisible',
-        dragging && 'opacity-50',
-      )}
-      style={
-        board.collapsed
-          ? undefined
-          : ({ '--slot-w': `${boardNaturalWidth(board.leaf_columns_count)}px` } as CSSProperties)
-      }
-      data-board-slot={board.id}
-    >
-      {board.collapsed ? (
-        <CollapsedBoard {...props} />
-      ) : near ? (
-        <LoadedBoard {...props} />
-      ) : (
-        <BoardPlaceholder {...props} />
-      )}
-    </div>
+    <BoardPopupsContext.Provider value={popup}>
+      <div
+        ref={slotRef}
+        tabIndex={-1}
+        className={cn(
+          'max-rows:w-full rows:max-w-full rows:flex-none min-w-0 outline-none',
+          board.collapsed ? 'rows:w-fit' : 'rows:w-(--slot-w)',
+          props.concealed && 'invisible',
+          dragging && 'opacity-50',
+        )}
+        style={
+          board.collapsed
+            ? undefined
+            : ({ '--slot-w': `${boardNaturalWidth(board.leaf_columns_count)}px` } as CSSProperties)
+        }
+        data-board-slot={board.id}
+      >
+        {board.collapsed ? (
+          <CollapsedBoard {...props} />
+        ) : near ? (
+          <LoadedBoard {...props} />
+        ) : (
+          <BoardPlaceholder {...props} />
+        )}
+      </div>
+    </BoardPopupsContext.Provider>
   )
 }, sameSlot)
 

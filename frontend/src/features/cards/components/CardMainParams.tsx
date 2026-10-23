@@ -23,6 +23,7 @@ import {
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { useReturnFocusOnClose } from '@/shared/ui/restore-focus'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import type { CardUpdate } from '../api'
 import type { CustomFieldOption } from '../customFields'
@@ -40,7 +41,7 @@ function useActiveCardTypes(enabled: boolean) {
   })
 }
 
-/** Сохранить поля карточки с уведомлением «Сохранено» или текстом ошибки. */
+/** Сохранить поля карточки с уведомлением «Сохранено» или текстом ошибки; true — сохранено. */
 function useSave(cardKey: string) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
@@ -49,8 +50,10 @@ function useSave(cardKey: string) {
     try {
       await update.mutateAsync(payload)
       toast.success(t('card.saved'))
+      return true
     } catch (error) {
       toast.error(getErrorMessage(error, tc('errors.generic')))
+      return false
     }
   }
   return { save, pending: update.isPending }
@@ -59,7 +62,7 @@ function useSave(cardKey: string) {
 /** Строка «название поля — значение»; на узком экране название над значением. */
 export function ParamRow({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid gap-1 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start sm:gap-4">
+    <div className="grid grid-cols-1 gap-1 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start sm:gap-4">
       {/* <Label> в названии — той же насыщенности и высоты, что текст (U-6 UX-ревью UI-1a) */}
       <dt className="text-muted-foreground text-sm sm:py-1.5 [&_label]:leading-5 [&_label]:font-normal">
         {label}
@@ -92,7 +95,8 @@ function PersonChip({ person }: { person: CardPerson }) {
 
 /**
  * «Основные параметры» окна карточки (README Kaiten, раздел 02): расположение, тип, ответственный, участники, срок,
- * «Срочно», метки, план в часах. Заказчик — в строке под названием. Пользовательские поля пространства (этап 5) —
+ * «Срочно», метки, план в часах. Срок, метки и план, пока не заданы, скрыты — их добавляют через «+» (LATER-97; план —
+ * решение PM 22.10); «Срочно» видно всегда. Заказчик — в строке под названием. Пользовательские поля пространства (этап 5) —
  * строками в конце этого списка.
  */
 export function CardMainParams({
@@ -107,9 +111,9 @@ export function CardMainParams({
   canEdit: boolean
   /** Открыть окно переноса (лупа у «Расположения»). */
   onMove: () => void
-  /** Срок или метки, выбранные в «+» (LATER-97): строка видна и сразу открывает выбор. */
+  /** Срок, метки или план, выбранные в «+» (LATER-97): строка видна и сразу открывает выбор (план — поле в фокусе). */
   adding?: AddKind[]
-  onAddDone?: (kind: 'due' | 'labels') => void
+  onAddDone?: (kind: 'due' | 'labels' | 'estimate') => void
   /** Поля типа карточки — строками в конце (этап 5 подключит данные; сейчас пусто). */
   typeFields?: CustomFieldOption[]
 }) {
@@ -118,12 +122,13 @@ export function CardMainParams({
   const hasDue = card.due_date !== null || card.due_at !== null
   const addingDue = canEdit && adding.includes('due')
   const addingLabels = canEdit && adding.includes('labels')
+  const addingEstimate = canEdit && adding.includes('estimate')
   const column = card.column.parent_name
     ? `${card.column.parent_name} / ${card.column.name}`
     : card.column.name
 
   return (
-    <dl className="grid gap-2">
+    <dl className="grid grid-cols-1 gap-2">
       <ParamRow label={t('params.location')}>
         <span className="min-w-0 break-words">
           {card.board.name} / {column} ({card.lane.name})
@@ -165,7 +170,11 @@ export function CardMainParams({
           />
         </ParamRow>
       )}
-      <ParamRow label={<Label htmlFor="card-urgent">{t('params.urgent')}</Label>}>
+      <ParamRow
+        label={
+          canEdit ? <Label htmlFor="card-urgent">{t('params.urgent')}</Label> : t('params.urgent')
+        }
+      >
         <UrgentField card={card} canEdit={canEdit} />
       </ParamRow>
       {(card.labels.length > 0 || addingLabels) && (
@@ -178,17 +187,24 @@ export function CardMainParams({
           />
         </ParamRow>
       )}
-      <ParamRow
-        label={
-          canEdit ? (
-            <Label htmlFor="card-estimate">{t('params.estimate')}</Label>
-          ) : (
-            t('params.estimate')
-          )
-        }
-      >
-        <EstimateField card={card} canEdit={canEdit} />
-      </ParamRow>
+      {(card.estimate_hours !== null || addingEstimate) && (
+        <ParamRow
+          label={
+            canEdit ? (
+              <Label htmlFor="card-estimate">{t('params.estimate')}</Label>
+            ) : (
+              t('params.estimate')
+            )
+          }
+        >
+          <EstimateField
+            card={card}
+            canEdit={canEdit}
+            autoFocus={addingEstimate}
+            onDone={() => onAddDone?.('estimate')}
+          />
+        </ParamRow>
+      )}
       {/* Этап 5: значение и правка пользовательского поля */}
       {typeFields.map((field) => (
         <ParamRow key={field.id} label={field.name}>
@@ -482,21 +498,40 @@ function DueField({
 }
 
 function UrgentField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+  const { t } = useTranslation('boards')
   const { save, pending } = useSave(card.key)
+  // Читателю — текстом: полупрозрачный недоступный флажок плохо читается (V-5 UX-ревью UI-1a)
+  if (!canEdit) return <span>{card.is_urgent ? t('params.yes') : t('params.no')}</span>
   return (
     <Checkbox
       id="card-urgent"
       checked={card.is_urgent}
-      disabled={!canEdit || pending}
+      disabled={pending}
       onCheckedChange={(checked) => save({ is_urgent: checked === true })}
     />
   )
 }
 
-/** План в часах, шаг 0,5. */
-function EstimateField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
+/**
+ * План в часах, шаг 0,5. Строка видна, пока план задан или его только что добавили через «+» (поле сразу в фокусе);
+ * `onDone` — правка закончена (сохранено, пусто или Esc): очищенный или так и не заданный план строку убирает. Неверное
+ * значение или ошибка сервера строку оставляют — с введённым текстом и ошибкой.
+ */
+function EstimateField({
+  card,
+  canEdit,
+  autoFocus = false,
+  onDone,
+}: {
+  card: CardDetail
+  canEdit: boolean
+  autoFocus?: boolean
+  onDone?: () => void
+}) {
   const { t } = useTranslation('boards')
   const { save } = useSave(card.key)
+  // Добавили через «+» — Esc убирает пустую строку, и фокус возвращается на «+» (U-5 UX-ревью пачки UX-2)
+  const returnFocus = useReturnFocusOnClose()
   const [estimate, setEstimate] = useState(card.estimate_hours?.toString() ?? '')
   const [error, setError] = useState<string | null>(null)
 
@@ -515,21 +550,22 @@ function EstimateField({ card, canEdit }: { card: CardDetail; canEdit: boolean }
     )
   }
 
-  const commit = () => {
+  const commit = async () => {
     const value = estimate.trim().replace(',', '.')
     const hours = value === '' ? null : Number(value)
     if (hours !== null && (Number.isNaN(hours) || hours < 0 || (hours * 2) % 1 !== 0)) {
       setError(t('fields.estimateInvalid'))
-      return
+      return false
     }
     setError(null)
-    if (hours !== card.estimate_hours) void save({ estimate_hours: hours })
+    return hours === card.estimate_hours || save({ estimate_hours: hours })
   }
 
   return (
-    <div className="grid gap-1">
+    <div className="grid grid-cols-1 gap-1">
       <Input
         id="card-estimate"
+        autoFocus={autoFocus}
         inputMode="decimal"
         className="h-8 w-28"
         value={estimate}
@@ -540,8 +576,12 @@ function EstimateField({ card, canEdit }: { card: CardDetail; canEdit: boolean }
         data-own-escape
         onChange={(event) => setEstimate(event.target.value)}
         onBlur={() => {
-          if (cancelled.current) cancelled.current = false
-          else commit()
+          if (cancelled.current) {
+            cancelled.current = false
+            onDone?.()
+          } else {
+            void commit().then((done) => done && onDone?.())
+          }
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur()
@@ -549,7 +589,12 @@ function EstimateField({ card, canEdit }: { card: CardDetail; canEdit: boolean }
             cancelled.current = true
             setEstimate(card.estimate_hours?.toString() ?? '')
             setError(null)
-            focusCardWindow(event.currentTarget)
+            if (autoFocus && card.estimate_hours === null) {
+              returnFocus()
+              event.currentTarget.blur()
+            } else {
+              focusCardWindow(event.currentTarget)
+            }
           }
         }}
       />

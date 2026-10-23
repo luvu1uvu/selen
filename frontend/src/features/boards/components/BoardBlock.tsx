@@ -16,6 +16,7 @@ import {
 } from '@/shared/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
+import { useBoardPopup } from '../boardPopups'
 import { lastLaneCollapsed } from '../model'
 import { BoardScopeContext, useSetAutoAssign } from '../queries'
 import { ArchivedCardsDialog } from './ArchivedCardsDialog'
@@ -44,8 +45,9 @@ export function BoardMenuShell({
   children: (opensDialog: OpensDialog) => ReactNode
 }) {
   const { t } = useTranslation('boards')
+  const popup = useBoardPopup('menu')
   return (
-    <ActionsMenu label={t('board.menu', { name })} className="size-7">
+    <ActionsMenu label={t('board.menu', { name })} className="size-7" {...popup}>
       {children}
     </ActionsMenu>
   )
@@ -191,8 +193,9 @@ export function BoardBlock({
 function BoardDescription({ name, text }: { name: string; text: string }) {
   const { t } = useTranslation('boards')
   const label = t('board.description', { name })
+  const popup = useBoardPopup('description')
   return (
-    <Popover>
+    <Popover {...popup}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>

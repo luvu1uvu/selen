@@ -60,7 +60,7 @@ test('ТК-UI1.33. PDF открывается в браузере, другие 
   // 4. У PDF — «Скачать …»: PDF скачивается, окно карточки остаётся на месте
   const cardUrl = page.url()
   const pdfDownload = page.waitForEvent('download')
-  await card.getByRole('link', { name: `Скачать ${pdfName}`, exact: true }).click()
+  await card.getByRole('link', { name: `Скачать «${pdfName}»`, exact: true }).click()
   expect((await pdfDownload).suggestedFilename()).toBe(pdfName)
   expect(page.url()).toBe(cardUrl)
   await expect(card).toBeVisible()

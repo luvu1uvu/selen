@@ -88,6 +88,23 @@ async function menuItems(user: ReturnType<typeof userEvent.setup>, button: HTMLE
 describe('Дерево: кнопки «+» и «⋯» у строки', () => {
   beforeEach(() => window.localStorage.clear())
 
+  it('подсказка «+» и «⋯» — Tooltip по наведению, а не атрибут title (правило 8, LATER-88)', async () => {
+    serve(sysAdmin, true)
+    const user = userEvent.setup()
+    renderApp('/')
+    const nav = await openTree()
+
+    for (const name of ['Добавить в «Mobile»', 'Меню «Mobile»']) {
+      const button = await within(nav).findByRole('button', { name })
+      expect(button).not.toHaveAttribute('title')
+      await user.hover(button)
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(name)
+      // jsdom не знает размеров: уход указателя Radix считает уходом на подсказку — закрываем Esc
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    }
+  })
+
   it('системному администратору — меню папки и пространства; «Доску» — только где он админ', async () => {
     serve(sysAdmin, true)
     const user = userEvent.setup()

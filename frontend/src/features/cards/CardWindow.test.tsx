@@ -130,7 +130,10 @@ describe('Окно карточки', () => {
       expect(within(window).getByText(/^Перемещена \d+ /)).toBeInTheDocument()
 
       created.focus()
-      expect(await screen.findByRole('tooltip')).toHaveTextContent('1 окт. 2026 г., 12:00, Борис')
+      // Кто создал — словами (V-4 UX-ревью UI-1a)
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(
+        '1 окт. 2026 г., 12:00 · создал(а) Борис',
+      )
     })
 
     it('не перемещали — только «Создана»; номер копирует ссылку на карточку', async () => {
@@ -144,6 +147,26 @@ describe('Окно карточки', () => {
       await user.click(within(window).getByRole('button', { name: /^DEV-1\./ }))
       expect(await screen.findByText('Ссылка скопирована')).toBeInTheDocument()
       expect(await navigator.clipboard.readText()).toBe(`${location.origin}/cards/DEV-1`)
+    })
+
+    it('буфер недоступен — номер открывает окно с ссылкой для ручного копирования (U-6 UX-ревью UI-1b)', async () => {
+      serveCard(makeCardDetail())
+      renderApp('/cards/DEV-1')
+      const window = await screen.findByRole('dialog', { name: 'Первая' })
+
+      // Буфера обмена нет — как у страницы не на https (заглушку буфера мог оставить setup() предыдущего теста)
+      const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+      try {
+        await userEvent.click(within(window).getByRole('button', { name: /^DEV-1\./ }))
+        const manual = await screen.findByRole('dialog', { name: 'Скопируйте ссылку' })
+        expect(within(manual).getByRole('textbox', { name: 'Ссылка' })).toHaveValue(
+          `${location.origin}/cards/DEV-1`,
+        )
+      } finally {
+        if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard)
+        else Reflect.deleteProperty(navigator, 'clipboard')
+      }
     })
 
     it('название правится на месте: Enter сохраняет, Esc отменяет правку и не закрывает окно', async () => {
@@ -207,6 +230,18 @@ describe('Окно карточки', () => {
       await userEvent.click(within(window).getByRole('button', { name: 'Закрыть' }))
       await waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
       expect(router.state.historyAction).toBe('REPLACE')
+    })
+
+    it('открытое по прямой ссылке после закрытия отдаёт фокус плитке этой карточки (U-10 UX-ревью UI-1a)', async () => {
+      serveCard(makeCardDetail())
+      renderApp('/cards/DEV-1')
+      await screen.findByRole('dialog', { name: 'Первая' })
+
+      await userEvent.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Открыть DEV-1: Первая' })).toHaveFocus(),
+      )
     })
 
     it('«Назад» браузера закрывает окно', async () => {
@@ -455,6 +490,7 @@ describe('Окно карточки', () => {
       ).toEqual([
         'Срок',
         'Метки',
+        'План, ч',
         'Чек-лист',
         'Ссылка',
         'Загрузить файл',
@@ -544,14 +580,7 @@ describe('Окно карточки', () => {
         within(main)
           .getAllByRole('term', { hidden: true })
           .map((term) => term.textContent)
-      expect(terms()).toEqual([
-        'Расположение',
-        'Тип',
-        'Ответственный',
-        'Участники',
-        'Срочно',
-        'План, ч',
-      ])
+      expect(terms()).toEqual(['Расположение', 'Тип', 'Ответственный', 'Участники', 'Срочно'])
 
       // «+» → «Срок»: строка появилась, фокус — в дате; закрыли без срока — строки снова нет
       await userEvent.click(
@@ -807,6 +836,29 @@ describe('Окно карточки', () => {
       const history = within(window).getByRole('region', { name: 'Блокировки' })
       expect(within(history).getByText('Ждали макет')).toBeInTheDocument()
       expect(within(history).queryByText('Ждём доступ')).not.toBeInTheDocument()
+    })
+
+    it('«Отмена» во встроенной форме — фокус на кнопке, которая её открыла (U-9 UX-ревью UI-1a)', async () => {
+      serveCard(makeCardDetail())
+      renderApp('/cards/DEV-1')
+      const window = await screen.findByRole('dialog')
+
+      // Блокировка — из «+»: после «Отмена» фокус снова на «+»
+      const add = within(window).getByRole('button', { name: 'Добавить в карточку' })
+      await userEvent.click(add)
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Блокировка' }))
+      const form = await within(window).findByRole('form', { name: 'Новая блокировка' })
+      await userEvent.click(within(form).getByRole('button', { name: 'Отмена' }))
+      await waitFor(() => expect(add).toHaveFocus())
+
+      // Описание — из серого поля «Добавьте описание…»: после «Отмена» фокус снова на нём
+      await userEvent.click(within(window).getByRole('button', { name: 'Добавьте описание…' }))
+      const editor = await within(window).findByRole('textbox', { name: 'Описание' })
+      await waitFor(() => expect(editor).toHaveFocus())
+      await userEvent.click(within(window).getByRole('button', { name: 'Отмена' }))
+      await waitFor(() =>
+        expect(within(window).getByRole('button', { name: 'Добавьте описание…' })).toHaveFocus(),
+      )
     })
 
     it('файл, брошенный на окно, становится вложением', async () => {

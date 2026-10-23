@@ -76,6 +76,30 @@ describe('Доска: добавление карточек', () => {
     )
   })
 
+  it('после Esc или «Отмена» фокус — на кнопке, которая открыла форму (LATER-107)', async () => {
+    serveBoard()
+    const user = userEvent.setup()
+    renderApp('/boards/board-1')
+
+    // «+» заголовка колонки — с клавиатуры, Esc
+    const top = await screen.findByRole('button', { name: 'Добавить карточку в начало To Do' })
+    top.focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('textbox', { name: 'Добавить карточку в начало To Do' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(
+      screen.queryByRole('textbox', { name: 'Добавить карточку в начало To Do' }),
+    ).not.toBeInTheDocument()
+    await vi.waitFor(() => expect(top).toHaveFocus())
+
+    // «+ Карточка» ячейки — мышью, «Отмена»
+    await user.click(screen.getByRole('button', { name: 'Добавить карточку в QA' }))
+    await user.click(screen.getByRole('button', { name: 'Отмена создания карточки в QA' }))
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Добавить карточку в QA' })).toHaveFocus(),
+    )
+  })
+
   it('кнопка под последней карточкой добавляет в конец ячейки', async () => {
     const bodies = serveBoard()
     const user = userEvent.setup()

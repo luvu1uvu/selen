@@ -20,8 +20,10 @@ import {
 } from 'lucide-react'
 import { useCurrentUser, useLogout } from '@/features/auth/queries'
 import { TreePanel } from '@/features/navigation/components/TreePanel'
+import { Hint } from '@/shared/components/Hint'
 import { isSystemAdmin } from '@/shared/lib/roles'
 import { cn } from '@/shared/lib/utils'
+import { useMediaQuery } from '@/shared/lib/useMediaQuery'
 import { usePersistentState } from '@/shared/lib/usePersistentState'
 import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import { Button } from '@/shared/ui/button'
@@ -33,6 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
+import { Sheet, SheetContent, SheetTitle } from '@/shared/ui/sheet'
 import type { RouteHandle } from '../routeHandle'
 
 /**
@@ -146,8 +149,9 @@ function AdminPanel({
 
 /**
  * Каркас приложения в стиле Kaiten: узкая полоса разделов, панель выбранного раздела (сворачивается,
- * состояние запоминается в браузере), шапка и содержимое страницы. На телефоне полоса и панель —
- * выезжающее меню.
+ * состояние запоминается в браузере), шапка и содержимое страницы. На экране уже 768 px полоса и панель —
+ * выезжающее слева окно (`Sheet`): Esc и щелчок мимо закрывают его, фокус внутри, после закрытия — снова на «Открыть
+ * меню» (LATER-108).
  *
  * Окно не прокручивается (ADR-0019): шапка и дерево всегда на месте, прокручивается содержимое — `main`
  * обычной страницы или холст страницы досок (маршрут с `handle.canvas` получает всю высоту без отступов).
@@ -159,6 +163,13 @@ export function AppLayout() {
   const navigate = useNavigate()
   const isAdmin = isSystemAdmin(user)
   const [menuOpen, setMenuOpen] = useState(false)
+  const desktop = useMediaQuery('(min-width: 48rem)')
+  // Окно стало широким — выезжающее меню закрыто (иначе, сузив окно снова, пользователь увидел бы его открытым)
+  const [wasDesktop, setWasDesktop] = useState(desktop)
+  if (wasDesktop !== desktop) {
+    setWasDesktop(desktop)
+    setMenuOpen(false)
+  }
   // Выбранный раздел — самостоятельное состояние (как в Kaiten): не зависит от открытой страницы,
   // запоминается для пользователя в браузере. «Администрирование» — только системному администратору.
   const [section, setSection] = usePersistentState<Section>(
@@ -189,71 +200,88 @@ export function AppLayout() {
     navigate('/login', { replace: true })
   }
 
+  // Полоса разделов и панель: на широком экране — слева на месте, на узком — в выезжающем окне
+  const sidebar = (
+    <>
+      <div className="bg-sidebar flex w-14 flex-col items-center gap-1 border-r py-2">
+        <Link
+          to="/"
+          onClick={closeMenu}
+          aria-label={t('nav.home')}
+          title={t('nav.home')}
+          className="bg-primary text-primary-foreground mb-2 flex size-9 items-center justify-center rounded-lg text-sm font-semibold"
+        >
+          {t('appName').charAt(0)}
+        </Link>
+        <nav aria-label={t('nav.sections')} className="flex flex-col items-center gap-1">
+          <RailButton
+            icon={Network}
+            label={t('nav.tree')}
+            active={activeSection === 'tree'}
+            onClick={() => selectSection('tree')}
+          />
+          {isAdmin && (
+            <RailButton
+              icon={ShieldCheck}
+              label={t('nav.admin')}
+              active={activeSection === 'admin'}
+              onClick={() => selectSection('admin')}
+            />
+          )}
+        </nav>
+        {/* Без подсказки: внутри выезжающего меню фокус с клавиатуры открыл бы её, и первый Esc закрыл бы подсказку, а не
+            меню (LATER-108); «Открыть меню» снаружи — с подсказкой, фокус на неё возвращается без подсказки */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="mt-auto md:hidden"
+          onClick={closeMenu}
+          aria-label={t('nav.closeMenu')}
+        >
+          <X />
+        </Button>
+      </div>
+      <div className={cn('bg-sidebar w-64 border-r', panelCollapsed && 'md:hidden')}>
+        {activeSection === 'admin' ? (
+          <AdminPanel onCollapse={() => setPanelCollapsed(true)} onNavigate={closeMenu} />
+        ) : (
+          <TreePanel onCollapse={() => setPanelCollapsed(true)} onNavigate={closeMenu} />
+        )}
+      </div>
+    </>
+  )
+
   return (
     <div className="flex h-svh overflow-hidden">
-      {menuOpen && <div className="bg-overlay fixed inset-0 z-30 md:hidden" onClick={closeMenu} />}
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-40 flex transition-transform md:sticky md:top-0 md:h-svh md:translate-x-0',
-          menuOpen ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <div className="bg-sidebar flex w-14 flex-col items-center gap-1 border-r py-2">
-          <Link
-            to="/"
-            onClick={closeMenu}
-            aria-label={t('nav.home')}
-            title={t('nav.home')}
-            className="bg-primary text-primary-foreground mb-2 flex size-9 items-center justify-center rounded-lg text-sm font-semibold"
+      {desktop ? (
+        <aside className="sticky top-0 flex h-svh">{sidebar}</aside>
+      ) : (
+        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+          <SheetContent
+            side="left"
+            showCloseButton={false}
+            aria-describedby={undefined}
+            className="w-auto flex-row gap-0 border-r-0 sm:max-w-none"
           >
-            {t('appName').charAt(0)}
-          </Link>
-          <nav aria-label={t('nav.sections')} className="flex flex-col items-center gap-1">
-            <RailButton
-              icon={Network}
-              label={t('nav.tree')}
-              active={activeSection === 'tree'}
-              onClick={() => selectSection('tree')}
-            />
-            {isAdmin && (
-              <RailButton
-                icon={ShieldCheck}
-                label={t('nav.admin')}
-                active={activeSection === 'admin'}
-                onClick={() => selectSection('admin')}
-              />
-            )}
-          </nav>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="mt-auto md:hidden"
-            onClick={closeMenu}
-            aria-label={t('nav.closeMenu')}
-          >
-            <X />
-          </Button>
-        </div>
-        <div className={cn('bg-sidebar w-64 border-r', panelCollapsed && 'md:hidden')}>
-          {activeSection === 'admin' ? (
-            <AdminPanel onCollapse={() => setPanelCollapsed(true)} onNavigate={closeMenu} />
-          ) : (
-            <TreePanel onCollapse={() => setPanelCollapsed(true)} onNavigate={closeMenu} />
-          )}
-        </div>
-      </aside>
+            <SheetTitle className="sr-only">{t('nav.menu')}</SheetTitle>
+            {sidebar}
+          </SheetContent>
+        </Sheet>
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setMenuOpen(true)}
-            aria-label={t('nav.openMenu')}
-          >
-            <Menu />
-          </Button>
+          <Hint label={t('nav.openMenu')}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMenuOpen(true)}
+              aria-label={t('nav.openMenu')}
+            >
+              <Menu />
+            </Button>
+          </Hint>
           <div className="flex-1" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
