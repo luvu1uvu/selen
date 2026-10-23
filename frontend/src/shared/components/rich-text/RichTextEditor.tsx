@@ -39,6 +39,8 @@ export interface RichTextEditorProps {
   onSubmit: (doc: RichTextDoc | null) => void | Promise<void>
   onCancel?: () => void
   submitLabel: string
+  /** Глагол подсказки Ctrl+Enter — как у кнопки: «сохранить» или «отправить» (новый комментарий, U-17 UX-ревью UI-1a). */
+  submitHint?: 'save' | 'send'
   label: string
   placeholder?: string
   busy?: boolean
@@ -60,6 +62,7 @@ export default function RichTextEditor({
   onSubmit,
   onCancel,
   submitLabel,
+  submitHint = 'save',
   label,
   placeholder,
   busy = false,
@@ -225,7 +228,7 @@ export default function RichTextEditor({
           </Button>
         )}
         <span className="text-muted-foreground ml-auto hidden text-xs sm:inline">
-          {t('richText.hint')}
+          {submitHint === 'send' ? t('richText.hintSend') : t('richText.hint')}
         </span>
       </div>
     </div>

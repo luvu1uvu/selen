@@ -87,6 +87,7 @@
     "linkUrl": "Адрес ссылки",
     "applyLink": "Применить",
     "hint": "Ctrl+Enter — сохранить, @ — упомянуть",
+    "hintSend": "Ctrl+Enter — отправить, @ — упомянуть",
     "tools": {
       "bold": "Жирный",
       "italic": "Курсив",

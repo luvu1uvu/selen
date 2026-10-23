@@ -47,7 +47,8 @@ function fieldValue(field: string, value: unknown, refs: Refs, t: T, timeZone?: 
     case 'is_urgent':
       return value ? t('history.yes') : t('history.no')
     case 'estimate_hours':
-      return t('history.hours', { value: String(value).replace('.', ',') })
+      // Часы — уже в названии поля «План, ч»
+      return String(value).replace('.', ',')
     default:
       return String(value)
   }

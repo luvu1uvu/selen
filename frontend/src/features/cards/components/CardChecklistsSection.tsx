@@ -149,7 +149,7 @@ export function CardChecklistsSection({
             </Button>
           </form>
         ) : (
-          <Button variant="ghost" size="sm" className="justify-self-start" onClick={onAdd}>
+          <Button variant="ghost" size="sm" className="-ml-2.5 justify-self-start" onClick={onAdd}>
             <Plus />
             {t('checklists.add')}
           </Button>

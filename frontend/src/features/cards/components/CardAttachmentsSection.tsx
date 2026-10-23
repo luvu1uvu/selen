@@ -52,12 +52,6 @@ export function CardAttachmentsSection({
 
   return (
     <div className="grid gap-3">
-      {canAttach && (
-        <Button variant="ghost" size="sm" className="justify-self-start" onClick={onPickFiles}>
-          <Paperclip />
-          {t('attachments.add')}
-        </Button>
-      )}
       {uploads.map((progress) => (
         <UploadRow key={progress.id} progress={progress} />
       ))}
@@ -115,6 +109,19 @@ export function CardAttachmentsSection({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Внизу секции, как «Добавить чек-лист» и «Добавить ссылку» (U-8 UX-ревью UI-1a) */}
+      {canAttach && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2.5 justify-self-start"
+          onClick={onPickFiles}
+        >
+          <Paperclip />
+          {t('attachments.add')}
+        </Button>
       )}
 
       <Dialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>

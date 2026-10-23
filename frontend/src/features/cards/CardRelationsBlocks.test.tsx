@@ -134,7 +134,7 @@ describe('Карточка: связи и блокировки', () => {
     // Связь со скрытой карточкой не убрать
     expect(within(section).getAllByRole('button', { name: /^Убрать связь/ })).toHaveLength(2)
 
-    await userEvent.click(within(section).getByRole('button', { name: 'Дочерняя' }))
+    await userEvent.click(within(section).getByRole('button', { name: 'Добавить дочернюю' }))
     const picker = within(section).getByLabelText('Найти дочернюю карточку')
     await userEvent.type(picker, 'мигр')
     // Запрос уходит после паузы ввода; в результатах — только подходящие
@@ -248,7 +248,9 @@ describe('Карточка: связи и блокировки', () => {
     expect(within(panel).getByRole('region', { name: 'Связи' })).toHaveTextContent('Эпик')
     expect(within(panel).queryByRole('region', { name: 'Блокировки' })).not.toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: 'Заблокировать' })).not.toBeInTheDocument()
-    expect(within(panel).queryByRole('button', { name: 'Дочерняя' })).not.toBeInTheDocument()
+    expect(
+      within(panel).queryByRole('button', { name: 'Добавить дочернюю' }),
+    ).not.toBeInTheDocument()
     expect(within(panel).queryByRole('button', { name: /^Убрать связь/ })).not.toBeInTheDocument()
   })
 })
@@ -358,10 +360,11 @@ describe('Карточка: лента истории', () => {
     expect(lines[2]).toContain('Ждём доступы')
     expect(lines[3]).toContain('Комментарий')
     expect(lines[4]).toContain('Участник добавлен: Вера (автоназначение)')
-    expect(lines[5]).toContain('Оценка: — → 6,5 ч')
+    // Названия полей — как в окне и с заглавной: «План, ч», «Название: изменено» (U-17 UX-ревью UI-1a)
+    expect(lines[5]).toContain('План, ч: — → 6,5')
     expect(lines[5]).toContain('Срочно: нет → да')
     expect(lines[5]).toContain('Ответственный: — → Вера')
-    expect(lines[5]).toContain('Изменено: название')
+    expect(lines[5]).toContain('Название: изменено')
     expect(lines[6]).toContain('Создана в «To Do»')
     expect(lines[6]).toContain('Борис')
   })

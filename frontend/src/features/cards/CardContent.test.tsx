@@ -172,6 +172,8 @@ describe('Карточка: описание, комментарии, чек-л�
     expect(
       await within(panel).findByRole('textbox', { name: 'Новый комментарий' }),
     ).toBeInTheDocument()
+    // Подсказка — тем же глаголом, что кнопка «Отправить» (U-17 UX-ревью UI-1a)
+    expect(within(panel).getByText('Ctrl+Enter — отправить, @ — упомянуть')).toBeInTheDocument()
     expect(within(panel).getByRole('checkbox', { name: 'Тесты' })).toBeDisabled()
     expect(within(panel).getByText('1/1')).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: 'Макет' })).toHaveAttribute(
@@ -201,7 +203,7 @@ describe('Карточка: описание, комментарии, чек-л�
     const panel = await screen.findByRole('dialog')
 
     // Новый чек-лист — кнопкой внизу секции; после создания форма закрывается
-    await userEvent.click(within(panel).getByRole('button', { name: 'Чек-лист' }))
+    await userEvent.click(within(panel).getByRole('button', { name: 'Добавить чек-лист' }))
     await userEvent.type(
       within(panel).getByLabelText('Название нового чек-листа'),
       'После релиза{Enter}',

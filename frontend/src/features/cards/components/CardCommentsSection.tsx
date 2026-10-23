@@ -78,6 +78,7 @@ export function CardCommentsSection({ card }: { card: CardDetail }) {
           label={t('comments.new')}
           placeholder={t('comments.placeholder')}
           submitLabel={t('comments.send')}
+          submitHint="send"
           busy={mutate.isPending}
           onSubmit={async (doc) => {
             if (!doc) return
@@ -141,7 +142,8 @@ function CommentItem({
           <LazyRichTextView doc={comment.body} names={names} />
         )}
         {comment.permissions.modify && !editing && (
-          <div className="flex gap-1">
+          // Подписи кнопок — вровень с текстом комментария (поле кнопки слева 8 px — за край, U-8 UX-ревью UI-1a)
+          <div className="-ml-2 flex gap-1">
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setEditing(true)}>
               {t('comments.edit')}
             </Button>

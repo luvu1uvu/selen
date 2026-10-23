@@ -118,7 +118,7 @@ export function CardRelationsSection({
             </Button>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="-ml-2.5 flex flex-wrap gap-2">
             <Button variant="ghost" size="sm" onClick={() => onAdd('parent')}>
               <Plus />
               {t('relations.addParent')}

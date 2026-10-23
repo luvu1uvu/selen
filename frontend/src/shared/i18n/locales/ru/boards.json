@@ -203,18 +203,17 @@
     "unknown": "неизвестно",
     "yes": "да",
     "no": "нет",
-    "hours": "{{value}} ч",
-    "fieldChanged": "Изменено: {{field}}",
+    "fieldChanged": "{{field}}: изменено",
     "fields": {
-      "title": "название",
-      "description": "описание",
+      "title": "Название",
+      "description": "Описание",
       "card_type_id": "Тип",
       "customer_id": "Заказчик",
       "responsible_id": "Ответственный",
       "due_date": "Срок",
       "due_at": "Срок",
       "is_urgent": "Срочно",
-      "estimate_hours": "Оценка"
+      "estimate_hours": "План, ч"
     },
     "viaAutoAssign": "(автоназначение)",
     "viaKeepAccess": "(чтобы не потерять доступ)",
@@ -268,7 +267,7 @@
     "dueTime": "Время срока (необязательно)",
     "clearDue": "Убрать срок",
     "estimatePlaceholder": "Например, 2,5",
-    "estimateInvalid": "Оценка — неотрицательное число с шагом 0,5 часа"
+    "estimateInvalid": "План — неотрицательное число с шагом 0,5 часа"
   },
   "labels": {
     "company": "Общие метки компании",
@@ -314,7 +313,7 @@
   "checklists": {
     "none": "Чек-листов нет",
     "newTitle": "Название нового чек-листа",
-    "add": "Чек-лист",
+    "add": "Добавить чек-лист",
     "rename": "Переименовать чек-лист",
     "remove": "Удалить чек-лист «{{title}}»",
     "progress": "Выполнено {{done}} из {{total}}",
@@ -338,7 +337,7 @@
     "add": "Добавить",
     "remove": "Удалить ссылку «{{title}}»",
     "invalid": "Ссылка должна начинаться с http:// или https://",
-    "addMore": "Ссылка"
+    "addMore": "Добавить ссылку"
   },
   "attachments": {
     "none": "Файлов нет",
@@ -367,8 +366,8 @@
     "hidden": "Скрытая карточка",
     "deleted": "Удалённая карточка",
     "archived": "в архиве",
-    "addParent": "Родительская",
-    "addChild": "Дочерняя",
+    "addParent": "Добавить родительскую",
+    "addChild": "Добавить дочернюю",
     "pickParent": "Найти родительскую карточку",
     "pickChild": "Найти дочернюю карточку",
     "added": "Связь добавлена",
