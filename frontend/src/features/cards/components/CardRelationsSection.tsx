@@ -49,9 +49,9 @@ export function CardRelationsSection({
 
   const list = (title: string, relations: CardRelation[]) =>
     relations.length > 0 && (
-      <div className="grid gap-1">
+      <div className="grid grid-cols-1 gap-1">
         <span className="text-muted-foreground text-xs">{title}</span>
-        <ul className="grid gap-1">
+        <ul className="grid grid-cols-1 gap-1">
           {relations.map((relation) => (
             <li key={relation.id} className="flex min-w-0 items-center gap-2 text-sm">
               <RelatedCardView card={relation.card} />
@@ -79,13 +79,13 @@ export function CardRelationsSection({
     )
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       {parents.length === 0 && children.length === 0 && !canEdit && (
         <span className="text-muted-foreground text-sm">{t('relations.none')}</span>
       )}
       {list(t('relations.parents'), parents)}
       {progress && (
-        <div className="grid gap-1">
+        <div className="grid grid-cols-1 gap-1">
           <span className="text-xs">{t('relations.progress', progress)}</span>
           <div
             role="progressbar"
@@ -106,7 +106,7 @@ export function CardRelationsSection({
 
       {canEdit &&
         (adding ? (
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <CardPicker
               spaceKey={card.space.key}
               excludeKey={card.key}
@@ -118,7 +118,7 @@ export function CardRelationsSection({
             </Button>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="-ml-2.5 flex flex-wrap gap-2">
             <Button variant="ghost" size="sm" onClick={() => onAdd('parent')}>
               <Plus />
               {t('relations.addParent')}

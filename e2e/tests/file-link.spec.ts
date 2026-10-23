@@ -31,7 +31,7 @@ test('ссылка на файл в новой вкладке: вошедший 
   expect(link).toMatch(/^\/files\/[0-9a-z]{26}$/)
 
   // «Скопировать ссылку на файл» — полный адрес (буфер обмена стеку E2E недоступен — адрес не localhost; подменён)
-  await window.getByRole('button', { name: `Скопировать ссылку на ${name}` }).click()
+  await window.getByRole('button', { name: `Скопировать ссылку на «${name}»` }).click()
   await expect(page.getByText('Ссылка на файл скопирована')).toBeVisible()
   expect(await copiedText(page)).toBe(new URL(link, page.url()).href)
 

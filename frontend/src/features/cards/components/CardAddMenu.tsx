@@ -6,6 +6,7 @@ import {
   CornerLeftUp,
   CornerRightDown,
   FileUp,
+  Hourglass,
   Link2,
   ListChecks,
   Plus,
@@ -58,6 +59,7 @@ export function CardAddMenu({
           ? [
               item('due', <AlarmClock />),
               item('labels', <Tag />),
+              item('estimate', <Hourglass />),
               item('checklist', <ListChecks />),
               item('link', <Link2 />),
             ]

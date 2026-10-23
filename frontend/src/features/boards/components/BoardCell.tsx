@@ -132,9 +132,10 @@ export const BoardCell = memo(function BoardCell({
           onClose={() => setAdding(false)}
         />
       )}
-      {canEdit && !adding && (
-        // Зона под последней карточкой: наведение на неё показывает кнопку
-        <div className="group/add flex min-h-10 flex-1 flex-col">
+      {canEdit && (
+        // Зона под последней карточкой: наведение на неё показывает кнопку. Пока форма открыта, кнопка скрыта, но не
+        // убрана: закрытая Esc или «Отмена» форма возвращает фокус на неё (LATER-107)
+        <div className={cn('group/add flex min-h-10 flex-1 flex-col', adding && 'hidden')}>
           {!dragging && (
             <Button
               variant="ghost"

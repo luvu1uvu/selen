@@ -30,8 +30,10 @@ test('ТК-UI1.28. Пустые значения: действие или «—�
     .click()
   const archived = page.getByRole('dialog', { name: 'Лежит в архиве' })
   const view = archived.getByRole('region', { name: 'Основные параметры' })
-  for (const name of ['Ответственный', 'Участники', 'План, ч']) {
+  for (const name of ['Ответственный', 'Участники']) {
     await expect(param(view, name), name).toHaveText('—')
   }
+  // Пачка UX-2 (решение PM 22.10): «План, ч», пока не задан, скрыт, как срок и метки, — строки нет вовсе
+  await expect(view.locator('dt', { hasText: 'План, ч' })).toHaveCount(0)
   await expect(view.getByText(/Не назначен|Не задан|Нет меток/)).toHaveCount(0)
 })

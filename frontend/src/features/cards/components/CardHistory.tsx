@@ -47,7 +47,8 @@ function fieldValue(field: string, value: unknown, refs: Refs, t: T, timeZone?: 
     case 'is_urgent':
       return value ? t('history.yes') : t('history.no')
     case 'estimate_hours':
-      return t('history.hours', { value: String(value).replace('.', ',') })
+      // Часы — уже в названии поля «План, ч»
+      return String(value).replace('.', ',')
     default:
       return String(value)
   }
@@ -152,7 +153,7 @@ export function CardHistory({ cardKey }: { cardKey: string }) {
   if (history.isError) return <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
 
   return (
-    <ol className="grid gap-2" aria-label={t('history.title')}>
+    <ol className="grid grid-cols-1 gap-2" aria-label={t('history.title')}>
       {refs &&
         history.data?.data.map((item) => {
           const lines =

@@ -85,6 +85,36 @@ describe('Страница входа', () => {
     )
   })
 
+  describe('ссылка на страницу приложения (LATER-104)', () => {
+    async function signIn() {
+      server.use(http.post('*/api/v1/auth/login', () => HttpResponse.json({ data: makeUser() })))
+      await userEvent.type(await screen.findByLabelText('Email'), 'admin@selen.test')
+      await userEvent.type(screen.getByLabelText('Пароль'), 'correct-password')
+      await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+    }
+
+    it('гость открыл страницу по ссылке — после входа он на ней, а не на главной', async () => {
+      const { router } = renderApp('/profile?tab=sessions')
+      await signIn()
+
+      expect(await screen.findByRole('heading', { name: 'Профиль' })).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/profile')
+      expect(router.state.location.search).toBe('?tab=sessions')
+    })
+
+    it('адрес возврата не со страницы приложения — главная', async () => {
+      for (const from of ['//evil.example', '/\\evil.example', 'https://evil.example', '/login']) {
+        const { router, unmount } = renderApp('/')
+        await screen.findByRole('button', { name: 'Войти' })
+        await router.navigate('/login', { replace: true, state: { from } })
+        await signIn()
+        expect(await screen.findByRole('heading', { name: 'Пространства' })).toBeInTheDocument()
+        expect(router.state.location.pathname, from).toBe('/')
+        unmount()
+      }
+    })
+  })
+
   describe('ссылка на файл (UI-1b, LATER-51)', () => {
     beforeEach(() => vi.mocked(openServerPage).mockClear())
 

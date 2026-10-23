@@ -11,9 +11,14 @@ test('ТК-3.24. Обычный администратор ничего не м�
   const owner = userRow(page, 'E2E Владелец')
   await expect(owner).toBeVisible()
   await expect(owner.getByRole('button', { name: 'Действия с пользователем' })).toHaveCount(0)
-  const key = owner.getByTitle(ACTIONS_ONLY_OWNER)
+  // Подсказка ключа — Tooltip, а не title (LATER-85): тест проверяет видимую подсказку с причиной
+  const key = owner.getByRole('link', { name: 'Доступ к пространствам' })
   await expect(key).toBeVisible()
   await key.hover()
+  await expect(page.getByRole('tooltip').filter({ hasText: ACTIONS_ONLY_OWNER })).toContainText(
+    'Доступ к пространствам',
+  )
+  await page.keyboard.press('Escape')
 
   // 3. «⋯» у участника: «Деактивировать» есть, «Сделать администратором» — нет
   await userRow(page, 'E2E Редактор').getByRole('button', { name: 'Действия с пользователем' }).click()

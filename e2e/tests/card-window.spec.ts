@@ -171,7 +171,7 @@ test('превью картинки с фокусом с клавиатуры �
   await page.goto('/cards/QA-3')
   const window = page.getByRole('dialog', { name: 'Блокирующая задача' })
   await window.getByLabel('Выбрать файлы').setInputFiles([{ name: 'непрозрачная.png', mimeType: 'image/png', buffer: png }])
-  const preview = window.getByRole('button', { name: 'Открыть непрозрачная.png' })
+  const preview = window.getByRole('button', { name: 'Открыть «непрозрачная.png»' })
   await expect(preview).toBeVisible()
 
   // Фокус с клавиатуры: Shift+Tab и обратно Tab

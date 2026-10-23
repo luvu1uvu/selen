@@ -54,6 +54,9 @@
   --success-surface: oklch(0.979 0.021 166.113);
   --success-muted: oklch(0.95 0.052 163.051);
   --success-border: oklch(0.905 0.093 164.15);
+  /* Синоним для уведомлений sonner (LATER-111): его переменная называется так же — --success-border, и в style
+     у Toaster ссылка на наш токен того же имени была бы циклом (недействительна, рамка брала цвет текста) */
+  --toast-success-border: var(--success-border);
   --warning-foreground: oklch(0.473 0.137 46.201);
   --warning-surface: oklch(0.987 0.022 95.277);
   --warning-muted: oklch(0.962 0.059 95.617);

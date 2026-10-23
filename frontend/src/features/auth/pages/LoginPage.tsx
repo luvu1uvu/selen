@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { z } from 'zod'
 import { applyValidationErrors, getErrorMessage } from '@/shared/api/errors'
 import { Alert } from '@/shared/ui/alert'
@@ -12,19 +12,16 @@ import { Checkbox } from '@/shared/ui/checkbox'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { fileReturnPath } from '@/shared/lib/browser'
 import { useLogin } from '../queries'
 import { emailSchema } from '../schemas'
 
 interface LocationState {
-  from?: string
   notice?: string
 }
 
 export function LoginPage() {
   const { t } = useTranslation('auth')
   const { t: tc } = useTranslation()
-  const navigate = useNavigate()
   const location = useLocation()
   const state = (location.state ?? {}) as LocationState
   const loginMutation = useLogin()
@@ -55,9 +52,9 @@ export function LoginPage() {
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null)
     try {
+      // Куда дальше (главная, страница, с которой отправили на вход, или файл) — решает RequireGuest, как только
+      // узнает пользователя (LATER-104)
       await loginMutation.mutateAsync(values)
-      // На вход привела ссылка на файл — к файлу отправит RequireGuest, как только узнает пользователя (UI-1b)
-      if (!fileReturnPath(location.search)) navigate(state.from ?? '/', { replace: true })
     } catch (error) {
       if (!applyValidationErrors(error, setError)) {
         setFormError(getErrorMessage(error, tc('errors.generic')))

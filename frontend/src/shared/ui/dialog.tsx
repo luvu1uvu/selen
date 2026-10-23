@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 import { XIcon } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { useRestoreFocus } from './restore-focus'
+import { keepOpenOnToast } from './toast-outside'
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -20,9 +21,15 @@ function DialogContent({
   className,
   children,
   closeLabel = 'Close',
+  closeClassName,
   onCloseAutoFocus,
+  onInteractOutside,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & { closeLabel?: string }) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  closeLabel?: string
+  /** Место ✕, если окно ставит его по-своему (окно карточки — вровень со строкой названия). */
+  closeClassName?: string
+}) {
   const restoreFocus = useRestoreFocus(onCloseAutoFocus)
   return (
     <DialogPrimitive.Portal>
@@ -34,6 +41,7 @@ function DialogContent({
           className,
         )}
         {...restoreFocus}
+        onInteractOutside={keepOpenOnToast(onInteractOutside)}
         {...props}
       >
         {children}
@@ -42,7 +50,10 @@ function DialogContent({
             подсказку, а не окно */}
         <DialogPrimitive.Close
           aria-label={closeLabel}
-          className="bg-background hover:bg-accent focus-visible:ring-ring absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]"
+          className={cn(
+            'bg-background hover:bg-accent focus-visible:ring-ring absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]',
+            closeClassName,
+          )}
         >
           <XIcon className="size-4" />
         </DialogPrimitive.Close>

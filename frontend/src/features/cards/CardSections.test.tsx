@@ -72,6 +72,22 @@ describe('Карточка: люди, поля, метки', () => {
     )
   })
 
+  it('«Снять ответственного» — первым пунктом, над списком людей (U-13 UX-ревью UI-1a)', async () => {
+    const calls = serveCard(
+      makeCardDetail({ responsible: { id: 'u2', name: 'Вера', status: 'active', in_space: true } }),
+    )
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    await userEvent.click(within(panel).getByRole('button', { name: /Вера/ }))
+    const list = await screen.findByRole('listbox')
+    await within(list).findByRole('option', { name: 'Борис' })
+    const options = within(list).getAllByRole('option')
+    expect(options[0]).toHaveTextContent('Снять ответственного')
+    await userEvent.click(options[0])
+    await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ responsible_id: null }))
+  })
+
   it('назначает ответственного и участников из участников пространства, кроме деактивированных', async () => {
     const calls = serveCard(
       makeCardDetail({
@@ -155,7 +171,7 @@ describe('Карточка: люди, поля, метки', () => {
   })
 
   it('«Срочно» и план с шагом 0,5 часа', async () => {
-    const calls = serveCard(makeCardDetail())
+    const calls = serveCard(makeCardDetail({ estimate_hours: 1 }))
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
@@ -175,6 +191,62 @@ describe('Карточка: люди, поля, метки', () => {
         { estimate_hours: 2.5 },
       ]),
     )
+  })
+
+  it('«План, ч», пока не задан, скрыт — добавляется через «+» → «Основное», как срок (решение PM 22.10)', async () => {
+    const calls = serveCard(makeCardDetail())
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+    const section = within(panel).getByRole('region', { name: 'Основные параметры' })
+    expect(within(section).queryByLabelText('План, ч')).not.toBeInTheDocument()
+    // «Срочно» видно всегда (решение PM 22.10)
+    expect(within(section).getByRole('checkbox', { name: 'Срочно' })).toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Добавить в карточку' }))
+    const main = within(await screen.findByRole('group', { name: 'Основное' }))
+    await userEvent.click(main.getByRole('menuitem', { name: 'План, ч' }))
+    const estimate = await within(section).findByLabelText('План, ч')
+    await vi.waitFor(() => expect(estimate).toHaveFocus())
+    // Неверное значение — строка остаётся, с введённым текстом и ошибкой; на сервер ничего не уходит
+    await userEvent.type(estimate, '1,3{Enter}')
+    expect(await within(section).findByText(/шагом 0,5 часа/)).toBeInTheDocument()
+    expect(within(section).getByLabelText('План, ч')).toHaveValue('1,3')
+    expect(calls).toEqual([])
+
+    await userEvent.clear(within(section).getByLabelText('План, ч'))
+    await userEvent.type(within(section).getByLabelText('План, ч'), '3{Enter}')
+    await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ estimate_hours: 3 }))
+    expect(within(section).getByLabelText('План, ч')).toHaveValue('3')
+
+    // Так и не задали — строка пропадает (Esc после «+» — фокус снова на «+», U-5 UX-ревью пачки UX-2 — ниже)
+    await userEvent.clear(within(section).getByLabelText('План, ч'))
+    await userEvent.keyboard('{Enter}')
+    await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ estimate_hours: null }))
+    await vi.waitFor(() =>
+      expect(within(section).queryByLabelText('План, ч')).not.toBeInTheDocument(),
+    )
+  })
+
+  it('«План, ч» через «+» и Esc — строки нет, фокус снова на «+» (U-5 UX-ревью пачки UX-2)', async () => {
+    serveCard(makeCardDetail())
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+    const section = within(panel).getByRole('region', { name: 'Основные параметры' })
+    const add = within(panel).getByRole('button', { name: 'Добавить в карточку' })
+
+    await userEvent.click(add)
+    await userEvent.click(
+      within(await screen.findByRole('group', { name: 'Основное' })).getByRole('menuitem', {
+        name: 'План, ч',
+      }),
+    )
+    const estimate = await within(section).findByLabelText('План, ч')
+    await vi.waitFor(() => expect(estimate).toHaveFocus())
+    await userEvent.keyboard('{Escape}')
+
+    await vi.waitFor(() => expect(within(section).queryByLabelText('План, ч')).toBeNull())
+    await vi.waitFor(() => expect(add).toHaveFocus())
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it('метки: ставит активные, архивную предлагает только если она уже стоит', async () => {
@@ -218,7 +290,7 @@ describe('Карточка: люди, поля, метки', () => {
       within(section)
         .getAllByRole('term')
         .map((term) => term.textContent),
-    ).toEqual(['Расположение', 'Тип', 'Ответственный', 'Участники', 'Срочно', 'План, ч'])
+    ).toEqual(['Расположение', 'Тип', 'Ответственный', 'Участники', 'Срочно'])
     expect(within(section).getByText('Продукт / To Do (Основная)')).toBeInTheDocument()
 
     await userEvent.click(within(section).getByRole('button', { name: 'Задача — тип карточки' }))
@@ -247,7 +319,11 @@ describe('Карточка: люди, поля, метки', () => {
     ).not.toBeInTheDocument()
     expect(within(panel).queryByLabelText('План, ч')).not.toBeInTheDocument()
     expect(within(panel).getByText('6,5')).toBeInTheDocument()
-    expect(within(panel).getByRole('checkbox', { name: 'Срочно' })).toBeDisabled()
+    // «Срочно» у читателя — текстом, а не недоступным флажком (V-5)
+    const section = within(panel).getByRole('region', { name: 'Основные параметры' })
+    expect(within(section).queryByRole('checkbox', { name: 'Срочно' })).not.toBeInTheDocument()
+    const urgent = within(section).getByText('Срочно').closest('div')!
+    expect(urgent).toHaveTextContent('СрочноНет')
   })
 })
 

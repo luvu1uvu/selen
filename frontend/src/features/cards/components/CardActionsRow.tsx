@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
-import { copyText } from '@/shared/lib/browser'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
+import { useCopyLink } from '@/shared/components/useCopyLink'
 import type { CardDetail } from '@/shared/types/api'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
 import { cardLink, type AddKind } from '../cardWindow'
@@ -38,6 +38,7 @@ export function CardActionsRow({
   const setArchived = useSetCardArchived(card.key)
   const remove = useDeleteCard()
   const [deleting, setDeleting] = useState(false)
+  const copy = useCopyLink()
 
   const toggleArchived = async () => {
     const archived = !card.archived_at
@@ -49,10 +50,7 @@ export function CardActionsRow({
     }
   }
 
-  const copyLink = async () => {
-    if (await copyText(cardLink(card.key))) toast.success(t('card.linkCopied'))
-    else toast.error(tc('errors.copyFailed'))
-  }
+  const copyLink = () => copy.copy(cardLink(card.key), t('card.linkCopied'))
 
   const confirmDelete = async () => {
     try {
@@ -91,7 +89,10 @@ export function CardActionsRow({
                   {card.archived_at ? t('card.restoreFromArchive') : t('card.archive')}
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onSelect={copyLink}>{t('card.copyLink')}</DropdownMenuItem>
+              {/* Буфер недоступен — откроется окно ручного копирования: как пункт, открывающий окно */}
+              <DropdownMenuItem onSelect={opensDialog(() => void copyLink())}>
+                {t('card.copyLink')}
+              </DropdownMenuItem>
               {card.permissions.delete && (
                 <>
                   <DropdownMenuSeparator />
@@ -116,6 +117,7 @@ export function CardActionsRow({
         pending={remove.isPending}
         onConfirm={confirmDelete}
       />
+      {copy.dialog}
     </div>
   )
 }

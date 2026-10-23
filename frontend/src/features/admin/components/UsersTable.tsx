@@ -17,6 +17,7 @@ import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-me
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import {
   useChangeRole,
   useReactivateUser,
@@ -170,15 +171,24 @@ export function UsersTable() {
                 </TableCell>
                 <TableCell>
                   {isMe || !hasActions ? (
-                    <Button variant="ghost" size="icon" asChild>
-                      <Link
-                        to={`/admin/users/${user.id}`}
-                        aria-label={t('users.actions.access')}
-                        title={isMe ? undefined : t('users.actionsUnavailable')}
-                      >
-                        <KeyRound />
-                      </Link>
-                    </Button>
+                    // Подсказка — Tooltip по наведению и по фокусу (правило 8); в чужой строке — и почему нет «⋯»
+                    // (LATER-85)
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild>
+                          <Link
+                            to={`/admin/users/${user.id}`}
+                            aria-label={t('users.actions.access')}
+                          >
+                            <KeyRound />
+                          </Link>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>{t('users.actions.access')}</p>
+                        {!isMe && <p>{t('users.actionsUnavailable')}</p>}
+                      </TooltipContent>
+                    </Tooltip>
                   ) : (
                     <ActionsMenu label={t('users.actions.menu', { name: user.name })}>
                       {(dialog) => (

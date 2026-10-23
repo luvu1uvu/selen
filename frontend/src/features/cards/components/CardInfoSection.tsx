@@ -15,7 +15,7 @@ export function CardInfoSection({ card }: { card: CardDetail }) {
   const date = (value: string) => formatDateTime(value, me?.timezone)
 
   return (
-    <dl className="grid gap-2">
+    <dl className="grid grid-cols-1 gap-2">
       <ParamRow label={t('info.createdBy')}>{card.created_by.name}</ParamRow>
       <ParamRow label={t('info.created')}>{date(card.created_at)}</ParamRow>
       {card.first_started_at && (
