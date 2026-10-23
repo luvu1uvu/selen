@@ -24,6 +24,8 @@ export function ActionsMenu({
   className,
   icon = <MoreHorizontal />,
   contentClassName,
+  open,
+  onOpenChange,
   children,
 }: {
   label: string
@@ -34,6 +36,9 @@ export function ActionsMenu({
   icon?: ReactNode
   /** Классы списка меню (например, две колонки меню «+» окна карточки). */
   contentClassName?: string
+  /** Открыто ли меню, если им управляет владелец (шапка доски, которая догружается, — LATER-99); иначе — само. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children: (opensDialog: OpensDialog) => ReactNode
 }) {
   const pending = useRef<(() => void) | null>(null)
@@ -42,7 +47,7 @@ export function ActionsMenu({
     pending.current = open
   }
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
