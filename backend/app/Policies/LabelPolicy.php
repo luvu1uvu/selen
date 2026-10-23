@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permission;
 use App\Models\Label;
 use App\Models\Space;
 use App\Models\User;
@@ -32,6 +33,6 @@ class LabelPolicy
         /** @var Space $space */
         $space = $label->space;
 
-        return $this->allowSpaceAdmin($actor, $space);
+        return $this->allowPermission($actor, $space, Permission::SpaceUpdate);
     }
 }

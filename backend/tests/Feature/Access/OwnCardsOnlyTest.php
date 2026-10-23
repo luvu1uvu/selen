@@ -2,10 +2,11 @@
 
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
+use App\Models\AccessGrant;
 use App\Models\Card;
 use App\Models\EventLogEntry;
 use App\Models\Label;
-use App\Models\SpaceMember;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -30,7 +31,7 @@ beforeEach(function () {
 
 function restrictionOf($space, $user): bool
 {
-    return SpaceMember::query()->where('space_id', $space->id)->where('user_id', $user->id)->value('own_cards_only');
+    return AccessGrant::query()->onSpace($space)->where('user_id', $user->id)->with('role')->sole()->standardRole()->ownCardsOnly();
 }
 
 describe('флаг на участнике', function () {
@@ -71,7 +72,7 @@ describe('флаг на участнике', function () {
 
         $this->actingAs($this->admin)->patchJson("/api/v1/spaces/DEV/members/{$this->editor->id}", ['role' => 'admin', 'own_cards_only' => true])
             ->assertUnprocessable();
-        expect(SpaceMember::query()->where('user_id', $this->editor->id)->value('role'))->toBe(SpaceRole::Editor);
+        expect(AccessGrant::query()->where('user_id', $this->editor->id)->with('role')->sole()->standardRole())->toBe(StandardRole::Editor);
     });
 });
 

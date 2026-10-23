@@ -19,7 +19,7 @@ use App\Models\BoardColumn;
 use App\Models\Card;
 use App\Models\Lane;
 use App\Models\User;
-use App\Services\Access\SpaceAccessResolver;
+use App\Services\Access\AccessResolver;
 use App\Services\Cards\CardHistory;
 use App\Services\Cards\CardVisibility;
 use Illuminate\Http\JsonResponse;
@@ -76,14 +76,14 @@ class CardController extends Controller
 
     public function archive(Request $request, Card $card, SetCardArchivedAction $action): CardResource
     {
-        Gate::authorize('update', $card);
+        Gate::authorize('move', $card);
 
         return new CardResource($action->handle($request->user(), $card, true)->loadDetails());
     }
 
     public function restore(Request $request, Card $card, SetCardArchivedAction $action): CardResource
     {
-        Gate::authorize('update', $card);
+        Gate::authorize('move', $card);
 
         return new CardResource($action->handle($request->user(), $card, false)->loadDetails());
     }
@@ -121,7 +121,7 @@ class CardController extends Controller
      * Кого можно упомянуть в описании или комментарии: тех, кто видит карточку (поправка PM A — то же правило,
      * что проверяет App\Rules\RichText), кроме деактивированных.
      */
-    public function mentionable(Card $card, CardVisibility $visibility, SpaceAccessResolver $resolver): JsonResponse
+    public function mentionable(Card $card, CardVisibility $visibility, AccessResolver $resolver): JsonResponse
     {
         Gate::authorize('view', $card);
 

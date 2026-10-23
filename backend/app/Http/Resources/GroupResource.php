@@ -2,8 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Models\AccessGrant;
 use App\Models\Group;
-use App\Models\SpaceGroup;
+use App\Models\Space;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\Request;
@@ -43,18 +44,32 @@ class GroupResource extends JsonResource
                     'added_at' => $this->addedAt($user),
                 ])),
             'spaces' => $this->whenLoaded('spaceGrants', fn () => $this->spaceGrants
-                ->sortBy(fn (SpaceGroup $grant) => mb_strtolower($grant->space->name))
+                ->sortBy(fn (AccessGrant $grant) => mb_strtolower((string) $grant->space?->name))
                 ->values()
-                ->map(fn (SpaceGroup $grant) => [
-                    'space' => [
-                        'id' => $grant->space->id,
-                        'key' => $grant->space->key,
-                        'name' => $grant->space->name,
-                        'archived_at' => $grant->space->archived_at?->toIso8601ZuluString(),
-                    ],
-                    'role' => $grant->role,
-                    'own_cards_only' => $grant->own_cards_only,
+                ->map(fn (AccessGrant $grant) => [
+                    'space' => $this->space($grant),
+                    // Прежний вид API: роль + «только свои карточки» (ADR-0024, П2a)
+                    'role' => $grant->standardRole()->legacyRole(),
+                    'own_cards_only' => $grant->standardRole()->ownCardsOnly(),
                 ])),
+        ];
+    }
+
+    /**
+     * Пространство выдачи (в П2a выдачи — только на пространства).
+     *
+     * @return array<string, mixed>
+     */
+    private function space(AccessGrant $grant): array
+    {
+        /** @var Space $space */
+        $space = $grant->space;
+
+        return [
+            'id' => $space->id,
+            'key' => $space->key,
+            'name' => $space->name,
+            'archived_at' => $space->archived_at?->toIso8601ZuluString(),
         ];
     }
 

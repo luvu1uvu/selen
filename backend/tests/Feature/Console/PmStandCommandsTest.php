@@ -92,7 +92,7 @@ describe('pm:backlog', function () {
         $space = Space::query()->where('key', 'LATER')->sole();
         expect($space->name)->toBe('Временно, пока реализовывается')
             ->and($space->roleOf($owner))->toBe(SpaceRole::Admin)
-            ->and($space->members()->count())->toBe(1);
+            ->and($space->personalGrants()->count())->toBe(1);
 
         expect(Label::query()->where('space_id', $space->id)->orderBy('name')->pluck('name')->all())
             ->toEqualCanonicalizing(array_keys(PmStand::LABELS));
@@ -223,7 +223,7 @@ describe('pm:qa-bot', function () {
 
         expect(User::query()->where('email', 'qa-bot@selen.local')->count())->toBe(1)
             ->and(Hash::check('new-bot-password-456', $bot->password))->toBeTrue()
-            ->and(PmStand::requireSpace()->members()->count())->toBe(2);
+            ->and(PmStand::requireSpace()->personalGrants()->count())->toBe(2);
     });
 
     it('без пароля или без LATER — понятная ошибка', function () {

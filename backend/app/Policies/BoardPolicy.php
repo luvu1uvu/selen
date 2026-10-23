@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\Enums\SpaceRole;
+use App\Enums\Permission;
 use App\Models\Board;
 use App\Models\Space;
 use App\Models\User;
@@ -25,36 +25,45 @@ class BoardPolicy
     /** Создать доску в пространстве. */
     public function create(User $actor, Space $space): Response
     {
-        return $this->allowSpaceAdmin($actor, $space);
+        return $this->allowPermission($actor, $space, Permission::BoardCreate);
     }
 
-    /** Название, порядок, архив, колонки и дорожки. */
+    /** Название, описание, порядок, колонки и дорожки. */
     public function manage(User $actor, Board $board): Response
     {
-        return $this->allowBoardStructure($actor, $board);
+        return $this->allowOnBoard($actor, $board, Permission::BoardUpdate);
+    }
+
+    /** Отправить доску в архив (ADR-0024: «удаление» доски — архив и восстановление). */
+    public function archive(User $actor, Board $board): Response
+    {
+        return $this->allowOnBoard($actor, $board, Permission::BoardDelete);
     }
 
     /** Восстановить архивную доску (в активном пространстве). */
     public function restore(User $actor, Board $board): Response
     {
-        return $this->allowSpaceAdmin($actor, $board->space);
+        return $this->allowPermission($actor, $board->space, Permission::BoardDelete);
     }
 
-    /** Список архивных карточек доски (восстановление — CardPolicy::update): editor и admin. */
+    /** Список архивных карточек доски (восстановление — CardPolicy::move): архив и возврат — перемещение карточек. */
     public function viewArchive(User $actor, Board $board): Response
     {
-        return $this->allowRole($actor, $board->space, fn (SpaceRole $role) => $role->canEditCards());
+        return $this->allowPermission($actor, $board->space, Permission::CardMove);
     }
 
     public function createCard(User $actor, Board $board): Response
     {
-        return $this->allowCardEditing($actor, $board);
+        return $this->allowOnBoard($actor, $board, Permission::CardCreate);
     }
 
-    /** Удалять карточки доски в корзину — как CardPolicy::delete: системный администратор, доска и пространство не в архиве. */
+    /**
+     * Удалять карточки доски в корзину — как CardPolicy::delete: до П2d — системный администратор с любой ролью
+     * в пространстве (чтение есть в любой роли), доска и пространство не в архиве.
+     */
     public function deleteCards(User $actor, Board $board): Response
     {
-        $response = $this->allowOnBoard($actor, $board, fn (SpaceRole $role) => true);
+        $response = $this->allowOnBoard($actor, $board, Permission::SpaceRead);
 
         return $response->allowed() && ! $actor->isAdmin() ? Response::deny() : $response;
     }

@@ -3,9 +3,9 @@
 namespace App\Actions\Spaces;
 
 use App\Enums\SpaceRole;
+use App\Models\AccessGrant;
 use App\Models\Group;
 use App\Models\Space;
-use App\Models\SpaceGroup;
 use App\Models\User;
 
 /**
@@ -17,12 +17,13 @@ class AssignSpaceGroupAction
     public function __construct(
         private readonly GrantSpaceGroupAction $grant,
         private readonly UpdateSpaceGroupAction $update,
+        private readonly SpaceGrants $grants,
     ) {}
 
-    public function handle(User $actor, Space $space, Group $group, SpaceRole $role, bool $ownCardsOnly): SpaceGroup
+    public function handle(User $actor, Space $space, Group $group, SpaceRole $role, bool $ownCardsOnly): AccessGrant
     {
         // Вложенные Actions блокируют пространство и перепроверяют доступы сами
-        $granted = $space->groupGrants()->where('group_id', $group->id)->exists();
+        $granted = $this->grants->ofGroup($space, $group) !== null;
 
         return $granted
             ? $this->update->handle($actor, $space, $group, $role, $ownCardsOnly, AssignSpaceRoleAction::VIA)

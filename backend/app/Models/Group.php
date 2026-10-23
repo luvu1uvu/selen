@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
  * Ведёт только системный администратор. Не удаляется, только архивируется: архивная группа доступа не даёт.
  *
  * Встроенная группа «Все сотрудники» (system_key = everyone): состав не хранится — в неё входит каждый активный
- * пользователь (вычисляет SpaceAccessResolver). Её нельзя архивировать, переименовать, менять состав и делать admin.
+ * пользователь (вычисляет AccessResolver). Её нельзя архивировать, переименовать, менять состав и делать admin.
  *
  * @property string $id
  * @property string $name
@@ -27,7 +27,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Collection<int, User> $members
- * @property-read Collection<int, SpaceGroup> $spaceGrants
+ * @property-read Collection<int, AccessGrant> $spaceGrants
  * @property-read int|null $members_count
  */
 #[Fillable(['name', 'description'])]
@@ -56,13 +56,13 @@ class Group extends Model
     }
 
     /**
-     * Доступы группы к пространствам.
+     * Выдачи доступа группе (в П2a — только на пространства, ADR-0024).
      *
-     * @return HasMany<SpaceGroup, $this>
+     * @return HasMany<AccessGrant, $this>
      */
     public function spaceGrants(): HasMany
     {
-        return $this->hasMany(SpaceGroup::class);
+        return $this->hasMany(AccessGrant::class);
     }
 
     /** @param  Builder<Group>  $query */

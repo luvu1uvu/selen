@@ -8,7 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
-use App\Services\Access\SpaceAccessResolver;
+use App\Services\Access\AccessResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Gate;
  */
 class UserAccessController extends Controller
 {
-    public function access(User $user, SpaceAccessResolver $resolver): JsonResponse
+    public function access(User $user, AccessResolver $resolver): JsonResponse
     {
         Gate::authorize('viewAny', User::class);
 
@@ -34,11 +34,12 @@ class UserAccessController extends Controller
             // Итог по всем действующим источникам (ADR-0012)
             'role' => $entry['access']->highestRole(),
             'sees_all_cards' => $entry['access']->canSeeAllCards(),
+            // Источник — в прежнем виде API: роль + «только свои карточки» (ADR-0024, П2a)
             'sources' => array_map(fn (array $source) => [
                 'type' => $source['group'] === null ? 'personal' : 'group',
                 'group' => $source['group'] === null ? null : ['id' => $source['group']->id, 'name' => $source['group']->name],
-                'role' => $source['role'],
-                'own_cards_only' => $source['own_cards_only'],
+                'role' => $source['source']->legacyRole(),
+                'own_cards_only' => $source['source']->ownCardsOnly(),
                 'inactive_reason' => $source['inactive_reason'],
             ], $entry['sources']),
         ]);

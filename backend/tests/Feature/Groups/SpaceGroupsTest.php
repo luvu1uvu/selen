@@ -2,8 +2,8 @@
 
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
+use App\Models\AccessGrant;
 use App\Models\EventLogEntry;
-use App\Models\SpaceGroup;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -124,7 +124,7 @@ describe('итоговые права (пример Петра)', function () {
     });
 
     it('без личного участия (только группа с ограничением) — только свои карточки', function () {
-        DB::table('space_members')->where('user_id', $this->petr->id)->delete();
+        DB::table('access_grants')->where('user_id', $this->petr->id)->delete();
         $this->actingAs($this->petr);
 
         expect($this->getJson("/api/v1/boards/{$this->board->id}")->json('data.cards.*.id'))->toBe([$this->own->id]);
@@ -233,6 +233,6 @@ describe('производительность', function () {
 
         expect($count($board))->toBe($boardFew)
             ->and($count('/api/v1/spaces'))->toBe($spacesFew)
-            ->and(SpaceGroup::query()->count())->toBe(10);
+            ->and(AccessGrant::query()->whereNotNull('group_id')->count())->toBe(10);
     });
 });

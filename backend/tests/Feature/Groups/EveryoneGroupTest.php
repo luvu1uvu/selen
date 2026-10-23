@@ -1,14 +1,15 @@
 <?php
 
+use App\Enums\Permission;
 use App\Enums\SpaceRole;
 use App\Enums\UserStatus;
 use App\Models\Group;
 use App\Models\Invitation;
 use App\Models\User;
-use App\Services\Access\SpaceAccessResolver;
+use App\Services\Access\AccessResolver;
 
 /*
-| Встроенная группа «Все сотрудники» (ADR-0012, «Изменения»): состав вычисляется в SpaceAccessResolver —
+| Встроенная группа «Все сотрудники» (ADR-0012, «Изменения»): состав вычисляется в AccessResolver —
 | каждый активный пользователь; группу нельзя архивировать, переименовать, менять её состав и делать admin.
 */
 
@@ -17,7 +18,7 @@ beforeEach(function () {
     $this->space = space(['key' => 'MGMT', 'name' => 'Management']);
     $this->spaceAdmin = member();
     addToSpace($this->space, $this->spaceAdmin, SpaceRole::Admin);
-    $this->resolver = app(SpaceAccessResolver::class);
+    $this->resolver = app(AccessResolver::class);
 });
 
 it('создаётся миграцией одна и помечена как встроенная', function () {
@@ -54,8 +55,8 @@ it('режим «только свои карточки» действует и 
     $access = $this->resolver->forSpace(member(), $this->space);
 
     expect($access->isRestricted())->toBeTrue()
-        ->and($access->allowsOnCard(fn (SpaceRole $role) => $role->canEditCards(), fn () => false))->toBeFalse()
-        ->and($access->allowsOnCard(fn (SpaceRole $role) => $role->canEditCards(), fn () => true))->toBeTrue();
+        ->and($access->allowsOnCard(Permission::CardUpdate, fn () => false))->toBeFalse()
+        ->and($access->allowsOnCard(Permission::CardUpdate, fn () => true))->toBeTrue();
 });
 
 it('новый сотрудник сразу после принятия приглашения видит пространство, деактивированный — нет', function () {

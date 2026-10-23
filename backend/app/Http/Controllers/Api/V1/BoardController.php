@@ -119,7 +119,7 @@ class BoardController extends Controller
 
     public function archive(Request $request, Board $board, SetBoardArchivedAction $action): BoardResource
     {
-        Gate::authorize('manage', $board);
+        Gate::authorize('archive', $board);
 
         return new BoardResource($action->handle($request->user(), $board, true));
     }

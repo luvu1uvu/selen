@@ -6,9 +6,11 @@ use App\Models\Space;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection;
 
 /**
  * Пространство в админке системного администратора: только метаданные, без содержимого.
+ * Администраторы (admins), счётчики и has_active_admin готовит Admin\SpaceController (через AccessResolver).
  *
  * @mixin Space
  */
@@ -21,6 +23,8 @@ class AdminSpaceResource extends JsonResource
     {
         /** @var User $user */
         $user = $request->user();
+        /** @var Collection<int, User> $admins */
+        $admins = $this->getRelation('admins');
 
         return [
             'id' => $this->id,
@@ -31,12 +35,13 @@ class AdminSpaceResource extends JsonResource
             'icon' => $this->whenLoaded('navNode', fn () => $this->navNode?->icon),
             'archived_at' => $this->archived_at?->toIso8601ZuluString(),
             'created_at' => $this->created_at->toIso8601ZuluString(),
-            'admins' => $this->admins->map(fn ($member) => [
-                'id' => $member->user->id,
-                'name' => $member->user->name,
-                'status' => $member->user->status,
+            // Личные администраторы пространства — личные выдачи с правом «управление доступом» (ADR-0012, ADR-0024)
+            'admins' => $admins->map(fn (User $admin) => [
+                'id' => $admin->id,
+                'name' => $admin->name,
+                'status' => $admin->status,
             ])->values(),
-            'members_count' => (int) $this->members_count,
+            'members_count' => (int) $this->getAttribute('personal_grants_count'),
             'groups_count' => (int) $this->getAttribute('group_grants_count'),
             // Инвариант: хотя бы один личный не деактивированный администратор (ADR-0012)
             'has_active_admin' => (bool) $this->getAttribute('has_active_admin'),

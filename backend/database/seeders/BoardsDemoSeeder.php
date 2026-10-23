@@ -38,6 +38,7 @@ use App\Enums\BoardTemplate;
 use App\Enums\ColumnCategory;
 use App\Enums\SpaceRole;
 use App\Enums\UserStatus;
+use App\Models\AccessGrant;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Card;
@@ -46,7 +47,6 @@ use App\Models\Group;
 use App\Models\Lane;
 use App\Models\NavNode;
 use App\Models\Space;
-use App\Models\SpaceMember;
 use App\Models\User;
 use App\Services\Cards\CardVisibility;
 use Carbon\CarbonImmutable;
@@ -403,8 +403,8 @@ class BoardsDemoSeeder extends Seeder
         file_put_contents($png, base64_decode(self::DEMO_PNG));
 
         foreach ($boards as $board) {
-            $members = SpaceMember::query()->where('space_id', $board->space_id)->with('user')->get()
-                ->map(fn (SpaceMember $m) => $m->user)
+            $members = AccessGrant::query()->onSpace($board->space_id)->whereNotNull('user_id')->orderBy('id')->with('user')->get()
+                ->map(fn (AccessGrant $grant) => $grant->user)
                 ->filter(fn (User $u) => $u->status === UserStatus::Active)
                 ->values();
             $cards = Card::query()->active()->where('board_id', $board->id)->orderBy('number')->with(['customer', 'space'])->get();

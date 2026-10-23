@@ -18,7 +18,7 @@ class MoveCardRequest extends FormRequest
 
     public function authorize(): Response
     {
-        return Gate::inspect('update', $this->route('card'));
+        return Gate::inspect('move', $this->route('card'));
     }
 
     /**

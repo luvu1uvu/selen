@@ -32,7 +32,6 @@ use Illuminate\Support\Carbon;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Invitation|null $latestInvitation
- * @property-read Collection<int, SpaceMember> $spaceMemberships
  * @property-read Collection<int, Group> $groups
  * @property-read Collection<int, Lane> $collapsedLanes
  * @property-read Collection<int, Board> $collapsedBoards
@@ -91,14 +90,8 @@ class User extends Authenticatable
         return $this->hasOne(Invitation::class)->latestOfMany();
     }
 
-    /** @return HasMany<SpaceMember, $this> */
-    public function spaceMemberships(): HasMany
-    {
-        return $this->hasMany(SpaceMember::class);
-    }
-
     /**
-     * Группы пользователя (состав; права — только через SpaceAccessResolver, ADR-0012).
+     * Группы пользователя (состав; права — только через AccessResolver, ADR-0012).
      *
      * @return BelongsToMany<Group, $this>
      */

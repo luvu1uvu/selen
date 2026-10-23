@@ -3,7 +3,6 @@
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
 use App\Models\Label;
-use App\Models\SpaceMember;
 use Illuminate\Support\Carbon;
 
 /*
@@ -88,7 +87,7 @@ it('ранее существовавший GET …/transitions работает
 it('пользователь с ограничением: невидимая связанная карточка в ленте замаскирована', function () {
     $restricted = member();
     addToSpace($this->space, $restricted, SpaceRole::Editor);
-    SpaceMember::query()->where('user_id', $restricted->id)->update(['own_cards_only' => true]);
+    restrictToOwnCards($restricted);
     $this->card->forceFill(['responsible_id' => $restricted->id])->save();
 
     $this->actingAs($this->editor)->postJson('/api/v1/cards/DEV-1/blocks', ['blocking_card' => 'DEV-2'])->assertCreated();

@@ -90,7 +90,7 @@ it('исключает участника: строка участия удал�
 
     $this->actingAs($this->owner)->deleteJson("/api/v1/spaces/DEV/members/{$boris->id}")->assertNoContent();
 
-    expect($this->space->members()->count())->toBe(1)
+    expect($this->space->personalGrants()->count())->toBe(1)
         ->and($boris->fresh())->not->toBeNull()
         ->and(EventLogEntry::query()->sole())
         ->event_type->toBe('space.member_removed')

@@ -8,7 +8,6 @@ use App\Models\Card;
 use App\Models\CardBlock;
 use App\Models\CardTransition;
 use App\Models\EventLogEntry;
-use App\Models\SpaceMember;
 use App\Services\Metrics\CardFlowMetrics;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -181,7 +180,7 @@ describe('карточка в корзине пропадает отовсюду
     it('зрителю «только свои» удалённая карточка, которую он и так не видел, остаётся «скрытой»', function () {
         $viewer = member();
         addToSpace($this->space, $viewer, SpaceRole::Editor);
-        SpaceMember::query()->where('space_id', $this->space->id)->where('user_id', $viewer->id)->update(['own_cards_only' => true]);
+        restrictToOwnCards($viewer, $this->space);
         $this->other->forceFill(['responsible_id' => $viewer->id])->save();   // DEV-2 — «своя»
         makeRelation($this->other, $this->card, $this->editor);
 

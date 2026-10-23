@@ -4,7 +4,6 @@ use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
 use App\Models\Card;
 use App\Models\CardTransition;
-use App\Models\SpaceMember;
 
 /*
 | Архив карточек доски и поиск карточек пространства (этап 2c): по номеру или названию, только видимые
@@ -79,7 +78,7 @@ describe('архив доски', function () {
 
         $restricted = member();
         addToSpace($this->space, $restricted, SpaceRole::Editor);
-        SpaceMember::query()->where('user_id', $restricted->id)->update(['own_cards_only' => true]);
+        restrictToOwnCards($restricted);
         Card::query()->where('number', 2)->update(['responsible_id' => $restricted->id]);
 
         ($this->archived)(user: $restricted)->assertOk()->assertJsonPath('data.*.key', ['DEV-2'])->assertJsonPath('meta.total', 1);
@@ -119,7 +118,7 @@ describe('поиск карточек пространства', function () {
     it('пользователь с ограничением находит только свои карточки', function () {
         $restricted = member();
         addToSpace($this->space, $restricted, SpaceRole::Commenter);
-        SpaceMember::query()->where('user_id', $restricted->id)->update(['own_cards_only' => true]);
+        restrictToOwnCards($restricted);
         Card::query()->where('number', 4)->update(['customer_id' => $restricted->id]);
 
         ($this->search)(user: $restricted)->assertJsonPath('data.*.key', ['DEV-4']);

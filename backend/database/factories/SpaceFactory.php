@@ -4,9 +4,11 @@ namespace Database\Factories;
 
 use App\Enums\NavNodeType;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
+use App\Models\AccessGrant;
 use App\Models\NavNode;
+use App\Models\Role;
 use App\Models\Space;
-use App\Models\SpaceMember;
 use App\Models\User;
 use App\Services\Positions\Positioner;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -43,13 +45,13 @@ class SpaceFactory extends Factory
         return $this->state(fn () => ['archived_at' => now()]);
     }
 
-    /** Добавить участника с ролью (в обход Actions — только для тестов и сидов). */
+    /** Добавить участника с ролью — личная выдача (в обход Actions — только для тестов и сидов). */
     public function withMember(User $user, SpaceRole $role): static
     {
-        return $this->afterCreating(fn (Space $space) => SpaceMember::query()->create([
-            'space_id' => $space->id,
+        return $this->afterCreating(fn (Space $space) => AccessGrant::query()->create([
+            'nav_node_id' => NavNode::query()->where('space_id', $space->id)->valueOrFail('id'),
             'user_id' => $user->id,
-            'role' => $role,
+            'role_id' => Role::standard(StandardRole::fromLegacy($role))->id,
         ]));
     }
 }

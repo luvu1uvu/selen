@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AccessGrant;
 use App\Models\Invitation;
 use App\Models\User;
 use Database\Factories\UserFactory;
@@ -137,8 +138,7 @@ it('проходит сквозной сценарий этапа 3', function (
         DB::table('spaces')->where('key', 'AND')->first(['id', 'key', 'last_card_number']),
         DB::table('cards')->where('space_id', $spaces['AND'])->get(['id', 'number', 'column_id']),
         DB::table('card_transitions')->whereIn('card_id', DB::table('cards')->select('id')->where('space_id', $spaces['AND']))->get(),
-        DB::table('space_members')->where('space_id', $spaces['AND'])->get(['user_id', 'role', 'own_cards_only']),
-        DB::table('space_groups')->where('space_id', $spaces['AND'])->orderBy('group_id')->get(['group_id', 'role', 'own_cards_only']),
+        AccessGrant::query()->onSpace($spaces['AND'])->orderBy('id')->get(['user_id', 'group_id', 'role_id'])->toArray(),
     ];
     $before = $snapshot();
     $history = $olga->get('/api/v1/cards/AND-1/history')->assertOk()->json('data');

@@ -124,7 +124,7 @@ class CardResource extends JsonResource
                 'edit' => Gate::forUser($user)->allows('update', $this->resource),
                 // Комментировать и прикладывать файлы — все роли, включая commenter
                 'comment' => Gate::forUser($user)->allows('comment', $this->resource),
-                // В корзину — только системный администратор (ADR-0015)
+                // В корзину — до П2d только системный администратор (ADR-0015)
                 'delete' => Gate::forUser($user)->allows('delete', $this->resource),
                 // Для зрителя действует режим «только свои карточки» (ADR-0008)
                 'restricted' => app(CardVisibility::class)->isRestricted($user, $this->space),

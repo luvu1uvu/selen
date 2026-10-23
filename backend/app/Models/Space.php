@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use App\Enums\SpaceRole;
+use App\Services\Access\AccessResolver;
 use App\Services\Access\SpaceAccess;
-use App\Services\Access\SpaceAccessResolver;
 use Database\Factories\SpaceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
@@ -28,11 +29,10 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property Carbon|null $archived_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
- * @property-read Collection<int, SpaceMember> $members
- * @property-read Collection<int, SpaceMember> $admins
- * @property-read int|null $members_count
+ * @property-read Collection<int, AccessGrant> $accessGrants
+ * @property-read Collection<int, AccessGrant> $personalGrants
+ * @property-read Collection<int, AccessGrant> $groupGrants
  * @property-read Collection<int, Board> $boards
- * @property-read Collection<int, SpaceGroup> $groupGrants
  * @property-read NavNode|null $navNode
  */
 #[Fillable(['name', 'key', 'description'])]
@@ -61,20 +61,34 @@ class Space extends Model
         ];
     }
 
-    /** @return HasMany<SpaceMember, $this> */
-    public function members(): HasMany
+    /**
+     * Выдачи доступа на узел пространства в дереве (ADR-0024). Права — только через accessOf().
+     *
+     * @return HasManyThrough<AccessGrant, NavNode, $this>
+     */
+    public function accessGrants(): HasManyThrough
     {
-        return $this->hasMany(SpaceMember::class);
+        return $this->hasManyThrough(AccessGrant::class, NavNode::class, 'space_id', 'nav_node_id');
     }
 
     /**
-     * Доступы групп к пространству (источники доступа; права — только через accessOf()).
+     * Личные выдачи (участники пространства).
      *
-     * @return HasMany<SpaceGroup, $this>
+     * @return HasManyThrough<AccessGrant, NavNode, $this>
      */
-    public function groupGrants(): HasMany
+    public function personalGrants(): HasManyThrough
     {
-        return $this->hasMany(SpaceGroup::class);
+        return $this->accessGrants()->whereNotNull('access_grants.user_id');
+    }
+
+    /**
+     * Выдачи группам (источники доступа; права — только через accessOf()).
+     *
+     * @return HasManyThrough<AccessGrant, NavNode, $this>
+     */
+    public function groupGrants(): HasManyThrough
+    {
+        return $this->accessGrants()->whereNotNull('access_grants.group_id');
     }
 
     /**
@@ -103,12 +117,6 @@ class Space extends Model
         return $this->hasMany(Card::class);
     }
 
-    /** @return HasMany<SpaceMember, $this> */
-    public function admins(): HasMany
-    {
-        return $this->hasMany(SpaceMember::class)->where('role', SpaceRole::Admin);
-    }
-
     /**
      * Только пространства, к которым у пользователя есть доступ (лично или через группу).
      *
@@ -116,7 +124,7 @@ class Space extends Model
      */
     public function scopeVisibleTo(Builder $query, User $user): void
     {
-        $query->whereIn('id', app(SpaceAccessResolver::class)->spaceIdsQuery($user));
+        $query->whereIn('id', app(AccessResolver::class)->spaceIdsQuery($user));
     }
 
     /** @param  Builder<Space>  $query */
@@ -131,13 +139,13 @@ class Space extends Model
     }
 
     /**
-     * Итоговые права пользователя: все действующие источники доступа (личное участие и группы).
+     * Итоговые права пользователя: все действующие источники доступа (личные выдачи и группы).
      * Единственный вход для политик и CardVisibility; вычисляется один раз на экземпляр.
      */
     public function accessOf(User $user): SpaceAccess
     {
         return $this->resolvedAccess[(string) $user->getKey()]
-            ??= app(SpaceAccessResolver::class)->forSpace($user, $this);
+            ??= app(AccessResolver::class)->forSpace($user, $this);
     }
 
     /** Самая сильная роль пользователя — для показа (my_role); null — доступа нет. Права — через accessOf(). */
@@ -153,7 +161,7 @@ class Space extends Model
      */
     public static function accessesOf(User $user): SupportCollection
     {
-        return app(SpaceAccessResolver::class)->forUser($user);
+        return app(AccessResolver::class)->forUser($user);
     }
 
     /** Запомнить уже вычисленные права (списки читают права всех пространств одним запросом). */

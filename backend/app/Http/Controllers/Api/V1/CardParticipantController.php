@@ -24,7 +24,7 @@ class CardParticipantController extends Controller
 
     public function destroy(Request $request, Card $card, User $user, RemoveCardParticipantAction $action): CardResource
     {
-        Gate::authorize('update', $card);
+        Gate::authorize('invite', $card);
 
         return new CardResource($action->handle($request->user(), $card, $user)->loadDetails());
     }

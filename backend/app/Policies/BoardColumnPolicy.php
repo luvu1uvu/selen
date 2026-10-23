@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permission;
 use App\Models\BoardColumn;
 use App\Models\User;
 use App\Policies\Concerns\ChecksSpaceRole;
@@ -14,6 +15,6 @@ class BoardColumnPolicy
 
     public function manage(User $actor, BoardColumn $column): Response
     {
-        return $this->allowBoardStructure($actor, $column->board);
+        return $this->allowOnBoard($actor, $column->board, Permission::BoardUpdate);
     }
 }

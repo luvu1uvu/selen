@@ -1,13 +1,15 @@
 <?php
 
 use App\Enums\BoardTemplate;
+use App\Enums\CardScope;
+use App\Enums\Permission;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
 use App\Enums\UserStatus;
 use App\Models\Card;
 use App\Models\Group;
 use App\Models\Label;
-use App\Models\SpaceMember;
-use App\Services\Access\SpaceAccessResolver;
+use App\Services\Access\AccessResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -16,10 +18,14 @@ use Illuminate\Support\Facades\Storage;
 | Матрица доступа к содержимому пространств (docs/adr/0005-space-access.md).
 |
 | Каждый эндпоинт пространства обязан быть в списке ниже — это проверяет последний тест:
-| новый маршрут без записи в матрице уронит CI. Минимальная роль:
-|   member — любой участник (чтение, комментарии и файлы), editor — правка карточек,
-|   admin — структура и участники, author — только автор (свой комментарий; в матрице автор — другой человек),
-|   sysadmin — никакая роль пространства не даёт, только системный администратор (удаление карточки в корзину).
+| новый маршрут без записи в матрице уронит CI. У эндпоинта две колонки:
+|   минимальная роль (как до «Прав 2.0»): member — любой участник (чтение, комментарии и файлы), editor — правка
+|   карточек, admin — структура и участники, author — только автор (свой комментарий; в матрице автор — другой
+|   человек), sysadmin — никакая роль пространства не даёт, только системный администратор (удаление в корзину);
+|   право каталога (ADR-0024): Permission, которое проверяет политика, или read — чтение (есть в любой роли),
+|   author и sysadmin — как выше.
+| Сценарии по ролям проверяют, что поведение стандартных ролей не изменилось; сценарии по правам — что у каждого
+| маршрута ровно то право каталога, которое записано в матрице (роль «только это право» — разрешено, остальное — 403).
 |
 | Маршруты карточки ({card}) дополнительно проверяются для пользователя в режиме «только свои карточки»
 | (ADR-0008): со своей карточкой — как его роль, с чужой — 404.
@@ -35,95 +41,95 @@ use Illuminate\Support\Facades\Storage;
 */
 
 /**
- * @return array<string, array{string, string, string}>
+ * @return array<string, array{string, string, string, Permission|string}>
  */
 function spaceEndpoints(): array
 {
     $endpoints = [
-        ['GET', 'spaces/{space}', 'member'],
-        ['PATCH', 'spaces/{space}', 'admin'],
-        ['GET', 'spaces/{space}/members', 'member'],
-        ['POST', 'spaces/{space}/members', 'admin'],
-        ['PATCH', 'spaces/{space}/members/{user}', 'admin'],
-        ['DELETE', 'spaces/{space}/members/{user}', 'admin'],
+        ['GET', 'spaces/{space}', 'member', 'read'],
+        ['PATCH', 'spaces/{space}', 'admin', Permission::SpaceUpdate],
+        ['GET', 'spaces/{space}/members', 'member', 'read'],
+        ['POST', 'spaces/{space}/members', 'admin', Permission::SpaceManageAccess],
+        ['PATCH', 'spaces/{space}/members/{user}', 'admin', Permission::SpaceManageAccess],
+        ['DELETE', 'spaces/{space}/members/{user}', 'admin', Permission::SpaceManageAccess],
         // Вкладка «Группы»: пользователю только с режимом «только свои карточки» — 403 (отдельный тест)
-        ['GET', 'spaces/{space}/groups', 'member'],
-        ['POST', 'spaces/{space}/groups', 'admin'],
-        ['PATCH', 'spaces/{space}/groups/{group}', 'admin'],
-        ['DELETE', 'spaces/{space}/groups/{group}', 'admin'],
+        ['GET', 'spaces/{space}/groups', 'member', 'read'],
+        ['POST', 'spaces/{space}/groups', 'admin', Permission::SpaceManageAccess],
+        ['PATCH', 'spaces/{space}/groups/{group}', 'admin', Permission::SpaceManageAccess],
+        ['DELETE', 'spaces/{space}/groups/{group}', 'admin', Permission::SpaceManageAccess],
 
-        ['GET', 'spaces/{space}/boards', 'member'],
-        ['POST', 'spaces/{space}/boards', 'admin'],
-        ['GET', 'boards/{board}', 'member'],
-        ['PATCH', 'boards/{board}', 'admin'],
-        ['POST', 'boards/{board}/move', 'admin'],
-        ['POST', 'boards/{board}/archive', 'admin'],
-        ['POST', 'boards/{board}/restore', 'admin'],
+        ['GET', 'spaces/{space}/boards', 'member', 'read'],
+        ['POST', 'spaces/{space}/boards', 'admin', Permission::BoardCreate],
+        ['GET', 'boards/{board}', 'member', 'read'],
+        ['PATCH', 'boards/{board}', 'admin', Permission::BoardUpdate],
+        ['POST', 'boards/{board}/move', 'admin', Permission::BoardUpdate],
+        ['POST', 'boards/{board}/archive', 'admin', Permission::BoardDelete],
+        ['POST', 'boards/{board}/restore', 'admin', Permission::BoardDelete],
         // Личное сворачивание доски на странице пространства — вид, а не изменение доски (ADR-0019)
-        ['PUT', 'boards/{board}/collapsed', 'member'],
-        ['DELETE', 'boards/{board}/collapsed', 'member'],
-        ['GET', 'boards/{board}/archived-cards', 'editor'],
+        ['PUT', 'boards/{board}/collapsed', 'member', 'read'],
+        ['DELETE', 'boards/{board}/collapsed', 'member', 'read'],
+        ['GET', 'boards/{board}/archived-cards', 'editor', Permission::CardMove],
 
-        ['POST', 'boards/{board}/columns', 'admin'],
-        ['PATCH', 'columns/{column}', 'admin'],
-        ['POST', 'columns/{column}/move', 'admin'],
-        ['PUT', 'columns/{column}/category', 'admin'],
-        ['POST', 'columns/{column}/archive', 'admin'],
+        ['POST', 'boards/{board}/columns', 'admin', Permission::BoardUpdate],
+        ['PATCH', 'columns/{column}', 'admin', Permission::BoardUpdate],
+        ['POST', 'columns/{column}/move', 'admin', Permission::BoardUpdate],
+        ['PUT', 'columns/{column}/category', 'admin', Permission::BoardUpdate],
+        ['POST', 'columns/{column}/archive', 'admin', Permission::BoardUpdate],
 
-        ['POST', 'boards/{board}/lanes', 'admin'],
-        ['PATCH', 'lanes/{lane}', 'admin'],
-        ['POST', 'lanes/{lane}/move', 'admin'],
-        ['POST', 'lanes/{lane}/archive', 'admin'],
+        ['POST', 'boards/{board}/lanes', 'admin', Permission::BoardUpdate],
+        ['PATCH', 'lanes/{lane}', 'admin', Permission::BoardUpdate],
+        ['POST', 'lanes/{lane}/move', 'admin', Permission::BoardUpdate],
+        ['POST', 'lanes/{lane}/archive', 'admin', Permission::BoardUpdate],
         // Личное сворачивание дорожки — вид, а не изменение доски (ADR-0019)
-        ['PUT', 'lanes/{lane}/collapsed', 'member'],
-        ['DELETE', 'lanes/{lane}/collapsed', 'member'],
+        ['PUT', 'lanes/{lane}/collapsed', 'member', 'read'],
+        ['DELETE', 'lanes/{lane}/collapsed', 'member', 'read'],
 
-        ['POST', 'boards/{board}/cards', 'editor'],
-        ['GET', 'cards/{card}', 'member'],
-        ['PATCH', 'cards/{card}', 'editor'],
-        ['DELETE', 'cards/{card}', 'sysadmin'],
-        ['POST', 'cards/{card}/move', 'editor'],
-        ['POST', 'cards/{card}/archive', 'editor'],
-        ['POST', 'cards/{card}/restore', 'editor'],
-        ['GET', 'cards/{card}/transitions', 'member'],
-        ['GET', 'cards/{card}/history', 'member'],
-        ['POST', 'cards/{card}/participants', 'editor'],
-        ['DELETE', 'cards/{card}/participants/{user}', 'editor'],
-        ['PUT', 'cards/{card}/labels', 'editor'],
+        ['POST', 'boards/{board}/cards', 'editor', Permission::CardCreate],
+        ['GET', 'cards/{card}', 'member', 'read'],
+        ['PATCH', 'cards/{card}', 'editor', Permission::CardUpdate],
+        ['DELETE', 'cards/{card}', 'sysadmin', 'sysadmin'],
+        ['POST', 'cards/{card}/move', 'editor', Permission::CardMove],
+        ['POST', 'cards/{card}/archive', 'editor', Permission::CardMove],
+        ['POST', 'cards/{card}/restore', 'editor', Permission::CardMove],
+        ['GET', 'cards/{card}/transitions', 'member', 'read'],
+        ['GET', 'cards/{card}/history', 'member', 'read'],
+        ['POST', 'cards/{card}/participants', 'editor', Permission::CardInvite],
+        ['DELETE', 'cards/{card}/participants/{user}', 'editor', Permission::CardInvite],
+        ['PUT', 'cards/{card}/labels', 'editor', Permission::CardUpdate],
 
-        ['GET', 'spaces/{space}/labels', 'member'],
-        ['POST', 'spaces/{space}/labels', 'admin'],
-        ['PATCH', 'labels/{label}', 'admin'],
-        ['POST', 'labels/{label}/archive', 'admin'],
-        ['POST', 'labels/{label}/restore', 'admin'],
+        ['GET', 'spaces/{space}/labels', 'member', 'read'],
+        ['POST', 'spaces/{space}/labels', 'admin', Permission::SpaceUpdate],
+        ['PATCH', 'labels/{label}', 'admin', Permission::SpaceUpdate],
+        ['POST', 'labels/{label}/archive', 'admin', Permission::SpaceUpdate],
+        ['POST', 'labels/{label}/restore', 'admin', Permission::SpaceUpdate],
 
-        ['GET', 'cards/{card}/mentionable', 'member'],
-        ['GET', 'cards/{card}/comments', 'member'],
-        ['POST', 'cards/{card}/comments', 'member'],
-        ['PATCH', 'comments/{comment}', 'author'],
-        ['DELETE', 'comments/{comment}', 'author'],
-        ['POST', 'cards/{card}/checklists', 'editor'],
-        ['PATCH', 'checklists/{checklist}', 'editor'],
-        ['DELETE', 'checklists/{checklist}', 'editor'],
-        ['POST', 'checklists/{checklist}/items', 'editor'],
-        ['PATCH', 'checklist-items/{item}', 'editor'],
-        ['POST', 'checklist-items/{item}/move', 'editor'],
-        ['DELETE', 'checklist-items/{item}', 'editor'],
-        ['POST', 'cards/{card}/links', 'editor'],
-        ['PATCH', 'card-links/{link}', 'editor'],
-        ['DELETE', 'card-links/{link}', 'editor'],
-        ['POST', 'cards/{card}/attachments', 'member'],
-        ['GET', 'attachments/{attachment}', 'member'],
+        ['GET', 'cards/{card}/mentionable', 'member', 'read'],
+        ['GET', 'cards/{card}/comments', 'member', 'read'],
+        ['POST', 'cards/{card}/comments', 'member', Permission::CardComment],
+        ['PATCH', 'comments/{comment}', 'author', 'author'],
+        ['DELETE', 'comments/{comment}', 'author', 'author'],
+        ['POST', 'cards/{card}/checklists', 'editor', Permission::CardUpdate],
+        ['PATCH', 'checklists/{checklist}', 'editor', Permission::CardUpdate],
+        ['DELETE', 'checklists/{checklist}', 'editor', Permission::CardUpdate],
+        ['POST', 'checklists/{checklist}/items', 'editor', Permission::CardUpdate],
+        ['PATCH', 'checklist-items/{item}', 'editor', Permission::CardUpdate],
+        ['POST', 'checklist-items/{item}/move', 'editor', Permission::CardUpdate],
+        ['DELETE', 'checklist-items/{item}', 'editor', Permission::CardUpdate],
+        ['POST', 'cards/{card}/links', 'editor', Permission::CardUpdate],
+        ['PATCH', 'card-links/{link}', 'editor', Permission::CardUpdate],
+        ['DELETE', 'card-links/{link}', 'editor', Permission::CardUpdate],
+        ['POST', 'cards/{card}/attachments', 'member', Permission::CardComment],
+        ['GET', 'attachments/{attachment}', 'member', 'read'],
         // Ссылка на файл, которую браузер открывает сам (UI-1b, веб-маршрут вне /api/v1 — путь от корня)
-        ['GET', '/files/{attachment}', 'member'],
+        ['GET', '/files/{attachment}', 'member', 'read'],
         // Удаляет загрузивший (в матрице — другой человек), editor или admin
-        ['DELETE', 'attachments/{attachment}', 'editor'],
+        ['DELETE', 'attachments/{attachment}', 'editor', Permission::CardUpdate],
 
-        ['GET', 'spaces/{space}/cards', 'member'],
-        ['POST', 'cards/{card}/relations', 'editor'],
-        ['DELETE', 'cards/{card}/relations/{relation}', 'editor'],
-        ['POST', 'cards/{card}/blocks', 'editor'],
-        ['POST', 'card-blocks/{block}/resolve', 'editor'],
+        ['GET', 'spaces/{space}/cards', 'member', 'read'],
+        ['POST', 'cards/{card}/relations', 'editor', Permission::CardUpdate],
+        ['DELETE', 'cards/{card}/relations/{relation}', 'editor', Permission::CardUpdate],
+        ['POST', 'cards/{card}/blocks', 'editor', Permission::CardUpdate],
+        ['POST', 'card-blocks/{block}/resolve', 'editor', Permission::CardUpdate],
     ];
 
     return collect($endpoints)->keyBy(fn (array $e) => "{$e[0]} {$e[1]}")->all();
@@ -142,7 +148,7 @@ const CARD_CONTENT_PLACEHOLDERS = ['{card}', '{comment}', '{checklist}', '{item}
 /**
  * Маршруты карточки — для проверки режима «только свои карточки».
  *
- * @return array<string, array{string, string, string}>
+ * @return array<string, array{string, string, string, Permission|string}>
  */
 function cardEndpoints(): array
 {
@@ -255,23 +261,55 @@ function restrictedMember($test, SpaceRole $role, string $source = 'personal')
         return $user;
     }
 
-    addToSpace($test->space, $user, $role);
-    SpaceMember::query()->where('space_id', $test->space->id)->where('user_id', $user->id)->update(['own_cards_only' => true]);
+    addToSpace($test->space, $user, StandardRole::fromLegacy($role, ownCardsOnly: true));
 
     return $user;
+}
+
+/** Прежнее правило уровней ролей (до «Прав 2.0») — заморожено здесь как эталон поведения. */
+function allowedByLevel(string $level, SpaceRole $role): bool
+{
+    return match ($level) {
+        'member' => true,
+        'editor' => $role === SpaceRole::Admin || $role === SpaceRole::Editor,
+        'admin' => $role === SpaceRole::Admin,
+        'author', 'sysadmin' => false,
+    };
+}
+
+/**
+ * Разрешает ли маршрут роль с таким набором прав (область «все карточки»).
+ *
+ * @param  list<Permission>  $permissions
+ */
+function allowedByPermission(Permission|string $required, array $permissions): bool
+{
+    return match (true) {
+        $required === 'read' => true,
+        $required instanceof Permission => in_array($required, $permissions, true),
+        // author, sysadmin: никакое право роли не даёт
+        default => false,
+    };
+}
+
+/**
+ * Права каталога, которые проверяют маршруты матрицы.
+ *
+ * @return list<Permission>
+ */
+function matrixPermissions(): array
+{
+    return collect(spaceEndpoints())->pluck(3)
+        ->filter(fn ($p) => $p instanceof Permission)
+        ->unique(fn (Permission $p) => $p->value)
+        ->values()
+        ->all();
 }
 
 /** Ожидаемый ответ для роли: разрешено — не 403/404, иначе 403. */
 function expectByLevel($response, string $level, SpaceRole $role, string $context = ''): void
 {
-    $allowed = match ($level) {
-        'member' => true,
-        'editor' => $role->canEditCards(),
-        'admin' => $role->canManageSpace(),
-        'author', 'sysadmin' => false,
-    };
-
-    $allowed
+    allowedByLevel($level, $role)
         ? expect($response->getStatusCode())->not->toBeIn([403, 404], $context)
         : $response->assertForbidden();
 }
@@ -328,14 +366,14 @@ it('через «Все сотрудники» роли действуют та�
     $user = member();
 
     foreach ([SpaceRole::Commenter, SpaceRole::Editor] as $role) {
-        $grant->forceFill(['role' => $role])->save();
+        $grant->forceFill(['role_id' => standardRole(StandardRole::fromLegacy($role))->id])->save();
         $this->actingAs($user);
 
         expectByLevel(($this->call)($method, $path), $level, $role, "«Все сотрудники»: {$role->value}");
     }
 
     $deactivated = member(['status' => UserStatus::Deactivated]);
-    expect(app(SpaceAccessResolver::class)->forSpace($deactivated, $this->space)->isMember())->toBeFalse();
+    expect(app(AccessResolver::class)->forSpace($deactivated, $this->space)->isMember())->toBeFalse();
 })->with(spaceEndpoints());
 
 it('через «Все сотрудники» в режиме «только свои карточки» чужая карточка — 404', function (string $method, string $path) {
@@ -396,6 +434,79 @@ it('ответ для чужого ресурса неотличим от нес
     'доска' => ['boards/{board}', 'boards/01JA0000000000000000000000'],
     'карточка' => ['cards/{card}', 'cards/DEV-999'],
 ]);
+
+it('стандартные роли: права каталога из базы дают те же ответы, что прежние уровни ролей', function () {
+    foreach ([StandardRole::Admin, StandardRole::Editor, StandardRole::Commenter] as $role) {
+        $permissions = DB::table('role_permissions')->where('role_id', standardRole($role)->id)->pluck('permission')
+            ->map(fn (string $p) => Permission::from($p))->all();
+
+        foreach (spaceEndpoints() as $key => [, , $level, $required]) {
+            expect(allowedByPermission($required, $permissions))->toBe(allowedByLevel($level, $role->legacyRole()), "{$key}: {$role->value}");
+        }
+    }
+});
+
+it('у маршрута ровно его право каталога: роль «только это право» — разрешено, с любым другим — 403', function (string $method, string $path, string $level, Permission|string $required) {
+    // Право маршрута — последним: его обладатель меняет данные (архив доски, исключение участника), остальные — нет
+    $permissions = collect(matrixPermissions())->sortBy(fn (Permission $p) => $p === $required)->values();
+
+    foreach ($permissions as $permission) {
+        $user = member();
+        grantAccess($this->space, $user, makeRole([$permission]));
+        $this->actingAs($user);
+        $response = ($this->call)($method, $path);
+
+        allowedByPermission($required, [$permission])
+            ? expect($response->getStatusCode())->not->toBeIn([403, 404], $permission->value)
+            : $response->assertForbidden();
+    }
+})->with(spaceEndpoints());
+
+it('то же право через группу и «Все сотрудники» действует так же, как лично', function (string $method, string $path, string $level, Permission|string $required) {
+    $permissions = $required instanceof Permission ? [$required] : [];
+    $role = makeRole($permissions);
+    $user = member();
+    grantAccess($this->space, addToGroup(makeGroup(), $user), $role);
+    $this->actingAs($user);
+
+    $response = ($this->call)($method, $path);
+    allowedByPermission($required, $permissions)
+        ? expect($response->getStatusCode())->not->toBeIn([403, 404], 'через группу')
+        : $response->assertForbidden();
+
+    // «Все сотрудники»: выдача группе, состав которой вычисляется
+    $everyone = member();
+    grantAccess($this->space, Group::everyone(), makeRole([]));
+    $this->actingAs($everyone);
+    allowedByPermission($required, [])
+        ? expect(($this->call)($method, $path)->getStatusCode())->not->toBeIn([403, 404], '«Все сотрудники»: только чтение')
+        : ($this->call)($method, $path)->assertForbidden();
+})->with(spaceEndpoints());
+
+it('область роли «свои карточки»: чужая карточка — 404, на своей действует право роли', function (string $method, string $path, string $level, Permission|string $required) {
+    $permissions = $required instanceof Permission ? [$required] : [];
+    $user = member();
+    grantAccess($this->space, $user, makeRole($permissions, CardScope::Own));
+    $this->actingAs($user);
+
+    ($this->call)($method, $path)->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
+
+    Card::query()->whereKey($this->card->id)->update(['responsible_id' => $user->id]);
+    $response = ($this->call)($method, $path);
+    allowedByPermission($required, $permissions)
+        ? expect($response->getStatusCode())->not->toBeIn([403, 404], 'своя карточка')
+        : $response->assertForbidden();
+})->with(cardEndpoints());
+
+it('каждое право каталога, которое действует с П2a, проверяет хотя бы один маршрут матрицы', function () {
+    $active = collect(Permission::cases())
+        ->filter(fn (Permission $p) => $p->since() === 'П2a')
+        ->reject(fn (Permission $p) => in_array($p, Permission::alwaysGranted(), true))
+        ->map(fn (Permission $p) => $p->value);
+
+    expect(collect(matrixPermissions())->map(fn (Permission $p) => $p->value)->sort()->values()->all())
+        ->toBe($active->sort()->values()->all());
+});
 
 it('все маршруты содержимого пространств есть в матрице доступа', function () {
     $covered = array_keys(spaceEndpoints());

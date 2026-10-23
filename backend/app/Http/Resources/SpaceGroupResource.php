@@ -2,15 +2,16 @@
 
 namespace App\Http\Resources;
 
-use App\Models\SpaceGroup;
+use App\Models\AccessGrant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Доступ группы к пространству — вкладка «Группы» в участниках пространства.
+ * Доступ группы к пространству (выдача группе) — вкладка «Группы» в участниках пространства.
  * Архивная группа остаётся в списке с пометкой: доступа она не даёт, но доступ сохранён.
+ * Роль — в прежнем виде API: роль + «только свои карточки» (ADR-0024, П2a). Ожидает загруженные group и role.
  *
- * @mixin SpaceGroup
+ * @mixin AccessGrant
  */
 class SpaceGroupResource extends JsonResource
 {
@@ -28,8 +29,8 @@ class SpaceGroupResource extends JsonResource
                 'archived_at' => $this->group->archived_at?->toIso8601ZuluString(),
                 'members_count' => $this->group->membersCount(),
             ],
-            'role' => $this->role,
-            'own_cards_only' => $this->own_cards_only,
+            'role' => $this->standardRole()->legacyRole(),
+            'own_cards_only' => $this->standardRole()->ownCardsOnly(),
             'added_at' => $this->created_at->toIso8601ZuluString(),
         ];
     }

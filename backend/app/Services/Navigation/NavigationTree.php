@@ -3,13 +3,13 @@
 namespace App\Services\Navigation;
 
 use App\Enums\NavNodeType;
-use App\Enums\SpaceRole;
+use App\Enums\Permission;
 use App\Models\Board;
 use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
+use App\Services\Access\AccessResolver;
 use App\Services\Access\SpaceAccess;
-use App\Services\Access\SpaceAccessResolver;
 use Illuminate\Support\Collection;
 
 /**
@@ -29,7 +29,7 @@ use Illuminate\Support\Collection;
  */
 class NavigationTree
 {
-    public function __construct(private readonly SpaceAccessResolver $resolver) {}
+    public function __construct(private readonly AccessResolver $resolver) {}
 
     /**
      * Дерево пользователя: вложенные узлы.
@@ -207,7 +207,8 @@ class NavigationTree
                     'icon' => $node->icon,
                     'everyone' => $everyone,
                     // Управлять пространством (создать доску) — как BoardPolicy::create
-                    'can_manage' => $context['accesses'][$space->id]->allows(fn (SpaceRole $role) => $role->canManageSpace()),
+                    // Как permissions.manage пространства (SpaceResource) — прежний флаг администратора пространства
+                    'can_manage' => $context['accesses'][$space->id]->allows(Permission::SpaceUpdate),
                     'space' => ['id' => $space->id, 'key' => $space->key, 'name' => $space->name],
                     'boards' => $context['boards']->get($space->id, collect())
                         ->map(fn (Board $board) => ['id' => $board->id, 'name' => $board->name])

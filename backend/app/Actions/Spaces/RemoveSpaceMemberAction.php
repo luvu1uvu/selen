@@ -4,13 +4,15 @@ namespace App\Actions\Spaces;
 
 use App\Enums\EventType;
 use App\Enums\SpaceRole;
+use App\Models\AccessGrant;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Исключение из пространства: удаляется строка участия (доступ), пользователь остаётся.
+ * Исключение из пространства: удаляется личная выдача (доступ), пользователь остаётся.
  * Факт и прежняя роль сохраняются в журнале событий.
  */
 class RemoveSpaceMemberAction
@@ -18,23 +20,25 @@ class RemoveSpaceMemberAction
     public function __construct(
         private readonly EventRecorder $events,
         private readonly SpaceAdminGuard $guard,
+        private readonly SpaceGrants $grants,
     ) {}
 
     public function handle(User $actor, Space $space, User $user): void
     {
         DB::transaction(function () use ($actor, $space, $user) {
             $space = $this->guard->lock($space);
-            $member = $space->members()->where('user_id', $user->getKey())->firstOrFail();
+            $grant = $this->grants->personal($space, $user) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
+            $role = $grant->standardRole()->legacyRole();
 
-            if ($member->role === SpaceRole::Admin) {
+            if ($role === SpaceRole::Admin) {
                 $this->guard->ensureAnotherAdminRemains($space, $user);
             }
 
-            $member->delete();
+            $grant->delete();
 
             $this->events->record(EventType::SpaceMemberRemoved, $actor, $space, [
                 'user_id' => $user->id,
-                'role' => $member->role->value,
+                'role' => $role->value,
             ]);
         });
     }

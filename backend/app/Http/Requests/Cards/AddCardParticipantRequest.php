@@ -12,7 +12,7 @@ class AddCardParticipantRequest extends FormRequest
 {
     public function authorize(): Response
     {
-        return Gate::inspect('update', $this->route('card'));
+        return Gate::inspect('invite', $this->route('card'));
     }
 
     /**
