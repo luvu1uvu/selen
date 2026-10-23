@@ -12,7 +12,8 @@ import {
 
 /**
  * ТК-UI1.7: «Основные параметры» — две колонки «поле — значение» в порядке Расположение, Тип, Ответственный,
- * Участники, Срок, Срочно, Метки, План, ч; срок и метки, пока не заданы, скрыты и добавляются через «+» (LATER-97);
+ * Участники, Срок, Срочно, Метки, План, ч; срок и метки, пока не заданы, скрыты и добавляются через «+» (LATER-97), план —
+ * тоже (решение PM 22.10, пачка UX-2);
  * каждое поле правится, после каждого изменения — «Сохранено»; на плитке —
  * ответственный, срок, метка, срочность, новый тип. Карточка без ответственного → WIN-3 «Поля правятся» (E2eSeeder);
  * Анна → e2e-editor; «Борис Петров» → E2E Администратор, «Вера Иванова» → E2E Подрядчик, метка — «Окно».
@@ -43,9 +44,9 @@ test('ТК-UI1.7. «Основные параметры»: поля читают
     'Ответственный',
     'Участники',
     'Срочно',
-    'План, ч',
   ])
-  for (const name of ['Расположение', 'Ответственный', 'План, ч']) {
+  // Пачка UX-2 (решение PM 22.10): «План, ч», пока не задан, скрыт и добавляется через «+», как срок; вместо него — «Срочно»
+  for (const name of ['Расположение', 'Ответственный', 'Срочно']) {
     const label = (await main.locator('dt', { hasText: name }).boundingBox())!
     const value = (await param(main, name).boundingBox())!
     expect(value.x, name).toBeGreaterThan(label.x + 100)
@@ -101,7 +102,11 @@ test('ТК-UI1.7. «Основные параметры»: поля читают
   await expect(page.getByRole('menu')).toHaveCount(0)
   await expect(param(main, 'Метки')).toContainText('Окно')
 
+  // Пачка UX-2 (решение PM 22.10): «План, ч» — через «+», поле сразу в фокусе
+  await window.getByRole('button', { name: 'Добавить в карточку' }).click()
+  await page.getByRole('menuitem', { name: 'План, ч' }).click()
   const estimate = main.getByRole('textbox', { name: 'План, ч' })
+  await expect(estimate).toBeFocused()
   await estimate.fill('2,5')
   await expectNewToast(page, 'Сохранено', () => estimate.press('Enter'))
   await expect(estimate).toHaveValue(/^2[.,]5$/)

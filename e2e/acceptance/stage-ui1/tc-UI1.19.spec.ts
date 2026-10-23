@@ -29,7 +29,9 @@ test('ТК-UI1.19. Комментатор видит окно без правк�
   await expect(param(main, 'Расположение')).toContainText('Релизы / To Do')
   await expect(main.getByRole('button')).toHaveText(['Основные параметры'])
   await expect(main.getByRole('textbox')).toHaveCount(0)
-  await expect(main.getByRole('checkbox', { name: 'Срочно' })).toBeDisabled()
+  // Пачка UX-2 (решение PM 22.10): «Срочно» без права правки — текстом «Да» / «Нет», а не недоступным флажком (V-5)
+  await expect(main.getByRole('checkbox', { name: 'Срочно' })).toHaveCount(0)
+  await expect(param(main, 'Срочно')).toHaveText(/^(Да|Нет)$/)
   await expect(window.getByRole('button', { name: /заказчик$/ })).toHaveCount(0)
 
   // «+» — только «Загрузить файл»

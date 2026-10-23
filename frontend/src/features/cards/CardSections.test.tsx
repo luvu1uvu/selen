@@ -155,7 +155,7 @@ describe('Карточка: люди, поля, метки', () => {
   })
 
   it('«Срочно» и план с шагом 0,5 часа', async () => {
-    const calls = serveCard(makeCardDetail())
+    const calls = serveCard(makeCardDetail({ estimate_hours: 1 }))
     renderApp('/cards/DEV-1')
     const panel = await screen.findByRole('dialog')
 
@@ -174,6 +174,33 @@ describe('Карточка: люди, поля, метки', () => {
         { is_urgent: true },
         { estimate_hours: 2.5 },
       ]),
+    )
+  })
+
+  it('«План, ч», пока не задан, скрыт — добавляется через «+» → «Основное», как срок (решение PM 22.10)', async () => {
+    const calls = serveCard(makeCardDetail())
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+    const section = within(panel).getByRole('region', { name: 'Основные параметры' })
+    expect(within(section).queryByLabelText('План, ч')).not.toBeInTheDocument()
+    // «Срочно» видно всегда (решение PM 22.10)
+    expect(within(section).getByRole('checkbox', { name: 'Срочно' })).toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Добавить в карточку' }))
+    const main = within(await screen.findByRole('group', { name: 'Основное' }))
+    await userEvent.click(main.getByRole('menuitem', { name: 'План, ч' }))
+    const estimate = await within(section).findByLabelText('План, ч')
+    await vi.waitFor(() => expect(estimate).toHaveFocus())
+    await userEvent.type(estimate, '3{Enter}')
+    await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ estimate_hours: 3 }))
+    expect(within(section).getByLabelText('План, ч')).toHaveValue('3')
+
+    // Так и не задали — строка пропадает
+    await userEvent.clear(within(section).getByLabelText('План, ч'))
+    await userEvent.keyboard('{Enter}')
+    await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ estimate_hours: null }))
+    await vi.waitFor(() =>
+      expect(within(section).queryByLabelText('План, ч')).not.toBeInTheDocument(),
     )
   })
 
@@ -218,7 +245,7 @@ describe('Карточка: люди, поля, метки', () => {
       within(section)
         .getAllByRole('term')
         .map((term) => term.textContent),
-    ).toEqual(['Расположение', 'Тип', 'Ответственный', 'Участники', 'Срочно', 'План, ч'])
+    ).toEqual(['Расположение', 'Тип', 'Ответственный', 'Участники', 'Срочно'])
     expect(within(section).getByText('Продукт / To Do (Основная)')).toBeInTheDocument()
 
     await userEvent.click(within(section).getByRole('button', { name: 'Задача — тип карточки' }))
@@ -247,7 +274,11 @@ describe('Карточка: люди, поля, метки', () => {
     ).not.toBeInTheDocument()
     expect(within(panel).queryByLabelText('План, ч')).not.toBeInTheDocument()
     expect(within(panel).getByText('6,5')).toBeInTheDocument()
-    expect(within(panel).getByRole('checkbox', { name: 'Срочно' })).toBeDisabled()
+    // «Срочно» у читателя — текстом, а не недоступным флажком (V-5)
+    const section = within(panel).getByRole('region', { name: 'Основные параметры' })
+    expect(within(section).queryByRole('checkbox', { name: 'Срочно' })).not.toBeInTheDocument()
+    const urgent = within(section).getByText('Срочно').closest('div')!
+    expect(urgent).toHaveTextContent('СрочноНет')
   })
 })
 

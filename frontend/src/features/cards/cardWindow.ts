@@ -42,7 +42,8 @@ export function useUnsavedText(unsaved: boolean) {
 }
 
 /** Что добавляет пункт «+» окна карточки (файл — сразу выбором файла, без формы). */
-export type AddKind = 'due' | 'labels' | 'checklist' | 'link' | 'parent' | 'child' | 'block'
+export type AddKind =
+  'due' | 'labels' | 'estimate' | 'checklist' | 'link' | 'parent' | 'child' | 'block'
 
 /** state перехода к карточке с плитки доски: первое окно поверх страницы. */
 export const OPEN_FROM_PAGE: CardWindowLocationState = { cardDepth: 1 }
