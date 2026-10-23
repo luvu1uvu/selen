@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openHome, pageAs } from '../../tests/helpers'
 import { openUsers, userRow } from '../stage-3/helpers'
-import { accessRow, ALL, INTERNS, openMembers, result, sources, spaceLink } from './helpers'
+import { expectHint } from '../stage-ux1/helpers'
+import { accessRow, ALL, INTERNS, openMembers, result, sources, spaceLink, tree } from './helpers'
 
 /**
  * ТК-R2.4: группы и «Все сотрудники» дают доступ как раньше, сводка «Доступ к пространствам» показывает, откуда
@@ -82,7 +83,16 @@ test('ТК-R2.4. Доступ через группы и «Все сотрудн
     await grantEveryone(admin)
     const member = await pageAs(browser, 'e2e-outsider@selen.test')
     await expect(spaceLink(member, ALL)).toBeVisible()
-    await expect(spaceLink(member, ALL)).toContainText('Доступно всем сотрудникам')
+    // Пометка «доступно всем» — значок рядом со ссылкой, подсказка (Tooltip) по наведению: пачка UX-2 (LATER-88)
+    // вынесла его из ссылки, поэтому проверяется видимая подсказка, а не текст ссылки (CLAUDE.md, frontend, правило 8)
+    // Внутренний локатор filter({ has }) ищется внутри строки списка — от страницы, а не от дерева
+    const mark = tree(member)
+      .getByRole('listitem')
+      .filter({ has: member.getByRole('link', { name: new RegExp(`(^|\\s)${ALL}$`) }) })
+      .getByRole('img', { name: 'Доступно всем сотрудникам' })
+    await expect(mark).toBeVisible()
+    await mark.hover()
+    await expectHint(member, 'Доступно всем сотрудникам')
     await expect(spaceLink(member, INTERNS)).toHaveCount(0)
     await expect(member.getByText(INTERNS)).toHaveCount(0)
   } finally {

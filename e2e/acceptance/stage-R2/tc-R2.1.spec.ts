@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { authFile, openBoard, openHome } from '../../tests/helpers'
+import { param } from '../stage-ui1/helpers'
 import { column, drag, READ, ROLES } from './helpers'
 
 /**
@@ -24,6 +25,8 @@ test('ТК-R2.1. Редактор и комментатор работают к�
   // Открыть карточку, изменить название, закрыть
   await card.click()
   const window = page.getByRole('dialog')
+  // Редактор может ставить «Срочно» — для сравнения с комментатором ниже
+  await expect(window.getByRole('checkbox', { name: 'Срочно' })).toBeEnabled()
   const title = window.getByRole('textbox', { name: 'Название' })
   await title.fill('Перенесена редактором')
   await page.keyboard.press('Enter')
@@ -68,7 +71,10 @@ test('ТК-R2.1. Редактор и комментатор работают к�
   const readWindow = page.getByRole('dialog', { name: 'Для комментария' })
   await expect(readWindow).toBeVisible()
   await expect(readWindow.getByRole('textbox', { name: 'Название' })).toHaveCount(0)
-  await expect(readWindow.getByRole('checkbox', { name: 'Срочно' })).toBeDisabled()
+  // Пачка UX-2 (решение PM 22.10, V-5): без права правки «Срочно» — текстом «Да» / «Нет», а не недоступным флажком.
+  // Проверяется то же: поставить «Срочно» комментатор не может
+  await expect(readWindow.getByRole('checkbox', { name: 'Срочно' })).toHaveCount(0)
+  await expect(param(readWindow, 'Срочно')).toHaveText('Нет')
   await expect(readWindow.getByRole('button', { name: 'Изменить метки' })).toHaveCount(0)
   await expect(readWindow.getByRole('button', { name: 'Добавить участников' })).toHaveCount(0)
 
