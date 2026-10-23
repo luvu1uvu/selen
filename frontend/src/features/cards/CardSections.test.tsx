@@ -218,13 +218,35 @@ describe('Карточка: люди, поля, метки', () => {
     await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ estimate_hours: 3 }))
     expect(within(section).getByLabelText('План, ч')).toHaveValue('3')
 
-    // Так и не задали — строка пропадает
+    // Так и не задали — строка пропадает (Esc после «+» — фокус снова на «+», U-5 UX-ревью пачки UX-2 — ниже)
     await userEvent.clear(within(section).getByLabelText('План, ч'))
     await userEvent.keyboard('{Enter}')
     await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ estimate_hours: null }))
     await vi.waitFor(() =>
       expect(within(section).queryByLabelText('План, ч')).not.toBeInTheDocument(),
     )
+  })
+
+  it('«План, ч» через «+» и Esc — строки нет, фокус снова на «+» (U-5 UX-ревью пачки UX-2)', async () => {
+    serveCard(makeCardDetail())
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+    const section = within(panel).getByRole('region', { name: 'Основные параметры' })
+    const add = within(panel).getByRole('button', { name: 'Добавить в карточку' })
+
+    await userEvent.click(add)
+    await userEvent.click(
+      within(await screen.findByRole('group', { name: 'Основное' })).getByRole('menuitem', {
+        name: 'План, ч',
+      }),
+    )
+    const estimate = await within(section).findByLabelText('План, ч')
+    await vi.waitFor(() => expect(estimate).toHaveFocus())
+    await userEvent.keyboard('{Escape}')
+
+    await vi.waitFor(() => expect(within(section).queryByLabelText('План, ч')).toBeNull())
+    await vi.waitFor(() => expect(add).toHaveFocus())
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it('метки: ставит активные, архивную предлагает только если она уже стоит', async () => {

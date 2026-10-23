@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useCurrentUser, useLogout } from '@/features/auth/queries'
 import { TreePanel } from '@/features/navigation/components/TreePanel'
+import { Hint } from '@/shared/components/Hint'
 import { isSystemAdmin } from '@/shared/lib/roles'
 import { cn } from '@/shared/lib/utils'
 import { useMediaQuery } from '@/shared/lib/useMediaQuery'
@@ -228,15 +229,17 @@ export function AppLayout() {
             />
           )}
         </nav>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="mt-auto md:hidden"
-          onClick={closeMenu}
-          aria-label={t('nav.closeMenu')}
-        >
-          <X />
-        </Button>
+        <Hint label={t('nav.closeMenu')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mt-auto md:hidden"
+            onClick={closeMenu}
+            aria-label={t('nav.closeMenu')}
+          >
+            <X />
+          </Button>
+        </Hint>
       </div>
       <div className={cn('bg-sidebar w-64 border-r', panelCollapsed && 'md:hidden')}>
         {activeSection === 'admin' ? (
@@ -268,15 +271,17 @@ export function AppLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setMenuOpen(true)}
-            aria-label={t('nav.openMenu')}
-          >
-            <Menu />
-          </Button>
+          <Hint label={t('nav.openMenu')}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMenuOpen(true)}
+              aria-label={t('nav.openMenu')}
+            >
+              <Menu />
+            </Button>
+          </Hint>
           <div className="flex-1" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

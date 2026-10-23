@@ -47,14 +47,14 @@ export function CardCommentsSection({ card }: { card: CardDetail }) {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {commentsQuery.isError && (
         <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
       )}
       {commentsQuery.data?.data.length === 0 && (
         <p className="text-muted-foreground text-sm">{t('comments.none')}</p>
       )}
-      <ol className="grid gap-4">
+      <ol className="grid grid-cols-1 gap-4">
         {commentsQuery.data?.data.map((comment) => (
           <CommentItem
             key={comment.id}

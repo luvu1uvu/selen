@@ -153,7 +153,7 @@ export function CardHistory({ cardKey }: { cardKey: string }) {
   if (history.isError) return <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
 
   return (
-    <ol className="grid gap-2" aria-label={t('history.title')}>
+    <ol className="grid grid-cols-1 gap-2" aria-label={t('history.title')}>
       {refs &&
         history.data?.data.map((item) => {
           const lines =

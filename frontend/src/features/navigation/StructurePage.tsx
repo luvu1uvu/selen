@@ -217,14 +217,15 @@ export function StructurePage() {
               return (
                 <li key={node.id} className="flex min-h-11 items-center gap-2 px-3 py-1">
                   <NodeIcon kind="folder" icon={node.icon} />
-                  <div className="grid min-w-0">
-                    <span className="truncate">{node.name}</span>
+                  <div className="grid min-w-0 grid-cols-1">
+                    <TruncatedText text={nodeName(node)} />
                     {inside.length > 0 && (
-                      <span className="text-muted-foreground truncate text-xs">
-                        {t('structure.archivedInside', {
+                      <TruncatedText
+                        text={t('structure.archivedInside', {
                           names: inside.map((item) => item.space?.name).join(', '),
                         })}
-                      </span>
+                        className="text-muted-foreground text-xs"
+                      />
                     )}
                   </div>
                   <Button

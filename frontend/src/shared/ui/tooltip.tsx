@@ -48,6 +48,7 @@ function TooltipTrigger({
 function TooltipContent({
   className,
   sideOffset = 4,
+  collisionPadding = 8,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
@@ -56,8 +57,10 @@ function TooltipContent({
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
+        // Не шире 384 px и не вплотную к краю окна: длинная подпись («+» у длинного названия) переносится (U-3 UX-ревью)
+        collisionPadding={collisionPadding}
         className={cn(
-          'bg-foreground text-background animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 z-50 w-fit rounded-md px-3 py-1.5 text-xs text-balance',
+          'bg-foreground text-background animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 z-50 w-fit max-w-sm rounded-md px-3 py-1.5 text-xs text-balance',
           className,
         )}
         {...props}

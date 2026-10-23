@@ -51,7 +51,7 @@ export function CardAttachmentsSection({
   const files = card.attachments.filter((a) => a.kind === 'file')
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       {uploads.map((progress) => (
         <UploadRow key={progress.id} progress={progress} />
       ))}
@@ -95,7 +95,7 @@ export function CardAttachmentsSection({
       )}
 
       {files.length > 0 && (
-        <ul className="grid gap-1">
+        <ul className="grid grid-cols-1 gap-1">
           {files.map((attachment) => (
             <li key={attachment.id} className="flex items-center gap-2 text-sm">
               <FileIcon className="text-muted-foreground size-4 shrink-0" aria-hidden />
@@ -263,7 +263,7 @@ function AttachmentActions({
 function UploadRow({ progress }: { progress: UploadProgress }) {
   const { t } = useTranslation('boards')
   return (
-    <div className="grid gap-1 text-xs">
+    <div className="grid grid-cols-1 gap-1 text-xs">
       <span className="truncate">{t('attachments.uploading', { name: progress.name })}</span>
       <div
         role="progressbar"

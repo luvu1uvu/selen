@@ -116,8 +116,11 @@ describe('Панель «Дерево»', () => {
     await waitFor(() => expect(linkTo(nav, '/spaces/IOS')).toBeDefined())
     const spaceMark = within(nav).getByRole('img', { name: 'Доступно всем сотрудникам' })
     expect(linkTo(nav, '/spaces/IOS')).not.toContainElement(spaceMark)
-    // С клавиатуры: Tab со ссылки пространства — на значок, подсказка видна
+    // С клавиатуры: Tab со ссылки пространства — на стрелку, затем на значок (порядок как на экране, U-4 UX-ревью
+    // пачки UX-2), подсказка видна
     act(() => linkTo(nav, '/spaces/IOS')!.focus())
+    await user.tab()
+    expect(within(nav).getByRole('button', { name: 'Раскрыть «iOS»' })).toHaveFocus()
     await user.tab()
     expect(spaceMark).toHaveFocus()
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Доступно всем сотрудникам')

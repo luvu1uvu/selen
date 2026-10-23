@@ -86,11 +86,11 @@ export function CardLinksSection({
   }
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-2">
       {card.links.length === 0 && !canEdit && (
         <span className="text-muted-foreground text-sm">{t('links.none')}</span>
       )}
-      <ul className="grid gap-1">
+      <ul className="grid grid-cols-1 gap-1">
         {card.links.map((link) => (
           <li key={link.id} className="flex items-center gap-2 text-sm">
             <ExternalLink className="text-muted-foreground size-4 shrink-0" aria-hidden />
@@ -127,7 +127,7 @@ export function CardLinksSection({
       )}
       {canEdit && adding && (
         <form
-          className="grid gap-2 sm:grid-cols-[1fr_12rem_auto_auto]"
+          className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_12rem_auto_auto]"
           onSubmit={(event) => {
             event.preventDefault()
             void submit()

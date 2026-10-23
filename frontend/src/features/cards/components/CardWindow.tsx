@@ -179,7 +179,7 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
           {card ? (
             <CardWindowBody key={card.key} card={card} onDeleted={closeDeleted} />
           ) : (
-            <div className="grid gap-2 p-6">
+            <div className="grid grid-cols-1 gap-2 p-6">
               <DialogTitle className="font-mono text-base">{cardKey}</DialogTitle>
               <DialogDescription>{tc('states.loading')}</DialogDescription>
             </div>
@@ -299,7 +299,9 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
       }}
     >
       <div className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-4 px-4 pt-5 pb-6 sm:px-6">
+        {/* Сетки окна — одна колонка minmax(0, 1fr) (grid-cols-1): у колонки auto ширину задавала бы самая длинная
+            строка (ссылка, плашка блокировки), «…» не срабатывало, и окно прокручивалось вбок (U-1 UX-ревью пачки UX-2) */}
+        <div className="grid grid-cols-1 gap-4 px-4 pt-5 pb-6 sm:px-6">
           <CardWindowHeader card={card} canEdit={canEdit} />
           {card.archived_at && <Alert>{t('card.archived')}</Alert>}
           <CardActionsRow

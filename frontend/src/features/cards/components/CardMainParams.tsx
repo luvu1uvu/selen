@@ -23,6 +23,7 @@ import {
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { useReturnFocusOnClose } from '@/shared/ui/restore-focus'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import type { CardUpdate } from '../api'
 import type { CustomFieldOption } from '../customFields'
@@ -61,7 +62,7 @@ function useSave(cardKey: string) {
 /** Строка «название поля — значение»; на узком экране название над значением. */
 export function ParamRow({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid gap-1 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start sm:gap-4">
+    <div className="grid grid-cols-1 gap-1 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start sm:gap-4">
       {/* <Label> в названии — той же насыщенности и высоты, что текст (U-6 UX-ревью UI-1a) */}
       <dt className="text-muted-foreground text-sm sm:py-1.5 [&_label]:leading-5 [&_label]:font-normal">
         {label}
@@ -127,7 +128,7 @@ export function CardMainParams({
     : card.column.name
 
   return (
-    <dl className="grid gap-2">
+    <dl className="grid grid-cols-1 gap-2">
       <ParamRow label={t('params.location')}>
         <span className="min-w-0 break-words">
           {card.board.name} / {column} ({card.lane.name})
@@ -529,6 +530,8 @@ function EstimateField({
 }) {
   const { t } = useTranslation('boards')
   const { save } = useSave(card.key)
+  // Добавили через «+» — Esc убирает пустую строку, и фокус возвращается на «+» (U-5 UX-ревью пачки UX-2)
+  const returnFocus = useReturnFocusOnClose()
   const [estimate, setEstimate] = useState(card.estimate_hours?.toString() ?? '')
   const [error, setError] = useState<string | null>(null)
 
@@ -559,7 +562,7 @@ function EstimateField({
   }
 
   return (
-    <div className="grid gap-1">
+    <div className="grid grid-cols-1 gap-1">
       <Input
         id="card-estimate"
         autoFocus={autoFocus}
@@ -586,7 +589,12 @@ function EstimateField({
             cancelled.current = true
             setEstimate(card.estimate_hours?.toString() ?? '')
             setError(null)
-            focusCardWindow(event.currentTarget)
+            if (autoFocus && card.estimate_hours === null) {
+              returnFocus()
+              event.currentTarget.blur()
+            } else {
+              focusCardWindow(event.currentTarget)
+            }
           }
         }}
       />

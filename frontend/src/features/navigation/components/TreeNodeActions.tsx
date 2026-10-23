@@ -13,8 +13,8 @@ import {
   SquarePlus,
   Trash2,
 } from 'lucide-react'
-import type { ReactElement } from 'react'
-import { hideHintUnlessKeyboard } from '@/shared/ui/restore-focus'
+import { useRef, type ReactNode } from 'react'
+import { hideHintUnlessKeyboard, restoreFocusQuietly } from '@/shared/ui/restore-focus'
 import type { NavTreeNode } from '@/shared/types/api'
 import {
   DropdownMenu,
@@ -30,17 +30,41 @@ const buttonClass =
   'text-muted-foreground hover:bg-background hover:text-foreground flex size-6 items-center justify-center rounded'
 
 /**
- * Подсказка кнопки-значка — Tooltip (CLAUDE.md, фронтенд, правило 8; LATER-88), по фокусу — только с клавиатуры: меню,
- * закрытое мышью, возвращает фокус на кнопку, и подсказка висела бы (как у `ActionsMenu`).
+ * Меню «+» или «⋯» строки дерева. Подсказка кнопки — Tooltip (CLAUDE.md, фронтенд, правило 8; LATER-88), по фокусу —
+ * только с клавиатуры. Закрытое меню возвращает фокус на кнопку без подсказки (`restoreFocusQuietly`, как у
+ * `ActionsMenu`): открытая подсказка забрала бы следующий Esc — в выезжающем меню на узком экране оно закрывалось бы
+ * только третьим Esc (U-2 UX-ревью пачки UX-2).
  */
-function TriggerHint({ label, children }: { label: string; children: ReactElement }) {
+function RowMenu({
+  label,
+  icon,
+  children,
+}: {
+  label: string
+  icon: ReactNode
+  children: ReactNode
+}) {
+  const trigger = useRef<HTMLButtonElement>(null)
   return (
-    <Tooltip>
-      <TooltipTrigger asChild onFocus={hideHintUnlessKeyboard}>
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild onFocus={hideHintUnlessKeyboard}>
+          <DropdownMenuTrigger ref={trigger} className={buttonClass} aria-label={label}>
+            {icon}
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent
+        align="start"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          restoreFocusQuietly(trigger.current)
+        }}
+      >
         {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -87,91 +111,77 @@ export function TreeNodeActions({
     // data-state у кнопки — состояние подсказки, оно перекрывает состояние меню
     <div className="bg-accent absolute top-1 right-1 flex items-center gap-0.5 rounded opacity-0 group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 has-[[aria-expanded=true]]:opacity-100 pointer-coarse:opacity-100">
       {(canAddInFolder || canAddBoard) && (
-        <DropdownMenu>
-          <TriggerHint label={t('tree.node.add', { name })}>
-            <DropdownMenuTrigger className={buttonClass} aria-label={t('tree.node.add', { name })}>
-              <Plus className="size-4" />
-            </DropdownMenuTrigger>
-          </TriggerHint>
-          <DropdownMenuContent align="start">
-            {node.type === 'folder' ? (
-              <>
-                <DropdownMenuItem
-                  disabled={tooDeep}
-                  title={tooDeep ? t('tree.node.tooDeep', { max: structure.maxDepth }) : undefined}
-                  onSelect={() =>
-                    structure.edit({ mode: 'create', parent: { id: node.id, name: node.name } })
-                  }
-                >
-                  <FolderPlus />
-                  {t('tree.node.addFolder')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onAddSpace({ id: node.id, name: node.name })}>
-                  <SquarePlus />
-                  {t('tree.node.addSpace')}
-                </DropdownMenuItem>
-              </>
-            ) : (
-              <DropdownMenuItem onSelect={() => onAddBoard(node.space.key)}>
-                <SquareKanban />
-                {t('tree.node.addBoard')}
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      {adminNode && (
-        <DropdownMenu>
-          <TriggerHint label={t('tree.node.menu', { name })}>
-            <DropdownMenuTrigger className={buttonClass} aria-label={t('tree.node.menu', { name })}>
-              <MoreHorizontal className="size-4" />
-            </DropdownMenuTrigger>
-          </TriggerHint>
-          <DropdownMenuContent align="start">
-            {node.type === 'folder' && (
+        <RowMenu label={t('tree.node.add', { name })} icon={<Plus className="size-4" />}>
+          {node.type === 'folder' ? (
+            <>
               <DropdownMenuItem
+                disabled={tooDeep}
+                title={tooDeep ? t('tree.node.tooDeep', { max: structure.maxDepth }) : undefined}
                 onSelect={() =>
-                  structure.edit({ mode: 'folder', id: node.id, name, icon: node.icon })
+                  structure.edit({ mode: 'create', parent: { id: node.id, name: node.name } })
                 }
               >
-                <Pencil />
-                {t('tree.node.rename')}
+                <FolderPlus />
+                {t('tree.node.addFolder')}
               </DropdownMenuItem>
-            )}
+              <DropdownMenuItem onSelect={() => onAddSpace({ id: node.id, name: node.name })}>
+                <SquarePlus />
+                {t('tree.node.addSpace')}
+              </DropdownMenuItem>
+            </>
+          ) : (
+            <DropdownMenuItem onSelect={() => onAddBoard(node.space.key)}>
+              <SquareKanban />
+              {t('tree.node.addBoard')}
+            </DropdownMenuItem>
+          )}
+        </RowMenu>
+      )}
+      {adminNode && (
+        <RowMenu label={t('tree.node.menu', { name })} icon={<MoreHorizontal className="size-4" />}>
+          {node.type === 'folder' && (
             <DropdownMenuItem
-              onSelect={() => structure.edit({ mode: 'icon', id: node.id, name, icon: node.icon })}
+              onSelect={() =>
+                structure.edit({ mode: 'folder', id: node.id, name, icon: node.icon })
+              }
             >
-              <Smile />
-              {t('tree.node.icon')}
+              <Pencil />
+              {t('tree.node.rename')}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => structure.move(adminNode)}>
-              <FolderInput />
-              {t('tree.node.move')}
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={first} onSelect={() => structure.shift(adminNode, -1)}>
-              <ArrowUp />
-              {t('tree.node.up')}
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={last} onSelect={() => structure.shift(adminNode, 1)}>
-              <ArrowDown />
-              {t('tree.node.down')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => structure.archive(adminNode)}>
-              <Archive />
-              {t('tree.node.archive')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              disabled={folderNotEmpty}
-              title={folderNotEmpty ? t('tree.node.deleteNotEmpty') : undefined}
-              onSelect={() => structure.remove(adminNode)}
-            >
-              <Trash2 />
-              {t('tree.node.delete')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          )}
+          <DropdownMenuItem
+            onSelect={() => structure.edit({ mode: 'icon', id: node.id, name, icon: node.icon })}
+          >
+            <Smile />
+            {t('tree.node.icon')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => structure.move(adminNode)}>
+            <FolderInput />
+            {t('tree.node.move')}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={first} onSelect={() => structure.shift(adminNode, -1)}>
+            <ArrowUp />
+            {t('tree.node.up')}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={last} onSelect={() => structure.shift(adminNode, 1)}>
+            <ArrowDown />
+            {t('tree.node.down')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => structure.archive(adminNode)}>
+            <Archive />
+            {t('tree.node.archive')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={folderNotEmpty}
+            title={folderNotEmpty ? t('tree.node.deleteNotEmpty') : undefined}
+            onSelect={() => structure.remove(adminNode)}
+          >
+            <Trash2 />
+            {t('tree.node.delete')}
+          </DropdownMenuItem>
+        </RowMenu>
       )}
     </div>
   )

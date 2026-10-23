@@ -243,19 +243,20 @@ export function NavTree({
                   </Link>
                 )}
               </RowName>
-              {node.everyone && (
-                <EveryoneMark
-                  className="absolute top-1/2 -translate-y-1/2"
-                  style={{ left: markLeft(depth) }}
-                  onClick={clickRow}
-                />
-              )}
+              {/* Стрелка — раньше значка: порядок Tab как на экране (U-4 UX-ревью пачки UX-2) */}
               {node.boards.length > 0 && (
                 <SpaceToggle
                   expanded={expanded}
                   name={node.space.name}
                   depth={depth}
                   onToggle={() => onToggle(node.id)}
+                />
+              )}
+              {node.everyone && (
+                <EveryoneMark
+                  className="absolute top-1/2 -translate-y-1/2"
+                  style={{ left: markLeft(depth) }}
+                  onClick={clickRow}
                 />
               )}
               {actions?.(node, depth)}

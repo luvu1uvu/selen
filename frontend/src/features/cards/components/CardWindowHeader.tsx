@@ -39,7 +39,7 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
   }
 
   return (
-    <header className="grid gap-1.5 pr-10">
+    <header className="grid grid-cols-1 gap-1.5 pr-10">
       {canEdit ? (
         <>
           <DialogTitle className="sr-only">{card.title}</DialogTitle>

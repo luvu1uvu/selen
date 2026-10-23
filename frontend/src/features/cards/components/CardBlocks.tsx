@@ -39,7 +39,7 @@ export function CardActiveBlocks({
   if (active.length === 0 && !(canEdit && adding)) return null
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-2">
       {active.map((block) => (
         <div
           key={block.id}
@@ -87,9 +87,9 @@ export function CardActiveBlocks({
 export function CardBlocksHistory({ card }: { card: CardDetail }) {
   const ended = card.blocks.filter((block) => block.ended_at)
   return (
-    <ul className="grid gap-2 text-sm">
+    <ul className="grid grid-cols-1 gap-2 text-sm">
       {ended.map((block) => (
-        <li key={block.id} className="grid gap-0.5 border-l-2 pl-3">
+        <li key={block.id} className="grid grid-cols-1 gap-0.5 border-l-2 pl-3">
           <BlockCause block={block} />
           <BlockMeta block={block} />
         </li>
@@ -101,7 +101,7 @@ export function CardBlocksHistory({ card }: { card: CardDetail }) {
 function BlockCause({ block }: { block: CardBlock }) {
   const { t } = useTranslation('boards')
   return (
-    <div className="grid gap-0.5">
+    <div className="grid grid-cols-1 gap-0.5">
       {block.blocking_card && (
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="text-muted-foreground shrink-0 text-xs">{t('blocks.byCard')}</span>
@@ -176,7 +176,7 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
 
   return (
     <form
-      className="grid gap-2 rounded-md border p-3"
+      className="grid grid-cols-1 gap-2 rounded-md border p-3"
       aria-labelledby={titleId}
       onSubmit={(event) => {
         event.preventDefault()
