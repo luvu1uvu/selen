@@ -1,4 +1,36 @@
-import { copyText, fileReturnPath } from './browser'
+import { appReturnPath, copyText, fileReturnPath } from './browser'
+
+describe('appReturnPath — возврат на страницу приложения после входа (LATER-104)', () => {
+  it('принимает только адрес страницы Selen на этом сайте', () => {
+    for (const from of [
+      '/',
+      '/cards/DEV-41',
+      '/spaces/DEV/cards/DEV-41',
+      '/spaces/DEV?board=5',
+      '/boards/3',
+      '/profile',
+      '/admin/users/01ja0000000000000000000000',
+    ])
+      expect(appReturnPath(from), from).toBe(from)
+    for (const from of [
+      undefined,
+      42,
+      '',
+      'cards/DEV-41',
+      'https://evil.example/cards/DEV-41',
+      '//evil.example',
+      '/\\evil.example',
+      // Табуляцию и перевод строки браузер из адреса выбрасывает: «/\t/evil» стал бы «//evil»
+      '/\t/evil.example',
+      '/\n/evil.example',
+      'javascript:alert(1)',
+      '/login',
+      '/forgot-password',
+      '/files/01ja0000000000000000000000',
+    ])
+      expect(appReturnPath(from), String(from)).toBeNull()
+  })
+})
 
 describe('fileReturnPath — возврат к файлу после входа (UI-1b)', () => {
   it('принимает только ссылку на файл этого приложения', () => {

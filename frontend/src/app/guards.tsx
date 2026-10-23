@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, Outlet, useLocation } from 'react-router'
 import { useCurrentUser } from '@/features/auth/queries'
-import { fileReturnPath, openServerPage } from '@/shared/lib/browser'
+import { appReturnPath, fileReturnPath, openServerPage } from '@/shared/lib/browser'
 import { isSystemAdmin } from '@/shared/lib/roles'
 import { Button } from '@/shared/ui/button'
 
@@ -15,13 +15,19 @@ function FullPageLoader() {
   )
 }
 
-/** Только для вошедших пользователей; остальных отправляет на /login. */
+/**
+ * Только для вошедших пользователей; остальных отправляет на /login и запоминает, откуда (с параметрами адреса:
+ * `?board=` открытой доски), — после входа `RequireGuest` вернёт туда (LATER-104).
+ */
 export function RequireAuth() {
   const { data: user, isPending } = useCurrentUser()
   const location = useLocation()
 
   if (isPending) return <FullPageLoader />
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  if (!user) {
+    const from = location.pathname + location.search + location.hash
+    return <Navigate to="/login" replace state={{ from }} />
+  }
   return <Outlet />
 }
 
@@ -48,8 +54,10 @@ function OpeningFile() {
 }
 
 /**
- * Только для гостей (вход, «забыли пароль»); вошедших отправляет на главную, а пришедших по ссылке на файл
- * (`/login?next=/files/<id>`, UI-1b) — к файлу: и после входа формой, и уже вошедших. Переход — только здесь.
+ * Только для гостей (вход, «забыли пароль»); вошедших отправляет на главную, пришедших по ссылке на файл
+ * (`/login?next=/files/<id>`, UI-1b) — к файлу, а отправленных на вход со страницы приложения (`state.from`
+ * от `RequireAuth`) — обратно на неё (LATER-104): и после входа формой, и уже вошедших. Переход — только здесь:
+ * форма входа сама не переходит, иначе гонка — этот guard узнаёт пользователя раньше и уводит на главную.
  */
 export function RequireGuest() {
   const { data: user, isPending } = useCurrentUser()
@@ -67,7 +75,10 @@ export function RequireGuest() {
 
   if (isPending) return <FullPageLoader />
   if (file) return <OpeningFile />
-  if (user) return <Navigate to="/" replace />
+  if (user) {
+    const from = appReturnPath((location.state as { from?: unknown } | null)?.from)
+    return <Navigate to={from ?? '/'} replace />
+  }
   return <Outlet />
 }
 

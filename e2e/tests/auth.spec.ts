@@ -17,3 +17,14 @@ test('неверный пароль — понятная ошибка', async ({
 
   await expect(page.getByText('Неверный email или пароль.')).toBeVisible()
 })
+
+test('вход по ссылке на карточку — после входа открыто её окно, а не главная (LATER-104)', async ({ page }) => {
+  await page.goto('/cards/QA-3?from=mail')
+  await expect(page).toHaveURL(/\/login$/)
+  await page.getByLabel('Email').fill('e2e-editor@selen.test')
+  await page.getByLabel('Пароль').fill(PASSWORD)
+  await page.getByRole('button', { name: 'Войти' }).click()
+
+  await expect(page.getByRole('dialog', { name: 'Блокирующая задача' })).toBeVisible()
+  await expect(page).toHaveURL(/\/cards\/QA-3\?from=mail$/)
+})
