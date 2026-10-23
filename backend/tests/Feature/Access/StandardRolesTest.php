@@ -99,6 +99,12 @@ it('стандартные роли и их права меняют только
         expect(fn () => DB::transaction($change))->toThrow(QueryException::class, $denied);
     }
 
+    // Сбой поиска схемы не открывает защиту: функции триггеров — с фиксированным search_path
+    expect(fn () => DB::transaction(function () use ($editor) {
+        DB::statement('SET LOCAL search_path = no_such_schema');
+        DB::table('public.roles')->where('id', $editor->id)->update(['name' => 'Другое']);
+    }))->toThrow(QueryException::class, $denied);
+
     // Пользовательскую роль (П2e) приложение меняет само
     $custom = makeRole([Permission::CardComment]);
     DB::table('role_permissions')->insert(['role_id' => $custom->id, 'permission' => 'card.update']);

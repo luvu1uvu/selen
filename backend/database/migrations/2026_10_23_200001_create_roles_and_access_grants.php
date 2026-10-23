@@ -113,15 +113,19 @@ return new class extends Migration
         });
 
         // Управлять доступом может только роль с областью «все карточки» — страховка в БД, как прежние CHECK
-        // space_members_admin_not_restricted и space_groups_admin_not_restricted (ADR-0008).
+        // space_members_admin_not_restricted и space_groups_admin_not_restricted (ADR-0008). Строка роли читается
+        // FOR SHARE: добавление права и смена области одной роли идут по очереди и не разминутся.
+        // Функции — с фиксированным search_path (временная таблица с тем же именем их не подменит).
         // OR REPLACE: migrate:fresh удаляет таблицы, но не функции
         $manageAccess = self::MANAGE_ACCESS;
         DB::unprepared(<<<SQL
             CREATE OR REPLACE FUNCTION role_permissions_scope_check() RETURNS trigger
-            LANGUAGE plpgsql AS \$\$
+            LANGUAGE plpgsql SET search_path = pg_catalog, public AS \$\$
+            DECLARE
+                scope text;
             BEGIN
-                IF NEW.permission IN {$manageAccess}
-                   AND EXISTS (SELECT 1 FROM roles WHERE id = NEW.role_id AND card_scope = 'own') THEN
+                SELECT card_scope INTO scope FROM public.roles WHERE id = NEW.role_id FOR SHARE;
+                IF NEW.permission IN {$manageAccess} AND scope = 'own' THEN
                     RAISE EXCEPTION 'roles: a role limited to own cards cannot manage access'
                         USING ERRCODE = 'check_violation';
                 END IF;
@@ -130,10 +134,10 @@ return new class extends Migration
             \$\$;
 
             CREATE OR REPLACE FUNCTION roles_scope_check() RETURNS trigger
-            LANGUAGE plpgsql AS \$\$
+            LANGUAGE plpgsql SET search_path = pg_catalog, public AS \$\$
             BEGIN
                 IF NEW.card_scope = 'own' AND EXISTS (
-                    SELECT 1 FROM role_permissions WHERE role_id = NEW.id AND permission IN {$manageAccess}
+                    SELECT 1 FROM public.role_permissions WHERE role_id = NEW.id AND permission IN {$manageAccess}
                 ) THEN
                     RAISE EXCEPTION 'roles: a role limited to own cards cannot manage access'
                         USING ERRCODE = 'check_violation';
@@ -149,22 +153,22 @@ return new class extends Migration
             SQL);
 
         // Стандартные роли и их права меняют только миграции — владелец таблицы (ADR-0016), не роль приложения.
-        // Пользовательские роли (key пуст, П2e) приложение ведёт само.
+        // Пользовательские роли (key пуст, П2e) приложение ведёт само. Не удалось определить владельца — запрет.
         DB::unprepared(<<<'SQL'
             CREATE OR REPLACE FUNCTION standard_roles_guard() RETURNS trigger
-            LANGUAGE plpgsql AS $$
+            LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
             DECLARE
                 standard boolean;
             BEGIN
                 IF TG_TABLE_NAME = 'roles' THEN
                     standard := OLD.key IS NOT NULL OR NEW.key IS NOT NULL;
                 ELSE
-                    standard := EXISTS (SELECT 1 FROM roles WHERE key IS NOT NULL AND id IN (OLD.role_id, NEW.role_id));
+                    standard := EXISTS (SELECT 1 FROM public.roles WHERE key IS NOT NULL AND id IN (OLD.role_id, NEW.role_id));
                 END IF;
 
-                IF standard AND NOT pg_has_role(current_user, (
-                    SELECT tableowner FROM pg_tables WHERE schemaname = current_schema() AND tablename = TG_TABLE_NAME
-                ), 'MEMBER') THEN
+                IF standard AND pg_has_role(current_user, (
+                    SELECT tableowner FROM pg_tables WHERE schemaname = TG_TABLE_SCHEMA AND tablename = TG_TABLE_NAME
+                ), 'MEMBER') IS NOT TRUE THEN
                     RAISE EXCEPTION 'roles: standard roles are changed only by migrations'
                         USING ERRCODE = 'insufficient_privilege';
                 END IF;

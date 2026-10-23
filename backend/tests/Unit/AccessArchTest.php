@@ -23,7 +23,13 @@ arch('выдачи доступа: читает для прав точка пр�
         'Tests',
     ]);
 
-it('таблицы прав запросами читает только App\Services\Access (модели — только связи)', function () {
+it('таблицы прав в запросах — только в точке прав и явном списке мест, где выдачи показывают или меняют', function () {
+    // Права по выдачам, ролям и составу групп вычисляет только App\Services\Access. Остальные места — связи моделей
+    // и показ или изменение строк выдач, не вычисление прав; новое место — сюда, с объяснением
+    $allowed = [
+        'Models/' => 'связи моделей (выдачи пространства и группы, состав группы)',
+        'Http/Controllers/Api/V1/SpaceMemberController.php' => 'показ личной выдачи во вкладке «Люди»',
+    ];
     $app = realpath(__DIR__.'/../../app');
     $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($app, FilesystemIterator::SKIP_DOTS));
     $readers = [];
@@ -35,16 +41,16 @@ it('таблицы прав запросами читает только App\Ser
             continue;
         }
 
-        // Только строки кода: упоминание в комментарии — не чтение
+        // Только строки кода (в том числе с псевдонимами и сырым SQL): упоминание в комментарии — не чтение
         foreach (token_get_all((string) file_get_contents($path)) as $token) {
-            if (! is_array($token) || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+            if (! is_array($token) || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
+                || preg_match('/\b(access_grants|role_permissions|roles|group_members)\b/', $token[1], $table) !== 1) {
                 continue;
             }
-            $text = trim($token[1], "'\"");
-            // Права ролей — только резолвер; выдачи, роли и состав групп целой таблицей — ещё связи моделей
-            $tableOnly = in_array($text, ['access_grants', 'roles', 'group_members'], true);
-            if (str_contains($text, 'role_permissions') || ($tableOnly && ! str_starts_with($relative, 'Models/'))) {
-                $readers[] = "{$relative}: {$text}";
+            $permitted = $table[1] !== 'role_permissions'
+                && collect($allowed)->keys()->contains(fn (string $place) => str_starts_with($relative, $place));
+            if (! $permitted) {
+                $readers[] = "{$relative}: {$token[1]}";
             }
         }
     }

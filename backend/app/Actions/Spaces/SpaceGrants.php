@@ -48,7 +48,7 @@ class SpaceGrants
      */
     public function standardRoleOf(AccessGrant $grant): StandardRole
     {
-        return $grant->standardRole() ?? throw new LogicException('Grants with custom roles are managed by the roles API (П2e)');
+        return $grant->standardRole() ?? throw new LogicException('A grant with a custom role is managed by the custom role API (П2e)');
     }
 
     public function changeRole(AccessGrant $grant, StandardRole $role): AccessGrant
