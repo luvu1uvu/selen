@@ -1,28 +1,38 @@
 <?php
 
+use App\Enums\SpaceRole;
 use App\Models\CardType;
 use App\Models\EventLogEntry;
 
+/** Участник пространства — справочник типов карточек компании пространства (GET spaces/{key}/card-types, ADR-0024). */
+function cardTypesOfSpace($test)
+{
+    $space = space();
+    addToSpace($space, $reader = member(), SpaceRole::Commenter);
+
+    return $test->actingAs($reader)->getJson("/api/v1/spaces/{$space->key}/card-types");
+}
+
 it('предустановлены четыре типа, по умолчанию — «Задача»', function () {
     expect(CardType::query()->ordered()->pluck('name')->all())->toBe(['Задача', 'Баг', 'История', 'Эпик'])
-        ->and(CardType::default()->name)->toBe('Задача');
+        ->and(CardType::default(company())->name)->toBe('Задача');
 
-    $this->actingAs(member())->getJson('/api/v1/card-types')
+    cardTypesOfSpace($this)
         ->assertOk()
         ->assertJsonCount(4, 'data')
         ->assertJsonPath('data.0.is_default', true)
         ->assertJsonPath('data.0.color', '#3b82f6');
 });
 
-it('системный администратор создаёт и меняет тип', function () {
+it('администратор компании создаёт и меняет тип', function () {
     $admin = admin();
 
-    $id = $this->actingAs($admin)->postJson('/api/v1/admin/card-types', ['name' => 'Улучшение', 'color' => '#F59E0B'])
+    $id = $this->actingAs($admin)->postJson(adminPath().'card-types', ['name' => 'Улучшение', 'color' => '#F59E0B'])
         ->assertCreated()
         ->assertJsonPath('data.color', '#f59e0b')
         ->json('data.id');
 
-    $this->actingAs($admin)->patchJson("/api/v1/admin/card-types/{$id}", ['name' => 'Доработка'])
+    $this->actingAs($admin)->patchJson(adminPath()."card-types/{$id}", ['name' => 'Доработка'])
         ->assertOk()
         ->assertJsonPath('data.name', 'Доработка')
         ->assertJsonPath('data.color', '#f59e0b');
@@ -32,7 +42,7 @@ it('системный администратор создаёт и меняет
 });
 
 it('проверяет название и цвет типа', function (array $data, string $field) {
-    $this->actingAs(admin())->postJson('/api/v1/admin/card-types', $data + ['name' => 'Новый', 'color' => '#000000'])
+    $this->actingAs(admin())->postJson(adminPath().'card-types', $data + ['name' => 'Новый', 'color' => '#000000'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors($field);
 })->with([
@@ -46,32 +56,32 @@ it('архивирует и восстанавливает тип; архивн�
     $admin = admin();
     $bug = CardType::query()->where('name', 'Баг')->sole();
 
-    $this->actingAs($admin)->postJson("/api/v1/admin/card-types/{$bug->id}/archive")
+    $this->actingAs($admin)->postJson(adminPath()."card-types/{$bug->id}/archive")
         ->assertOk()
         ->assertJsonPath('data.archived_at', fn ($value) => $value !== null);
-    $this->actingAs($admin)->postJson("/api/v1/admin/card-types/{$bug->id}/archive")->assertUnprocessable();
+    $this->actingAs($admin)->postJson(adminPath()."card-types/{$bug->id}/archive")->assertUnprocessable();
 
-    $this->actingAs(member())->getJson('/api/v1/card-types')->assertJsonCount(3, 'data');
-    $this->actingAs($admin)->getJson('/api/v1/admin/card-types')->assertJsonCount(4, 'data');
+    cardTypesOfSpace($this)->assertJsonCount(3, 'data');
+    $this->actingAs($admin)->getJson(adminPath().'card-types')->assertJsonCount(4, 'data');
 
-    $this->actingAs($admin)->postJson("/api/v1/admin/card-types/{$bug->id}/restore")->assertOk();
-    $this->actingAs($admin)->postJson("/api/v1/admin/card-types/{$bug->id}/restore")->assertUnprocessable();
+    $this->actingAs($admin)->postJson(adminPath()."card-types/{$bug->id}/restore")->assertOk();
+    $this->actingAs($admin)->postJson(adminPath()."card-types/{$bug->id}/restore")->assertUnprocessable();
     expect(loggedEventTypes())->toBe(['card_type.archived', 'card_type.restored']);
 });
 
 it('тип по умолчанию архивировать нельзя', function () {
-    $this->actingAs(admin())->postJson('/api/v1/admin/card-types/'.CardType::default()->id.'/archive')
+    $this->actingAs(admin())->postJson(adminPath().'card-types/'.CardType::default(company())->id.'/archive')
         ->assertUnprocessable()
         ->assertJsonPath('errors.card_type.0', __('selen.card_types.default_cannot_be_archived'));
 });
 
 it('обычный сотрудник не управляет справочником', function () {
     $user = member();
-    $task = CardType::default();
+    $task = CardType::default(company());
 
-    $this->actingAs($user)->getJson('/api/v1/admin/card-types')->assertForbidden();
-    $this->actingAs($user)->postJson('/api/v1/admin/card-types', ['name' => 'X', 'color' => '#000000'])->assertForbidden();
-    $this->actingAs($user)->patchJson("/api/v1/admin/card-types/{$task->id}", ['name' => 'X'])->assertForbidden();
-    $this->actingAs($user)->postJson("/api/v1/admin/card-types/{$task->id}/archive")->assertForbidden();
-    $this->actingAs($user)->postJson("/api/v1/admin/card-types/{$task->id}/restore")->assertForbidden();
+    $this->actingAs($user)->getJson(adminPath().'card-types')->assertForbidden();
+    $this->actingAs($user)->postJson(adminPath().'card-types', ['name' => 'X', 'color' => '#000000'])->assertForbidden();
+    $this->actingAs($user)->patchJson(adminPath()."card-types/{$task->id}", ['name' => 'X'])->assertForbidden();
+    $this->actingAs($user)->postJson(adminPath()."card-types/{$task->id}/archive")->assertForbidden();
+    $this->actingAs($user)->postJson(adminPath()."card-types/{$task->id}/restore")->assertForbidden();
 });

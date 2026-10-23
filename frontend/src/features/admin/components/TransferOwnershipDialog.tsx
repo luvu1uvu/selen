@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { useCurrentUser } from '@/features/auth/queries'
+import { useAdminCompanyId } from '@/features/admin/company'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { applyValidationErrors, getErrorMessage } from '@/shared/api/errors'
 import type { DirectoryUser } from '@/shared/types/api'
@@ -27,6 +28,7 @@ import { useTransferOwnership } from '../queries'
  * пароль. После передачи текущий пользователь сразу становится администратором (интерфейс перечитывает права).
  */
 export function TransferOwnershipDialog() {
+  const company = useAdminCompanyId()
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
   const { data: me } = useCurrentUser()
@@ -93,6 +95,7 @@ export function TransferOwnershipDialog() {
             error={errors.user_id?.message}
           >
             <UserPicker
+              companyId={company}
               id="transfer-user"
               value={selected}
               onChange={(user) => {

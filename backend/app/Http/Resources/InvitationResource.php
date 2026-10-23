@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Enums\InvitationState;
 use App\Enums\UserStatus;
+use App\Models\Company;
 use App\Models\Invitation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -20,6 +21,8 @@ class InvitationResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        /** @var Company $company */
+        $company = $request->route('company');
         $state = $this->state();
         $isLatest = $this->user->latestInvitation?->is($this->resource) ?? false;
 
@@ -28,7 +31,8 @@ class InvitationResource extends JsonResource
             'user_id' => $this->user_id,
             'name' => $this->user->name,
             'email' => $this->email,
-            'role' => $this->user->role,
+            // Роль приглашённого в компании (admin — приглашён администратором компании)
+            'role' => $company->roleOf($this->user),
             'state' => $state,
             'expires_at' => $this->expires_at->toIso8601ZuluString(),
             'accepted_at' => $this->accepted_at?->toIso8601ZuluString(),
@@ -40,9 +44,9 @@ class InvitationResource extends JsonResource
             ],
             // Состояние приглашения и права текущего администратора (приглашённым админом управляет Владелец)
             'can_resend' => $isLatest && ! $this->user->hasActivated() && $state !== InvitationState::Accepted
-                && $request->user()->can('resend', $this->resource),
+                && $request->user()->can('resend', [$this->resource, $company]),
             'can_revoke' => $this->isOpen() && $this->user->status === UserStatus::Invited
-                && $request->user()->can('revoke', $this->resource),
+                && $request->user()->can('revoke', [$this->resource, $company]),
         ];
     }
 }

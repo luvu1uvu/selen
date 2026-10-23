@@ -2,16 +2,22 @@
 
 namespace App\Policies;
 
-use App\Models\CardType;
+use App\Enums\Permission;
+use App\Models\Company;
 use App\Models\User;
+use App\Policies\Concerns\ChecksCompanyPermission;
+use Illuminate\Auth\Access\Response;
 
 /**
- * Справочник типов карточек: читают все, меняет только системный администратор.
+ * Типы карточек — справочник компании (ADR-0024): читают участники пространств компании (GET spaces/{key}/card-types),
+ * меняет тот, у кого право компании «управлять справочниками» (администратор компании и Владелец).
  */
 class CardTypePolicy
 {
-    public function manage(User $actor, ?CardType $type = null): bool
+    use ChecksCompanyPermission;
+
+    public function manage(User $actor, Company $company): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $company, Permission::CompanyManageDictionaries);
     }
 }

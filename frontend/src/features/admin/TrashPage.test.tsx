@@ -22,7 +22,7 @@ describe('Корзина', () => {
     signedInAs(makeUser({ timezone: 'Europe/Moscow' }))
     const restored: string[] = []
     server.use(
-      http.get('*/api/v1/admin/trash/cards', () => {
+      http.get('*/api/v1/admin/companies/:company/trash/cards', () => {
         const data = [trashed('DEV-7', 'Старый отчёт', true), trashed('DEV-3', 'Логин')].filter(
           (card) => !restored.includes(card.key),
         )
@@ -31,7 +31,7 @@ describe('Корзина', () => {
           meta: { current_page: 1, last_page: 1, per_page: 20, total: data.length },
         })
       }),
-      http.post('*/api/v1/admin/trash/cards/:key/restore', ({ params }) => {
+      http.post('*/api/v1/admin/companies/:company/trash/cards/:key/restore', ({ params }) => {
         restored.push(String(params.key))
         return HttpResponse.json({
           data: { ...trashed(String(params.key), 'Логин'), deleted_at: null, deleted_by: null },
@@ -59,7 +59,7 @@ describe('Корзина', () => {
   it('из пространства без доступа — «Название скрыто», но номер, место, кто и когда удалил и «Восстановить» есть', async () => {
     signedInAs(makeUser())
     server.use(
-      http.get('*/api/v1/admin/trash/cards', () =>
+      http.get('*/api/v1/admin/companies/:company/trash/cards', () =>
         HttpResponse.json({
           data: [{ ...trashed('HR-4', ''), title: null, title_hidden: true }],
           meta: { current_page: 1, last_page: 1, per_page: 20, total: 1 },
@@ -80,7 +80,7 @@ describe('Корзина', () => {
   it('пустая корзина', async () => {
     signedInAs(makeUser())
     server.use(
-      http.get('*/api/v1/admin/trash/cards', () =>
+      http.get('*/api/v1/admin/companies/:company/trash/cards', () =>
         HttpResponse.json({
           data: [],
           meta: { current_page: 1, last_page: 1, per_page: 20, total: 0 },
@@ -95,7 +95,7 @@ describe('Корзина', () => {
   it('в меню администрирования есть «Корзина»; участнику раздел недоступен', async () => {
     signedInAs(makeUser())
     server.use(
-      http.get('*/api/v1/admin/trash/cards', () =>
+      http.get('*/api/v1/admin/companies/:company/trash/cards', () =>
         HttpResponse.json({
           data: [],
           meta: { current_page: 1, last_page: 1, per_page: 20, total: 0 },

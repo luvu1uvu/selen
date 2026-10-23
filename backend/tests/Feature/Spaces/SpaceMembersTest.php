@@ -164,14 +164,14 @@ it('справочник сотрудников доступен админис�
     member(['name' => 'Борис Петров', 'email' => 'boris@selen.test']);
     User::factory()->deactivated()->create(['name' => 'Борис Уволенный']);
 
-    $this->actingAs($this->owner)->getJson('/api/v1/users/directory?search=бор')
+    $this->actingAs($this->owner)->getJson('/api/v1/companies/'.company()->id.'/users/directory?search=бор')
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.email', 'boris@selen.test');
 
-    $this->actingAs(admin())->getJson('/api/v1/users/directory')->assertOk();
+    $this->actingAs(admin())->getJson('/api/v1/companies/'.company()->id.'/users/directory')->assertOk();
 
     $editor = member();
     addToSpace($this->space, $editor, SpaceRole::Editor);
-    $this->actingAs($editor)->getJson('/api/v1/users/directory')->assertForbidden();
+    $this->actingAs($editor)->getJson('/api/v1/companies/'.company()->id.'/users/directory')->assertForbidden();
 });

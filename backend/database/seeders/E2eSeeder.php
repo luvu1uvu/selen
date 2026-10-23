@@ -32,6 +32,7 @@ use App\Enums\ColumnCategory;
 use App\Enums\SpaceRole;
 use App\Models\Board;
 use App\Models\BoardColumn;
+use App\Models\Company;
 use App\Models\Lane;
 use App\Models\NavNode;
 use App\Models\Space;
@@ -87,6 +88,8 @@ use Illuminate\Http\UploadedFile;
  * Приёмка LATER-91 (подготовка к тёмной теме, acceptance/stage-L91): пространство THEME «Тёмная тема» — см. themePrep().
  * Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4): пространства RROLES, RREAD, RGROUPS, RALL, RINTERN,
  * группы «E2E Руководители», «E2E Подрядчики», архивная «E2E Стажёры» — см. rights2().
+ * Приёмка «Права 2.0», П2b-1 — компании (acceptance/stage-R2, ТК-R2.5–R2.8): пространство RCOMP «Права: компания»
+ * и четыре человека, которые не входят в систему, — см. companies().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  */
 class E2eSeeder extends Seeder
@@ -118,11 +121,11 @@ class E2eSeeder extends Seeder
         // смена его роли не задевает сохранённые входы других тестов
         $candidate = User::factory()->create(['name' => 'E2E Кандидат', 'email' => 'e2e-candidate@selen.test']);
 
-        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Сквозные тесты', 'key' => 'QA'], [$admin]);
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Сквозные тесты', 'key' => 'QA'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
         app(AddSpaceMemberAction::class)->handle($admin, $space, $restricted, SpaceRole::Editor);
         app(SetSpaceMemberRestrictionAction::class)->handle($admin, $space, $restricted, true);
-        $analysts = app(SaveGroupAction::class)->handle($admin, ['name' => 'E2E Аналитики']);
+        $analysts = app(SaveGroupAction::class)->handle($admin, Company::primary(), ['name' => 'E2E Аналитики']);
         app(GrantSpaceGroupAction::class)->handle($admin, $space, $analysts, SpaceRole::Commenter);
 
         $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Процесс'], BoardTemplate::Development);
@@ -156,7 +159,7 @@ class E2eSeeder extends Seeder
         // Длинная доска (board-layout.spec, приёмка LATER-4/LATER-50): шире окна (8 колонок) и выше его — 30 карточек
         // в To Do; закреплённые шапка и заголовки колонок, прокрутка вбок, автопрокрутка при перетаскивании. Своё
         // пространство: номера карточек не пересекаются с QA (поиск «QA-3» в тестах не находит QA-30…)
-        $layout = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Раскладка', 'key' => 'LAYOUT'], [$admin]);
+        $layout = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Раскладка', 'key' => 'LAYOUT'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $layout, $editor, SpaceRole::Editor);
         $long = app(CreateBoardAction::class)->handle($admin, $layout, ['name' => 'Длинная доска'], BoardTemplate::Development);
         $longLane = Lane::query()->where('board_id', $long->id)->sole();
@@ -243,7 +246,7 @@ class E2eSeeder extends Seeder
 
         $this->rows($admin, $editor, $restricted);
 
-        $mobile = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Мобильные приложения', 'key' => 'MOB'], [$admin]);
+        $mobile = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Мобильные приложения', 'key' => 'MOB'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $mobile, $editor, SpaceRole::Commenter);
         $releases = app(CreateBoardAction::class)->handle($admin, $mobile, ['name' => 'Релизы'], BoardTemplate::Simple);
         // Пачка UX-1 (acceptance/stage-ux1): карточка MOB-1, которую комментатор e2e-editor открывает, но не переносит
@@ -255,20 +258,20 @@ class E2eSeeder extends Seeder
             BoardColumn::query()->where('board_id', $releases->id)->where('name', 'To Do')->sole(),
             Lane::query()->where('board_id', $releases->id)->sole(),
         );
-        app(CreateSpaceAction::class)->handle($admin, ['name' => 'E2E Перенос', 'key' => 'MOVE'], [$admin]);
+        app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'E2E Перенос', 'key' => 'MOVE'], [$admin]);
 
-        $folder = app(CreateFolderAction::class)->handle($admin, 'E2E Мобильные', '📱', null);
+        $folder = app(CreateFolderAction::class)->handle($admin, Company::primary(), 'E2E Мобильные', '📱', null);
         $node = NavNode::query()->where('space_id', $mobile->id)->sole();
         app(MoveNavNodeAction::class)->handle($admin, $node, $folder->id, null, null);
 
-        $empty = app(CreateFolderAction::class)->handle($admin, 'E2E Пустая', null, null);
-        app(CreateFolderAction::class)->handle($admin, 'E2E Вложенная пустая', null, $empty->id);
+        $empty = app(CreateFolderAction::class)->handle($admin, Company::primary(), 'E2E Пустая', null, null);
+        app(CreateFolderAction::class)->handle($admin, Company::primary(), 'E2E Вложенная пустая', null, $empty->id);
 
         // Пачка UX-2 (LATER-109): длинные названия на всех уровнях дерева — папка, в ней папка, в ней пространство
         // LONGTREE (только администратор) с доской
-        $longFolder = app(CreateFolderAction::class)->handle($admin, self::LONG_FOLDER, null, null);
-        $longSubfolder = app(CreateFolderAction::class)->handle($admin, self::LONG_SUBFOLDER, null, $longFolder->id);
-        $longSpace = app(CreateSpaceAction::class)->handle($admin, ['name' => self::LONG_SPACE, 'key' => 'LONGTREE'], [$admin]);
+        $longFolder = app(CreateFolderAction::class)->handle($admin, Company::primary(), self::LONG_FOLDER, null, null);
+        $longSubfolder = app(CreateFolderAction::class)->handle($admin, Company::primary(), self::LONG_SUBFOLDER, null, $longFolder->id);
+        $longSpace = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => self::LONG_SPACE, 'key' => 'LONGTREE'], [$admin]);
         app(CreateBoardAction::class)->handle($admin, $longSpace, ['name' => self::LONG_BOARD], BoardTemplate::Empty);
         $longNode = NavNode::query()->where('space_id', $longSpace->id)->sole();
         app(MoveNavNodeAction::class)->handle($admin, $longNode, $longSubfolder->id, null, null);
@@ -281,6 +284,9 @@ class E2eSeeder extends Seeder
 
         // Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4)
         $this->rights2($admin, $editor, $restricted, $outsider);
+
+        // Приёмка «Права 2.0», П2b-1 — компании (acceptance/stage-R2, ТК-R2.5–R2.8)
+        $this->companies($admin);
 
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
@@ -321,12 +327,12 @@ class E2eSeeder extends Seeder
                 ->handle($admin, $board, ['title' => $title], $column($columnName), $lane);
         };
 
-        $leads = app(SaveGroupAction::class)->handle($admin, ['name' => 'E2E Руководители']);
+        $leads = app(SaveGroupAction::class)->handle($admin, Company::primary(), ['name' => 'E2E Руководители']);
         app(AddGroupMemberAction::class)->handle($admin, $leads, $lead);
-        $contractors = app(SaveGroupAction::class)->handle($admin, ['name' => 'E2E Подрядчики']);
+        $contractors = app(SaveGroupAction::class)->handle($admin, Company::primary(), ['name' => 'E2E Подрядчики']);
         app(AddGroupMemberAction::class)->handle($admin, $contractors, $restricted);
 
-        $roles = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: роли', 'key' => 'RROLES'], [$admin]);
+        $roles = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: роли', 'key' => 'RROLES'], [$admin]);
         foreach ([$editor, $restricted, $lead, $member] as $user) {
             $addMember->handle($admin, $roles, $user, SpaceRole::Editor);
         }
@@ -339,25 +345,56 @@ class E2eSeeder extends Seeder
         app(AddCardParticipantAction::class)->handle($admin, $card('Подрядчик — участник', 'In Progress'), $restricted);
         $card('Готовая чужая', 'Done');
 
-        $read = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: чтение', 'key' => 'RREAD'], [$admin]);
+        $read = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: чтение', 'key' => 'RREAD'], [$admin]);
         $addMember->handle($admin, $read, $editor, SpaceRole::Commenter);
         // Не «Продукт»: две одноимённые доски в раскрытом дереве (RROLES и RREAD) не различить по названию
         $board($read, 'Обсуждение')('Для комментария');
 
-        $groups = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: группы', 'key' => 'RGROUPS'], [$admin]);
+        $groups = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: группы', 'key' => 'RGROUPS'], [$admin]);
         $grant->handle($admin, $groups, $contractors, SpaceRole::Editor, ownCardsOnly: true);
         $grant->handle($admin, $groups, $leads, SpaceRole::Commenter);
         $card = $board($groups, 'Заявки');
         app(UpdateCardAction::class)->handle($admin, $card('Заявка подрядчика'), ['responsible_id' => $restricted->id]);
         $card('Чужая заявка');
 
-        app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: для всех', 'key' => 'RALL'], [$admin]);
+        app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: для всех', 'key' => 'RALL'], [$admin]);
 
-        $interns = app(SaveGroupAction::class)->handle($admin, ['name' => 'E2E Стажёры']);
+        $interns = app(SaveGroupAction::class)->handle($admin, Company::primary(), ['name' => 'E2E Стажёры']);
         app(AddGroupMemberAction::class)->handle($admin, $interns, $outsider);
-        $archive = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: стажёры', 'key' => 'RINTERN'], [$admin]);
+        $archive = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: стажёры', 'key' => 'RINTERN'], [$admin]);
         $grant->handle($admin, $archive, $interns, SpaceRole::Commenter);
         app(SetGroupArchivedAction::class)->handle($admin, $interns, true);
+    }
+
+    /**
+     * «Права 2.0», П2b-1 — компании (приёмочные тесты ТК-R2.5–R2.8, e2e/acceptance/stage-R2): всё — в «Компании 1»,
+     * для пользователей как раньше. Свои люди и пространство вместо «Демо Участника», «Бориса», «Дины», «Маркетинга»,
+     * «Компании» и «Разработки» демо-данных — тест-кейсы меняют роль, состав групп, участников, тип карточки и корзину,
+     * не задевая данные других тестов. Никто из них не входит в систему.
+     *
+     * - «E2E Роль компании» — участник: ТК-R2.5 делает его администратором и возвращает «Участник» («Демо Участник»).
+     * - «E2E Деактивированный» — деактивирован: пометка в списке «Пользователи» (ТК-R2.5).
+     * - «E2E Сотрудник группы» — ТК-R2.6 добавляет его в новую группу («Борис Петров»); группа получает доступ к RCOMP.
+     * - «E2E Сотрудник компании» — ТК-R2.7 добавляет его участником RCOMP с ролью «Комментатор» («Дина»).
+     * - RCOMP «Права: компания» (e2e-admin — единственный личный администратор: Анна и admin@ тест-кейсов), доска
+     *   «Продукт» (шаблон «Простой»), в To Do: RCOMP-1 «Сменить тип» (тип по умолчанию — ТК-R2.7 меняет на «Баг»;
+     *   ТК-R2.6 смотрит в ней выбор меток и типов, ничего не меняя), RCOMP-2 «В корзину и обратно» (ТК-R2.8 удаляет
+     *   в корзину и восстанавливает). ТК-R2.6 переносит RCOMP в новую папку «Структуры» и возвращает в корень.
+     */
+    private function companies(User $admin): void
+    {
+        User::factory()->create(['name' => 'E2E Роль компании', 'email' => 'e2e-company-role@selen.test']);
+        User::factory()->deactivated()->create(['name' => 'E2E Деактивированный', 'email' => 'e2e-deactivated@selen.test']);
+        User::factory()->create(['name' => 'E2E Сотрудник группы', 'email' => 'e2e-company-group@selen.test']);
+        User::factory()->create(['name' => 'E2E Сотрудник компании', 'email' => 'e2e-company-member@selen.test']);
+
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: компания', 'key' => 'RCOMP'], [$admin]);
+        $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Продукт'], BoardTemplate::Simple);
+        $lane = Lane::query()->where('board_id', $board->id)->sole();
+        $todo = BoardColumn::query()->where('board_id', $board->id)->where('name', 'To Do')->sole();
+        foreach (['Сменить тип', 'В корзину и обратно'] as $title) {
+            app(CreateCardAction::class)->handle($admin, $board, ['title' => $title], $todo, $lane);
+        }
     }
 
     /**
@@ -373,7 +410,7 @@ class E2eSeeder extends Seeder
      */
     private function uxBatch2(User $admin, User $editor): void
     {
-        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Пачка UX-2', 'key' => 'UXB'], [$admin]);
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Пачка UX-2', 'key' => 'UXB'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
         $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Продукт'], BoardTemplate::Development);
         $lane = Lane::query()->where('board_id', $board->id)->sole();
@@ -419,7 +456,7 @@ class E2eSeeder extends Seeder
      */
     private function themePrep(User $admin, User $editor, User $restricted, User $candidate): void
     {
-        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Тёмная тема', 'key' => 'THEME'], [$admin]);
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Тёмная тема', 'key' => 'THEME'], [$admin]);
         foreach ([$editor, $restricted, $candidate] as $member) {
             app(AddSpaceMemberAction::class)->handle($admin, $space, $member, SpaceRole::Editor);
         }
@@ -483,7 +520,7 @@ class E2eSeeder extends Seeder
      */
     private function cardWindow(User $admin, User $editor, User $restricted): void
     {
-        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Окно карточки', 'key' => 'WIN'], [$admin]);
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Окно карточки', 'key' => 'WIN'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
         app(AddSpaceMemberAction::class)->handle($admin, $space, $restricted, SpaceRole::Editor);
         app(SetSpaceMemberRestrictionAction::class)->handle($admin, $space, $restricted, true);
@@ -530,7 +567,7 @@ class E2eSeeder extends Seeder
         $column = fn (string $boardId, string $name) => BoardColumn::query()->where('board_id', $boardId)->where('name', $name)->sole();
         $lane = fn (string $boardId) => Lane::query()->where('board_id', $boardId)->sole();
 
-        $rows = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Ряды', 'key' => 'ROWS'], [$admin]);
+        $rows = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Ряды', 'key' => 'ROWS'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $rows, $editor, SpaceRole::Editor);
         app(AddSpaceMemberAction::class)->handle($admin, $rows, $restricted, SpaceRole::Editor);
         app(SetSpaceMemberRestrictionAction::class)->handle($admin, $rows, $restricted, true);
@@ -569,7 +606,7 @@ class E2eSeeder extends Seeder
             }
         }
 
-        $arrange = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Перестановка', 'key' => 'ARRANGE'], [$admin]);
+        $arrange = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Перестановка', 'key' => 'ARRANGE'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $arrange, $editor, SpaceRole::Editor);
         foreach (['Первая', 'Вторая', 'Третья'] as $name) {
             $board = $create->handle($admin, $arrange, ['name' => $name], BoardTemplate::Simple);
@@ -609,7 +646,7 @@ class E2eSeeder extends Seeder
         $column = fn (string $boardId, string $name) => BoardColumn::query()->where('board_id', $boardId)->where('name', $name)->sole();
         $lane = fn (string $boardId) => Lane::query()->where('board_id', $boardId)->sole();
 
-        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => $name, 'key' => $key], [$admin]);
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => $name, 'key' => $key], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
         app(AddSpaceMemberAction::class)->handle($admin, $space, $restricted, SpaceRole::Editor);
         app(SetSpaceMemberRestrictionAction::class)->handle($admin, $space, $restricted, true);

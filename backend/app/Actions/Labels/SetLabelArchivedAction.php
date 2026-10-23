@@ -45,6 +45,7 @@ class SetLabelArchivedAction
     {
         return Label::query()
             ->active()
+            ->inCompany($label->company_id)
             ->whereKeyNot($label->id)
             ->where(fn ($q) => $label->space_id === null ? $q->whereNull('space_id') : $q->where('space_id', $label->space_id))
             ->whereRaw('lower(name) = lower(?)', [$label->name])

@@ -2,16 +2,17 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Enums\UserRole;
+use App\Enums\CompanyRole;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class UpdateUserRoleRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return Gate::allows('updateRole', $this->route('user'));
+        return Gate::inspect('updateRole', [$this->route('user'), $this->route('company')]);
     }
 
     /**
@@ -20,8 +21,8 @@ class UpdateUserRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // Роль Владельца — только передачей владения (ADR-0017)
-            'role' => ['required', Rule::enum(UserRole::class)->only(UserRole::ASSIGNABLE)],
+            // Роль в компании; Владельца так не назначить — только передачей владения (ADR-0017)
+            'role' => ['required', Rule::enum(CompanyRole::class)],
         ];
     }
 }

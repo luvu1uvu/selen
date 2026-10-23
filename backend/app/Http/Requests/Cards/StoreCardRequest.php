@@ -27,7 +27,8 @@ class StoreCardRequest extends FormRequest
 
         return [
             'title' => ['required', 'string', 'max:500'],
-            'card_type_id' => ['nullable', 'ulid', Rule::exists('card_types', 'id')->whereNull('archived_at')],
+            // Тип — справочник компании пространства (ADR-0024)
+            'card_type_id' => ['nullable', 'ulid', Rule::exists('card_types', 'id')->where('company_id', $board->space->company_id)->whereNull('archived_at')],
             ...$this->cellRules($board->id),
         ];
     }

@@ -3,8 +3,10 @@
 namespace App\Policies;
 
 use App\Enums\Permission;
+use App\Models\Company;
 use App\Models\Space;
 use App\Models\User;
+use App\Policies\Concerns\ChecksCompanyPermission;
 use App\Policies\Concerns\ChecksSpaceRole;
 use Illuminate\Auth\Access\Response;
 
@@ -16,40 +18,40 @@ use Illuminate\Auth\Access\Response;
  */
 class SpacePolicy
 {
-    use ChecksSpaceRole;
+    use ChecksCompanyPermission, ChecksSpaceRole;
 
-    // --- Админка: системный администратор ---------------------------------
+    // --- Админка компании: права компании (ADR-0024; правом роли — с П2d) ---
 
-    public function adminViewAny(User $actor): bool
+    public function adminViewAny(User $actor, Company $company): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $company, Permission::CompanyManageStructure);
     }
 
-    public function create(User $actor): bool
+    public function create(User $actor, Company $company): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $company, Permission::CompanyManageStructure);
     }
 
-    public function archive(User $actor, Space $space): bool
+    public function archive(User $actor, Space $space): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $space->company, Permission::CompanyManageStructure);
     }
 
-    public function restore(User $actor, Space $space): bool
+    public function restore(User $actor, Space $space): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $space->company, Permission::CompanyManageStructure);
     }
 
     /** Удалить пустое пространство навсегда (LATER-43). */
-    public function delete(User $actor, Space $space): bool
+    public function delete(User $actor, Space $space): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $space->company, Permission::CompanyManageStructure);
     }
 
-    /** Назначить роль в пространстве себе или другому пользователю. */
-    public function assignRole(User $actor, Space $space): bool
+    /** Назначить роль в пространстве себе или другому пользователю (право компании «управлять доступом»). */
+    public function assignRole(User $actor, Space $space): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $space->company, Permission::CompanyManageAccess);
     }
 
     // --- Содержимое: участники пространства -------------------------------

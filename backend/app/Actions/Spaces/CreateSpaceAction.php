@@ -6,6 +6,7 @@ use App\Actions\Navigation\NavTreeGuard;
 use App\Enums\EventType;
 use App\Enums\NavNodeType;
 use App\Enums\SpaceRole;
+use App\Models\Company;
 use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
@@ -14,9 +15,9 @@ use App\Services\Positions\Positioner;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Создание пространства системным администратором вместе с администраторами пространства.
- * Пространство встаёт в конец корня дерева навигации или указанной активной папки (ADR-0013); иконка-эмодзи
- * необязательна.
+ * Создание пространства компании (администратором компании) вместе с администраторами пространства.
+ * Пространство встаёт в конец корня дерева компании или указанной активной папки этой компании (ADR-0013,
+ * ADR-0024); иконка-эмодзи необязательна.
  */
 class CreateSpaceAction
 {
@@ -34,19 +35,21 @@ class CreateSpaceAction
      * @param  list<User>  $admins  администраторы пространства (не пусто)
      * @param  string|null  $parentId  папка в дереве навигации (null — корень)
      */
-    public function handle(User $actor, array $data, array $admins, ?string $icon = null, ?string $parentId = null): Space
+    public function handle(User $actor, Company $company, array $data, array $admins, ?string $icon = null, ?string $parentId = null): Space
     {
-        return DB::transaction(function () use ($actor, $data, $admins, $icon, $parentId) {
+        return DB::transaction(function () use ($actor, $company, $data, $admins, $icon, $parentId) {
             NavNode::lockTree();
-            $this->guard->ensureParent($parentId);
+            $this->guard->ensureParent($company, $parentId);
 
-            $space = Space::query()->create($data);
+            $space = new Space($data);
+            $space->forceFill(['company_id' => $company->id])->save();
             NavNode::query()->forceCreate([
+                'company_id' => $company->id,
                 'type' => NavNodeType::Space,
                 'parent_id' => $parentId,
                 'space_id' => $space->id,
                 'icon' => $icon,
-                'position' => $this->positions->atEnd(NavNode::siblingsOf($parentId)),
+                'position' => $this->positions->atEnd(NavNode::siblingsOf($company, $parentId)),
             ]);
 
             $this->events->record(EventType::SpaceCreated, $actor, $space, [

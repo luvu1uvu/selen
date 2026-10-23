@@ -87,7 +87,7 @@ describe('Карточка: описание, комментарии, чек-л�
     server.use(
       http.get('*/api/v1/boards/board-1', () => HttpResponse.json({ data: makeBoardDetail() })),
       http.get('*/api/v1/cards/DEV-1/history', () => HttpResponse.json(makeCardHistory())),
-      http.get('*/api/v1/card-types', () =>
+      http.get('*/api/v1/spaces/:key/card-types', () =>
         HttpResponse.json({ data: makeBoardDetail().card_types }),
       ),
       http.get('*/api/v1/spaces/DEV/members', () => HttpResponse.json({ data: [] })),

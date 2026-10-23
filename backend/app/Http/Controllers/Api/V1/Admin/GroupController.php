@@ -15,6 +15,7 @@ use App\Http\Requests\Admin\AssignSpaceGroupRequest;
 use App\Http\Requests\Admin\SaveGroupRequest;
 use App\Http\Requests\Admin\StoreGroupMemberRequest;
 use App\Http\Resources\GroupResource;
+use App\Models\Company;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
@@ -30,57 +31,57 @@ use Illuminate\Support\Facades\Gate;
  */
 class GroupController extends Controller
 {
-    public function index(): AnonymousResourceCollection
+    public function index(Company $company): AnonymousResourceCollection
     {
-        Gate::authorize('viewAny', Group::class);
+        Gate::authorize('viewAny', [Group::class, $company]);
 
-        // Встроенная «Все сотрудники» — первой
-        $groups = Group::query()->withCount(['members', 'spaceGrants'])->orderByRaw('system_key IS NULL, lower(name)')->get();
+        // Встроенная «Все сотрудники» компании — первой
+        $groups = Group::query()->inCompany($company)->withCount(['members', 'spaceGrants'])->orderByRaw('system_key IS NULL, lower(name)')->get();
 
         return GroupResource::collection($groups);
     }
 
-    public function store(SaveGroupRequest $request, SaveGroupAction $action): JsonResponse
+    public function store(SaveGroupRequest $request, Company $company, SaveGroupAction $action): JsonResponse
     {
-        $group = $action->handle($request->user(), $request->validated());
+        $group = $action->handle($request->user(), $company, $request->validated());
 
         return (new GroupResource($this->reload($group)))->response()->setStatusCode(201);
     }
 
-    public function show(Group $group): GroupResource
+    public function show(Company $company, Group $group): GroupResource
     {
         Gate::authorize('view', $group);
 
         return new GroupResource($this->reload($group));
     }
 
-    public function update(SaveGroupRequest $request, Group $group, SaveGroupAction $action): GroupResource
+    public function update(SaveGroupRequest $request, Company $company, Group $group, SaveGroupAction $action): GroupResource
     {
-        return new GroupResource($this->reload($action->handle($request->user(), $request->validated(), $group)));
+        return new GroupResource($this->reload($action->handle($request->user(), $company, $request->validated(), $group)));
     }
 
-    public function archive(Request $request, Group $group, SetGroupArchivedAction $action): GroupResource
+    public function archive(Request $request, Company $company, Group $group, SetGroupArchivedAction $action): GroupResource
     {
         Gate::authorize('archive', $group);
 
         return new GroupResource($this->reload($action->handle($request->user(), $group, true)));
     }
 
-    public function restore(Request $request, Group $group, SetGroupArchivedAction $action): GroupResource
+    public function restore(Request $request, Company $company, Group $group, SetGroupArchivedAction $action): GroupResource
     {
         Gate::authorize('archive', $group);
 
         return new GroupResource($this->reload($action->handle($request->user(), $group, false)));
     }
 
-    public function addMember(StoreGroupMemberRequest $request, Group $group, AddGroupMemberAction $action): GroupResource
+    public function addMember(StoreGroupMemberRequest $request, Company $company, Group $group, AddGroupMemberAction $action): GroupResource
     {
         $action->handle($request->user(), $group, User::query()->findOrFail($request->validated('user_id')));
 
         return new GroupResource($this->reload($group));
     }
 
-    public function removeMember(Request $request, Group $group, User $user, RemoveGroupMemberAction $action): Response
+    public function removeMember(Request $request, Company $company, Group $group, User $user, RemoveGroupMemberAction $action): Response
     {
         Gate::authorize('update', $group);
 
@@ -92,6 +93,7 @@ class GroupController extends Controller
     /** Выдать или изменить доступ группы к пространству (в журнале — via=admin_panel). */
     public function assignSpace(
         AssignSpaceGroupRequest $request,
+        Company $company,
         Group $group,
         Space $space,
         AssignSpaceGroupAction $action,
@@ -107,7 +109,7 @@ class GroupController extends Controller
         return new GroupResource($this->reload($group));
     }
 
-    public function revokeSpace(Request $request, Group $group, Space $space, RevokeSpaceGroupAction $action): Response
+    public function revokeSpace(Request $request, Company $company, Group $group, Space $space, RevokeSpaceGroupAction $action): Response
     {
         Gate::authorize('update', $group);
 

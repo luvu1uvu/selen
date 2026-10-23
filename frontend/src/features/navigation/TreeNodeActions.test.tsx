@@ -62,7 +62,7 @@ function serve(user: User, canManageIos: boolean) {
   signedInAs(user)
   server.use(
     http.get('*/api/v1/navigation', () => HttpResponse.json({ data: treeFor(canManageIos) })),
-    http.get('*/api/v1/admin/navigation', () =>
+    http.get('*/api/v1/admin/companies/:company/navigation', () =>
       HttpResponse.json({ data: structure, meta: { max_depth: 4 } }),
     ),
   )
@@ -180,11 +180,11 @@ describe('Дерево: кнопки «+» и «⋯» у строки', () => {
     serve(sysAdmin, true)
     const bodies: Record<string, unknown> = {}
     server.use(
-      http.post('*/api/v1/admin/spaces', async ({ request }) => {
+      http.post('*/api/v1/admin/companies/:company/spaces', async ({ request }) => {
         bodies.space = await request.json()
         return HttpResponse.json({ data: {} }, { status: 201 })
       }),
-      http.post('*/api/v1/admin/folders', async ({ request }) => {
+      http.post('*/api/v1/admin/companies/:company/folders', async ({ request }) => {
         bodies.folder = await request.json()
         return HttpResponse.json({ data: structure, meta: { max_depth: 4 } }, { status: 201 })
       }),
@@ -219,11 +219,14 @@ describe('Дерево: кнопки «+» и «⋯» у строки', () => {
     serve(sysAdmin, true)
     const moves: unknown[] = []
     server.use(
-      http.post('*/api/v1/admin/nav-nodes/:id/move', async ({ params, request }) => {
-        moves.push({ id: params.id, ...((await request.json()) as object) })
-        return HttpResponse.json({ data: structure, meta: { max_depth: 4 } })
-      }),
-      http.post('*/api/v1/admin/folders/:id/archive', () =>
+      http.post(
+        '*/api/v1/admin/companies/:company/nav-nodes/:id/move',
+        async ({ params, request }) => {
+          moves.push({ id: params.id, ...((await request.json()) as object) })
+          return HttpResponse.json({ data: structure, meta: { max_depth: 4 } })
+        },
+      ),
+      http.post('*/api/v1/admin/companies/:company/folders/:id/archive', () =>
         HttpResponse.json(
           { message: 'Сначала перенесите содержимое: Android', errors: { node: ['…'] } },
           { status: 422 },
@@ -255,11 +258,11 @@ describe('Дерево: кнопки «+» и «⋯» у строки', () => {
     serve(sysAdmin, true)
     const requests: string[] = []
     server.use(
-      http.post('*/api/v1/admin/spaces/:id/archive', ({ params }) => {
+      http.post('*/api/v1/admin/companies/:company/spaces/:id/archive', ({ params }) => {
         requests.push(`archive ${params.id}`)
         return HttpResponse.json({ data: { ...ios, archived_at: '2026-10-15T07:00:00Z' } })
       }),
-      http.delete('*/api/v1/admin/spaces/:id', ({ params }) => {
+      http.delete('*/api/v1/admin/companies/:company/spaces/:id', ({ params }) => {
         requests.push(`delete ${params.id}`)
         return new HttpResponse(null, { status: 204 })
       }),
@@ -293,7 +296,7 @@ describe('Дерево: кнопки «+» и «⋯» у строки', () => {
           ? HttpResponse.json({ message: 'Не найдено.' }, { status: 404 })
           : HttpResponse.json({ data: makeBoardDetail() }),
       ),
-      http.delete('*/api/v1/admin/spaces/:id', () => {
+      http.delete('*/api/v1/admin/companies/:company/spaces/:id', () => {
         deleted = true
         return new HttpResponse(null, { status: 204 })
       }),

@@ -51,7 +51,7 @@ class CreateCardAction
 
             $card = new Card([
                 'title' => $data['title'],
-                'card_type_id' => $data['card_type_id'] ?? CardType::default()->id,
+                'card_type_id' => $data['card_type_id'] ?? CardType::default($board->companyId())->id,
             ]);
             $card->forceFill([
                 'space_id' => $board->space_id,

@@ -2,7 +2,10 @@ import type { User } from '@/shared/types/api'
 
 type WithRole = Pick<User, 'role'> | null | undefined
 
-/** Системный администратор — администратор или Владелец (ADR-0017). Доступ всё равно проверяет API. */
+/**
+ * Администратор компании или Владелец (ADR-0017, ADR-0024): role — роль для интерфейса (у текущего пользователя admin —
+ * администратор хотя бы одной компании, у людей в админке — роль в этой компании). Доступ всё равно проверяет API.
+ */
 export function isSystemAdmin(user: WithRole): boolean {
   return user?.role === 'admin' || user?.role === 'owner'
 }
@@ -10,4 +13,12 @@ export function isSystemAdmin(user: WithRole): boolean {
 /** Владелец — единственный; назначает администраторов и передаёт владение (ADR-0017). */
 export function isOwner(user: WithRole): boolean {
   return user?.role === 'owner'
+}
+
+/**
+ * Компании, которыми текущий пользователь управляет (Владелец — всеми), — адреса админки admin/companies/{id}/…
+ * (ADR-0024). Пока компания одна, админка работает с первой; выбор компании — П2b-2.
+ */
+export function adminCompanies(user: Pick<User, 'admin_companies'> | null | undefined): string[] {
+  return user?.admin_companies?.map((company) => company.id) ?? []
 }

@@ -4,6 +4,7 @@ namespace App\Actions\Navigation;
 
 use App\Enums\EventType;
 use App\Enums\NavNodeType;
+use App\Models\Company;
 use App\Models\NavNode;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
@@ -20,11 +21,11 @@ class CreateFolderAction
         private readonly NavTreeGuard $guard,
     ) {}
 
-    public function handle(User $actor, string $name, ?string $icon, ?string $parentId): NavNode
+    public function handle(User $actor, Company $company, string $name, ?string $icon, ?string $parentId): NavNode
     {
-        return DB::transaction(function () use ($actor, $name, $icon, $parentId) {
+        return DB::transaction(function () use ($actor, $company, $name, $icon, $parentId) {
             NavNode::lockTree();
-            $this->guard->ensureParent($parentId);
+            $this->guard->ensureParent($company, $parentId);
 
             if (NavNode::depthOf($parentId) + 1 > NavNode::MAX_FOLDER_DEPTH) {
                 throw ValidationException::withMessages([
@@ -33,11 +34,12 @@ class CreateFolderAction
             }
 
             $folder = NavNode::query()->forceCreate([
+                'company_id' => $company->id,
                 'parent_id' => $parentId,
                 'type' => NavNodeType::Folder,
                 'name' => $name,
                 'icon' => $icon,
-                'position' => $this->positions->atEnd(NavNode::siblingsOf($parentId)),
+                'position' => $this->positions->atEnd(NavNode::siblingsOf($company, $parentId)),
             ]);
 
             $this->events->record(EventType::FolderCreated, $actor, $folder, ['parent_id' => $parentId]);

@@ -67,7 +67,7 @@ describe('Карточка: связи и блокировки', () => {
     server.use(
       http.get('*/api/v1/boards/board-1', () => HttpResponse.json({ data: makeBoardDetail() })),
       http.get('*/api/v1/cards/DEV-1/history', () => HttpResponse.json(makeCardHistory())),
-      http.get('*/api/v1/card-types', () =>
+      http.get('*/api/v1/spaces/:key/card-types', () =>
         HttpResponse.json({ data: makeBoardDetail().card_types }),
       ),
     )
@@ -260,7 +260,7 @@ describe('Карточка: лента истории', () => {
     signedInAs(makeUser({ role: 'member', timezone: 'Europe/Moscow' }))
     server.use(
       http.get('*/api/v1/boards/board-1', () => HttpResponse.json({ data: makeBoardDetail() })),
-      http.get('*/api/v1/card-types', () =>
+      http.get('*/api/v1/spaces/:key/card-types', () =>
         HttpResponse.json({ data: makeBoardDetail().card_types }),
       ),
       http.get('*/api/v1/cards/DEV-1', () => HttpResponse.json({ data: makeCardDetail() })),

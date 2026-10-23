@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
  * @property-read Card $card
  * @property-read User $author
  */
-class Comment extends Model
+class Comment extends Model implements HasCompany
 {
     use HasUlids;
 
@@ -56,5 +57,13 @@ class Comment extends Model
     public function isDeleted(): bool
     {
         return $this->deleted_at !== null;
+    }
+
+    /** Компания комментария — компания пространства карточки (HasCompany: журнал событий). */
+    public function companyId(): string
+    {
+        return $this->relationLoaded('card')
+            ? $this->card->companyId()
+            : (string) Space::query()->whereIn('id', Card::withTrashed()->select('space_id')->whereKey($this->card_id))->value('company_id');
     }
 }

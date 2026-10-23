@@ -41,7 +41,7 @@ it('показывает IP события входа в журнале адми
     $admin = admin();
     app(EventRecorder::class)->record(EventType::Logout, $admin, $admin);
 
-    $this->actingAs($admin)->getJson('/api/v1/admin/events')
+    $this->actingAs($admin)->getJson(adminPath().'events')
         ->assertOk()
         ->assertJsonPath('data.0.auth_audit.ip', '127.0.0.1')
         ->assertJsonPath('data.0.meta', ['source' => 'http']);

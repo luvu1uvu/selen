@@ -5,11 +5,14 @@ namespace App\Services\Access;
 use App\Enums\CardScope;
 use App\Enums\Permission;
 use App\Enums\StandardRole;
+use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\AccessGrant;
+use App\Models\Company;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -17,17 +20,25 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Единая точка прав (docs/adr/0024-rights-2.md, ADR-0012): единственное место, где для вычисления доступа читаются
- * выдачи (access_grants), состав групп (group_members), роли и их права (roles, role_permissions). Политики,
- * CardVisibility, списки пространств, участники, подсказка @ получают права только отсюда — напрямую или через
- * Space::accessOf().
+ * членство в компаниях (company_members), выдачи (access_grants), состав групп (group_members), роли и их права
+ * (roles, role_permissions). Политики, CardVisibility, списки пространств, участники, подсказка @, админка компаний
+ * получают права только отсюда — напрямую или через Space::accessOf() и Company::permissionsOf().
+ *
+ * Изоляция компаний — здесь же (одно правило, раздел 2 плана): выдача действует, только если её получатель —
+ * действующий участник компании выдачи (её «дом» или Владелец, activeMember()). Каждая ветка выборки источников
+ * соединяется с этим правилом по компании выдачи; строка выдачи человеку без членства ничего не даёт.
  *
  * Действующий источник — выдача на узел пространства: личная; группе — если она не в архиве, а пользователь
- * не деактивирован; встроенной группе «Все сотрудники» — каждому активному пользователю (её состав не хранится,
- * а вычисляется здесь: новый сотрудник получает доступ сразу после принятия приглашения, деактивированный теряет
- * его сразу). Права источника — права его роли; права ролей приходят тем же запросом, что и выдачи.
+ * не деактивирован; встроенной группе «Все сотрудники» компании — каждому активному «дому» этой компании (её состав
+ * не хранится, а вычисляется здесь: новый сотрудник получает доступ сразу после принятия приглашения,
+ * деактивированный теряет его сразу). Права источника — права его роли; права ролей приходят тем же запросом,
+ * что и выдачи.
  */
 class AccessResolver
 {
+    /** Вид членства «дом» — полноправный сотрудник компании (гости — П2c). */
+    public const HOME = 'home';
+
     /** Права пользователя в одном пространстве — один запрос. Кеширует Space::accessOf(). */
     public function forSpace(User $user, Space $space): SpaceAccess
     {
@@ -67,14 +78,180 @@ class AccessResolver
         return DB::query()->fromSub($this->sourceRows(userId: $user->getKey()), 'access')->select('space_id');
     }
 
-    /** Управляет доступом хотя бы к одному пространству (лично или через группу) — справочник сотрудников и групп. */
-    public function managesAccessAnywhere(User $user): bool
+    /**
+     * Управляет доступом хотя бы к одному пространству компании (лично или через группу) — справочник сотрудников
+     * и групп этой компании для выдачи доступа.
+     */
+    public function managesAccessIn(User $user, Company $company): bool
     {
         return DB::query()
-            ->fromSub($this->sourceRows(userId: $user->getKey()), 'access')
+            ->fromSub($this->sourceRows(userId: $user->getKey(), companyId: $company->getKey()), 'access')
             ->join('role_permissions', 'role_permissions.role_id', '=', 'access.role_id')
             ->where('role_permissions.permission', Permission::SpaceManageAccess->value)
             ->exists();
+    }
+
+    /**
+     * Права пользователя в компании (Company::permissionsOf): Владелец — участник всех компаний со всеми правами
+     * компании; «дом» — участник, администратор компании — с правами по умолчанию (выдача прав компании — П2c).
+     */
+    public function forCompany(User $user, Company $company): CompanyAccess
+    {
+        $membership = $user->isOwner() ? null : $this->homes()
+            ->where('company_id', $company->getKey())
+            ->where('user_id', $user->getKey())
+            ->first(['is_admin']);
+
+        return $this->companyAccess($user, $membership === null ? null : (bool) $membership->is_admin);
+    }
+
+    /**
+     * Права в компании для списка людей одним запросом (админка «Пользователи», приглашения): запоминаются
+     * в Company::permissionsOf().
+     *
+     * @param  iterable<User>  $users
+     */
+    public function rememberCompanyPermissions(Company $company, iterable $users): void
+    {
+        $users = collect($users);
+        $admins = $this->homes()
+            ->where('company_id', $company->getKey())
+            ->whereIn('user_id', $users->map(fn (User $user) => $user->getKey())->all())
+            ->pluck('is_admin', 'user_id');
+
+        foreach ($users as $user) {
+            $flag = $admins->get($user->getKey());
+            $company->rememberPermissions($user, $this->companyAccess($user, $flag === null ? null : (bool) $flag));
+        }
+    }
+
+    /** @param  bool|null  $isAdmin  членство: администратор компании или нет; null — не участник */
+    private function companyAccess(User $user, ?bool $isAdmin): CompanyAccess
+    {
+        if ($user->isOwner()) {
+            $all = array_filter(Permission::cases(), fn (Permission $p) => $p->scope() === 'company');
+
+            return new CompanyAccess(member: true, admin: true, owner: true, permissions: $this->permissionSet($all));
+        }
+
+        return match ($isAdmin) {
+            null => CompanyAccess::none(),
+            true => new CompanyAccess(member: true, admin: true, permissions: $this->permissionSet(Permission::companyAdminDefaults())),
+            false => new CompanyAccess(member: true),
+        };
+    }
+
+    /**
+     * Компании, которыми пользователь управляет как администратор (Владелец — все), по дате создания:
+     * /auth/me (frontend — adminCompanies) и User::administers().
+     *
+     * @return Collection<int, string>
+     */
+    public function adminCompanyIds(User $user): Collection
+    {
+        return DB::table('companies')
+            ->when(! $user->isOwner(), fn (Builder $q) => $q->whereIn('id', $this->homes()
+                ->select('company_id')
+                ->where('user_id', $user->getKey())
+                ->where('is_admin', true)))
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->pluck('id');
+    }
+
+    /**
+     * Действующие администраторы компании: Владелец и активные администраторы компании (инвариант «не оставить
+     * компанию без администратора», подсказки консоли).
+     *
+     * @return EloquentBuilder<User>
+     */
+    public function activeAdmins(Company $company): EloquentBuilder
+    {
+        return User::query()
+            ->where('status', UserStatus::Active)
+            ->where(fn (EloquentBuilder $q) => $q
+                ->where('role', UserRole::Owner)
+                ->orWhereIn('id', $this->companyMemberIds($company)->where('is_admin', true)));
+    }
+
+    /**
+     * Признак «администратор компании» у людей — под блокировкой строк членства до конца транзакции
+     * (UserLock: права, проверенные политикой, не изменились параллельно): user_id → администратор.
+     *
+     * @param  list<string>  $userIds
+     * @return array<string, bool>
+     */
+    public function lockAdminFlags(Company $company, array $userIds): array
+    {
+        return $this->homes()
+            ->where('company_id', $company->getKey())
+            ->whereIn('user_id', $userIds)
+            ->orderBy('user_id')
+            ->lockForUpdate()
+            ->pluck('is_admin', 'user_id')
+            ->map(fn (mixed $flag) => (bool) $flag)
+            ->all();
+    }
+
+    /**
+     * Подзапрос id людей компании — её «домов» (список «Пользователи», справочник для выдачи доступа, число людей
+     * в «Все сотрудники»).
+     */
+    public function companyMemberIds(Company|string $company): Builder
+    {
+        return $this->homes()
+            ->select('user_id')
+            ->where('company_id', $company instanceof Company ? $company->getKey() : $company);
+    }
+
+    /**
+     * Подзапрос id компаний, где пользователь — «дом» (дерево: какие компании ему показывать).
+     */
+    public function memberCompanyIds(User $user): Builder
+    {
+        return $this->homes()->select('company_id')->where('user_id', $user->getKey());
+    }
+
+    /**
+     * Действующее членство (одно правило изоляции компаний): пользователь из колонки $user — «дом» компании из колонки
+     * $company или Владелец (он участник всех компаний — чтобы ему можно было выдать доступ, ADR-0024).
+     * Гости, срок гостя и «убран из компании» — П2c (тогда правило расширяется здесь и в homes()).
+     */
+    private function activeMember(Builder $query, string $company, string $user): Builder
+    {
+        return $query->where(fn (Builder $q) => $q
+            ->whereExists(fn (Builder $q) => $q->from('company_members')
+                ->where('company_members.kind', self::HOME)
+                ->whereColumn('company_members.company_id', $company)
+                ->whereColumn('company_members.user_id', $user)
+                ->selectRaw('1'))
+            ->orWhereExists(fn (Builder $q) => $q->from('users AS owners')
+                ->whereColumn('owners.id', $user)
+                ->where('owners.role', UserRole::Owner->value)
+                ->selectRaw('1')));
+    }
+
+    /**
+     * Членство «дом» — единственный вид членства в П2b-1 (CHECK). Условие «дом» — во всех выборках членства: здесь,
+     * в activeMember() и во «Все сотрудники», и в связях Company::users / User::companies (привязка {user} в адресах).
+     */
+    private function homes(): Builder
+    {
+        return DB::table('company_members')->where('kind', self::HOME);
+    }
+
+    /**
+     * @param  iterable<Permission>  $permissions
+     * @return array<string, true>
+     */
+    private function permissionSet(iterable $permissions): array
+    {
+        $set = [];
+        foreach ($permissions as $permission) {
+            $set[$permission->value] = true;
+        }
+
+        return $set;
     }
 
     /**
@@ -146,16 +323,17 @@ class AccessResolver
     }
 
     /**
-     * Пространства, где пользователь — последний личный не деактивированный администратор
+     * Пространства компании, где пользователь — последний личный не деактивированный администратор
      * (после его деактивации там не останется действующего администратора).
      *
      * @return EloquentCollection<int, Space>
      */
-    public function lastManagerSpaces(User $user): EloquentCollection
+    public function lastManagerSpaces(User $user, Company $company): EloquentCollection
     {
         $managers = $this->personalManagersQuery();
 
         return Space::query()
+            ->inCompany($company)
             ->whereIn('id', DB::query()->fromSub($managers, 'mine')->where('mine.user_id', $user->getKey())->select('mine.space_id'))
             ->whereNotExists(fn (Builder $q) => $q
                 ->fromSub($this->personalManagersQuery(), 'others')
@@ -169,16 +347,18 @@ class AccessResolver
     }
 
     /**
-     * Сводка для админки «почему он видит / не видит»: все источники пользователя, включая недействующие,
-     * с причиной. Пространства — по названию.
+     * Сводка для админки компании «почему он видит / не видит»: все источники пользователя в пространствах этой
+     * компании, включая недействующие, с причиной. Пространства — по названию. Человек — участник компании
+     * (его ищет привязка маршрута среди людей компании).
      *
      * @return Collection<int, array{space: Space, access: SpaceAccess, sources: list<array{group: Group|null, source: AccessSource, inactive_reason: 'group_archived'|'user_deactivated'|'user_invited'|null}>}>
      */
-    public function explain(User $user): Collection
+    public function explain(User $user, Company $company): Collection
     {
         $deactivated = $user->status === UserStatus::Deactivated;
 
         $grants = AccessGrant::query()
+            ->inCompany($company)
             ->where(fn ($q) => $q
                 ->where('user_id', $user->getKey())
                 ->orWhereIn('group_id', DB::table('group_members')->select('group_id')->where('user_id', $user->getKey()))
@@ -232,22 +412,25 @@ class AccessResolver
 
     /**
      * Строки действующих источников: личные выдачи + выдачи активных групп активным участникам +
-     * выдачи группе «Все сотрудники» всем активным пользователям. Только выдачи на узлы пространств.
-     * Колонки: space_id, user_id, group_id (null — личная), role_id.
+     * выдачи группе «Все сотрудники» компании её активным «домам». Только выдачи на узлы пространств и только
+     * действующим участникам компании выдачи (activeMember — каждая ветка). Колонки: space_id, user_id, group_id
+     * (null — личная), role_id.
      */
-    private function sourceRows(?string $spaceId = null, ?string $userId = null): Builder
+    private function sourceRows(?string $spaceId = null, ?string $userId = null, ?string $companyId = null): Builder
     {
         $grants = fn () => DB::table('access_grants')
             ->join('nav_nodes', fn ($join) => $join->on('nav_nodes.id', '=', 'access_grants.nav_node_id')
                 ->whereNotNull('nav_nodes.space_id'))
-            ->when($spaceId !== null, fn (Builder $q) => $q->where('nav_nodes.space_id', $spaceId));
+            ->when($spaceId !== null, fn (Builder $q) => $q->where('nav_nodes.space_id', $spaceId))
+            ->when($companyId !== null, fn (Builder $q) => $q->where('access_grants.company_id', $companyId));
 
-        $personal = $grants()
+        $personal = $this->activeMember($grants(), 'access_grants.company_id', 'access_grants.user_id')
             ->whereNotNull('access_grants.user_id')
             ->select(['nav_nodes.space_id', 'access_grants.user_id', DB::raw('NULL::char(26) AS group_id'), 'access_grants.role_id'])
             ->when($userId !== null, fn (Builder $q) => $q->where('access_grants.user_id', $userId));
 
-        $groups = $grants()
+        // Группа — той же компании, что выдача (составной FK); её участник — действующий участник этой компании
+        $groups = $this->activeMember($grants(), 'access_grants.company_id', 'group_members.user_id')
             ->join('groups', fn ($join) => $join->on('groups.id', '=', 'access_grants.group_id')
                 ->whereNull('groups.archived_at')
                 ->whereNull('groups.system_key'))
@@ -258,11 +441,13 @@ class AccessResolver
             ->select(['nav_nodes.space_id', 'group_members.user_id', 'access_grants.group_id', 'access_grants.role_id'])
             ->when($userId !== null, fn (Builder $q) => $q->where('group_members.user_id', $userId));
 
-        // Встроенная группа: состав не хранится — каждый активный пользователь
+        // Встроенная группа: состав не хранится — каждый активный «дом» компании выдачи
         $everyone = $grants()
             ->join('groups', fn ($join) => $join->on('groups.id', '=', 'access_grants.group_id')
                 ->where('groups.system_key', Group::EVERYONE))
-            ->crossJoin('users')
+            ->join('company_members', fn ($join) => $join->on('company_members.company_id', '=', 'access_grants.company_id')
+                ->where('company_members.kind', self::HOME))
+            ->join('users', 'users.id', '=', 'company_members.user_id')
             ->where('users.status', UserStatus::Active->value)
             ->select(['nav_nodes.space_id', 'users.id AS user_id', 'access_grants.group_id', 'access_grants.role_id'])
             ->when($userId !== null, fn (Builder $q) => $q->where('users.id', $userId));
@@ -287,11 +472,12 @@ class AccessResolver
     }
 
     /**
-     * Личные выдачи с правом «управление доступом» на узлы пространств. Колонки: grant_id, space_id, user_id.
+     * Личные выдачи с правом «управление доступом» на узлы пространств — участникам компании выдачи (activeMember).
+     * Колонки: grant_id, space_id, user_id.
      */
     private function personalManagersQuery(): Builder
     {
-        return DB::table('access_grants')
+        return $this->activeMember(DB::table('access_grants'), 'access_grants.company_id', 'access_grants.user_id')
             ->join('nav_nodes', 'nav_nodes.id', '=', 'access_grants.nav_node_id')
             ->join('role_permissions', fn ($join) => $join->on('role_permissions.role_id', '=', 'access_grants.role_id')
                 ->where('role_permissions.permission', Permission::SpaceManageAccess->value))

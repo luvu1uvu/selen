@@ -5,10 +5,8 @@ namespace App\Console\Commands;
 use App\Actions\PmStand\ImportDeferredAction;
 use App\Actions\PmStand\SetUpPmSpaceAction;
 use App\Console\Commands\Concerns\ReportsStandErrors;
-use App\Enums\UserRole;
-use App\Enums\UserStatus;
 use App\Models\Space;
-use App\Models\User;
+use App\Services\Access\AccessResolver;
 use App\Services\PmStand\PmStand;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -38,7 +36,7 @@ class PmBacklogCommand extends Command
 
             $space = PmStand::space();
             $space === null
-                ? Gate::forUser($owner)->authorize('create', Space::class)
+                ? Gate::forUser($owner)->authorize('create', [Space::class, PmStand::company()])
                 : Gate::forUser($owner)->authorize('update', $space);
 
             $space = $setUp->handle($owner);
@@ -61,9 +59,7 @@ class PmBacklogCommand extends Command
     /** Подсказка при неизвестном email: чаще всего это опечатка, а не отсутствие учётной записи. */
     private function ownerHint(): string
     {
-        $admins = User::query()
-            ->whereIn('role', UserRole::systemAdmins())->where('status', UserStatus::Active)
-            ->orderBy('email')->pluck('email');
+        $admins = app(AccessResolver::class)->activeAdmins(PmStand::company())->orderBy('email')->pluck('email');
 
         return $admins->isEmpty()
             ? 'заведите учётную запись: make pm-owner'

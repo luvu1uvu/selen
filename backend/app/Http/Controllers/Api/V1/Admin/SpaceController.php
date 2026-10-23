@@ -12,6 +12,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AssignSpaceRoleRequest;
 use App\Http\Requests\Admin\StoreSpaceRequest;
 use App\Http\Resources\AdminSpaceResource;
+use App\Models\Company;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
@@ -32,16 +33,16 @@ class SpaceController extends Controller
 {
     public function __construct(private readonly AccessResolver $resolver) {}
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request, Company $company): AnonymousResourceCollection
     {
-        Gate::authorize('adminViewAny', Space::class);
+        Gate::authorize('adminViewAny', [Space::class, $company]);
 
         /** @var User $actor */
         $actor = $request->user();
         $accesses = Space::accessesOf($actor);
 
         // Пространства без действующего администратора — первыми (решение PM этапа 3)
-        $spaces = $this->withAdminData(Space::query())
+        $spaces = $this->withAdminData(Space::query()->inCompany($company))
             ->orderBy('has_active_admin')
             ->orderBy('name')
             ->get()
@@ -50,7 +51,7 @@ class SpaceController extends Controller
         return AdminSpaceResource::collection($this->withAdmins($spaces));
     }
 
-    public function store(StoreSpaceRequest $request, CreateSpaceAction $action): JsonResponse
+    public function store(StoreSpaceRequest $request, Company $company, CreateSpaceAction $action): JsonResponse
     {
         /** @var User $actor */
         $actor = $request->user();
@@ -62,6 +63,7 @@ class SpaceController extends Controller
 
         $space = $action->handle(
             $actor,
+            $company,
             $request->safe()->only(['name', 'key', 'description']),
             $admins,
             $request->validated('icon'),
@@ -71,7 +73,7 @@ class SpaceController extends Controller
         return (new AdminSpaceResource($this->reload($space)))->response()->setStatusCode(201);
     }
 
-    public function archive(Request $request, Space $space, ArchiveSpaceAction $action): AdminSpaceResource
+    public function archive(Request $request, Company $company, Space $space, ArchiveSpaceAction $action): AdminSpaceResource
     {
         Gate::authorize('archive', $space);
 
@@ -79,7 +81,7 @@ class SpaceController extends Controller
     }
 
     /** Удалить пустое пространство навсегда (LATER-43). */
-    public function destroy(Request $request, Space $space, DeleteSpaceAction $action): Response
+    public function destroy(Request $request, Company $company, Space $space, DeleteSpaceAction $action): Response
     {
         Gate::authorize('delete', $space);
 
@@ -88,7 +90,7 @@ class SpaceController extends Controller
         return response()->noContent();
     }
 
-    public function restore(Request $request, Space $space, RestoreSpaceAction $action): AdminSpaceResource
+    public function restore(Request $request, Company $company, Space $space, RestoreSpaceAction $action): AdminSpaceResource
     {
         Gate::authorize('restore', $space);
 
@@ -98,6 +100,7 @@ class SpaceController extends Controller
     /** Назначить роль в пространстве себе или другому пользователю (пишется в журнал). */
     public function assignRole(
         AssignSpaceRoleRequest $request,
+        Company $company,
         Space $space,
         User $user,
         AssignSpaceRoleAction $action,

@@ -91,7 +91,7 @@ it('не меняет ни ответ доски, ни счётчик, ни по
 it('удаление пустого пространства уносит строки сворачивания его досок', function () {
     $this->actingAs($this->viewer)->putJson("/api/v1/boards/{$this->board->id}/collapsed")->assertNoContent();
 
-    $this->actingAs(admin())->deleteJson("/api/v1/admin/spaces/{$this->space->id}")->assertSuccessful();
+    $this->actingAs(admin())->deleteJson(adminPath()."spaces/{$this->space->id}")->assertSuccessful();
 
     expect(DB::table('collapsed_boards')->count())->toBe(0);
 });

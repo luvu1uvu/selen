@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Spaces;
 
 use App\Enums\SpaceRole;
+use App\Models\Space;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -20,8 +21,12 @@ class StoreSpaceGroupRequest extends FormRequest
      */
     public function rules(): array
     {
+        /** @var Space $space */
+        $space = $this->route('space');
+
         return [
-            'group_id' => ['required', 'ulid', Rule::exists('groups', 'id')],
+            // Только группа компании пространства (ADR-0024): группа другой компании — как несуществующая
+            'group_id' => ['required', 'ulid', Rule::exists('groups', 'id')->where('company_id', $space->company_id)],
             'role' => ['required', Rule::enum(SpaceRole::class)],
             'own_cards_only' => ['sometimes', 'boolean'],
         ];

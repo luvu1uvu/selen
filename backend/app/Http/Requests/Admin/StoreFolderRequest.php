@@ -4,14 +4,15 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\NavNode;
 use App\Rules\Emoji;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 
 class StoreFolderRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return Gate::allows('manage', NavNode::class);
+        return Gate::inspect('manage', [NavNode::class, $this->route('company')]);
     }
 
     protected function prepareForValidation(): void

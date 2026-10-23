@@ -73,7 +73,11 @@ function PeopleTable({ space }: { space: Space }) {
     <div className="grid gap-4">
       {canManage && (
         <div className="flex justify-end">
-          <AddMemberDialog spaceKey={space.key} memberIds={personalIds} />
+          <AddMemberDialog
+            spaceKey={space.key}
+            companyId={space.company_id}
+            memberIds={personalIds}
+          />
         </div>
       )}
 
@@ -215,6 +219,7 @@ function PeopleTable({ space }: { space: Space }) {
       {canManage && (
         <AddMemberDialog
           spaceKey={space.key}
+          companyId={space.company_id}
           memberIds={personalIds}
           presetUser={toAdd}
           onClose={() => setToAdd(null)}

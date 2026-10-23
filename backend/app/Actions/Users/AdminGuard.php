@@ -2,24 +2,25 @@
 
 namespace App\Actions\Users;
 
-use App\Enums\UserRole;
-use App\Enums\UserStatus;
+use App\Models\Company;
 use App\Models\User;
+use App\Services\Access\AccessResolver;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Защита от ситуации «в системе не осталось ни одного активного администратора». Владелец — тоже
- * администратор (ADR-0017); пока он есть, проверка проходит всегда — она страхует базу без Владельца.
+ * Инвариант «компания не остаётся без администратора»: снять администратора компании или деактивировать его можно,
+ * только если у компании останется другой действующий администратор (Владелец — администратор всех компаний,
+ * ADR-0017, ADR-0024).
  */
 class AdminGuard
 {
-    public function ensureAnotherActiveAdminExists(User $user): void
+    public function __construct(private readonly AccessResolver $resolver) {}
+
+    public function ensureAnotherActiveAdminExists(User $user, Company $company): void
     {
         // FOR UPDATE нельзя совмещать с count() в PostgreSQL — блокируем строки и считаем в PHP
         // @phpstan-ignore-next-line larastan.noUnnecessaryCollectionCall
-        $otherAdmins = User::query()
-            ->whereIn('role', UserRole::systemAdmins())
-            ->where('status', UserStatus::Active)
+        $otherAdmins = $this->resolver->activeAdmins($company)
             ->whereKeyNot($user->getKey())
             ->lockForUpdate()
             ->pluck('id')

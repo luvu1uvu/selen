@@ -5,6 +5,7 @@ namespace App\Actions\Invitations;
 use App\Actions\Users\UserLock;
 use App\Enums\EventType;
 use App\Enums\UserStatus;
+use App\Models\Company;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
@@ -23,14 +24,14 @@ class RevokeInvitationAction
         private readonly UserLock $lock,
     ) {}
 
-    public function handle(User $actor, Invitation $invitation): Invitation
+    public function handle(User $actor, Invitation $invitation, Company $company): Invitation
     {
         // Роль приглашённого — та, по которой политика пустила (приглашённым админом управляет только Владелец)
         $authorized = $invitation->user;
 
-        return DB::transaction(function () use ($actor, $invitation, $authorized) {
+        return DB::transaction(function () use ($actor, $invitation, $authorized, $company) {
             $invitation = Invitation::query()->lockForUpdate()->findOrFail($invitation->id);
-            $user = $this->lock->lock($actor, $authorized);
+            $user = $this->lock->lock($actor, $authorized, $company);
 
             if (! $invitation->isOpen() || $user->status !== UserStatus::Invited) {
                 throw ValidationException::withMessages([

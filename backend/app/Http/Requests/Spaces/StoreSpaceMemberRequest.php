@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Spaces;
 
 use App\Enums\SpaceRole;
+use App\Models\Space;
+use App\Rules\CompanyMember;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -12,7 +14,13 @@ class StoreSpaceMemberRequest extends FormRequest
 {
     public function authorize(): Response
     {
-        return Gate::inspect('manageMembers', $this->route('space'));
+        return Gate::inspect('manageMembers', $this->space());
+    }
+
+    private function space(): Space
+    {
+        /** @var Space */
+        return $this->route('space');
     }
 
     /**
@@ -21,7 +29,8 @@ class StoreSpaceMemberRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id' => ['required', 'ulid', Rule::exists('users', 'id')],
+            // Только «дом» компании пространства (ADR-0024): человек другой компании — как несуществующий
+            'user_id' => ['required', 'ulid', new CompanyMember($this->space()->company_id)],
             'role' => ['required', Rule::enum(SpaceRole::class)],
         ];
     }

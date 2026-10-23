@@ -21,6 +21,7 @@ use App\Models\CardRelation;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Comment;
+use App\Models\Company;
 use App\Models\EventLogEntry;
 use App\Models\Group;
 use App\Models\Lane;
@@ -60,15 +61,36 @@ function asOwner(string $sql): void
     $owner->statement($sql);
 }
 
+/** Выполнить $test под владельцем схемы в транзакции, которая откатывается. */
+function asSchemaOwner(Closure $test): void
+{
+    $connection = DB::connection('pgsql_owner');
+    $connection->statement("SET lock_timeout = '3s'");
+    $connection->beginTransaction();
+
+    try {
+        DB::usingConnection('pgsql_owner', $test);
+    } finally {
+        $connection->rollBack();
+    }
+}
+
+/** Миграция компаний («Права 2.0», П2b-1): тесты прежних миграций откатывают её первой (down) и поднимают обратно (up). */
+function companiesMigration(): object
+{
+    return require database_path('migrations/2026_10_23_300001_create_companies.php');
+}
+
 /** Отдельный «браузер» со своими cookie (сессия, «Запомнить меня»). */
 function browser(string $ip = '10.0.0.1'): Browser
 {
     return new Browser(test(), $ip);
 }
 
-function admin(array $attributes = []): User
+/** Администратор компании (по умолчанию — «Компании 1», ADR-0024). */
+function admin(array $attributes = [], ?Company $company = null): User
 {
-    return User::factory()->admin()->create($attributes);
+    return User::factory()->admin($company)->create($attributes);
 }
 
 /** Владелец системы (ADR-0017): в базе не больше одного. Не путать с asOwner() — владельцем схемы БД. */
@@ -77,9 +99,28 @@ function owner(array $attributes = []): User
     return User::factory()->owner()->create($attributes);
 }
 
-function member(array $attributes = []): User
+/** Участник компании — её «дом» (по умолчанию — «Компании 1»). */
+function member(array $attributes = [], ?Company $company = null): User
 {
-    return User::factory()->create($attributes);
+    return ($company === null ? User::factory() : User::factory()->inCompany($company))->create($attributes);
+}
+
+/** «Компания 1» — её создаёт миграция (ADR-0024); в ней по умолчанию все фабрики. */
+function company(): Company
+{
+    return Company::primary();
+}
+
+/** Вторая компания со справочниками из шаблона (тесты изоляции). */
+function otherCompany(array $attributes = []): Company
+{
+    return Company::factory()->create($attributes);
+}
+
+/** Адрес API админки компании (по умолчанию — «Компании 1»): adminPath().'users' → /api/v1/admin/companies/{id}/users. */
+function adminPath(?Company $company = null): string
+{
+    return '/api/v1/admin/companies/'.($company ?? Company::primary())->id.'/';
 }
 
 function space(array $attributes = []): Space
@@ -96,7 +137,8 @@ function addToSpace(Space $space, User $user, SpaceRole|StandardRole $role): Acc
 /** Выдача доступа к пространству в обход Actions: пользователю или группе, стандартная роль или любая роль. */
 function grantAccess(Space $space, User|Group $subject, StandardRole|Role $role): AccessGrant
 {
-    return AccessGrant::query()->create([
+    return AccessGrant::query()->forceCreate([
+        'company_id' => $space->company_id,
         'nav_node_id' => nodeOf($space)->id,
         'user_id' => $subject instanceof User ? $subject->id : null,
         'group_id' => $subject instanceof Group ? $subject->id : null,
@@ -125,19 +167,25 @@ function standardRole(StandardRole $role): Role
  *
  * @param  list<Permission>  $permissions
  */
-function makeRole(array $permissions, CardScope $scope = CardScope::All): Role
+function makeRole(array $permissions, CardScope $scope = CardScope::All, ?Company $company = null): Role
 {
-    $role = Role::query()->forceCreate(['name' => 'Роль '.Str::random(8), 'card_scope' => $scope, 'position' => 'a9']);
+    // Пользовательская роль — справочник компании (ADR-0024)
+    $role = Role::query()->forceCreate([
+        'company_id' => ($company ?? Company::primary())->id,
+        'name' => 'Роль '.Str::random(8),
+        'card_scope' => $scope,
+        'position' => 'a9',
+    ]);
     $values = collect([...Permission::alwaysGranted(), ...$permissions])->map(fn (Permission $p) => $p->value)->unique();
     DB::table('role_permissions')->insert($values->map(fn (string $p) => ['role_id' => $role->id, 'permission' => $p])->all());
 
     return $role;
 }
 
-/** Группа пользователей в обход Actions (подготовка данных теста). */
+/** Группа пользователей в обход Actions (подготовка данных теста); компания — «Компания 1», если не задана. */
 function makeGroup(array $attributes = []): Group
 {
-    return Group::query()->forceCreate($attributes + ['name' => 'Группа '.Str::random(8)]);
+    return Group::query()->forceCreate($attributes + ['name' => 'Группа '.Str::random(8), 'company_id' => Company::primary()->id]);
 }
 
 /** Добавить людей в группу в обход Actions. */
@@ -165,10 +213,13 @@ function addToSpaceViaGroup(Space $space, User $user, SpaceRole $role, bool $own
     return $group;
 }
 
-/** Папка дерева навигации — через настоящий Action (позиция, проверки глубины). */
-function makeFolder(string $name, ?NavNode $parent = null, ?string $icon = null): NavNode
+/** Папка дерева навигации — через настоящий Action (позиция, проверки глубины); компания — родителя или «Компании 1». */
+function makeFolder(string $name, ?NavNode $parent = null, ?string $icon = null, ?Company $company = null): NavNode
 {
-    return app(CreateFolderAction::class)->handle(User::query()->whereIn('role', UserRole::systemAdmins())->first() ?? admin(), $name, $icon, $parent?->id);
+    $company = $parent->company ?? $company ?? Company::primary();
+    $actor = User::query()->where('role', UserRole::Owner)->first() ?? admin(company: $company);
+
+    return app(CreateFolderAction::class)->handle($actor, $company, $name, $icon, $parent?->id);
 }
 
 /** Узел пространства в дереве навигации. */
@@ -196,7 +247,7 @@ function placeIn(NavNode $node, ?NavNode $folder): NavNode
 {
     $node->forceFill([
         'parent_id' => $folder?->id,
-        'position' => app(Positioner::class)->atEnd(NavNode::siblingsOf($folder?->id, $node->id)),
+        'position' => app(Positioner::class)->atEnd(NavNode::siblingsOf($node->company_id, $folder?->id, $node->id)),
     ])->save();
 
     return $node;

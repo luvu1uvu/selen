@@ -21,10 +21,10 @@ it('проходит сквозной сценарий этапа 2', function (
 
     $users = [];
     foreach (['S' => 'admin', 'A' => 'member', 'B' => 'member', 'C' => 'member', 'E' => 'member', 'D' => 'member'] as $name => $role) {
-        $users[$name] = User::factory()->create([
+        // Системный администратор этапа 1 — теперь администратор компании (ADR-0024)
+        $users[$name] = ($role === 'admin' ? User::factory()->admin() : User::factory())->create([
             'name' => "Сотрудник {$name}",
             'email' => mb_strtolower($name).'@selen.test',
-            'role' => $role,
         ]);
     }
     $login = function (string $name) {
@@ -38,7 +38,7 @@ it('проходит сквозной сценарий этапа 2', function (
     $id = fn (string $name) => $users[$name]->id;
 
     // --- 1. DEV: A — admin, B — editor, C — commenter, E — editor «только свои карточки» ---
-    $s->post('/api/v1/admin/spaces', ['name' => 'Разработка', 'key' => 'DEV', 'admin_ids' => [$id('A')]])->assertCreated();
+    $s->post(adminPath().'spaces', ['name' => 'Разработка', 'key' => 'DEV', 'admin_ids' => [$id('A')]])->assertCreated();
     $boardId = $a->post('/api/v1/spaces/DEV/boards', ['name' => 'Разработка', 'template' => 'development'])
         ->assertCreated()->json('data.id');
     foreach (['B' => 'editor', 'C' => 'commenter', 'E' => 'editor'] as $name => $role) {
@@ -47,7 +47,7 @@ it('проходит сквозной сценарий этапа 2', function (
     $a->patch("/api/v1/spaces/DEV/members/{$id('E')}", ['own_cards_only' => true])
         ->assertOk()->assertJsonPath('data.personal.own_cards_only', true);
 
-    $companyLabel = $s->post('/api/v1/admin/labels', ['name' => 'Безопасность', 'color' => '#ef4444'])->assertCreated()->json('data.id');
+    $companyLabel = $s->post(adminPath().'labels', ['name' => 'Безопасность', 'color' => '#ef4444'])->assertCreated()->json('data.id');
     $spaceLabel = $a->post('/api/v1/spaces/DEV/labels', ['name' => 'Бэкенд', 'color' => '#3b82f6'])->assertCreated()->json('data.id');
 
     $board = $b->get("/api/v1/boards/{$boardId}")->assertOk()->json('data');

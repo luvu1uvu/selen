@@ -19,7 +19,11 @@ const types: CardType[] = [
 describe('Админка: типы карточек', () => {
   beforeEach(() => {
     signedInAs(makeUser())
-    server.use(http.get('*/api/v1/admin/card-types', () => HttpResponse.json({ data: types })))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/card-types', () =>
+        HttpResponse.json({ data: types }),
+      ),
+    )
   })
 
   it('показывает тип по умолчанию и архивные', async () => {
@@ -34,7 +38,7 @@ describe('Админка: типы карточек', () => {
   it('создаёт тип с цветом из палитры', async () => {
     let body: unknown
     server.use(
-      http.post('*/api/v1/admin/card-types', async ({ request }) => {
+      http.post('*/api/v1/admin/companies/:company/card-types', async ({ request }) => {
         body = await request.json()
         return HttpResponse.json({ data: types[0] }, { status: 201 })
       }),
@@ -53,7 +57,7 @@ describe('Админка: типы карточек', () => {
   it('восстанавливает архивный тип', async () => {
     let restored = false
     server.use(
-      http.post('*/api/v1/admin/card-types/t-2/restore', () => {
+      http.post('*/api/v1/admin/companies/:company/card-types/t-2/restore', () => {
         restored = true
         return HttpResponse.json({ data: types[1] })
       }),

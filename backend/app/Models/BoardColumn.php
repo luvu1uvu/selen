@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ColumnCategory;
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -31,7 +32,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, BoardColumn> $children
  */
 #[Fillable(['board_id', 'parent_id', 'name', 'category', 'position'])]
-class BoardColumn extends Model
+class BoardColumn extends Model implements HasCompany
 {
     use HasUlids;
 
@@ -97,5 +98,13 @@ class BoardColumn extends Model
     public function hasActiveChildren(): bool
     {
         return $this->children()->active()->exists();
+    }
+
+    /** Компания колонки — компания пространства доски (HasCompany: журнал событий). */
+    public function companyId(): string
+    {
+        return $this->relationLoaded('board')
+            ? $this->board->companyId()
+            : (string) Space::query()->whereIn('id', Board::query()->select('space_id')->whereKey($this->board_id))->value('company_id');
     }
 }

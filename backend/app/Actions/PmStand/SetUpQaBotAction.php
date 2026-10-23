@@ -33,9 +33,11 @@ class SetUpQaBotAction
             $bot = User::query()->where('email', $email)->first();
 
             if ($bot === null) {
-                $bot = $this->createUser->handle(PmStand::BOT_NAME, $email, $password);
+                $bot = $this->createUser->handle($space->company, PmStand::BOT_NAME, $email, $password);
             } else {
-                if ($bot->isAdmin() || ! $bot->isActive()) {
+                // Бот — обычный активный сотрудник компании стенда (ADR-0024: администраторы — у компаний)
+                $inCompany = $space->company->permissionsOf($bot);
+                if ($bot->isOwner() || $inCompany->isAdmin() || ! $inCompany->isMember() || ! $bot->isActive()) {
                     throw ValidationException::withMessages([
                         'email' => "{$email} — не обычный активный сотрудник: QA-ботом быть не может.",
                     ]);

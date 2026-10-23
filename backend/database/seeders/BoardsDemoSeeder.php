@@ -43,6 +43,7 @@ use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Card;
 use App\Models\CardType;
+use App\Models\Company;
 use App\Models\Group;
 use App\Models\Lane;
 use App\Models\NavNode;
@@ -85,7 +86,7 @@ class BoardsDemoSeeder extends Seeder
     {
         mt_srand(2026);
         $this->now = CarbonImmutable::now('UTC')->startOfMinute();
-        $this->types = CardType::query()->pluck('id', 'name')->all();
+        $this->types = CardType::query()->inCompany(Company::primary())->pluck('id', 'name')->all();
         $this->createPeople();
 
         // Всё «происходит» 60 дней назад, дальше время идёт вперёд вместе с историей карточек
@@ -173,9 +174,9 @@ class BoardsDemoSeeder extends Seeder
         $add = app(AddSpaceMemberAction::class);
         $admin = $this->people['admin'];
 
-        $dev = $create->handle($admin, ['name' => 'Разработка', 'key' => 'DEV', 'description' => 'Продукт и инфраструктура'], [$this->people['anna'], $admin, $this->people['owner']]);
-        $ops = $create->handle($admin, ['name' => 'Эксплуатация', 'key' => 'OPS', 'description' => 'Заявки и дежурства'], [$this->people['egor']]);
-        $mkt = $create->handle($admin, ['name' => 'Маркетинг', 'key' => 'MKT', 'description' => null], [$this->people['dina']]);
+        $dev = $create->handle($admin, Company::primary(), ['name' => 'Разработка', 'key' => 'DEV', 'description' => 'Продукт и инфраструктура'], [$this->people['anna'], $admin, $this->people['owner']]);
+        $ops = $create->handle($admin, Company::primary(), ['name' => 'Эксплуатация', 'key' => 'OPS', 'description' => 'Заявки и дежурства'], [$this->people['egor']]);
+        $mkt = $create->handle($admin, Company::primary(), ['name' => 'Маркетинг', 'key' => 'MKT', 'description' => null], [$this->people['dina']]);
 
         // Участников добавляют администраторы пространств
         $owners = ['DEV' => 'anna', 'OPS' => 'egor', 'MKT' => 'dina'];
@@ -343,7 +344,7 @@ class BoardsDemoSeeder extends Seeder
         $saveLabel = app(SaveLabelAction::class);
         $company = [];
         foreach (['Безопасность' => '#ef4444', 'Техдолг' => '#64748b', 'Клиент' => '#f59e0b'] as $name => $color) {
-            $company[] = $saveLabel->handle($admin, ['name' => $name, 'color' => $color]);
+            $company[] = $saveLabel->handle($admin, ['name' => $name, 'color' => $color], company: Company::primary());
         }
         $dev = $boards[0]->space;
         $local = [];
@@ -530,18 +531,18 @@ class BoardsDemoSeeder extends Seeder
         $addMember = app(AddGroupMemberAction::class);
         $grant = app(GrantSpaceGroupAction::class);
 
-        $leads = $save->handle($admin, ['name' => 'Руководители', 'description' => 'Видят все продуктовые пространства']);
+        $leads = $save->handle($admin, Company::primary(), ['name' => 'Руководители', 'description' => 'Видят все продуктовые пространства']);
         $addMember->handle($admin, $leads, $this->people['grigory']);
         $addMember->handle($admin, $leads, $this->people['anna']);
         foreach ([$dev, $ops, $mkt] as $space) {
             $grant->handle($admin, $space, $leads, SpaceRole::Commenter);
         }
 
-        $contractors = $save->handle($admin, ['name' => 'Подрядчики', 'description' => 'Внешние исполнители заявок']);
+        $contractors = $save->handle($admin, Company::primary(), ['name' => 'Подрядчики', 'description' => 'Внешние исполнители заявок']);
         $addMember->handle($admin, $contractors, $this->people['zhanna']);
         $grant->handle($admin, $ops, $contractors, SpaceRole::Editor, ownCardsOnly: true);
 
-        $interns = $save->handle($admin, ['name' => 'Стажёры', 'description' => 'Летняя стажировка']);
+        $interns = $save->handle($admin, Company::primary(), ['name' => 'Стажёры', 'description' => 'Летняя стажировка']);
         $addMember->handle($admin, $interns, $this->people['demo']);
         $grant->handle($admin, $mkt, $interns, SpaceRole::Commenter);
         app(SetGroupArchivedAction::class)->handle($admin, $interns, true);
@@ -560,23 +561,24 @@ class BoardsDemoSeeder extends Seeder
 
         $company = app(CreateSpaceAction::class)->handle(
             $admin,
+            Company::primary(),
             ['name' => 'Компания', 'key' => 'COMP', 'description' => 'Объявления и общие правила — открыто всем сотрудникам'],
             [$admin],
             '🏢',
         );
         $this->board($company, 'Объявления', BoardTemplate::Simple, 'admin');
-        app(GrantSpaceGroupAction::class)->handle($admin, $company, Group::everyone(), SpaceRole::Commenter);
+        app(GrantSpaceGroupAction::class)->handle($admin, $company, Group::everyone(Company::primary()), SpaceRole::Commenter);
 
         // Не «Продукт»: так называется доска в DEV — одинаковые названия папки и доски путают в дереве
-        $product = $folder->handle($admin, 'Продуктовые команды', '💡', null);
-        $operations = $folder->handle($admin, 'Операции', '⚙️', null);
+        $product = $folder->handle($admin, Company::primary(), 'Продуктовые команды', '💡', null);
+        $operations = $folder->handle($admin, Company::primary(), 'Операции', '⚙️', null);
         // По-настоящему пустая папка (ни одного пространства на любой глубине) — в дереве её видит только Владелец
-        $ideas = $folder->handle($admin, 'Новые направления', '🌱', null);
-        $folder->handle($admin, 'Идеи на 2027', null, $ideas->id);
-        $old = $folder->handle($admin, 'Архив 2025', null, $operations->id);
+        $ideas = $folder->handle($admin, Company::primary(), 'Новые направления', '🌱', null);
+        $folder->handle($admin, Company::primary(), 'Идеи на 2027', null, $ideas->id);
+        $old = $folder->handle($admin, Company::primary(), 'Архив 2025', null, $operations->id);
 
         // Архивное пространство в архивной папке — видно в «Структуре», восстанавливается вместе с папкой
-        $promo = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Промо 2025', 'key' => 'PROMO'], [$admin]);
+        $promo = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Промо 2025', 'key' => 'PROMO'], [$admin]);
         $move->handle($admin, NavNode::query()->where('space_id', $promo->id)->sole(), $old->id, null, null);
         app(ArchiveSpaceAction::class)->handle($admin, $promo);
         app(SetFolderArchivedAction::class)->handle($admin, $old, true);

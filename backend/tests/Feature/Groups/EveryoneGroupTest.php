@@ -14,7 +14,7 @@ use App\Services\Access\AccessResolver;
 */
 
 beforeEach(function () {
-    $this->everyone = Group::everyone();
+    $this->everyone = Group::everyone(company());
     $this->space = space(['key' => 'MGMT', 'name' => 'Management']);
     $this->spaceAdmin = member();
     addToSpace($this->space, $this->spaceAdmin, SpaceRole::Admin);
@@ -81,17 +81,17 @@ it('нельзя архивировать, переименовать и мен�
     $this->actingAs(admin());
     $id = $this->everyone->id;
 
-    $this->postJson("/api/v1/admin/groups/{$id}/archive")->assertUnprocessable()
+    $this->postJson(adminPath()."groups/{$id}/archive")->assertUnprocessable()
         ->assertJsonValidationErrors(['group' => 'нельзя архивировать']);
-    $this->postJson("/api/v1/admin/groups/{$id}/members", ['user_id' => member()->id])->assertUnprocessable()
+    $this->postJson(adminPath()."groups/{$id}/members", ['user_id' => member()->id])->assertUnprocessable()
         ->assertJsonValidationErrors(['user_id' => 'автоматически']);
-    $this->deleteJson("/api/v1/admin/groups/{$id}/members/{$this->spaceAdmin->id}")->assertUnprocessable()
+    $this->deleteJson(adminPath()."groups/{$id}/members/{$this->spaceAdmin->id}")->assertUnprocessable()
         ->assertJsonValidationErrors('user_id');
-    $this->patchJson("/api/v1/admin/groups/{$id}", ['name' => 'Все'])->assertUnprocessable()
+    $this->patchJson(adminPath()."groups/{$id}", ['name' => 'Все'])->assertUnprocessable()
         ->assertJsonValidationErrors(['name' => 'изменить нельзя']);
 
     // Описание менять можно; то же название — не изменение
-    $this->patchJson("/api/v1/admin/groups/{$id}", ['name' => 'Все сотрудники', 'description' => 'Весь штат'])
+    $this->patchJson(adminPath()."groups/{$id}", ['name' => 'Все сотрудники', 'description' => 'Весь штат'])
         ->assertOk()->assertJsonPath('data.description', 'Весь штат');
 
     expect($this->everyone->fresh()->archived_at)->toBeNull()
@@ -118,7 +118,7 @@ it('выдаётся пространству ролью editor или commenter
 
     // Из админки — то же правило
     $this->actingAs(admin());
-    $this->putJson("/api/v1/admin/groups/{$this->everyone->id}/spaces/{$this->space->id}", ['role' => 'admin'])
+    $this->putJson(adminPath()."groups/{$this->everyone->id}/spaces/{$this->space->id}", ['role' => 'admin'])
         ->assertUnprocessable()->assertJsonValidationErrors('role');
 
     expect(loggedEventTypes())->toBe(['space.group_added', 'space.group_role_changed', 'space.group_restriction_changed']);
@@ -132,14 +132,14 @@ it('в списках — первой, число людей — активны
     $this->actingAs(admin());
     makeGroup(['name' => 'Аналитики']);
 
-    $this->getJson('/api/v1/admin/groups')->assertOk()
+    $this->getJson(adminPath().'groups')->assertOk()
         ->assertJsonPath('data.0.system', 'everyone')
         ->assertJsonPath('data.0.members_count', $active + 1)
         ->assertJsonPath('data.1.system', null);
-    $this->getJson('/api/v1/groups/directory')->assertOk()
+    $this->getJson('/api/v1/companies/'.company()->id.'/groups/directory')->assertOk()
         ->assertJsonPath('data.0.name', 'Все сотрудники')
         ->assertJsonPath('data.0.system', 'everyone');
-    $this->getJson("/api/v1/admin/groups/{$this->everyone->id}")->assertOk()
+    $this->getJson(adminPath()."groups/{$this->everyone->id}")->assertOk()
         ->assertJsonPath('data.system', 'everyone')
         ->assertJsonPath('data.members', []);
 });
@@ -149,11 +149,11 @@ it('сводка доступа объясняет, почему приглаш�
     $invited = member(['status' => UserStatus::Invited]);
     $this->actingAs(admin());
 
-    $this->getJson("/api/v1/admin/users/{$invited->id}/access")->assertOk()
+    $this->getJson(adminPath()."users/{$invited->id}/access")->assertOk()
         ->assertJsonPath('data.spaces.0.space.key', 'MGMT')
         ->assertJsonPath('data.spaces.0.sources.0.group.id', $this->everyone->id)
         ->assertJsonPath('data.spaces.0.sources.0.inactive_reason', 'user_invited')->assertJsonPath('data.groups', []);
 
-    $this->getJson("/api/v1/admin/users/{$this->spaceAdmin->id}/access")->assertOk()
+    $this->getJson(adminPath()."users/{$this->spaceAdmin->id}/access")->assertOk()
         ->assertJsonPath('data.spaces.0.sources.1.inactive_reason', null)->assertJsonPath('data.groups.0.id', $this->everyone->id);
 });

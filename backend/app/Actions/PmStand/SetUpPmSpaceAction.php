@@ -33,7 +33,7 @@ class SetUpPmSpaceAction
     public function handle(User $owner): Space
     {
         return DB::transaction(function () use ($owner) {
-            $space = PmStand::space() ?? $this->createSpace->handle($owner, [
+            $space = PmStand::space() ?? $this->createSpace->handle($owner, PmStand::company(), [
                 'name' => PmStand::SPACE_NAME,
                 'key' => PmStand::SPACE_KEY,
                 'description' => 'Отложенные задачи и баги приёмки PM.',

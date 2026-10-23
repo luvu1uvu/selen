@@ -5,6 +5,7 @@ namespace Tests\Support;
 use App\Enums\Permission;
 use App\Enums\SpaceRole;
 use App\Enums\UserStatus;
+use App\Models\Company;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
@@ -19,7 +20,9 @@ use stdClass;
  *
  * legacy() — ЗАМОРОЖЕННАЯ копия прежнего правила (SpaceAccessResolver и SpaceRole до П2a): читает space_members
  * и space_groups, роли admin | editor | commenter и флаг own_cards_only. Не менять вместе с кодом приложения.
- * current() — то же самое через AccessResolver и права каталога. Формат у обоих одинаковый: сравниваются как есть.
+ * beforeCompanies() — ЗАМОРОЖЕННАЯ копия правила П2a (AccessResolver до компаний, П2b-1): выдачи и права ролей без
+ * членства в компаниях; «Все сотрудники» — все активные пользователи. Не менять вместе с кодом приложения.
+ * current() — то же самое через AccessResolver и права каталога. Формат у всех одинаковый: сравниваются как есть.
  */
 final class AccessSnapshot
 {
@@ -96,6 +99,69 @@ final class AccessSnapshot
     }
 
     /**
+     * Правило П2a по выдачам (до миграции компаний П2b-1).
+     *
+     * @return array<string, mixed>
+     */
+    public static function beforeCompanies(): array
+    {
+        $grants = fn () => DB::table('access_grants')
+            ->join('nav_nodes', fn ($join) => $join->on('nav_nodes.id', '=', 'access_grants.nav_node_id')->whereNotNull('nav_nodes.space_id'));
+        // Замыкание: unionAll() меняет построитель запроса, а личные выдачи нужны ещё раз (администраторы)
+        $personal = fn () => $grants()->whereNotNull('access_grants.user_id')
+            ->select(['nav_nodes.space_id', 'access_grants.user_id', DB::raw('NULL::char(26) AS group_id'), 'access_grants.role_id']);
+        $groups = $grants()
+            ->join('groups', fn ($join) => $join->on('groups.id', '=', 'access_grants.group_id')
+                ->whereNull('groups.archived_at')->whereNull('groups.system_key'))
+            ->join('group_members', 'group_members.group_id', '=', 'access_grants.group_id')
+            ->join('users', fn ($join) => $join->on('users.id', '=', 'group_members.user_id')->where('users.status', '!=', 'deactivated'))
+            ->select(['nav_nodes.space_id', 'group_members.user_id', 'access_grants.group_id', 'access_grants.role_id']);
+        $everyone = $grants()
+            ->join('groups', fn ($join) => $join->on('groups.id', '=', 'access_grants.group_id')->where('groups.system_key', 'everyone'))
+            ->crossJoin('users')
+            ->where('users.status', 'active')
+            ->select(['nav_nodes.space_id', 'users.id AS user_id', 'access_grants.group_id', 'access_grants.role_id']);
+
+        $roles = DB::table('roles')->get()->keyBy('id');
+        $permissions = DB::table('role_permissions')->get()->groupBy('role_id')->map(fn ($rows) => $rows->pluck('permission')->all());
+        $role = fn (string $id) => [
+            'role' => preg_replace('/_own$/', '', (string) $roles[$id]->key),
+            'own' => $roles[$id]->card_scope === 'own',
+            'permissions' => $permissions->get($id, []),
+        ];
+
+        $rows = $personal()->unionAll($groups)->unionAll($everyone)->get();
+        $pairs = [];
+        foreach ($rows->groupBy(fn (stdClass $row) => "{$row->space_id}:{$row->user_id}") as $key => $sources) {
+            $pairs[$key] = self::pair($sources->map(function (stdClass $row) use ($role) {
+                $r = $role($row->role_id);
+
+                return [
+                    'group' => $row->group_id === null ? null : trim($row->group_id),
+                    'role' => $r['role'],
+                    'own' => $r['own'],
+                    'allows' => fn (string $action) => in_array($action, $r['permissions'], true),
+                ];
+            })->all());
+        }
+
+        $manages = fn (string $roleId) => in_array('space.manage_access', $permissions->get($roleId, []), true);
+        $admins = $personal()->get()
+            ->filter(fn (stdClass $row) => $manages($row->role_id))
+            ->filter(fn (stdClass $row) => DB::table('users')->where('id', $row->user_id)->value('status') !== 'deactivated')
+            ->map(fn (stdClass $row) => [$row->space_id, $row->user_id])
+            ->values()
+            ->all();
+        $openToEveryone = $grants()
+            ->join('groups', 'groups.id', '=', 'access_grants.group_id')
+            ->where('groups.system_key', 'everyone')
+            ->pluck('nav_nodes.space_id');
+        $managersAnywhere = $rows->filter(fn (stdClass $row) => $manages($row->role_id))->pluck('user_id');
+
+        return self::finish($pairs, $admins, $openToEveryone->all(), $managersAnywhere->all());
+    }
+
+    /**
      * То же по новой модели: AccessResolver, права каталога.
      *
      * @return array<string, mixed>
@@ -128,7 +194,10 @@ final class AccessSnapshot
             }
         }
 
-        $managersAnywhere = User::query()->get()->filter(fn (User $user) => $resolver->managesAccessAnywhere($user))->modelKeys();
+        $companies = Company::query()->get();
+        $managersAnywhere = User::query()->get()
+            ->filter(fn (User $user) => $companies->contains(fn (Company $company) => $resolver->managesAccessIn($user, $company)))
+            ->modelKeys();
 
         return self::finish($pairs, $admins, $resolver->spacesOpenToEveryone()->all(), $managersAnywhere);
     }

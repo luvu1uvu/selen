@@ -94,7 +94,7 @@ it('списки: права во всех пространствах и под�
     expect($accesses->keys()->sort()->values()->all())->toBe(collect([$this->space->id, $other->id])->sort()->values()->all())
         ->and($accesses[$other->id]->highestRole())->toBe(SpaceRole::Admin)
         ->and(Space::query()->visibleTo($this->user)->pluck('id')->all())->not->toContain($hidden->id)
-        ->and($this->resolver->managesAccessAnywhere($this->user))->toBeTrue();
+        ->and($this->resolver->managesAccessIn($this->user, company()))->toBeTrue();
 });
 
 it('кеш прав живёт на экземпляре пространства', function () {

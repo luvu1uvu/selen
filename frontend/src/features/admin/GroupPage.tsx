@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { RoleSelectOptions } from '@/features/spaces/components/RoleSelectOptions'
+import { useAdminCompanyId } from '@/features/admin/company'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { getErrorMessage, getErrorStatus } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
@@ -232,6 +233,7 @@ function AddedAt({ value }: { value: string }) {
 }
 
 function AddMemberForm({ group }: { group: Group }) {
+  const company = useAdminCompanyId()
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
   const add = useAddGroupMember(group.id)
@@ -254,6 +256,7 @@ function AddMemberForm({ group }: { group: Group }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
         <div className="flex-1">
           <UserPicker
+            companyId={company}
             id="group-add-member"
             value={user}
             onChange={setUser}

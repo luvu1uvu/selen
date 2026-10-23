@@ -57,3 +57,15 @@ export function accessRow(page: Page, key: string) {
 /** Ячейки строки «Доступ к пространствам»: «Итог» и «Источники». */
 export const result = (row: Locator) => row.getByRole('cell').nth(1)
 export const sources = (row: Locator) => row.getByRole('cell').nth(2)
+
+/*
+ * «Права 2.0», П2b-1 — компании (docs/stages/rights-2.md, «Как проверить руками (П2b-1…)», ТК-R2.5–R2.8): всё
+ * в «Компании 1», для пользователей как раньше. Данные — E2eSeeder::companies: RCOMP «Права: компания» вместо
+ * «Маркетинга», «Компании» и «Разработки» демо-данных (e2e-admin — его администратор: Анна и admin@ тест-кейсов),
+ * люди, которые не входят в систему, — вместо «Демо Участника», «Бориса», «Дины».
+ */
+export const COMPANY_SPACE = 'Права: компания'
+export const COMPANY_KEY = 'RCOMP'
+
+/** Метка для одноразовых названий (группа, метка, тип, папка, приглашение): тест можно повторить на том же стеке. */
+export const stamp = () => Date.now().toString(36)

@@ -133,10 +133,11 @@ cmd_owner() {
   require_env
   local admins
   admins="$(PGPASSWORD="$(env_get DB_PASSWORD)" compose exec -T -e PGPASSWORD postgres psql -U "$(env_get DB_USERNAME)" \
-    -d "$(env_get DB_DATABASE)" -Atc "SELECT string_agg(email, ', ' ORDER BY email) FROM users WHERE role IN ('owner', 'admin') AND status = 'active'")"
+    -d "$(env_get DB_DATABASE)" -Atc "SELECT string_agg(email, ', ' ORDER BY email) FROM users WHERE status = 'active' AND (role = 'owner' OR id IN (SELECT user_id FROM company_members WHERE is_admin))")"
   [[ -z "$admins" ]] \
     || log "На стенде уже есть администраторы: $admins. Если это вы — вторая учётная запись не нужна, выйдите (Ctrl+C)."
-  log "Учётная запись PM (системный администратор; первая на стенде — Владелец). Email и пароль никуда не сохраняются."
+  # Администраторы — у компаний (ADR-0024): Владелец и администраторы «Компании 1»
+  log "Учётная запись PM (администратор «Компании 1»; первая на стенде — Владелец). Email и пароль никуда не сохраняются."
   compose exec php php artisan app:create-admin
 }
 

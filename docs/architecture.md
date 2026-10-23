@@ -34,7 +34,7 @@
 | Form Requests | `app/Http/Requests` | валидация входа, иногда авторизация (`authorize()`) |
 | Controllers | `app/Http/Controllers/Api/V1` | тонкие: Request → Action → Resource; HTTP-специфика (сессия) |
 | **Actions** | `app/Actions/{Auth,Invitations,Users,Spaces,Groups,CardTypes,Labels,Boards,Columns,Lanes,Cards,Comments,Checklists,CardLinks,Attachments,CardRelations,CardBlocks}` | бизнес-операция целиком, в транзакции, с записью события |
-| Services | `app/Services` | переиспользуемое: `AccessResolver` + `SpaceAccess` (итоговые права по источникам доступа и правам каталога, ADR-0012, ADR-0024), `EventRecorder`, `UserSessions`, `InvitationIssuer`, `Positioner`, `CardPlacement` (положение карточки, автоснятие блокировок), `CardFlowMetrics`, `CardVisibility` (кто видит карточку, «Скрытая карточка»), `CardPeople` (участники, автоназначение), `CardHistory` (лента истории), `MentionSync`, `AttachmentFiles` |
+| Services | `app/Services` | переиспользуемое: `AccessResolver` + `SpaceAccess` + `CompanyAccess` (итоговые права по источникам доступа и правам каталога, права компании, изоляция компаний, ADR-0012, ADR-0024), `CompanyTemplate` (справочники новой компании), `EventRecorder`, `UserSessions`, `InvitationIssuer`, `Positioner`, `CardPlacement` (положение карточки, автоснятие блокировок), `CardFlowMetrics`, `CardVisibility` (кто видит карточку, «Скрытая карточка»), `CardPeople` (участники, автоназначение), `CardHistory` (лента истории), `MentionSync`, `AttachmentFiles` |
 | Policies | `app/Policies` | кто может выполнять действие; доступ к пространствам — трейт `Policies/Concerns/ChecksSpaceRole` (ADR-0005) |
 | Resources | `app/Http/Resources` | формат JSON-ответов |
 | Models / Enums | `app/Models`, `app/Enums` | Eloquent-модели, роли, статусы, каталог событий |
@@ -54,18 +54,20 @@
 
 | Таблица | Ключевые поля |
 |---|---|
-| `users` | `id` ULID, `name`, `email` (unique, lower-case), `password` (null до принятия приглашения), `role` owner/admin/member (Владелец — один: уникальный частичный индекс, CHECK «активен», отложенный триггер, ADR-0017), `status` invited/active/deactivated, `timezone` (Europe/Moscow), `last_login_at`, `deactivated_at`, `remember_token`, timestamps |
-| `invitations` | `id` ULID, `user_id`, `email`, `token_hash` (sha256, unique), `invited_by_id`, `expires_at`, `accepted_at`, `revoked_at`, `superseded_by_id`, timestamps |
-| `event_log` | `id` bigint identity, `occurred_at` timestamptz(6), `event_type`, `actor_id`, `subject_type`, `subject_id`, `payload` jsonb (только id и enum, без ПДн), `meta` jsonb (`source`) |
+| `companies` | `id` ULID, `name` (unique без учёта регистра), `created_by`, timestamps — компании (ADR-0024); не удаляются |
+| `company_members` | `company_id`, `user_id` (PK пара), `kind` (`home`; гости — П2c), `is_admin` (администратор компании), timestamps — членство |
+| `users` | `id` ULID, `name`, `email` (unique, lower-case), `password` (null до принятия приглашения), `role` owner/member (Владелец — один: уникальный частичный индекс, CHECK «активен», отложенный триггер, ADR-0017; администратор — у компании, ADR-0024), `status` invited/active/deactivated, `timezone` (Europe/Moscow), `last_login_at`, `deactivated_at`, `remember_token`, timestamps |
+| `invitations` | `id` ULID, `company_id`, `user_id`, `email`, `token_hash` (sha256, unique), `invited_by_id`, `expires_at`, `accepted_at`, `revoked_at`, `superseded_by_id`, timestamps |
+| `event_log` | `id` bigint identity, `company_id` (пусто — без компании), `occurred_at` timestamptz(6), `event_type`, `actor_id`, `subject_type`, `subject_id`, `payload` jsonb (только id и enum, без ПДн), `meta` jsonb (`source`) |
 | `auth_audit` | `occurred_at`, `event_log_id`, `event_type`, `user_id`, `email_attempted`, `ip`, `user_agent` — НЕ append-only, хранится 12 мес. (ADR-0003) |
-| `spaces` | `id` ULID, `name`, `key` (unique, `^[A-Z]{2,10}$`), `description`, `last_card_number`, `archived_at`, timestamps |
-| `roles` | `id` ULID, `key` (стандартные: admin, editor, commenter, editor_own, commenter_own), `name`, `card_scope` all/own, `grants_new_permissions`, `position` — роли: набор прав каталога и область карточек (ADR-0024) |
+| `spaces` | `id` ULID, `company_id`, `name`, `key` (unique во всём Selen, `^[A-Z]{2,10}$`), `description`, `last_card_number`, `archived_at`, timestamps |
+| `roles` | `id` ULID, `key` (стандартные: admin, editor, commenter, editor_own, commenter_own), `company_id` (у пользовательской роли), `name`, `card_scope` all/own, `grants_new_permissions`, `position` — роли: набор прав каталога и область карточек (ADR-0024) |
 | `role_permissions` | `role_id`, `permission` (значение `App\Enums\Permission`; PK пара; роль с «управлением доступом» — только с областью all, триггер) |
-| `access_grants` | `nav_node_id` (в П2a — узел пространства), `user_id` или `group_id` (ровно одно — CHECK), `role_id`, `granted_by`, timestamps — выдачи доступа; у субъекта на узле одна роль до П2d |
-| `groups` | `id` ULID, `name` (unique без учёта регистра), `description`, `system_key` (`everyone` — встроенная «Все сотрудники», состав вычисляется), `archived_at` — группы пользователей (ADR-0012) |
+| `access_grants` | `company_id`, `nav_node_id` (в П2a — узел пространства; узел и группа — той же компании, составные FK), `user_id` или `group_id` (ровно одно — CHECK), `role_id`, `granted_by`, timestamps — выдачи доступа; у субъекта на узле одна роль до П2d |
+| `groups` | `id` ULID, `company_id`, `name` (unique в компании без учёта регистра), `description`, `system_key` (`everyone` — встроенная «Все сотрудники» компании, состав вычисляется), `archived_at` — группы пользователей (ADR-0012) |
 | `group_members` | `group_id`, `user_id` (PK пара), `added_by`, `created_at` |
-| `nav_nodes` | `id` ULID, `parent_id` (null — корень), `type` folder/space, `name` (у папки), `icon` (эмодзи), `space_id` (unique), `position` (COLLATE "C"), `archived_at` (у папки) — дерево навигации (ADR-0013) |
-| `card_types` | `id` ULID, `name` (unique), `color` `#rrggbb`, `is_default` (ровно один), `archived_at` |
+| `nav_nodes` | `id` ULID, `company_id` (родитель и пространство — той же компании), `parent_id` (null — корень дерева компании), `type` folder/space, `name` (у папки), `icon` (эмодзи), `space_id` (unique), `position` (COLLATE "C"), `archived_at` (у папки) — дерево навигации (ADR-0013) |
+| `card_types` | `id` ULID, `company_id`, `name` (unique в компании), `color` `#rrggbb`, `is_default` (один на компанию), `archived_at` |
 | `boards` | `id` ULID, `space_id`, `name`, `description`, `position` (COLLATE "C"), `auto_assign_on_move`, `archived_at` |
 | `board_columns` | `id`, `board_id`, `parent_id` (неизменяем), `name`, `category` (только у первого уровня), `position`, `archived_at` |
 | `lanes` | `id`, `board_id`, `name`, `position`, `archived_at` |
@@ -99,11 +101,19 @@
 ### Пространства и доступ
 
 Подробно — [adr/0005-space-access.md](adr/0005-space-access.md). Кратко: роли admin/editor/commenter на уровне
-пространства; не участник получает 404 (единый ответ для всего API), нехватка роли — 403; системный
-администратор управляет пространствами из админки, но содержимое видит только назначив себе роль.
-Системный администратор — роль `admin` или `owner` ([adr/0017-owner-role.md](adr/0017-owner-role.md)): Владелец —
-один, назначает и снимает администраторов, передаёт владение; его учётную запись не меняет никто.
+пространства; не участник получает 404 (единый ответ для всего API), нехватка роли — 403; администратор компании
+управляет пространствами из админки, но содержимое видит только назначив себе роль.
+Владелец ([adr/0017-owner-role.md](adr/0017-owner-role.md)) — один на весь Selen, участник всех компаний, назначает
+и снимает администраторов компаний, передаёт владение; его учётную запись не меняет никто.
 Матрица доступа в тестах покрывает каждый маршрут пространства.
+
+**Компании** ([adr/0024-rights-2.md](adr/0024-rights-2.md), П2b-1): у каждой свои дерево, группы со своей «Все
+сотрудники», метки, типы карточек, приглашения и журнал; человек связан с компанией членством (`company_members`:
+«дом», администратор компании). Изоляция — в `AccessResolver`: выдача действует, только если получатель — участник
+компании выдачи («дом» или Владелец). Админка — `admin/companies/{company}/…` со scoped binding (объект другой
+компании — 404), права компании — `Company::permissionsOf()`; справочники и ссылки в запросах — «в этой компании»;
+связи между компаниями запрещены в БД (составные FK, триггеры). Всё, что было до компаний, — «Компания 1»; пока
+компания одна, интерфейс прежний. Тесты — `CompanyIsolationTest`, `AdminAccessMatrixTest` по компаниям.
 
 Режим «только свои карточки» ([adr/0008-own-cards-only.md](adr/0008-own-cards-only.md)) — область карточек роли
 («Редактор / Комментатор — только свои карточки»): участник видит только карточки, где он заказчик, ответственный или участник; остальные — 404
@@ -115,13 +125,14 @@
 `App\Enums\Permission` и область карточек (все / свои); стандартные роли — «Администратор», «Редактор»,
 «Комментатор» и два варианта «— только свои карточки»; политики проверяют права каталога. Выдачи и права ролей читает
 только `AccessResolver` (один запрос `UNION ALL`), права кешируются на экземпляре `Space` (`accessOf`). В пространстве всегда есть личный администратор; администраторы через
-группы — дополнительные. Группы ведёт системный администратор; архивная группа доступа не даёт. Встроенная группа
-«Все сотрудники» — все активные пользователи (состав вычисляется резолвером, не хранится; без роли admin).
+группы — дополнительные. Группы ведёт администратор компании; архивная группа доступа не даёт. Встроенная группа
+«Все сотрудники» — все активные «дома» компании (состав вычисляется резолвером, не хранится; без роли admin).
 
 **Дерево навигации** ([adr/0013-navigation-tree.md](adr/0013-navigation-tree.md)): папки и пространства в
-`nav_nodes`, глубина папок ≤ 4, ведёт системный администратор (админка «Структура»). Папки не дают доступа:
+`nav_nodes`, глубина папок ≤ 4, у каждой компании своё дерево, ведёт администратор компании (админка «Структура»).
+Папки не дают доступа:
 `NavigationTree::forUser` показывает папку, только если внутри есть доступное пользователю активное пространство,
-названия прочих папок не уходят в ответы (правило одно для всех, включая системного администратора; полная
+названия прочих папок и чужих компаний не уходят в ответы (правило одно для всех, включая администратора компании; полная
 структура — только в «Структуре»); каждое доступное пространство видно всегда, даже без досок. Владельцу
 видны ещё и пустые папки (без единого пространства), с пометкой «пустая» (ADR-0017). Перемещение
 меняет только место в дереве — ключ, номера, история и доступы не трогаются.
@@ -137,7 +148,7 @@
 - Люди в карточке: заказчик (по умолчанию автор), ответственный, участники. Автоназначение (настройка доски):
   после ручного перехода в «в работе»/«готово» переместивший становится ответственным, а если он уже есть —
   участником (`CardPeople`).
-- Метки — общие компании (системный администратор) и пространства (его администратор), архив вместо удаления.
+- Метки — общие компании (администратор компании) и пространства (его администратор), архив вместо удаления.
 - Фасад карточки на доске: метки, срок с подсветкой, «Срочно», ответственный; справочники меток и людей
   приходят один раз на доску, число SQL-запросов не зависит от числа карточек (тест).
 

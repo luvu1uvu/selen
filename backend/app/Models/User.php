@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Notifications\ResetPasswordNotification;
+use App\Services\Access\AccessResolver;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -32,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Invitation|null $latestInvitation
+ * @property-read Collection<int, Company> $companies
  * @property-read Collection<int, Group> $groups
  * @property-read Collection<int, Lane> $collapsedLanes
  * @property-read Collection<int, Board> $collapsedBoards
@@ -121,15 +123,27 @@ class User extends Authenticatable
     }
 
     /**
-     * Системный администратор — администратор или Владелец (ADR-0017): у Владельца все права администратора.
-     * Исключительные права Владельца — isOwner().
+     * Компании, где пользователь — «дом» (членство, ADR-0024; права в компании — только Company::permissionsOf()).
+     *
+     * @return BelongsToMany<Company, $this>
      */
-    public function isAdmin(): bool
+    public function companies(): BelongsToMany
     {
-        return $this->role->isSystemAdmin();
+        return $this->belongsToMany(Company::class, 'company_members')->withPivot(['kind', 'is_admin'])
+            ->wherePivot('kind', AccessResolver::HOME)
+            ->withTimestamps();
     }
 
-    /** Владелец — единственный в системе (ограничения БД и политики, ADR-0017). */
+    /**
+     * Управляет ли компанией как администратор: Владелец — всеми, администратор компании — своей (ADR-0024;
+     * frontend — adminCompanies). Глобального системного администратора нет.
+     */
+    public function administers(Company $company): bool
+    {
+        return $company->permissionsOf($this)->isAdmin();
+    }
+
+    /** Владелец — единственный в системе (ограничения БД и политики, ADR-0017); участник всех компаний. */
     public function isOwner(): bool
     {
         return $this->role === UserRole::Owner;

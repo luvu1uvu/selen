@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\NavNodeType;
+use App\Models\Concerns\BelongsToCompany;
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -13,10 +15,12 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Узел дерева навигации: папка или пространство (позже — документ), docs/adr/0013-navigation-tree.md.
- * Папки не дают и не ограничивают доступ. Дерево ведёт только системный администратор через Actions
- * (app/Actions/Navigation); положение пространства в дереве не трогает его ключ, карточки и доступы.
+ * Папки не дают и не ограничивают доступ. У каждой компании своё дерево (ADR-0024): корень — узлы компании без
+ * родителя, родитель и пространство — той же компании (составные FK). Дерево ведёт администратор компании через
+ * Actions (app/Actions/Navigation); положение пространства в дереве не трогает его ключ, карточки и доступы.
  *
  * @property string $id
+ * @property string $company_id
  * @property string|null $parent_id
  * @property NavNodeType $type
  * @property string|null $name
@@ -30,9 +34,9 @@ use Illuminate\Support\Facades\DB;
  * @property-read Space|null $space
  */
 #[Fillable(['name', 'icon'])]
-class NavNode extends Model
+class NavNode extends Model implements HasCompany
 {
-    use HasUlids;
+    use BelongsToCompany, HasUlids;
 
     /** Предельная глубина вложенности папок (пространство может лежать в папке 4-го уровня). */
     public const MAX_FOLDER_DEPTH = 4;
@@ -46,6 +50,16 @@ class NavNode extends Model
             'type' => NavNodeType::class,
             'archived_at' => 'datetime',
         ];
+    }
+
+    /** Узел пространства — в компании пространства (составной FK проверяет и явно заданную). */
+    protected static function booted(): void
+    {
+        static::creating(function (NavNode $node) {
+            if ($node->space_id !== null) {
+                $node->company_id ??= Space::query()->whereKey($node->space_id)->value('company_id');
+            }
+        });
     }
 
     /** @return BelongsTo<NavNode, $this> */
@@ -77,13 +91,14 @@ class NavNode extends Model
     }
 
     /**
-     * Узлы с тем же родителем (для позиций), без этого узла.
+     * Узлы с тем же родителем в дереве компании (для позиций), без этого узла.
      *
      * @return Builder<NavNode>
      */
-    public static function siblingsOf(?string $parentId, ?string $exceptId = null): Builder
+    public static function siblingsOf(Company|string $company, ?string $parentId, ?string $exceptId = null): Builder
     {
         return self::query()
+            ->inCompany($company)
             ->when($parentId === null, fn ($q) => $q->whereNull('parent_id'), fn ($q) => $q->where('parent_id', $parentId))
             ->when($exceptId !== null, fn ($q) => $q->whereKeyNot($exceptId));
     }
