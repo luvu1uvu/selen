@@ -6,9 +6,9 @@ import { cn } from '@/shared/lib/utils'
 const STYLES = {
   none: '',
   pending: 'text-muted-foreground',
-  overdue: 'bg-red-100 text-red-800',
-  missed: 'bg-red-100 text-red-800',
-  met: 'bg-emerald-100 text-emerald-800',
+  overdue: 'bg-danger-muted text-danger-foreground',
+  missed: 'bg-danger-muted text-danger-foreground',
+  met: 'bg-success-muted text-success-foreground',
 } as const
 
 /**

@@ -75,14 +75,16 @@ export function AddCardForm({
 
   return (
     <div
-      className="border-input bg-background focus-within:border-ring focus-within:ring-ring/50 min-w-0 overflow-hidden rounded-md border shadow-xs focus-within:ring-[3px]"
+      className="border-input bg-card focus-within:border-ring focus-within:ring-ring min-w-0 overflow-hidden rounded-md border shadow-xs focus-within:ring-2"
       // Закрываем, только если фокус ушёл за пределы формы (не на её кнопки), а название пустое
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget) && !title.trim()) onClose()
       }}
     >
       {lanes && lanes.length > 1 && (
-        <div className="has-[:focus-visible]:bg-muted/60 relative flex h-8 min-w-0 items-center border-b px-3 text-xs">
+        // Фокус с клавиатуры на выборе дорожки — своя рамка внутри формы: у всей формы она одна и та же и для поля, и
+        // для выбора, а один фон muted/60 — 1,05:1 к белому (U-3 UX-ревью LATER-91)
+        <div className="has-[:focus-visible]:bg-muted/60 has-[:focus-visible]:ring-ring relative flex h-8 min-w-0 items-center border-b px-3 text-xs has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset">
           <span className="min-w-0 flex-1 truncate pr-6" data-slot="lane-value" aria-hidden>
             {lanes.find((lane) => lane.id === laneId)?.name}
           </span>

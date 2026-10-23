@@ -117,6 +117,19 @@ test('«+» в заголовке колонки открывает форму �
   await expect(cell(page, 'To Do / Основная')).toBeVisible()
 })
 
+test('выбор дорожки в форме новой карточки — своя рамка фокуса с клавиатуры', async ({ page }) => {
+  // U-3 UX-ревью LATER-91: у всей формы рамка одна и для поля, и для выбора; у строки выбора был только фон 1,05:1
+  await page.getByRole('button', { name: 'Добавить карточку в начало To Do' }).click()
+  const form = cell(page, 'To Do / Основная')
+  await expect(form.getByRole('textbox', { name: 'Добавить карточку в начало To Do' })).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(form.getByRole('combobox', { name: 'Дорожка' })).toBeFocused()
+  const row = form.locator('[data-slot="lane-value"]').locator('..')
+  // Цвет — ring (#737373, oklch 0.556), рамка 2 px внутри строки
+  await expect(row).toHaveCSS('box-shadow', /(oklch\(0\.556 0 0\)|rgb\(115, 115, 115\)) 0px 0px 0px 2px inset/)
+  await page.keyboard.press('Escape')
+})
+
 test('название дорожки слева и счётчик с шевроном справа видны при прокрутке доски вбок', async ({ page }) => {
   const block = (await page.locator(`section[aria-label="${BOARD}"]`).boundingBox())!
   const name = lane(page, 'Срочные').getByText('Срочные', { exact: true })

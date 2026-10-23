@@ -53,9 +53,9 @@ export function LaneRow({
       ref={rowRef}
       className={cn(
         // Полоса во всю ширину блока, со своим лёгким фоном: линии колонок через неё не идут. Фон непрозрачный
-        // (muted 40 % поверх фона доски), его наследуют закреплённые части: на узкой видимой части доски счётчик
-        // и шеврон закрывают конец названия, а не ложатся поверх текста
-        'flex h-10 items-center justify-between gap-2 bg-[color-mix(in_oklab,var(--color-muted)_40%,var(--color-background))] px-3',
+        // (токен lane — muted 40 % поверх фона доски), его наследуют закреплённые части: на узкой видимой части
+        // доски счётчик и шеврон закрывают конец названия, а не ложатся поверх текста
+        'bg-lane flex h-10 items-center justify-between gap-2 px-3',
         collapsed && 'hover:bg-muted cursor-pointer',
         className,
       )}

@@ -71,7 +71,7 @@ export function CardAttachmentsSection({
               key={attachment.id}
               // Рамка фокуса превью — у figure: кнопка целиком под картинкой, её рамка была бы не видна, а снаружи кнопки
               // её срезал бы overflow-hidden (U-3 UX-ревью UI-1a)
-              className="group has-[>button:focus-visible]:ring-ring/50 relative overflow-hidden rounded-md border has-[>button:focus-visible]:ring-[3px]"
+              className="group has-[>button:focus-visible]:ring-ring relative overflow-hidden rounded-md border has-[>button:focus-visible]:ring-[3px]"
             >
               {attachment.kind === 'image' ? (
                 <button
@@ -165,6 +165,7 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
       controls
       preload="metadata"
       aria-label={attachment.name}
+      // eslint-disable-next-line no-restricted-syntax -- поля вокруг видео чёрные в любой теме, как у плееров
       className="aspect-video w-full bg-black"
       onError={() => setFailed(true)}
       onLoadedMetadata={(event) => event.currentTarget.videoWidth === 0 && setFailed(true)}

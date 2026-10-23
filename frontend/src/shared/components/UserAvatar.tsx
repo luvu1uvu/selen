@@ -1,26 +1,16 @@
+import { AVATAR_COLORS, readableTextOn } from '@/shared/lib/palette'
 import { cn } from '@/shared/lib/utils'
-
-/** Палитра фона аватаров — цвет стабилен для человека (по id). */
-const COLORS = [
-  '#2563eb',
-  '#16a34a',
-  '#d97706',
-  '#9333ea',
-  '#db2777',
-  '#0891b2',
-  '#dc2626',
-  '#4b5563',
-]
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   return (parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts[1]?.[0] ?? '') : '')
 }
 
+/** Цвет фона аватара стабилен для человека (по id). */
 function colorFor(id: string): string {
   let hash = 0
   for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return COLORS[hash % COLORS.length]
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
 /**
@@ -41,17 +31,18 @@ export function UserAvatar({
   size?: 'xs' | 'sm'
   className?: string
 }) {
+  const color = colorFor(id)
   return (
     <span
       title={label}
       aria-label={label}
       role="img"
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full font-medium text-white uppercase select-none',
+        'inline-flex shrink-0 items-center justify-center rounded-full font-medium uppercase select-none',
         size === 'xs' ? 'size-5 text-[10px]' : 'size-7 text-xs',
         className,
       )}
-      style={{ backgroundColor: colorFor(id) }}
+      style={{ backgroundColor: color, color: readableTextOn(color) }}
     >
       {initials(name)}
     </span>

@@ -176,7 +176,7 @@ export default function RichTextEditor({
 
   return (
     <div className="grid gap-2">
-      <div className="focus-within:ring-ring/50 rounded-md border focus-within:ring-[3px]">
+      <div className="focus-within:ring-ring rounded-md border focus-within:ring-2">
         {editor && <Toolbar editor={editor} onLink={() => setLinkOpen((open) => !open)} />}
         {linkOpen && (
           <div className="flex items-center gap-2 border-b px-2 py-1.5">

@@ -79,7 +79,7 @@ export function BoardHeader({
 }) {
   return (
     <header
-      className={cn('bg-background flex h-12 items-center gap-2 px-3', className)}
+      className={cn('bg-board flex h-12 items-center gap-2 px-3', className)}
       onClick={onClick}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -139,7 +139,7 @@ export function BoardBlock({
         // в отличие от hidden, clip не делает блок контейнером прокрутки, и закрепление шапки работает от холста.
         // relative — для затенения краёв тела доски (BoardView, EdgeShade)
         className={cn(
-          'bg-background relative flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
+          'bg-board relative flex w-fit max-w-full min-w-[min(20rem,100%)] flex-col self-start overflow-clip rounded-xl border',
           !endsWithBand && 'min-h-60',
           className,
         )}

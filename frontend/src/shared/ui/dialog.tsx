@@ -26,7 +26,7 @@ function DialogContent({
   const restoreFocus = useRestoreFocus(onCloseAutoFocus)
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50" />
+      <DialogPrimitive.Overlay className="data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 bg-overlay fixed inset-0 z-50" />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
@@ -42,7 +42,7 @@ function DialogContent({
             подсказку, а не окно */}
         <DialogPrimitive.Close
           aria-label={closeLabel}
-          className="bg-background hover:bg-accent focus-visible:ring-ring/50 absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]"
+          className="bg-background hover:bg-accent focus-visible:ring-ring absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]"
         >
           <XIcon className="size-4" />
         </DialogPrimitive.Close>

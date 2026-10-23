@@ -13,11 +13,11 @@ import { moveColumn, moveLane } from '../api'
 import { useStructureMutation } from '../queries'
 import type { StructureAction } from './StructureDialogs'
 
-/** Точка категории колонки: насыщенные цвета — не меньше 3:1 к белому (правила вида, разделы 2 и 11). */
+/** Точка категории колонки: токены category-* — не меньше 3:1 к белому (правила вида, разделы 2 и 11). */
 const CATEGORY_DOTS = {
-  queue: 'bg-slate-500',
-  in_progress: 'bg-blue-600',
-  done: 'bg-emerald-600',
+  queue: 'bg-category-queue',
+  in_progress: 'bg-category-progress',
+  done: 'bg-category-done',
 } as const
 
 /** Перестановка через меню: надёжнее перетаскивания на сетке с подколонками и доступно с клавиатуры. */
@@ -160,7 +160,7 @@ function CategoryDot({ category }: { category: BoardColumn['category'] }) {
           role="img"
           aria-label={label}
           tabIndex={0}
-          className="focus-visible:ring-ring/50 inline-flex size-6 items-center justify-center rounded-md outline-none focus-visible:ring-[3px]"
+          className="focus-visible:ring-ring inline-flex size-6 items-center justify-center rounded-md outline-none focus-visible:ring-[3px]"
           data-category={category}
         >
           <span className={cn('size-2 rounded-full', CATEGORY_DOTS[category])} />
