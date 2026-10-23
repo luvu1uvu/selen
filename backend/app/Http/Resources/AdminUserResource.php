@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Company;
+use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -33,8 +34,8 @@ class AdminUserResource extends UserResource
                 'update_role' => $actor->can('updateRole', [$user, $company]),
                 'deactivate' => $actor->can('deactivate', [$user, $company]),
                 'reactivate' => $actor->can('reactivate', [$user, $company]),
-                // Повторить или отозвать приглашение пользователя (InvitationPolicy — по нему же)
-                'manage_invitation' => $actor->can('manages', [$user, $company]),
+                // Повторить или отозвать приглашение пользователя (InvitationPolicy::manages)
+                'manage_invitation' => $actor->can('manages', [Invitation::class, $user, $company]),
                 'transfer_ownership' => $actor->can('transferOwnership', [$user, $company]),
             ],
         ];

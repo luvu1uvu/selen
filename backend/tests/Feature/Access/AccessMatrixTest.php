@@ -225,7 +225,7 @@ it('не участник получает 404', function (string $method, strin
         ->assertExactJson(['message' => __('selen.not_found')]);
 })->with(spaceEndpoints());
 
-it('системный администратор без роли в пространстве получает 404', function (string $method, string $path) {
+it('администратор компании без роли в пространстве получает 404', function (string $method, string $path) {
     $this->actingAs(admin());
 
     ($this->call)($method, $path)->assertNotFound();

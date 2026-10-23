@@ -58,10 +58,7 @@ class UserPolicy
         return $this->allowCompanyMemberIf($actor, $company, fn () => $actor->isOwner() && $actor->isNot($user));
     }
 
-    /**
-     * Может ли участник компании менять учётную запись её человека (статус, приглашение).
-     * Используется и InvitationPolicy.
-     */
+    /** Может ли участник компании менять учётную запись её человека (роль в компании, статус). */
     public function manages(User $actor, User $user, Company $company): bool
     {
         if (! $company->permissionsOf($actor)->allows(Permission::CompanyManageUsers) || $user->isOwner()) {

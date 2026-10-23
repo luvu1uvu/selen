@@ -24,7 +24,7 @@ it('предустановлены четыре типа, по умолчани�
         ->assertJsonPath('data.0.color', '#3b82f6');
 });
 
-it('системный администратор создаёт и меняет тип', function () {
+it('администратор компании создаёт и меняет тип', function () {
     $admin = admin();
 
     $id = $this->actingAs($admin)->postJson(adminPath().'card-types', ['name' => 'Улучшение', 'color' => '#F59E0B'])

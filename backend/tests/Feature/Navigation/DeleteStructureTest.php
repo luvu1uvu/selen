@@ -147,7 +147,7 @@ describe('пространство', function () {
             ->and(Card::withTrashed()->whereKey($card->id)->exists())->toBeTrue();
     });
 
-    it('удаляет только системный администратор — администратору пространства 403', function () {
+    it('удаляет только администратор компании — администратору пространства 403', function () {
         $space = space();
         $user = member();
         addToSpace($space, $user, SpaceRole::Admin);

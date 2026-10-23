@@ -11,9 +11,9 @@ use App\Policies\Concerns\ChecksCompanyPermission;
 use Illuminate\Auth\Access\Response;
 
 /**
- * Приглашения в компанию — право компании «приглашать пользователей» (администратор компании и Владелец, ADR-0024).
- * Приглашённым администратором компании управляет только Владелец, как и самими администраторами
- * (UserPolicy::manages, ADR-0017). Приглашение другой компании — 404 (привязка маршрута).
+ * Приглашения в компанию — право компании «приглашать пользователей» (администратор компании и Владелец, ADR-0024):
+ * список, приглашение, повтор и отзыв. Приглашённым администратором компании управляет только Владелец, как и самими
+ * администраторами (ADR-0017). Приглашение другой компании — 404 (привязка маршрута).
  */
 class InvitationPolicy
 {
@@ -36,11 +36,24 @@ class InvitationPolicy
 
     public function resend(User $actor, Invitation $invitation, Company $company): Response
     {
-        return $this->allowCompanyMemberIf($actor, $company, fn () => app(UserPolicy::class)->manages($actor, $invitation->user, $company));
+        return $this->allowCompanyMemberIf($actor, $company, fn () => $this->manages($actor, $invitation->user, $company));
     }
 
     public function revoke(User $actor, Invitation $invitation, Company $company): Response
     {
-        return $this->allowCompanyMemberIf($actor, $company, fn () => app(UserPolicy::class)->manages($actor, $invitation->user, $company));
+        return $this->allowCompanyMemberIf($actor, $company, fn () => $this->manages($actor, $invitation->user, $company));
+    }
+
+    /**
+     * Повторить или отозвать приглашение человека: право «приглашать»; Владельца — никто, приглашённого администратора
+     * компании — только Владелец (как UserPolicy::manages). Подсказка интерфейсу — AdminUserResource.
+     */
+    public function manages(User $actor, User $invitee, Company $company): bool
+    {
+        if (! $company->permissionsOf($actor)->allows(Permission::CompanyInviteUsers) || $invitee->isOwner()) {
+            return false;
+        }
+
+        return ! $company->permissionsOf($invitee)->isAdmin() || $actor->isOwner();
     }
 }

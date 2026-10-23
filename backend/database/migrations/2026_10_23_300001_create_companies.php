@@ -11,7 +11,8 @@ use Illuminate\Support\Str;
  * каждый пользователь — её «дом» (деактивированный — тоже, без отметки: деактивация по-прежнему у учётной записи,
  * решение PM 23.10), системный администратор — администратор компании (users.role: owner | member), у корневых
  * таблиц — company_id. Связи между компаниями запрещены в БД: составные FK (узлы дерева, выдачи, метки
- * пространства) и триггеры (роль выдачи, связи и блокировки карточек).
+ * пространства) и триггеры (роль выдачи, связи и блокировки карточек, состав группы, личная выдача, метка и тип
+ * карточки). Компании не удаляются (В10): DELETE и TRUNCATE у роли приложения отозваны.
  *
  * Журнал событий не переписывается: company_id добавляется с DEFAULT («Компания 1» у старых строк без UPDATE —
  * триггер append-only не срабатывает), затем DEFAULT снимается; у новых событий без компании — NULL.
@@ -35,6 +36,7 @@ return new class extends Migration
         $this->addEventLogCompany($companyId);
         $this->addConstraints();
         $this->addCrossCompanyTriggers();
+        $this->restrictAppRole();
     }
 
     public function down(): void
@@ -48,6 +50,11 @@ return new class extends Migration
         }
 
         DB::unprepared(<<<'SQL'
+            DROP TRIGGER IF EXISTS group_members_same_company ON group_members;
+            DROP TRIGGER IF EXISTS access_grants_user_company ON access_grants;
+            DROP TRIGGER IF EXISTS card_labels_same_company ON card_labels;
+            DROP TRIGGER IF EXISTS cards_type_same_company ON cards;
+            DROP FUNCTION IF EXISTS company_links_check();
             DROP TRIGGER IF EXISTS card_relations_same_company ON card_relations;
             DROP TRIGGER IF EXISTS card_blocks_same_company ON card_blocks;
             DROP FUNCTION IF EXISTS card_links_same_company();
@@ -288,6 +295,64 @@ return new class extends Migration
 
             CREATE TRIGGER access_grants_role_company BEFORE INSERT OR UPDATE OF role_id, company_id ON access_grants
                 FOR EACH ROW EXECUTE FUNCTION access_grants_role_company();
+
+            -- Состав группы — «дома» её компании; личная выдача — участнику компании выдачи (или Владельцу); метка
+            -- и тип карточки — компании её пространства. Проверка при вставке и изменении ссылки: если человека
+            -- потом уберут из компании (П2c), строки остаются, а действовать перестают (AccessResolver)
+            CREATE OR REPLACE FUNCTION company_links_check() RETURNS trigger
+            LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+            DECLARE
+                ok boolean;
+            BEGIN
+                IF TG_TABLE_NAME = 'group_members' THEN
+                    ok := EXISTS (
+                        SELECT 1 FROM public.groups g JOIN public.company_members m ON m.company_id = g.company_id
+                         WHERE g.id = NEW.group_id AND m.user_id = NEW.user_id AND m.kind = 'home'
+                    );
+                ELSIF TG_TABLE_NAME = 'access_grants' THEN
+                    ok := NEW.user_id IS NULL
+                        OR EXISTS (SELECT 1 FROM public.company_members WHERE company_id = NEW.company_id AND user_id = NEW.user_id)
+                        OR EXISTS (SELECT 1 FROM public.users WHERE id = NEW.user_id AND role = 'owner');
+                ELSIF TG_TABLE_NAME = 'card_labels' THEN
+                    ok := EXISTS (
+                        SELECT 1 FROM public.cards c JOIN public.spaces s ON s.id = c.space_id
+                          JOIN public.labels l ON l.company_id = s.company_id
+                         WHERE c.id = NEW.card_id AND l.id = NEW.label_id
+                    );
+                ELSE
+                    ok := EXISTS (
+                        SELECT 1 FROM public.spaces s JOIN public.card_types t ON t.company_id = s.company_id
+                         WHERE s.id = NEW.space_id AND t.id = NEW.card_type_id
+                    );
+                END IF;
+
+                IF NOT ok THEN
+                    RAISE EXCEPTION '%: a link to another company is not allowed', TG_TABLE_NAME
+                        USING ERRCODE = 'foreign_key_violation';
+                END IF;
+
+                RETURN NEW;
+            END;
+            $$;
+
+            CREATE TRIGGER group_members_same_company BEFORE INSERT OR UPDATE ON group_members
+                FOR EACH ROW EXECUTE FUNCTION company_links_check();
+            CREATE TRIGGER access_grants_user_company BEFORE INSERT OR UPDATE OF user_id, company_id ON access_grants
+                FOR EACH ROW EXECUTE FUNCTION company_links_check();
+            CREATE TRIGGER card_labels_same_company BEFORE INSERT OR UPDATE ON card_labels
+                FOR EACH ROW EXECUTE FUNCTION company_links_check();
+            CREATE TRIGGER cards_type_same_company BEFORE INSERT OR UPDATE OF card_type_id, space_id ON cards
+                FOR EACH ROW EXECUTE FUNCTION company_links_check();
             SQL);
+    }
+
+    /** Компании не удаляются (решение PM 23.10, В10) — как история: роль приложения не может DELETE и TRUNCATE. */
+    private function restrictAppRole(): void
+    {
+        $role = (string) config('database.connections.pgsql.username');
+        $exists = DB::selectOne('SELECT 1 AS found FROM pg_roles WHERE rolname = ? AND rolname <> current_user', [$role]);
+        if ($exists !== null) {
+            DB::statement('REVOKE DELETE, TRUNCATE ON companies FROM '.DB::getQueryGrammar()->wrap($role));
+        }
     }
 };

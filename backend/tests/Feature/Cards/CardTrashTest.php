@@ -91,7 +91,7 @@ describe('удаление', function () {
         expect(Card::query()->whereKey($this->card->id)->exists())->toBeTrue();
     });
 
-    it('системному администратору не из пространства — 404', function () {
+    it('администратору компании не из пространства — 404', function () {
         $this->actingAs(admin())->deleteJson('/api/v1/cards/DEV-1')->assertNotFound();
         expect(Card::query()->whereKey($this->card->id)->exists())->toBeTrue();
     });
@@ -107,7 +107,7 @@ describe('удаление', function () {
 });
 
 describe('карточка в корзине пропадает отовсюду', function () {
-    it('по ссылке и по всем вложенным маршрутам — 404 как для чужой, в том числе системному администратору', function () {
+    it('по ссылке и по всем вложенным маршрутам — 404 как для чужой, в том числе администратору компании', function () {
         $comment = makeComment($this->card, $this->editor);
         $checklist = makeChecklist($this->card);
         $item = makeChecklistItem($checklist);
@@ -243,7 +243,7 @@ describe('карточка в корзине пропадает отовсюду
 });
 
 describe('«Администрирование → Корзина»', function () {
-    it('список — только системному администратору: номер, название, где лежала, кто и когда удалил', function () {
+    it('список — только администратору компании: номер, название, где лежала, кто и когда удалил', function () {
         $this->actingAs($this->editor)->postJson('/api/v1/cards/DEV-2/archive')->assertOk();
         ($this->delete)('DEV-1')->assertNoContent();
         $this->travel(1)->minutes();
@@ -376,7 +376,7 @@ describe('«Администрирование → Корзина»', function (
             ->and(app(CardFlowMetrics::class)->forCard($restored)->leadTimeSeconds())->not->toBeNull();
     });
 
-    it('восстановить может только системный администратор: остальным 403 — и для существующего номера, и для несуществующего', function () {
+    it('восстановить может только администратор компании: остальным 403 — и для существующего номера, и для несуществующего', function () {
         ($this->delete)()->assertNoContent();
 
         foreach (['DEV-1', 'DEV-2', 'DEV-99', 'NOPE-1'] as $key) {

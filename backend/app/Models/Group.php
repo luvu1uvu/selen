@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use LogicException;
 
 /**
  * Группа пользователей — источник доступа к пространствам рядом с личным участием (docs/adr/0012-groups.md).
@@ -120,6 +121,11 @@ class Group extends Model implements HasCompany
      */
     public function resolveChildRouteBinding($childType, $value, $field): ?Model
     {
+        // Только известные вложенные объекты (members/{user}, spaces/{space}): новый вложенный маршрут — сюда осознанно
+        if (! in_array($childType, ['user', 'space'], true)) {
+            throw new LogicException("Вложенный объект {$childType} у Group не ограничен компанией");
+        }
+
         return $this->company->resolveChildRouteBinding($childType, $value, $field);
     }
 }

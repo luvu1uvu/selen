@@ -53,7 +53,7 @@ describe('группа', function () {
         $this->postJson(adminPath()."groups/{$group->id}/restore")->assertUnprocessable();
     });
 
-    it('недоступна не системному администратору', function () {
+    it('недоступна не администратору компании', function () {
         $group = makeGroup();
         $spaceAdmin = member();
         addToSpace(space(), $spaceAdmin, SpaceRole::Admin);

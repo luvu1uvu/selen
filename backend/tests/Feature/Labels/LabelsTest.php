@@ -33,7 +33,7 @@ function spaceLabel($space, string $name = 'Фронтенд', string $color = '
 }
 
 describe('общие метки компании', function () {
-    it('создаёт и меняет только системный администратор', function () {
+    it('создаёт и меняет только администратор компании', function () {
         $this->actingAs($this->sysadmin)->postJson(adminPath().'labels', ['name' => 'Безопасность', 'color' => '#EF4444'])
             ->assertCreated()
             ->assertJsonPath('data.scope', 'company')

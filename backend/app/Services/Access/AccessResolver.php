@@ -97,7 +97,7 @@ class AccessResolver
      */
     public function forCompany(User $user, Company $company): CompanyAccess
     {
-        $membership = $user->isOwner() ? null : DB::table('company_members')
+        $membership = $user->isOwner() ? null : $this->homes()
             ->where('company_id', $company->getKey())
             ->where('user_id', $user->getKey())
             ->first(['is_admin']);
@@ -114,7 +114,7 @@ class AccessResolver
     public function rememberCompanyPermissions(Company $company, iterable $users): void
     {
         $users = collect($users);
-        $admins = DB::table('company_members')
+        $admins = $this->homes()
             ->where('company_id', $company->getKey())
             ->whereIn('user_id', $users->map(fn (User $user) => $user->getKey())->all())
             ->pluck('is_admin', 'user_id');
@@ -150,7 +150,7 @@ class AccessResolver
     public function adminCompanyIds(User $user): Collection
     {
         return DB::table('companies')
-            ->when(! $user->isOwner(), fn (Builder $q) => $q->whereIn('id', DB::table('company_members')
+            ->when(! $user->isOwner(), fn (Builder $q) => $q->whereIn('id', $this->homes()
                 ->select('company_id')
                 ->where('user_id', $user->getKey())
                 ->where('is_admin', true)))
@@ -183,7 +183,7 @@ class AccessResolver
      */
     public function lockAdminFlags(Company $company, array $userIds): array
     {
-        return DB::table('company_members')
+        return $this->homes()
             ->where('company_id', $company->getKey())
             ->whereIn('user_id', $userIds)
             ->orderBy('user_id')
@@ -199,10 +199,9 @@ class AccessResolver
      */
     public function companyMemberIds(Company|string $company): Builder
     {
-        return DB::table('company_members')
+        return $this->homes()
             ->select('user_id')
-            ->where('company_id', $company instanceof Company ? $company->getKey() : $company)
-            ->where('kind', self::HOME);
+            ->where('company_id', $company instanceof Company ? $company->getKey() : $company);
     }
 
     /**
@@ -210,18 +209,19 @@ class AccessResolver
      */
     public function memberCompanyIds(User $user): Builder
     {
-        return DB::table('company_members')->select('company_id')->where('user_id', $user->getKey())->where('kind', self::HOME);
+        return $this->homes()->select('company_id')->where('user_id', $user->getKey());
     }
 
     /**
      * Действующее членство (одно правило изоляции компаний): пользователь из колонки $user — «дом» компании из колонки
      * $company или Владелец (он участник всех компаний — чтобы ему можно было выдать доступ, ADR-0024).
-     * Гости, срок гостя и «убран из компании» — П2c.
+     * Гости, срок гостя и «убран из компании» — П2c (тогда правило расширяется здесь и в homes()).
      */
     private function activeMember(Builder $query, string $company, string $user): Builder
     {
         return $query->where(fn (Builder $q) => $q
             ->whereExists(fn (Builder $q) => $q->from('company_members')
+                ->where('company_members.kind', self::HOME)
                 ->whereColumn('company_members.company_id', $company)
                 ->whereColumn('company_members.user_id', $user)
                 ->selectRaw('1'))
@@ -229,6 +229,12 @@ class AccessResolver
                 ->whereColumn('owners.id', $user)
                 ->where('owners.role', UserRole::Owner->value)
                 ->selectRaw('1')));
+    }
+
+    /** Членство «дом» — единственный вид членства в П2b-1 (CHECK); все чтения company_members — отсюда. */
+    private function homes(): Builder
+    {
+        return DB::table('company_members')->where('kind', self::HOME);
     }
 
     /**

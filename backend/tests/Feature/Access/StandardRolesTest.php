@@ -61,7 +61,7 @@ it('стандартные роли повторяют прежние: роль 
         ->and(StandardRole::CommenterOwnCards->permissions())->toBe(StandardRole::Commenter->permissions());
 });
 
-it('права, которые до П2d проверяет системный администратор, у «Администратора» ещё не появились (решение PM 23.10)', function () {
+it('права, которые до П2d проверяют права компании, у «Администратора» ещё не появились (решение PM 23.10)', function () {
     // Чтение папок входит в любую роль уже сейчас (В14), хотя папки доступ дают только с П2d
     $later = collect(Permission::cases())
         ->filter(fn (Permission $p) => $p->since() === 'П2d')

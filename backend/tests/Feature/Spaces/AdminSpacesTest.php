@@ -5,7 +5,7 @@ use App\Models\EventLogEntry;
 use App\Models\Space;
 use App\Models\User;
 
-it('системный администратор создаёт пространство и по умолчанию становится его администратором', function () {
+it('администратор компании создаёт пространство и по умолчанию становится его администратором', function () {
     $admin = admin();
 
     $this->actingAs($admin)->postJson(adminPath().'spaces', [
@@ -98,7 +98,7 @@ it('админка показывает все пространства с ад�
         ->assertJsonPath('data.1.my_role', null);
 });
 
-it('системный администратор не видит содержимое пространства, пока не назначит себе роль', function () {
+it('администратор компании не видит содержимое пространства, пока не назначит себе роль', function () {
     $admin = admin();
     $space = space(['key' => 'DEV']);
     addToSpace($space, member(), SpaceRole::Admin);
@@ -166,7 +166,7 @@ it('архивирует и восстанавливает пространст�
     expect(loggedEventTypes())->toBe(['space.archived', 'space.restored']);
 });
 
-it('архивировать, восстанавливать и назначать роли может только системный администратор', function () {
+it('архивировать, восстанавливать и назначать роли может только администратор компании', function () {
     $user = member();
     $space = space();
     addToSpace($space, $user, SpaceRole::Admin);

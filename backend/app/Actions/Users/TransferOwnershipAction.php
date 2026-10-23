@@ -5,13 +5,15 @@ namespace App\Actions\Users;
 use App\Enums\EventType;
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Services\Access\AccessResolver;
 use App\Services\EventLog\EventRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Передача владения (ADR-0017): получатель становится Владельцем, бывший Владелец — администратором своих компаний
- * (ADR-0024). Событие — без компании («о человеке»: его видят администраторы компаний нового и бывшего Владельца).
+ * (ADR-0024). Событие — без компании, «о человеке» — новом Владельце: его видят администраторы компаний, где он «дом»
+ * (решение PM 23.10).
  * Обе строки меняются в одной транзакции (отложенный триггер БД проверяет, что Владелец не пропал).
  * Из интерфейса — Владелец с подтверждением паролем (TransferOwnershipRequest), аварийно — команда
  * app:transfer-ownership на сервере ($actor = null); она же назначает Владельца, если его нет.
@@ -50,7 +52,7 @@ class TransferOwnershipAction
             // Бывший Владелец остаётся администратором — своих компаний (ADR-0024: администраторы — у компаний)
             $from?->forceFill(['role' => UserRole::Member])->save();
             if ($from !== null) {
-                $from->companies()->newPivotQuery()->update(['is_admin' => true, 'updated_at' => now()]);
+                $from->companies()->wherePivot('kind', AccessResolver::HOME)->newPivotQuery()->update(['is_admin' => true, 'updated_at' => now()]);
             }
             $to->forceFill(['role' => UserRole::Owner])->save();
 

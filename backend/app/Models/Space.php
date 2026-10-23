@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
+use LogicException;
 
 /**
  * Пространство — команда со своими досками и участниками. Не удаляется, только архивируется. Принадлежит компании
@@ -190,6 +191,11 @@ class Space extends Model implements HasCompany
      */
     public function resolveChildRouteBinding($childType, $value, $field): ?Model
     {
+        // Только известные вложенные объекты (members/{user}, groups/{group}): новый вложенный маршрут — сюда осознанно
+        if (! in_array($childType, ['user', 'group'], true)) {
+            throw new LogicException("Вложенный объект {$childType} у Space не ограничен компанией");
+        }
+
         return $this->company->resolveChildRouteBinding($childType, $value, $field);
     }
 }

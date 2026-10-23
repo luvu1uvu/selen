@@ -49,7 +49,7 @@ it('у деактивированного групповые источники 
         ->assertJsonPath('data.spaces.0.sources.0.inactive_reason', 'user_deactivated');
 });
 
-it('доступна только системному администратору', function () {
+it('доступна только администратору компании', function () {
     $user = member();
     $this->actingAs(member())->getJson(adminPath()."users/{$user->id}/access")->assertForbidden();
     $this->actingAs(member())->getJson(adminPath()."users/{$user->id}/deactivation-impact")->assertForbidden();

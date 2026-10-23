@@ -2,6 +2,7 @@
 
 use App\Actions\Cards\DeleteCardAction;
 use App\Enums\BoardTemplate;
+use App\Enums\EventType;
 use App\Enums\SpaceRole;
 use App\Models\CardType;
 use App\Models\Company;
@@ -9,6 +10,7 @@ use App\Models\Group;
 use App\Models\Invitation;
 use App\Models\Label;
 use App\Models\User;
+use App\Services\EventLog\EventRecorder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -23,11 +25,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 |
 | Компании A («Компания 1») и B наполнены одинаково (isolationFixture). Проверки:
 | (а) каждый зарегистрированный маршрут с объектами B в адресе — от имени администратора A (он же администратор
-|     пространства A, у него есть все права в A) — 404 с единым телом. Маршрут админки — и в компании B, и в компании A
-|     с объектами B. Маршрут без объектов компании в адресе — только из списка ROUTES_WITHOUT_COMPANY_OBJECTS, иначе
-|     тест падает: новый маршрут без записи здесь роняет CI;
+|     пространства A, у него есть все права в A) — 404 с единым телом: все объекты из B, а для адреса с несколькими
+|     объектами — ещё и каждый объект по очереди из B при остальных из A (свой родитель — чужой вложенный объект:
+|     scoped binding). Маршрут без объектов компании в адресе — только из списка ROUTES_WITHOUT_COMPANY_OBJECTS,
+|     параметр без значения в isolationParams — тоже ошибка: новый маршрут без записи здесь роняет CI;
 | (б) ответы всех GET-маршрутов людям A (участник и администратор компании) не содержат ни одного маркера B —
-|     названий, email, ключа, id (как проверка названий скрытых папок, ADR-0013);
+|     названий, email, ключа, id (как проверка названий скрытых папок, ADR-0013); администратору A все они отвечают
+|     без ошибки — иначе проверка маркеров ничего бы не доказывала;
+| (б) журнал: события без компании о людях B и системные не видны администратору A; Владельцу — системные;
 | (в) ссылки на объекты B в теле запроса — 422, как на несуществующие; связать карточки A и B нельзя и в обход
 |     приложения (триггер), упомянуть человека B в карточке A — тоже;
 | (г) правило членства: выдача и группа человеку без «дома» в компании ничего не дают, «Все сотрудники» A — только
@@ -197,7 +202,6 @@ it('(а) каждый маршрут с объектами другой комп
 
     foreach (isolationRoutes() as [$method, $path, $names]) {
         $route = "{$method} ".str_replace('{space:key}', '{space}', ltrim($path, '/'));
-        $objects = array_values(array_diff($names, ['company']));
         if ($names === [] || $names === ['token'] || $names === ['path']) {
             in_array($route, ROUTES_WITHOUT_COMPANY_OBJECTS, true) || $failures[] = "{$route}: нет в ROUTES_WITHOUT_COMPANY_OBJECTS";
 
@@ -205,9 +209,11 @@ it('(а) каждый маршрут с объектами другой комп
         }
 
         $variants = [$paramsB];
-        if (in_array('company', $names, true) && $objects !== []) {
-            // Своя компания в адресе, объекты — чужой: привязка ищет их только среди объектов своей компании
-            $variants[] = ['{company}' => $paramsA['{company}']] + $paramsB;
+        if (count($names) > 1) {
+            // Каждый объект адреса по очереди — чужой, остальные свои: свой родитель не открывает чужой вложенный объект
+            foreach ($names as $name) {
+                $variants[] = ["{{$name}}" => $paramsB["{{$name}}"] ?? '{'.$name.'}'] + $paramsA;
+            }
         }
         if (in_array('label', $names, true)) {
             $variants[] = ['{label}' => $this->b['company_label']->id] + $paramsB;
@@ -215,6 +221,11 @@ it('(а) каждый маршрут с объектами другой комп
 
         foreach ($variants as $params) {
             $uri = isolationPath($path, $params);
+            if (str_contains($uri, '{')) {
+                $failures[] = "{$route}: параметр без значения в isolationParams";
+
+                continue;
+            }
             $response = $this->json($method, $uri, []);
             $checked++;
             if ($response->status() !== 404 || $response->json() !== ['message' => __('selen.not_found')]) {
@@ -240,8 +251,13 @@ it('(б) ответы GET-маршрутов людям компании A не 
         }
 
         $uri = isolationPath($path, $params);
-        $content = isolationContent($this->getJson($uri));
+        $response = $this->getJson($uri);
+        $content = isolationContent($response);
         $checked++;
+        // Администратору A (все права в A) свои списки открыты: ответ с ошибкой маркеров не содержит и ничего не доказывал бы
+        if ($who === 'admin' && $response->getStatusCode() >= 400) {
+            $leaks[] = "{$uri}: ответ {$response->getStatusCode()}";
+        }
         foreach ($markers as $marker) {
             if (str_contains($content, $marker)) {
                 $leaks[] = "{$uri}: «{$marker}»";
@@ -252,6 +268,31 @@ it('(б) ответы GET-маршрутов людям компании A не 
     expect($checked)->toBeGreaterThan(30)
         ->and($leaks)->toBe([]);
 })->with(['admin', 'editor']);
+
+it('(б) журнал: события без компании о людях другой компании и системные не видны администратору компании', function () {
+    $events = app(EventRecorder::class);
+    $ownEvent = $events->record(EventType::LoginSucceeded, $this->a['editor'], $this->a['editor']);
+    $foreign = [
+        $events->record(EventType::LoginSucceeded, $this->b['editor'], $this->b['editor'])->id,
+        $events->record(EventType::PasswordChanged, $this->b['admin'], $this->b['admin'])->id,
+    ];
+    // Неудачный вход с неизвестным email: человека нет — системное событие
+    $system = $events->record(EventType::LoginFailed, null, null, ['reason' => 'unknown_email'], attemptedEmail: 'nobody@selen.test')->id;
+    $journal = fn (User $actor, Company $company) => collect($this->actingAs($actor)->getJson(adminPath($company).'events?page=1')
+        ->assertOk()->json('data'))->pluck('id');
+
+    $seenByA = $journal($this->a['admin'], company());
+    expect($seenByA)->toContain($ownEvent->id)
+        ->not->toContain($system)
+        ->and($seenByA->intersect($foreign)->all())->toBe([]);
+
+    $seenByB = $journal($this->b['admin'], $this->b['company']);
+    expect($seenByB->intersect($foreign)->values()->all())->toEqualCanonicalizing($foreign)
+        ->and($seenByB)->not->toContain($ownEvent->id)->not->toContain($system);
+
+    // Системные события — только Владельцу
+    expect($journal(owner(), company()))->toContain($system)->toContain($ownEvent->id);
+});
 
 it('(в) ссылки на объекты другой компании в теле запроса — 422, как на несуществующие', function () {
     $a = $this->a;
@@ -294,6 +335,23 @@ it('(в) карточки разных компаний не связать и �
         ->and(fn () => DB::transaction(fn () => makeBlock($a, $user, $b)))->toThrow(QueryException::class, 'cards of different companies cannot be linked');
 });
 
+it('(в) в обход приложения не связать с другой компанией: состав группы, личная выдача, метка и тип карточки', function () {
+    $stranger = $this->b['editor'];
+    $link = 'a link to another company is not allowed';
+
+    expect(fn () => DB::transaction(fn () => addToGroup($this->a['group'], $stranger)))->toThrow(QueryException::class, $link)
+        ->and(fn () => DB::transaction(fn () => addToSpace($this->a['space'], $stranger, SpaceRole::Editor)))->toThrow(QueryException::class, $link)
+        ->and(fn () => DB::transaction(fn () => DB::table('card_labels')->insert(['card_id' => $this->a['card']->id, 'label_id' => $this->b['company_label']->id])))
+        ->toThrow(QueryException::class, $link)
+        ->and(fn () => DB::transaction(fn () => $this->a['card']->forceFill(['card_type_id' => $this->b['card_type']->id])->save()))
+        ->toThrow(QueryException::class, $link);
+
+    // Своя компания — можно; Владелец — участник всех компаний: выдача ему в компании B проходит и без «дома» в ней
+    DB::transaction(fn () => addToSpace($this->b['space'], owner(), SpaceRole::Commenter));
+    DB::table('card_labels')->insert(['card_id' => $this->a['card']->id, 'label_id' => $this->a['company_label']->id]);
+    expect(DB::table('card_labels')->where('card_id', $this->a['card']->id)->count())->toBe(1);
+});
+
 it('(в) человек с «домами» в двух компаниях не связывает их карточки и не упоминает людей другой компании', function () {
     $both = member(company: $this->a['company']);
     $both->companies()->attach($this->b['company']->id, ['kind' => 'home']);
@@ -311,10 +369,13 @@ it('(в) человек с «домами» в двух компаниях не 
 });
 
 it('(г) выдача и группа человеку без «дома» в компании ничего не дают', function () {
+    // Человек был «домом» A, получил личную выдачу и группу, затем «дом» в A пропал (в обход приложения; «убрать
+    // из компании» — П2c): строки выдачи и состава остались, но ничего не дают
     $stranger = $this->b['editor'];
-    // В обход приложения: личная выдача и группа компании A человеку компании B
+    $stranger->companies()->attach(company()->id, ['kind' => 'home']);
     addToSpace($this->a['space'], $stranger, SpaceRole::Admin);
     addToGroup($this->a['group'], $stranger);
+    $stranger->companies()->detach(company()->id);
 
     $this->actingAs($stranger);
     $this->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertNotFound();
@@ -330,11 +391,14 @@ it('(г) выдача и группа человеку без «дома» в к
 
 it('(г) «Все сотрудники» компании открывают пространство только её людям', function () {
     grantGroup($this->a['space'], Group::everyone(company()), SpaceRole::Commenter);
+    [$inA, $inB] = [Group::everyone(company())->membersCount(), Group::everyone($this->b['company'])->membersCount()];
     $mine = member();
 
     $this->actingAs($mine)->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertOk();
     $this->actingAs($this->b['editor'])->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertNotFound();
-    expect(Group::everyone(company())->membersCount())->toBe(User::query()->whereHas('companies', fn ($q) => $q->whereKey(company()->id))->where('status', 'active')->count());
+    // Число людей «Все сотрудники» — активные «дома» своей компании: новый человек A не прибавляется к B
+    expect(Group::everyone(company())->membersCount())->toBe($inA + 1)
+        ->and(Group::everyone($this->b['company'])->membersCount())->toBe($inB);
 });
 
 it('(г) администратор другой компании не управляет людьми и справочниками компании A', function () {

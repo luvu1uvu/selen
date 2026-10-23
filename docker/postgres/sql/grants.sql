@@ -26,3 +26,6 @@ SELECT format('REVOKE UPDATE, DELETE, TRUNCATE ON %I FROM %I', t, :'app')
  WHERE to_regclass('public.' || t) IS NOT NULL \gexec
 SELECT format('REVOKE DELETE, TRUNCATE ON card_blocks FROM %I', :'app')
  WHERE to_regclass('public.card_blocks') IS NOT NULL \gexec
+-- Компании не удаляются (ADR-0024, В10) — то же делает миграция create_companies
+SELECT format('REVOKE DELETE, TRUNCATE ON companies FROM %I', :'app')
+ WHERE to_regclass('public.companies') IS NOT NULL \gexec

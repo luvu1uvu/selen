@@ -23,7 +23,7 @@ function adminTree($test): Collection
     return collect($test->getJson(adminPath().'navigation')->assertOk()->json('data'))->keyBy('id');
 }
 
-it('доступна только системному администратору', function (string $method, string $uri) {
+it('доступна только администратору компании', function (string $method, string $uri) {
     $folder = makeFolder('Папка');
     $user = member();
     addToSpace(space(), $user, SpaceRole::Admin);

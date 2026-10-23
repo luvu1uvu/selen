@@ -361,6 +361,11 @@ class Card extends Model implements HasCompany
      */
     public function resolveChildRouteBinding($childType, $value, $field): ?Model
     {
+        // Только известные вложенные объекты (participants/{user}): новый вложенный маршрут — сюда осознанно
+        if (! in_array($childType, ['user'], true)) {
+            throw new LogicException("Вложенный объект {$childType} у Card не ограничен компанией");
+        }
+
         return $this->space->company->resolveChildRouteBinding($childType, $value, $field);
     }
 }
