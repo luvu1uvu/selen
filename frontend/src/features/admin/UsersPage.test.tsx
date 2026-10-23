@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { AdminUser } from '@/shared/types/api'
@@ -191,14 +191,32 @@ describe('Админка пользователей', () => {
 
     const ownerRow = (await screen.findByText('Ольга Владелец')).closest('tr')!
     expect(within(ownerRow).getByText('Владелец')).toBeInTheDocument()
+    // Ключ вместо «⋯»: подсказка Tooltip по наведению и по фокусу, не title; почему нет меню — в ней же (LATER-85)
+    const user = userEvent.setup()
     for (const name of ['Ольга Владелец', 'Другой Админ']) {
       const row = screen.getByText(name).closest('tr')!
       expect(within(row).queryByRole('button', { name: /^Действия с пользователем/ })).toBeNull()
-      expect(within(row).getByRole('link', { name: 'Доступ к пространствам' })).toHaveAttribute(
-        'title',
+      const key = within(row).getByRole('link', { name: 'Доступ к пространствам' })
+      expect(key).not.toHaveAttribute('title')
+      await user.hover(key)
+      const hint = await screen.findByRole('tooltip')
+      expect(hint).toHaveTextContent('Доступ к пространствам')
+      expect(hint).toHaveTextContent(
         'Действия с администраторами и Владельцем доступны только Владельцу',
       )
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
     }
+    // Своя строка: у ключа своя подсказка, без причины
+    const myRow = within(screen.getByRole('table')).getByText(admin.name).closest('tr')!
+    const myKey = within(myRow).getByRole('link', {
+      name: 'Доступ к пространствам',
+    })
+    act(() => myKey.focus())
+    const myHint = await screen.findByRole('tooltip')
+    expect(myHint).toHaveTextContent('Доступ к пространствам')
+    expect(myHint).not.toHaveTextContent('доступны только Владельцу')
+    await user.keyboard('{Escape}')
 
     const memberRow = screen.getByText('Борис').closest('tr')!
     await userEvent.click(
