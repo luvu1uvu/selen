@@ -379,6 +379,9 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
   «unbound variable» (у PM в терминале так упали `make pm-backup` и `make backup`; у сессии локаль `C`, и ошибка
   не видна). Переменную вплотную перед не-ASCII символом — только `${VAR}»`. Проверяет `scripts/check-scripts.sh`
   (`make lint`, CI).
+- **Стандартные роли меняют только миграции** (ADR-0024): под ролью приложения триггер `standard_roles_guard` отвечает
+  ошибкой на любое изменение строк `roles` с `key` и их `role_permissions` — и в тестах. Роль с нужным набором прав для
+  теста — `makeRole([...])` (tests/Pest.php), выдача в обход Actions — `grantAccess()` / `addToSpace()`.
 - **Роль приложения не меняет схему и историю** (ADR-0016): `php artisan migrate` без `--database=pgsql_owner` падает
   на правах (схема не меняется), `UPDATE`/`DELETE`/`TRUNCATE` истории в тестах — ошибка прав 42501, а не текст
   триггера. Триггеры проверять под владельцем: `asOwner($sql)` (tests/Pest.php). Тесты — `RefreshDatabaseAsOwner`.

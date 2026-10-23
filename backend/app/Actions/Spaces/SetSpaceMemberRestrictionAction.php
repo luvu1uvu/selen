@@ -30,9 +30,9 @@ class SetSpaceMemberRestrictionAction
         return DB::transaction(function () use ($actor, $space, $user, $ownCardsOnly) {
             $space = $this->guard->lock($space);
             $grant = $this->grants->personal($space, $user) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
-            $role = $grant->standardRole()->legacyRole();
+            $role = $this->grants->standardRoleOf($grant)->legacyRole();
 
-            if ($grant->standardRole()->ownCardsOnly() === $ownCardsOnly) {
+            if ($grant->ownCardsOnly() === $ownCardsOnly) {
                 return $grant;
             }
 

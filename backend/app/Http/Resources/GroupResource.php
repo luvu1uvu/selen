@@ -49,8 +49,8 @@ class GroupResource extends JsonResource
                 ->map(fn (AccessGrant $grant) => [
                     'space' => $this->space($grant),
                     // Прежний вид API: роль + «только свои карточки» (ADR-0024, П2a)
-                    'role' => $grant->standardRole()->legacyRole(),
-                    'own_cards_only' => $grant->standardRole()->ownCardsOnly(),
+                    'role' => $grant->legacyRole(),
+                    'own_cards_only' => $grant->ownCardsOnly(),
                 ])),
         ];
     }

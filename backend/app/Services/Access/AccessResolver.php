@@ -300,6 +300,12 @@ class AccessResolver
             ->select(['access_grants.id AS grant_id', 'nav_nodes.space_id', 'access_grants.user_id']);
     }
 
+    /** Есть ли право в роли (например, «управление доступом» у снимаемой выдачи — инвариант администратора). */
+    public function rolePermits(string $roleId, Permission $permission): bool
+    {
+        return DB::table('role_permissions')->where('role_id', $roleId)->where('permission', $permission->value)->exists();
+    }
+
     /**
      * Права ролей одним запросом: role_id → набор прав.
      *

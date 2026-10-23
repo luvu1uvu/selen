@@ -2,6 +2,8 @@
 
 namespace App\Actions\Spaces;
 
+use App\Enums\Permission;
+use App\Models\AccessGrant;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
@@ -22,6 +24,12 @@ class SpaceAdminGuard
     public function lock(Space $space): Space
     {
         return Space::query()->lockForUpdate()->findOrFail($space->getKey());
+    }
+
+    /** Даёт ли выдача право «управление доступом» — тогда её снятие или смена проверяют инвариант. */
+    public function managesAccess(AccessGrant $grant): bool
+    {
+        return $this->resolver->rolePermits($grant->role_id, Permission::SpaceManageAccess);
     }
 
     /** Вызывать внутри транзакции после lock(). */

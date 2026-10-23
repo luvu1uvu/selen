@@ -33,7 +33,7 @@ class RevokeSpaceGroupAction
 
             $this->events->record(EventType::SpaceGroupRemoved, $actor, $space, array_filter([
                 'group_id' => $group->id,
-                'role' => $grant->standardRole()->legacyRole()->value,
+                'role' => $this->grants->standardRoleOf($grant)->legacyRole()->value,
                 'via' => $via,
             ]));
         });

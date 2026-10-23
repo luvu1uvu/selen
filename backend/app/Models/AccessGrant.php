@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\CardScope;
+use App\Enums\SpaceRole;
 use App\Enums\StandardRole;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -9,7 +11,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Support\Carbon;
-use LogicException;
 
 /**
  * Выдача доступа: субъект (пользователь или группа, в том числе «Все сотрудники») × узел дерева × роль
@@ -80,12 +81,21 @@ class AccessGrant extends Model
         $query->whereIn('nav_node_id', NavNode::query()->select('id')->where('space_id', $spaceId));
     }
 
-    /**
-     * Стандартная роль выдачи — для API пространств (role + own_cards_only) и журнала.
-     * Пользовательских ролей до П2e нет.
-     */
-    public function standardRole(): StandardRole
+    /** Стандартная роль выдачи; null — пользовательская роль (П2e). Ожидает загруженную role. */
+    public function standardRole(): ?StandardRole
     {
-        return $this->role->key ?? throw new LogicException('Custom roles are not supported before П2e');
+        return $this->role->key;
+    }
+
+    /** Роль в API пространств (admin | editor | commenter); у пользовательской роли её нет — null. */
+    public function legacyRole(): ?SpaceRole
+    {
+        return $this->standardRole()?->legacyRole();
+    }
+
+    /** «Только свои карточки» в API пространств — область карточек роли. */
+    public function ownCardsOnly(): bool
+    {
+        return $this->role->card_scope === CardScope::Own;
     }
 }

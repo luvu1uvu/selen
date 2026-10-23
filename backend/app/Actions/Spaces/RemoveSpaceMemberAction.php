@@ -3,7 +3,6 @@
 namespace App\Actions\Spaces;
 
 use App\Enums\EventType;
-use App\Enums\SpaceRole;
 use App\Models\AccessGrant;
 use App\Models\Space;
 use App\Models\User;
@@ -28,9 +27,9 @@ class RemoveSpaceMemberAction
         DB::transaction(function () use ($actor, $space, $user) {
             $space = $this->guard->lock($space);
             $grant = $this->grants->personal($space, $user) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
-            $role = $grant->standardRole()->legacyRole();
+            $role = $this->grants->standardRoleOf($grant)->legacyRole();
 
-            if ($role === SpaceRole::Admin) {
+            if ($this->guard->managesAccess($grant)) {
                 $this->guard->ensureAnotherAdminRemains($space, $user);
             }
 

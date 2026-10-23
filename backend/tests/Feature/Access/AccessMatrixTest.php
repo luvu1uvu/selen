@@ -237,7 +237,7 @@ it('commenter ничего не может изменить', function (string $
 
     $response = ($this->call)($method, $path);
 
-    $level === 'member' ? expect($response->getStatusCode())->not->toBeIn([403, 404]) : $response->assertForbidden();
+    $level === 'member' ? expectAllowed($response) : $response->assertForbidden();
 })->with(spaceEndpoints());
 
 it('editor не меняет структуру и участников', function (string $method, string $path, string $level) {
@@ -247,7 +247,7 @@ it('editor не меняет структуру и участников', functi
 
     in_array($level, ['admin', 'author', 'sysadmin'], true)
         ? $response->assertForbidden()
-        : expect($response->getStatusCode())->not->toBeIn([403, 404]);
+        : expectAllowed($response);
 })->with(spaceEndpoints());
 
 /** Участник пространства в режиме «только свои карточки» — лично или через группу. */
@@ -264,6 +264,12 @@ function restrictedMember($test, SpaceRole $role, string $source = 'personal')
     addToSpace($test->space, $user, StandardRole::fromLegacy($role, ownCardsOnly: true));
 
     return $user;
+}
+
+/** Разрешено: сервер ответил не 403 / 404 и без ошибки (422 и 409 — отказ по данным, а не по правам). */
+function expectAllowed($response, string $context = ''): void
+{
+    expect($response->getStatusCode())->toBeLessThan(500, $context)->not->toBeIn([403, 404], $context);
 }
 
 /** Прежнее правило уровней ролей (до «Прав 2.0») — заморожено здесь как эталон поведения. */
@@ -310,7 +316,7 @@ function matrixPermissions(): array
 function expectByLevel($response, string $level, SpaceRole $role, string $context = ''): void
 {
     allowedByLevel($level, $role)
-        ? expect($response->getStatusCode())->not->toBeIn([403, 404], $context)
+        ? expectAllowed($response, $context)
         : $response->assertForbidden();
 }
 
@@ -340,7 +346,7 @@ it('в режиме «только свои карточки» своя карт
             $response = ($this->call)($method, $path);
             $allowed = $level === 'member' || ($level === 'editor' && $role === SpaceRole::Editor);
             $allowed
-                ? expect($response->getStatusCode())->not->toBeIn([403, 404], "{$how}, {$role->value}, {$source}")
+                ? expectAllowed($response, "{$how}, {$role->value}, {$source}")
                 : $response->assertForbidden();
 
             // Вернуть карточку в исходное состояние для следующей комбинации
@@ -457,31 +463,33 @@ it('у маршрута ровно его право каталога: роль 
         $response = ($this->call)($method, $path);
 
         allowedByPermission($required, [$permission])
-            ? expect($response->getStatusCode())->not->toBeIn([403, 404], $permission->value)
+            ? expectAllowed($response, $permission->value)
             : $response->assertForbidden();
     }
 })->with(spaceEndpoints());
 
-it('то же право через группу и «Все сотрудники» действует так же, как лично', function (string $method, string $path, string $level, Permission|string $required) {
-    $permissions = $required instanceof Permission ? [$required] : [];
-    $role = makeRole($permissions);
+it('право через группу и «Все сотрудники» действует так же, как лично', function (string $method, string $path, string $level, Permission|string $required, string $source) {
+    $other = collect(matrixPermissions())->first(fn (Permission $p) => $p !== $required);
+    $with = $required instanceof Permission ? [$required] : [];
     $user = member();
-    grantAccess($this->space, addToGroup(makeGroup(), $user), $role);
+    // «Все сотрудники»: состав не хранится — пользователь входит в неё сам, потому что активен
+    $group = $source === 'group' ? addToGroup(makeGroup(), $user) : Group::everyone();
+    $grant = grantAccess($this->space, $group, makeRole([$other]));
     $this->actingAs($user);
 
+    // Сначала без права маршрута (другое право): ничего не меняется, разрешено только чтение
     $response = ($this->call)($method, $path);
-    allowedByPermission($required, $permissions)
-        ? expect($response->getStatusCode())->not->toBeIn([403, 404], 'через группу')
+    allowedByPermission($required, [$other])
+        ? expectAllowed($response, "{$source}: {$other->value}")
         : $response->assertForbidden();
 
-    // «Все сотрудники»: выдача группе, состав которой вычисляется
-    $everyone = member();
-    grantAccess($this->space, Group::everyone(), makeRole([]));
-    $this->actingAs($everyone);
-    allowedByPermission($required, [])
-        ? expect(($this->call)($method, $path)->getStatusCode())->not->toBeIn([403, 404], '«Все сотрудники»: только чтение')
-        : ($this->call)($method, $path)->assertForbidden();
-})->with(spaceEndpoints());
+    // С правом маршрута — разрешено (кроме author и sysadmin)
+    $grant->forceFill(['role_id' => makeRole($with)->id])->save();
+    $response = ($this->call)($method, $path);
+    allowedByPermission($required, $with)
+        ? expectAllowed($response, "{$source}: право маршрута")
+        : $response->assertForbidden();
+})->with(spaceEndpoints())->with(['group', 'everyone']);
 
 it('область роли «свои карточки»: чужая карточка — 404, на своей действует право роли', function (string $method, string $path, string $level, Permission|string $required) {
     $permissions = $required instanceof Permission ? [$required] : [];
@@ -494,7 +502,7 @@ it('область роли «свои карточки»: чужая карто
     Card::query()->whereKey($this->card->id)->update(['responsible_id' => $user->id]);
     $response = ($this->call)($method, $path);
     allowedByPermission($required, $permissions)
-        ? expect($response->getStatusCode())->not->toBeIn([403, 404], 'своя карточка')
+        ? expectAllowed($response, 'своя карточка')
         : $response->assertForbidden();
 })->with(cardEndpoints());
 

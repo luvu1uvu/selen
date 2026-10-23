@@ -29,8 +29,8 @@ class SpaceGroupResource extends JsonResource
                 'archived_at' => $this->group->archived_at?->toIso8601ZuluString(),
                 'members_count' => $this->group->membersCount(),
             ],
-            'role' => $this->standardRole()->legacyRole(),
-            'own_cards_only' => $this->standardRole()->ownCardsOnly(),
+            'role' => $this->legacyRole(),
+            'own_cards_only' => $this->ownCardsOnly(),
             'added_at' => $this->created_at->toIso8601ZuluString(),
         ];
     }

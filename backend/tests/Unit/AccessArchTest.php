@@ -23,22 +23,28 @@ arch('выдачи доступа: читает для прав точка пр�
         'Tests',
     ]);
 
-it('права ролей (role_permissions) читает только App\Services\Access', function () {
+it('таблицы прав запросами читает только App\Services\Access (модели — только связи)', function () {
     $app = realpath(__DIR__.'/../../app');
     $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($app, FilesystemIterator::SKIP_DOTS));
     $readers = [];
 
     foreach ($files as $file) {
         $path = $file->getPathname();
-        if ($file->getExtension() !== 'php' || str_starts_with($path, "{$app}/Services/Access/")) {
+        $relative = substr($path, strlen($app) + 1);
+        if ($file->getExtension() !== 'php' || str_starts_with($relative, 'Services/Access/')) {
             continue;
         }
 
         // Только строки кода: упоминание в комментарии — не чтение
         foreach (token_get_all((string) file_get_contents($path)) as $token) {
-            if (is_array($token) && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
-                && str_contains($token[1], 'role_permissions')) {
-                $readers[] = substr($path, strlen($app) + 1);
+            if (! is_array($token) || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+                continue;
+            }
+            $text = trim($token[1], "'\"");
+            // Права ролей — только резолвер; выдачи, роли и состав групп целой таблицей — ещё связи моделей
+            $tableOnly = in_array($text, ['access_grants', 'roles', 'group_members'], true);
+            if (str_contains($text, 'role_permissions') || ($tableOnly && ! str_starts_with($relative, 'Models/'))) {
+                $readers[] = "{$relative}: {$text}";
             }
         }
     }

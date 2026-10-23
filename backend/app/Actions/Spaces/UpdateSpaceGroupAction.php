@@ -38,8 +38,8 @@ class UpdateSpaceGroupAction
             $space = $this->guard->lock($space);
             $grant = $this->grants->ofGroup($space, $group) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
 
-            $fromRole = $grant->standardRole()->legacyRole();
-            $fromRestricted = $grant->standardRole()->ownCardsOnly();
+            $fromRole = $this->grants->standardRoleOf($grant)->legacyRole();
+            $fromRestricted = $grant->ownCardsOnly();
             $toRole = $role ?? $fromRole;
             $toRestricted = $toRole->canManageSpace() ? false : ($ownCardsOnly ?? $fromRestricted);
 

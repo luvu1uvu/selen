@@ -7,6 +7,7 @@ use App\Enums\StandardRole;
 use App\Models\Role;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /*
 | Каталог прав и стандартные роли (docs/adr/0024-rights-2.md, П2a). Права стандартных ролей ведут миграции;
@@ -78,9 +79,39 @@ it('база не даёт роли с областью «свои карточ�
     expect(fn () => DB::transaction(fn () => DB::table('role_permissions')->insert(['role_id' => $own->id, 'permission' => 'space.manage_access'])))
         ->toThrow(QueryException::class, 'a role limited to own cards cannot manage access');
 
-    $admin = standardRole(StandardRole::Admin);
-    expect(fn () => DB::transaction(fn () => DB::table('roles')->where('id', $admin->id)->update(['card_scope' => 'own'])))
+    $manager = makeRole([Permission::SpaceManageAccess]);
+    expect(fn () => DB::transaction(fn () => DB::table('roles')->where('id', $manager->id)->update(['card_scope' => 'own'])))
         ->toThrow(QueryException::class, 'a role limited to own cards cannot manage access');
+});
+
+it('стандартные роли и их права меняют только миграции (владелец схемы), не приложение', function () {
+    $editor = standardRole(StandardRole::Editor);
+    $denied = 'standard roles are changed only by migrations';
+
+    foreach ([
+        'переименовать' => fn () => DB::table('roles')->where('id', $editor->id)->update(['name' => 'Другое']),
+        'удалить' => fn () => DB::table('role_permissions')->where('role_id', $editor->id)->where('permission', 'card.update')->delete(),
+        'добавить право' => fn () => DB::table('role_permissions')->insert(['role_id' => $editor->id, 'permission' => 'board.create']),
+        'новая стандартная' => fn () => DB::table('roles')->insert([
+            'id' => strtolower((string) Str::ulid()), 'key' => 'reader', 'name' => 'Читатель', 'card_scope' => 'all', 'position' => 'a9',
+        ]),
+    ] as $what => $change) {
+        expect(fn () => DB::transaction($change))->toThrow(QueryException::class, $denied);
+    }
+
+    // Пользовательскую роль (П2e) приложение меняет само
+    $custom = makeRole([Permission::CardComment]);
+    DB::table('role_permissions')->insert(['role_id' => $custom->id, 'permission' => 'card.update']);
+    expect(DB::table('role_permissions')->where('role_id', $custom->id)->count())->toBe(5);
+
+    // Владелец схемы (миграции) — может; его транзакция откатывается
+    $owner = DB::connection('pgsql_owner');
+    $owner->beginTransaction();
+    try {
+        expect($owner->table('roles')->where('key', 'editor')->update(['name' => 'Редактор (миграция)']))->toBe(1);
+    } finally {
+        $owner->rollBack();
+    }
 });
 
 it('выдача — ровно одному субъекту, у субъекта на узле одна роль (до П2d)', function () {

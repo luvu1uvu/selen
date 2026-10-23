@@ -83,6 +83,7 @@ return new class extends Migration
         DB::unprepared(<<<'SQL'
             DROP FUNCTION IF EXISTS role_permissions_scope_check();
             DROP FUNCTION IF EXISTS roles_scope_check();
+            DROP FUNCTION IF EXISTS standard_roles_guard();
             SQL);
     }
 
@@ -145,6 +146,37 @@ return new class extends Migration
                 FOR EACH ROW EXECUTE FUNCTION role_permissions_scope_check();
             CREATE TRIGGER roles_scope_check BEFORE UPDATE OF card_scope ON roles
                 FOR EACH ROW EXECUTE FUNCTION roles_scope_check();
+            SQL);
+
+        // Стандартные роли и их права меняют только миграции — владелец таблицы (ADR-0016), не роль приложения.
+        // Пользовательские роли (key пуст, П2e) приложение ведёт само.
+        DB::unprepared(<<<'SQL'
+            CREATE OR REPLACE FUNCTION standard_roles_guard() RETURNS trigger
+            LANGUAGE plpgsql AS $$
+            DECLARE
+                standard boolean;
+            BEGIN
+                IF TG_TABLE_NAME = 'roles' THEN
+                    standard := OLD.key IS NOT NULL OR NEW.key IS NOT NULL;
+                ELSE
+                    standard := EXISTS (SELECT 1 FROM roles WHERE key IS NOT NULL AND id IN (OLD.role_id, NEW.role_id));
+                END IF;
+
+                IF standard AND NOT pg_has_role(current_user, (
+                    SELECT tableowner FROM pg_tables WHERE schemaname = current_schema() AND tablename = TG_TABLE_NAME
+                ), 'MEMBER') THEN
+                    RAISE EXCEPTION 'roles: standard roles are changed only by migrations'
+                        USING ERRCODE = 'insufficient_privilege';
+                END IF;
+
+                RETURN COALESCE(NEW, OLD);
+            END;
+            $$;
+
+            CREATE TRIGGER roles_standard_guard BEFORE INSERT OR UPDATE OR DELETE ON roles
+                FOR EACH ROW EXECUTE FUNCTION standard_roles_guard();
+            CREATE TRIGGER role_permissions_standard_guard BEFORE INSERT OR UPDATE OR DELETE ON role_permissions
+                FOR EACH ROW EXECUTE FUNCTION standard_roles_guard();
             SQL);
 
         $now = now();

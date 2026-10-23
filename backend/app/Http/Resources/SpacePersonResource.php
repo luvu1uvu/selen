@@ -50,8 +50,8 @@ class SpacePersonResource extends JsonResource
             'role' => $access->highestRole(),
             // Личная выдача в прежнем виде API: роль + «только свои карточки» (ADR-0024, П2a)
             'personal' => $personal === null ? null : [
-                'role' => $personal->standardRole()->legacyRole(),
-                'own_cards_only' => $personal->standardRole()->ownCardsOnly(),
+                'role' => $personal->legacyRole(),
+                'own_cards_only' => $personal->ownCardsOnly(),
                 'added_at' => $personal->created_at->toIso8601ZuluString(),
             ],
             'groups' => collect($access->sources)

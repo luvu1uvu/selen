@@ -30,14 +30,14 @@ class ChangeSpaceMemberRoleAction
         return DB::transaction(function () use ($actor, $space, $user, $role, $via) {
             $space = $this->guard->lock($space);
             $grant = $this->grants->personal($space, $user) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
-            $current = $grant->standardRole();
+            $current = $this->grants->standardRoleOf($grant);
             $from = $current->legacyRole();
 
             if ($from === $role) {
                 return $grant;
             }
 
-            if ($from === SpaceRole::Admin) {
+            if ($this->guard->managesAccess($grant)) {
                 $this->guard->ensureAnotherAdminRemains($space, $user);
             }
 
@@ -51,7 +51,7 @@ class ChangeSpaceMemberRoleAction
                 'via' => $via,
             ]));
 
-            if ($wasRestricted && ! $grant->standardRole()->ownCardsOnly()) {
+            if ($wasRestricted && ! $grant->ownCardsOnly()) {
                 $this->events->record(EventType::SpaceMemberRestrictionChanged, $actor, $space, [
                     'user_id' => $user->id,
                     'from' => true,
