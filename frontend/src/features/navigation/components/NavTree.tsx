@@ -1,4 +1,4 @@
-import { useRef, type ReactElement, type ReactNode } from 'react'
+import { useRef, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, matchPath, useLocation, useSearchParams } from 'react-router'
 import { ChevronRight } from 'lucide-react'
@@ -38,6 +38,14 @@ const EMPTY_MARK_RIGHT = 58
  */
 function MarkSpace() {
   return <span aria-hidden className="size-3.5 shrink-0" />
+}
+
+/**
+ * Щелчок по значку поверх строки — как по самой строке (ссылке или кнопке — первый элемент строки): значок не должен
+ * быть «мёртвой зоной» посреди строки.
+ */
+function clickRow(event: MouseEvent<HTMLElement>) {
+  ;(event.currentTarget.parentElement?.firstElementChild as HTMLElement | null)?.click()
 }
 
 /**
@@ -191,12 +199,14 @@ export function NavTree({
                   folder
                   className="absolute top-1/2 -translate-y-1/2"
                   style={{ left: markLeft(depth) }}
+                  onClick={clickRow}
                 />
               )}
               {node.empty && (
                 <EmptyFolderMark
                   className="absolute top-1/2 -translate-y-1/2"
                   style={{ right: EMPTY_MARK_RIGHT }}
+                  onClick={clickRow}
                 />
               )}
               {actions?.(node, depth)}
@@ -237,6 +247,7 @@ export function NavTree({
                 <EveryoneMark
                   className="absolute top-1/2 -translate-y-1/2"
                   style={{ left: markLeft(depth) }}
+                  onClick={clickRow}
                 />
               )}
               {node.boards.length > 0 && (

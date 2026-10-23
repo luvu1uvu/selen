@@ -23,6 +23,9 @@ class ResizeObserverStub {
 }
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 Element.prototype.hasPointerCapture ??= () => false
+// sonner захватывает указатель при нажатии на уведомление (смахивание)
+Element.prototype.setPointerCapture ??= () => {}
+Element.prototype.releasePointerCapture ??= () => {}
 Element.prototype.scrollIntoView ??= () => {}
 
 // Визуальный редактор (ProseMirror) меряет положение выделения — в jsdom у Range этих методов нет

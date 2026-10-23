@@ -90,8 +90,9 @@ describe('Панель «Дерево»', () => {
   it('значок «доступно всем» — у открытого всем пространства и у папки, подсказка по наведению и фокусу (LATER-88)', async () => {
     signedInAs(member)
     withTree()
+    server.use(http.get('*/api/v1/spaces/IOS', () => HttpResponse.json({ data: ios })))
     const user = userEvent.setup()
-    renderApp('/')
+    const { router } = renderApp('/')
 
     const nav = await treeNav()
     const folder = await within(nav).findByRole('button', { name: /Mobile/ })
@@ -109,7 +110,9 @@ describe('Панель «Дерево»', () => {
     await user.keyboard('{Escape}')
     expect(within(nav).queryByRole('img', { name: 'Доступно всем сотрудникам' })).toBeNull()
 
-    await user.click(folder)
+    // Щелчок по значку — как по строке: папка раскрывается (значок не «мёртвая зона» посреди строки)
+    await user.click(folderMark)
+    expect(folder).toHaveAttribute('aria-expanded', 'true')
     await waitFor(() => expect(linkTo(nav, '/spaces/IOS')).toBeDefined())
     const spaceMark = within(nav).getByRole('img', { name: 'Доступно всем сотрудникам' })
     expect(linkTo(nav, '/spaces/IOS')).not.toContainElement(spaceMark)
@@ -118,6 +121,10 @@ describe('Панель «Дерево»', () => {
     await user.tab()
     expect(spaceMark).toHaveFocus()
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Доступно всем сотрудникам')
+
+    // Щелчок по значку пространства открывает пространство
+    await user.click(spaceMark)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/spaces/IOS'))
   })
 
   describe('длинное название — «…», полное в подсказке у строки (LATER-109)', () => {

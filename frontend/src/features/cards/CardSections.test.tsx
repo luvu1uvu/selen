@@ -207,7 +207,14 @@ describe('Карточка: люди, поля, метки', () => {
     await userEvent.click(main.getByRole('menuitem', { name: 'План, ч' }))
     const estimate = await within(section).findByLabelText('План, ч')
     await vi.waitFor(() => expect(estimate).toHaveFocus())
-    await userEvent.type(estimate, '3{Enter}')
+    // Неверное значение — строка остаётся, с введённым текстом и ошибкой; на сервер ничего не уходит
+    await userEvent.type(estimate, '1,3{Enter}')
+    expect(await within(section).findByText(/шагом 0,5 часа/)).toBeInTheDocument()
+    expect(within(section).getByLabelText('План, ч')).toHaveValue('1,3')
+    expect(calls).toEqual([])
+
+    await userEvent.clear(within(section).getByLabelText('План, ч'))
+    await userEvent.type(within(section).getByLabelText('План, ч'), '3{Enter}')
     await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ estimate_hours: 3 }))
     expect(within(section).getByLabelText('План, ч')).toHaveValue('3')
 

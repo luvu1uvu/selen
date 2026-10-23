@@ -237,6 +237,27 @@ describe('Карточка: описание, комментарии, чек-л�
     )
   })
 
+  it('обрезанное название ссылки — целиком в подсказке у ссылки, без title (ревью пачки UX-2)', async () => {
+    // jsdom не считает раскладку: «не помещается» — текст длиннее 20 символов
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return (this.textContent?.length ?? 0) > 20 ? 300 : 50
+    })
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100)
+    const title = 'Макет экрана оформления заказа, версия для планшета'
+    serve(makeCardDetail({ links: [{ id: 'l1', url: 'https://figma.com/x', title }] }))
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    const link = within(panel).getByRole('link', { name: title })
+    expect(link).not.toHaveAttribute('title')
+    // Без setup(): его заглушка буфера обмена осталась бы для следующих тестов файла
+    await userEvent.hover(link)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(title)
+    vi.restoreAllMocks()
+  })
+
   it('ссылки: только http и https', async () => {
     const calls = serve(makeCardDetail())
     renderApp('/cards/DEV-1')

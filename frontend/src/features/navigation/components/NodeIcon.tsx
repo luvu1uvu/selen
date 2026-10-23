@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, MouseEventHandler } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Boxes, EyeOff, Folder, SquareKanban, UsersRound } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
@@ -40,9 +40,11 @@ const markFocus = 'focus-visible:ring-ring rounded-sm outline-none focus-visible
 export function EmptyFolderMark({
   className,
   style,
+  onClick,
 }: {
   className?: string
   style?: CSSProperties
+  onClick?: MouseEventHandler<HTMLElement>
 }) {
   const { t } = useTranslation('spaces')
   return (
@@ -52,6 +54,7 @@ export function EmptyFolderMark({
           tabIndex={0}
           className={cn('text-muted-foreground text-xs whitespace-nowrap', markFocus, className)}
           style={style}
+          onClick={onClick}
         >
           {t('tree.emptyFolder')}
         </span>
@@ -69,10 +72,13 @@ export function EveryoneMark({
   folder = false,
   className,
   style,
+  onClick,
 }: {
   folder?: boolean
   className?: string
   style?: CSSProperties
+  /** В дереве — щелчок как по строке (значок лежит поверх неё). */
+  onClick?: MouseEventHandler<HTMLElement>
 }) {
   const { t } = useTranslation('spaces')
   const label = folder ? t('tree.folderEveryone') : t('tree.everyone')
@@ -85,6 +91,7 @@ export function EveryoneMark({
           tabIndex={0}
           className={cn('flex shrink-0', markFocus, className)}
           style={style}
+          onClick={onClick}
         >
           <UsersRound aria-hidden className="text-muted-foreground size-3.5" />
         </span>

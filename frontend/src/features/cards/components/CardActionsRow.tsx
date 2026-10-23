@@ -89,7 +89,10 @@ export function CardActionsRow({
                   {card.archived_at ? t('card.restoreFromArchive') : t('card.archive')}
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onSelect={copyLink}>{t('card.copyLink')}</DropdownMenuItem>
+              {/* Буфер недоступен — откроется окно ручного копирования: как пункт, открывающий окно */}
+              <DropdownMenuItem onSelect={opensDialog(() => void copyLink())}>
+                {t('card.copyLink')}
+              </DropdownMenuItem>
               {card.permissions.delete && (
                 <>
                   <DropdownMenuSeparator />

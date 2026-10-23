@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { cn } from '@/shared/lib/utils'
 import { useRestoreFocus } from './restore-focus'
+import { keepOpenOnToast } from './toast-outside'
 import { XIcon } from 'lucide-react'
 import { Dialog as SheetPrimitive } from 'radix-ui'
 
@@ -43,6 +44,7 @@ function SheetContent({
   showCloseButton = true,
   closeLabel = 'Close',
   onCloseAutoFocus,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   /** Подпись кнопки закрытия для скринридеров — передаётся из i18n. */
@@ -69,6 +71,7 @@ function SheetContent({
           className,
         )}
         {...restoreFocus}
+        onInteractOutside={keepOpenOnToast(onInteractOutside)}
         {...props}
       >
         {children}

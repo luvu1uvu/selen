@@ -113,6 +113,7 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
           </>
         )}
       </div>
+      {copy.dialog}
     </header>
   )
 }

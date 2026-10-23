@@ -149,6 +149,26 @@ describe('Окно карточки', () => {
       expect(await navigator.clipboard.readText()).toBe(`${location.origin}/cards/DEV-1`)
     })
 
+    it('буфер недоступен — номер открывает окно с ссылкой для ручного копирования (U-6 UX-ревью UI-1b)', async () => {
+      serveCard(makeCardDetail())
+      renderApp('/cards/DEV-1')
+      const window = await screen.findByRole('dialog', { name: 'Первая' })
+
+      // Буфера обмена нет — как у страницы не на https (заглушку буфера мог оставить setup() предыдущего теста)
+      const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+      try {
+        await userEvent.click(within(window).getByRole('button', { name: /^DEV-1\./ }))
+        const manual = await screen.findByRole('dialog', { name: 'Скопируйте ссылку' })
+        expect(within(manual).getByRole('textbox', { name: 'Ссылка' })).toHaveValue(
+          `${location.origin}/cards/DEV-1`,
+        )
+      } finally {
+        if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard)
+        else Reflect.deleteProperty(navigator, 'clipboard')
+      }
+    })
+
     it('название правится на месте: Enter сохраняет, Esc отменяет правку и не закрывает окно', async () => {
       const patches = serveCard(makeCardDetail())
       const { router } = renderApp('/cards/DEV-1')

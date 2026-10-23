@@ -40,7 +40,7 @@ function useActiveCardTypes(enabled: boolean) {
   })
 }
 
-/** Сохранить поля карточки с уведомлением «Сохранено» или текстом ошибки. */
+/** Сохранить поля карточки с уведомлением «Сохранено» или текстом ошибки; true — сохранено. */
 function useSave(cardKey: string) {
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
@@ -49,8 +49,10 @@ function useSave(cardKey: string) {
     try {
       await update.mutateAsync(payload)
       toast.success(t('card.saved'))
+      return true
     } catch (error) {
       toast.error(getErrorMessage(error, tc('errors.generic')))
+      return false
     }
   }
   return { save, pending: update.isPending }
@@ -511,7 +513,8 @@ function UrgentField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) 
 
 /**
  * План в часах, шаг 0,5. Строка видна, пока план задан или его только что добавили через «+» (поле сразу в фокусе);
- * ушли из поля — `onDone`: очищенный или так и не заданный план строку убирает.
+ * `onDone` — правка закончена (сохранено, пусто или Esc): очищенный или так и не заданный план строку убирает. Неверное
+ * значение или ошибка сервера строку оставляют — с введённым текстом и ошибкой.
  */
 function EstimateField({
   card,
@@ -544,15 +547,15 @@ function EstimateField({
     )
   }
 
-  const commit = () => {
+  const commit = async () => {
     const value = estimate.trim().replace(',', '.')
     const hours = value === '' ? null : Number(value)
     if (hours !== null && (Number.isNaN(hours) || hours < 0 || (hours * 2) % 1 !== 0)) {
       setError(t('fields.estimateInvalid'))
-      return
+      return false
     }
     setError(null)
-    if (hours !== card.estimate_hours) void save({ estimate_hours: hours })
+    return hours === card.estimate_hours || save({ estimate_hours: hours })
   }
 
   return (
@@ -570,9 +573,12 @@ function EstimateField({
         data-own-escape
         onChange={(event) => setEstimate(event.target.value)}
         onBlur={() => {
-          if (cancelled.current) cancelled.current = false
-          else commit()
-          onDone?.()
+          if (cancelled.current) {
+            cancelled.current = false
+            onDone?.()
+          } else {
+            void commit().then((done) => done && onDone?.())
+          }
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur()

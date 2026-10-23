@@ -170,12 +170,9 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
             last.focus()
           }}
           onInteractOutside={(event) => {
-            // Список подсказки @ и уведомления — вне окна, но щелчок по ним — не «мимо окна»
+            // Список подсказки @ — вне окна, но щелчок по нему — не «мимо окна» (уведомления — так у всех окон, DialogContent)
             const target = event.target
-            if (
-              target instanceof Element &&
-              target.closest(`[${RICH_TEXT_POPUP_ATTRIBUTE}], [data-sonner-toaster]`)
-            )
+            if (target instanceof Element && target.closest(`[${RICH_TEXT_POPUP_ATTRIBUTE}]`))
               event.preventDefault()
           }}
         >

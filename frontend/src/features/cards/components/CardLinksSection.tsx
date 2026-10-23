@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
-import type { CardDetail } from '@/shared/types/api'
+import type { CardDetail, CardLink } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Hint } from '@/shared/components/Hint'
+import { TruncatedTrigger } from '@/shared/components/TruncatedText'
 import { linkApi } from '../api'
 import { useUnsavedText } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
@@ -18,6 +19,25 @@ function domainOf(url: string) {
   } catch {
     return ''
   }
+}
+
+/** Ссылка карточки: название (или адрес); обрезанное — целиком в подсказке у ссылки (правила вида, раздел 6). */
+function LinkTitle({ link }: { link: CardLink }) {
+  const ref = useRef<HTMLAnchorElement>(null)
+  const text = link.title || link.url
+  return (
+    <TruncatedTrigger text={text} nameRef={ref}>
+      <a
+        ref={ref}
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        className="min-w-0 truncate hover:underline"
+      >
+        {text}
+      </a>
+    </TruncatedTrigger>
+  )
 }
 
 /**
@@ -74,14 +94,7 @@ export function CardLinksSection({
         {card.links.map((link) => (
           <li key={link.id} className="flex items-center gap-2 text-sm">
             <ExternalLink className="text-muted-foreground size-4 shrink-0" aria-hidden />
-            <a
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer nofollow"
-              className="truncate hover:underline"
-            >
-              {link.title || link.url}
-            </a>
+            <LinkTitle link={link} />
             {/* У ссылки с названием — куда она ведёт: домен серым (V-6 UX-ревью UI-1a); без названия адрес и так виден */}
             {link.title && (
               <span className="text-muted-foreground shrink-0 text-xs">{domainOf(link.url)}</span>
