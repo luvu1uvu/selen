@@ -27,6 +27,10 @@ describe('appReturnPath — возврат на страницу приложе�
       '/login',
       '/forgot-password',
       '/files/01ja0000000000000000000000',
+      // «..» браузер схлопнул бы — адрес вёл бы не туда, куда показывает проверка (аудит LATER-104, S-1)
+      '/cards/../files/01ja0000000000000000000000',
+      '/cards/%2e%2e/files/01ja0000000000000000000000',
+      '/spaces/x/..//evil.example',
     ])
       expect(appReturnPath(from), String(from)).toBeNull()
   })

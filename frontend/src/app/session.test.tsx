@@ -232,7 +232,7 @@ describe('Сессия вкладки', () => {
       }),
     )
     const user = userEvent.setup()
-    const { queryClient } = renderApp('/admin/structure')
+    const { queryClient, router } = renderApp('/admin/structure')
     await waitFor(() => expect(newFolderMark()).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Администрирование' }))
     expect(queryClient.getQueryData(['spaces', 'navigation'])).toEqual(trees[admin.id])
@@ -248,9 +248,34 @@ describe('Сессия вкладки', () => {
     await user.type(screen.getByLabelText('Пароль'), 'password-123')
     await user.click(screen.getByRole('button', { name: 'Войти' }))
     expect(await userMenu()).toHaveTextContent('Ольга Владелец')
+    // На страницу, где была вкладка, возвращается только тот же пользователь; другой — на главную (аудит LATER-104, S-2)
+    expect(router.state.location.pathname).toBe('/')
     await waitFor(() =>
       expect(queryClient.getQueryData(['spaces', 'navigation'])).toEqual(trees[owner.id]),
     )
+  })
+
+  it('сессия закончилась, вошёл тот же пользователь — он снова на той же странице (LATER-104)', async () => {
+    const session = serveSession()
+    server.use(
+      http.post('*/api/v1/auth/login', () => {
+        session.user = admin
+        return HttpResponse.json({ data: admin })
+      }),
+    )
+    const user = userEvent.setup()
+    const { router } = renderApp('/admin/structure')
+    await waitFor(() => expect(newFolderMark()).toBeInTheDocument())
+
+    session.user = null
+    await user.click(screen.getByRole('button', { name: 'Администрирование' }))
+    await user.click(screen.getByRole('link', { name: 'Пользователи' }))
+    expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Email'), 'admin@selen.test')
+    await user.type(screen.getByLabelText('Пароль'), 'password-123')
+    await user.click(screen.getByRole('button', { name: 'Войти' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/admin/users'))
   })
 
   it('запрос ушёл без пользователя вкладки (409 session_unverified) — данные перезагружаются', async () => {

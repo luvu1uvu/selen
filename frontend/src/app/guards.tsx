@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, Outlet, useLocation } from 'react-router'
 import { useCurrentUser } from '@/features/auth/queries'
@@ -15,18 +15,33 @@ function FullPageLoader() {
   )
 }
 
+/** Куда вернуть после входа (`RequireAuth` → `RequireGuest`) и кого: сессия закончилась — её пользователь. */
+interface ReturnState {
+  from?: unknown
+  userId?: unknown
+}
+
 /**
  * Только для вошедших пользователей; остальных отправляет на /login и запоминает, откуда (с параметрами адреса:
- * `?board=` открытой доски), — после входа `RequireGuest` вернёт туда (LATER-104).
+ * `?board=` открытой доски), — после входа `RequireGuest` вернёт туда (LATER-104). Если на вход отправила
+ * закончившаяся сессия (401), запоминается и её пользователь: вернётся на страницу только он, другой войдёт на главную
+ * и не увидит в адресе, что открывал прежний (аудит LATER-104, S-2). Гость по ссылке — без пользователя: вернётся
+ * любой вошедший.
  */
 export function RequireAuth() {
   const { data: user, isPending } = useCurrentUser()
   const location = useLocation()
+  // Последний вошедший в этой вкладке (подстройка состояния при рендере): после 401 пользователь уже null
+  const [lastUser, setLastUser] = useState<string | null>(null)
+  if (user && user.id !== lastUser) setLastUser(user.id)
 
   if (isPending) return <FullPageLoader />
   if (!user) {
-    const from = location.pathname + location.search + location.hash
-    return <Navigate to="/login" replace state={{ from }} />
+    const state: ReturnState = {
+      from: location.pathname + location.search + location.hash,
+      userId: lastUser ?? undefined,
+    }
+    return <Navigate to="/login" replace state={state} />
   }
   return <Outlet />
 }
@@ -76,7 +91,9 @@ export function RequireGuest() {
   if (isPending) return <FullPageLoader />
   if (file) return <OpeningFile />
   if (user) {
-    const from = appReturnPath((location.state as { from?: unknown } | null)?.from)
+    const state = location.state as ReturnState | null
+    const sameUser = state?.userId === undefined || state.userId === user.id
+    const from = sameUser ? appReturnPath(state?.from) : null
     return <Navigate to={from ?? '/'} replace />
   }
   return <Outlet />
