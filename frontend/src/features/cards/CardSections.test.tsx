@@ -72,6 +72,22 @@ describe('Карточка: люди, поля, метки', () => {
     )
   })
 
+  it('«Снять ответственного» — первым пунктом, над списком людей (U-13 UX-ревью UI-1a)', async () => {
+    const calls = serveCard(
+      makeCardDetail({ responsible: { id: 'u2', name: 'Вера', status: 'active', in_space: true } }),
+    )
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    await userEvent.click(within(panel).getByRole('button', { name: /Вера/ }))
+    const list = await screen.findByRole('listbox')
+    await within(list).findByRole('option', { name: 'Борис' })
+    const options = within(list).getAllByRole('option')
+    expect(options[0]).toHaveTextContent('Снять ответственного')
+    await userEvent.click(options[0])
+    await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ responsible_id: null }))
+  })
+
   it('назначает ответственного и участников из участников пространства, кроме деактивированных', async () => {
     const calls = serveCard(
       makeCardDetail({

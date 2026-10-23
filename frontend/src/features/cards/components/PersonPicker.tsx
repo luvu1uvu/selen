@@ -71,7 +71,10 @@ export function PersonPicker({
   current?: CardPerson[]
   multiple?: boolean
   disabled?: boolean
-  /** Пункт под списком (например, «Снять ответственного»): получает функцию закрытия. */
+  /**
+   * Пункт над списком людей (например, «Снять ответственного»: в конце длинного списка его не найти — U-13 UX-ревью
+   * UI-1a); получает функцию закрытия.
+   */
   extra?: (close: () => void) => ReactNode
   onSelect: (user: UserRef) => void
   /** Кнопка, которая открывает список. */
@@ -107,6 +110,12 @@ export function PersonPicker({
             ) : (
               <CommandEmpty>{t('params.nobody')}</CommandEmpty>
             )}
+            {extra && (
+              <>
+                <CommandGroup>{extra(close)}</CommandGroup>
+                <CommandSeparator />
+              </>
+            )}
             <CommandGroup>
               {people.map((user) => (
                 <CommandItem
@@ -133,12 +142,6 @@ export function PersonPicker({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {extra && (
-              <>
-                <CommandSeparator />
-                <CommandGroup>{extra(close)}</CommandGroup>
-              </>
-            )}
           </CommandList>
         </Command>
       </PopoverContent>

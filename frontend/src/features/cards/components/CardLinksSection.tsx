@@ -11,6 +11,15 @@ import { linkApi } from '../api'
 import { useUnsavedText } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
 
+/** Домен ссылки без «www.»; адрес не разобрался — пусто. */
+function domainOf(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
 /**
  * Ссылки на документы, макеты и т. п.: только http и https, необязательное название. Новая — пунктом «+» окна
  * или кнопкой внизу секции (`adding` — форма открыта).
@@ -70,10 +79,13 @@ export function CardLinksSection({
               target="_blank"
               rel="noopener noreferrer nofollow"
               className="truncate hover:underline"
-              title={link.url}
             >
               {link.title || link.url}
             </a>
+            {/* У ссылки с названием — куда она ведёт: домен серым (V-6 UX-ревью UI-1a); без названия адрес и так виден */}
+            {link.title && (
+              <span className="text-muted-foreground shrink-0 text-xs">{domainOf(link.url)}</span>
+            )}
             {canEdit && (
               <Hint label={t('links.remove', { title: link.title || link.url })}>
                 <Button

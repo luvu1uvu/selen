@@ -180,6 +180,10 @@ describe('Карточка: описание, комментарии, чек-л�
       'rel',
       'noopener noreferrer nofollow',
     )
+    // Куда ведёт ссылка с названием — домен серым рядом (V-6 UX-ревью UI-1a)
+    expect(within(panel).getByRole('link', { name: 'Макет' }).nextElementSibling).toHaveTextContent(
+      'figma.com',
+    )
     expect(within(panel).queryByLabelText('Адрес ссылки')).not.toBeInTheDocument()
     expect(within(panel).queryByLabelText('Название нового чек-листа')).not.toBeInTheDocument()
   })
