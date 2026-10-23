@@ -71,6 +71,10 @@
   "badges": {
     "you": "вы"
   },
+  "toasts": {
+    "region": "Уведомления (Alt+T)",
+    "close": "Закрыть уведомление"
+  },
   "richText": {
     "toolbar": "Форматирование",
     "mentionList": "Кого упомянуть",
