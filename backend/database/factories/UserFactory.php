@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Models\Company;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -35,12 +36,32 @@ class UserFactory extends Factory
         ];
     }
 
-    public function admin(): static
+    /**
+     * Каждый пользователь — «дом» в компании (ADR-0024): по умолчанию в «Компании 1» (Company::primary()), иначе —
+     * inCompany(). Состояния ниже заменяют членство целиком (sync) — последнее и действует.
+     */
+    public function configure(): static
     {
-        return $this->state(fn () => ['role' => UserRole::Admin]);
+        return $this->afterCreating(fn (User $user) => $user->companies()->attach(Company::primary()->id, ['kind' => 'home']));
     }
 
-    /** Владелец (ADR-0017): в базе не больше одного. */
+    /** «Дом» в этой компании вместо «Компании 1» (тесты изоляции: человек другой компании). */
+    public function inCompany(Company $company, bool $admin = false): static
+    {
+        return $this->afterCreating(fn (User $user) => $user->companies()->sync([
+            $company->id => ['kind' => 'home', 'is_admin' => $admin],
+        ]));
+    }
+
+    /** Администратор компании (по умолчанию — «Компании 1»). */
+    public function admin(?Company $company = null): static
+    {
+        return $this->afterCreating(fn (User $user) => $user->companies()->sync([
+            ($company ?? Company::primary())->id => ['kind' => 'home', 'is_admin' => true],
+        ]));
+    }
+
+    /** Владелец (ADR-0017): в базе не больше одного; «дом» — «Компания 1», как у Владельца после перехода. */
     public function owner(): static
     {
         return $this->state(fn () => ['role' => UserRole::Owner]);

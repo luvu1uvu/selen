@@ -181,7 +181,7 @@ it('выход завершает сессию и пишет событие', fu
 it('отвечает 401 гостю на защищённых маршрутах', function () {
     $this->getJson('/api/v1/auth/me')->assertUnauthorized();
     $this->postJson('/api/v1/auth/logout')->assertUnauthorized();
-    $this->getJson('/api/v1/admin/users')->assertUnauthorized();
+    $this->getJson(adminPath().'users')->assertUnauthorized();
 });
 
 it('возвращает текущего пользователя', function () {

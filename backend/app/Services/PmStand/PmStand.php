@@ -6,6 +6,7 @@ use App\Enums\ColumnCategory;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Card;
+use App\Models\Company;
 use App\Models\Lane;
 use App\Models\Space;
 use App\Models\User;
@@ -79,6 +80,15 @@ final class PmStand
     public static function space(): ?Space
     {
         return Space::query()->where('key', self::SPACE_KEY)->first();
+    }
+
+    /**
+     * Компания стенда: компания пространства LATER, а до его создания — «Компания 1» (ADR-0024: на стенде всё — в ней,
+     * решение PM 21.10).
+     */
+    public static function company(): Company
+    {
+        return self::space()->company ?? Company::primary();
     }
 
     /** Пространство LATER — или понятная ошибка, если make pm-backlog ещё не запускали. */

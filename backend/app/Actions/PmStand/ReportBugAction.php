@@ -41,7 +41,7 @@ class ReportBugAction
         $space = PmStand::requireSpace();
         $board = PmStand::requireBoard($space, PmStand::BUGS_BOARD);
         $column = PmStand::requireColumn($board, array_key_first(PmStand::BUGS_COLUMNS));
-        $type = CardType::query()->active()->where('name', PmStand::BUG_TYPE)->firstOrFail();
+        $type = CardType::query()->inCompany($space->company_id)->active()->where('name', PmStand::BUG_TYPE)->firstOrFail();
 
         return DB::transaction(function () use ($bot, $owner, $bug, $screenshot, $space, $board, $column, $type) {
             $card = $this->createCard->handle($bot, $board, [

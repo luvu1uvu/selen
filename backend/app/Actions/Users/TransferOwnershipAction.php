@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Передача владения (ADR-0017): получатель становится Владельцем, бывший Владелец — администратором.
+ * Передача владения (ADR-0017): получатель становится Владельцем, бывший Владелец — администратором своих компаний
+ * (ADR-0024). Событие — без компании («о человеке»: его видят администраторы компаний нового и бывшего Владельца).
  * Обе строки меняются в одной транзакции (отложенный триггер БД проверяет, что Владелец не пропал).
  * Из интерфейса — Владелец с подтверждением паролем (TransferOwnershipRequest), аварийно — команда
  * app:transfer-ownership на сервере ($actor = null); она же назначает Владельца, если его нет.
@@ -46,7 +47,11 @@ class TransferOwnershipAction
                 throw ValidationException::withMessages(['user_id' => __('selen.users.no_longer_owner')]);
             }
 
-            $from?->forceFill(['role' => UserRole::Admin])->save();
+            // Бывший Владелец остаётся администратором — своих компаний (ADR-0024: администраторы — у компаний)
+            $from?->forceFill(['role' => UserRole::Member])->save();
+            if ($from !== null) {
+                $from->companies()->newPivotQuery()->update(['is_admin' => true, 'updated_at' => now()]);
+            }
             $to->forceFill(['role' => UserRole::Owner])->save();
 
             $this->events->record(EventType::UserOwnershipTransferred, $actor, $to, [

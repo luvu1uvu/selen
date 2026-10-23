@@ -16,7 +16,7 @@ beforeEach(function () {
     $this->folderB = makeFolder('Папка B');
     foreach (['ONE', 'TWO', 'THREE', 'FOUR'] as $key) {
         $space = space(['key' => $key, 'name' => $key]);
-        grantGroup($space, Group::everyone(), SpaceRole::Commenter);
+        grantGroup($space, Group::everyone(company()), SpaceRole::Commenter);
         $this->{$key} = nodeOf($space);
     }
     placeIn($this->THREE, $this->folderA);
@@ -45,7 +45,7 @@ function structureOrder(array $nodes): array
 
 function expectSameOrder(): array
 {
-    $admin = test()->actingAs(test()->admin)->getJson('/api/v1/admin/navigation')->assertOk()->json('data');
+    $admin = test()->actingAs(test()->admin)->getJson(adminPath().'navigation')->assertOk()->json('data');
     $user = test()->actingAs(test()->user)->getJson('/api/v1/navigation')->assertOk()->json('data');
 
     expect(flatTree($user))->toBe(structureOrder($admin));
@@ -55,7 +55,7 @@ function expectSameOrder(): array
 
 function moveNode(string $id, array $payload): void
 {
-    test()->actingAs(test()->admin)->postJson("/api/v1/admin/nav-nodes/{$id}/move", $payload)->assertOk();
+    test()->actingAs(test()->admin)->postJson(adminPath()."nav-nodes/{$id}/move", $payload)->assertOk();
 }
 
 it('сохраняет порядок «Структуры» после каждого вида перемещения', function () {

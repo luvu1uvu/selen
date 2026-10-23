@@ -21,7 +21,8 @@ it('проходит сквозной сценарий этапа 3', function (
     $people = ['S' => 'admin', 'ivan' => 'member', 'olga' => 'member', 'petr' => 'member', 'yulia' => 'member', 'boris' => 'member'];
     $users = [];
     foreach ($people as $name => $role) {
-        $users[$name] = User::factory()->create(['name' => "Сотрудник {$name}", 'email' => "{$name}@selen.test", 'role' => $role]);
+        // Системный администратор — теперь администратор компании (ADR-0024)
+        $users[$name] = ($role === 'admin' ? User::factory()->admin() : User::factory())->create(['name' => "Сотрудник {$name}", 'email' => "{$name}@selen.test"]);
     }
     $login = function (string $name) {
         $browser = browser('10.0.3.'.(crc32($name) % 250));
@@ -35,14 +36,14 @@ it('проходит сквозной сценарий этапа 3', function (
     // --- 1. Пространства и папка Mobile -------------------------------------------------------
     $spaces = [];
     foreach (['IOS' => ['iOS', '📱'], 'AND' => ['Android', '🤖'], 'FRONT' => ['Frontend', null], 'BACK' => ['Backend', null], 'MGMT' => ['Management', '📊']] as $key => [$name, $icon]) {
-        $spaces[$key] = $s->post('/api/v1/admin/spaces', ['name' => $name, 'key' => $key, 'icon' => $icon])->assertCreated()->json('data.id');
+        $spaces[$key] = $s->post(adminPath().'spaces', ['name' => $name, 'key' => $key, 'icon' => $icon])->assertCreated()->json('data.id');
     }
-    $mobile = $s->post('/api/v1/admin/folders', ['name' => 'Mobile', 'icon' => '📦'])->assertCreated()->json('meta.created_id');
-    $nodes = collect($s->get('/api/v1/admin/navigation')->assertOk()->json('data'))->whereNotNull('space')->keyBy('space.key');
-    $s->post("/api/v1/admin/nav-nodes/{$nodes['IOS']['id']}/move", ['parent_id' => $mobile])->assertOk();
-    $s->post("/api/v1/admin/nav-nodes/{$nodes['AND']['id']}/move", ['parent_id' => $mobile, 'after_id' => $nodes['IOS']['id']])->assertOk();
+    $mobile = $s->post(adminPath().'folders', ['name' => 'Mobile', 'icon' => '📦'])->assertCreated()->json('meta.created_id');
+    $nodes = collect($s->get(adminPath().'navigation')->assertOk()->json('data'))->whereNotNull('space')->keyBy('space.key');
+    $s->post(adminPath()."nav-nodes/{$nodes['IOS']['id']}/move", ['parent_id' => $mobile])->assertOk();
+    $s->post(adminPath()."nav-nodes/{$nodes['AND']['id']}/move", ['parent_id' => $mobile, 'after_id' => $nodes['IOS']['id']])->assertOk();
 
-    $structure = fn () => collect($s->get('/api/v1/admin/navigation')->assertOk()->json('data'))
+    $structure = fn () => collect($s->get(adminPath().'navigation')->assertOk()->json('data'))
         ->map(fn ($n) => str_repeat('  ', $n['depth'] - 1).($n['name'] ?? $n['space']['key']))->all();
     expect($structure())->toBe(['FRONT', 'BACK', 'MGMT', 'Mobile', '  IOS', '  AND']);
 
@@ -61,32 +62,32 @@ it('проходит сквозной сценарий этапа 3', function (
     $s->post('/api/v1/cards/AND-1/move', ['column_id' => $sCell['next'], 'lane_id' => $sCell['lane_id']])->assertOk();
 
     // --- 2. Группы и их доступы ---------------------------------------------------------------
-    $group = fn (string $name) => $s->post('/api/v1/admin/groups', ['name' => $name])->assertCreated()->json('data.id');
+    $group = fn (string $name) => $s->post(adminPath().'groups', ['name' => $name])->assertCreated()->json('data.id');
     $management = $group('Management');
     $analysts = $group('Analysts');
     $contractors = $group('Contractors');
     foreach (['IOS', 'AND', 'FRONT', 'BACK'] as $key) {
-        $s->put("/api/v1/admin/groups/{$management}/spaces/{$spaces[$key]}", ['role' => 'commenter'])->assertOk();
-        $s->put("/api/v1/admin/groups/{$analysts}/spaces/{$spaces[$key]}", ['role' => 'commenter'])->assertOk();
+        $s->put(adminPath()."groups/{$management}/spaces/{$spaces[$key]}", ['role' => 'commenter'])->assertOk();
+        $s->put(adminPath()."groups/{$analysts}/spaces/{$spaces[$key]}", ['role' => 'commenter'])->assertOk();
     }
-    $s->put("/api/v1/admin/groups/{$management}/spaces/{$spaces['MGMT']}", ['role' => 'admin'])->assertOk();
-    $s->put("/api/v1/admin/groups/{$contractors}/spaces/{$spaces['FRONT']}", ['role' => 'editor', 'own_cards_only' => true])->assertOk();
+    $s->put(adminPath()."groups/{$management}/spaces/{$spaces['MGMT']}", ['role' => 'admin'])->assertOk();
+    $s->put(adminPath()."groups/{$contractors}/spaces/{$spaces['FRONT']}", ['role' => 'editor', 'own_cards_only' => true])->assertOk();
 
     // --- 3. Иван: в «Management» сразу видит все пространства, исключён — со следующего запроса 404 ---
     $ivan = $login('ivan');
     $ivan->get('/api/v1/navigation')->assertOk()->assertExactJson(['data' => []]);
-    $s->post("/api/v1/admin/groups/{$management}/members", ['user_id' => $id('ivan')])->assertOk();
+    $s->post(adminPath()."groups/{$management}/members", ['user_id' => $id('ivan')])->assertOk();
     $treeKeys = fn ($browser) => collect($browser->get('/api/v1/navigation')->assertOk()->json('data'))
         ->flatMap(fn ($n) => $n['type'] === 'folder' ? collect($n['children'])->pluck('space.key') : [$n['space']['key']])->all();
     expect($treeKeys($ivan))->toBe(['FRONT', 'BACK', 'MGMT', 'IOS', 'AND']);
     $ivan->get('/api/v1/spaces/MGMT')->assertOk()->assertJsonPath('data.my_role', 'admin');
-    $s->delete("/api/v1/admin/groups/{$management}/members/{$id('ivan')}")->assertNoContent();
+    $s->delete(adminPath()."groups/{$management}/members/{$id('ivan')}")->assertNoContent();
     $ivan->get('/api/v1/spaces/MGMT')->assertNotFound();
     $ivan->get("/api/v1/boards/{$boards['IOS']}")->assertNotFound();
     $ivan->get('/api/v1/navigation')->assertOk()->assertExactJson(['data' => []]);
 
     // --- 4. Ольга: «Analysts» + лично editor в Backend ------------------------------------------
-    $s->post("/api/v1/admin/groups/{$analysts}/members", ['user_id' => $id('olga')])->assertOk();
+    $s->post(adminPath()."groups/{$analysts}/members", ['user_id' => $id('olga')])->assertOk();
     $s->post('/api/v1/spaces/BACK/members', ['user_id' => $id('olga'), 'role' => 'editor'])->assertCreated();
     $olga = $login('olga');
     $olga->post("/api/v1/boards/{$boards['BACK']}/cards", ['title' => 'API отчётов'] + $cell($olga, 'BACK'))->assertCreated();
@@ -97,7 +98,7 @@ it('проходит сквозной сценарий этапа 3', function (
     expect($treeKeys($olga))->toBe(['FRONT', 'BACK', 'IOS', 'AND']);
 
     // --- 5. Пётр: «Contractors» (editor, только свои) + лично commenter без ограничения во Frontend ---
-    $s->post("/api/v1/admin/groups/{$contractors}/members", ['user_id' => $id('petr')])->assertOk();
+    $s->post(adminPath()."groups/{$contractors}/members", ['user_id' => $id('petr')])->assertOk();
     $s->post('/api/v1/spaces/FRONT/members', ['user_id' => $id('petr'), 'role' => 'commenter'])->assertCreated();
     $frontCell = $cell($s, 'FRONT');
     $s->post("/api/v1/boards/{$boards['FRONT']}/cards", ['title' => 'Чужая'] + $frontCell)->assertCreated()->assertJsonPath('data.key', 'FRONT-1');
@@ -142,7 +143,7 @@ it('проходит сквозной сценарий этапа 3', function (
     ];
     $before = $snapshot();
     $history = $olga->get('/api/v1/cards/AND-1/history')->assertOk()->json('data');
-    $s->post("/api/v1/admin/nav-nodes/{$nodes['AND']['id']}/move", ['parent_id' => null])->assertOk();
+    $s->post(adminPath()."nav-nodes/{$nodes['AND']['id']}/move", ['parent_id' => null])->assertOk();
     expect($structure())->toBe(['FRONT', 'BACK', 'MGMT', 'Mobile', '  IOS', 'AND'])
         ->and($snapshot())->toEqual($before)
         ->and($olga->get('/api/v1/cards/AND-1/history')->assertOk()->json('data'))->toEqual($history);
@@ -153,12 +154,12 @@ it('проходит сквозной сценарий этапа 3', function (
     $s->delete("/api/v1/spaces/MGMT/members/{$id('S')}")->assertUnprocessable();
 
     // --- 9. «Все сотрудники»: Management открыт всем ---------------------------------------
-    $everyone = collect($s->get('/api/v1/admin/groups')->assertOk()->json('data'))->firstWhere('system', 'everyone');
+    $everyone = collect($s->get(adminPath().'groups')->assertOk()->json('data'))->firstWhere('system', 'everyone');
     expect($everyone['name'])->toBe('Все сотрудники');
     $s->post('/api/v1/spaces/MGMT/groups', ['group_id' => $everyone['id'], 'role' => 'admin'])->assertUnprocessable();
     $s->post('/api/v1/spaces/MGMT/groups', ['group_id' => $everyone['id'], 'role' => 'commenter'])->assertCreated();
-    $s->post("/api/v1/admin/groups/{$everyone['id']}/archive")->assertUnprocessable();
-    $s->post("/api/v1/admin/groups/{$everyone['id']}/members", ['user_id' => $id('boris')])->assertUnprocessable();
+    $s->post(adminPath()."groups/{$everyone['id']}/archive")->assertUnprocessable();
+    $s->post(adminPath()."groups/{$everyone['id']}/members", ['user_id' => $id('boris')])->assertUnprocessable();
 
     $invitation = Invitation::factory()->withToken('stage-3-newcomer')->create();
     $newcomer = browser('10.0.3.251');
@@ -171,14 +172,14 @@ it('проходит сквозной сценарий этапа 3', function (
     $newcomer->post("/api/v1/boards/{$boards['MGMT']}/cards", ['title' => 'Нельзя'] + $cell($newcomer, 'MGMT'))->assertForbidden();
 
     // Значок у папки — только когда открыты все её пространства
-    $mobileNode = fn () => collect($s->get('/api/v1/admin/navigation')->assertOk()->json('data'))->firstWhere('id', $mobile);
+    $mobileNode = fn () => collect($s->get(adminPath().'navigation')->assertOk()->json('data'))->firstWhere('id', $mobile);
     expect($mobileNode()['everyone'])->toBeFalse();
     $s->post('/api/v1/spaces/IOS/groups', ['group_id' => $everyone['id'], 'role' => 'commenter'])->assertCreated();
     expect($mobileNode()['everyone'])->toBeTrue();
     expect($newcomer->get('/api/v1/navigation')->assertOk()->json('data.1'))->toMatchArray(['type' => 'folder', 'name' => 'Mobile', 'everyone' => true]);
 
     // Деактивированный новичок доступа не имеет (войти не может, а права не вычисляются)
-    $s->post("/api/v1/admin/users/{$invitation->user_id}/deactivate")->assertOk();
+    $s->post(adminPath()."users/{$invitation->user_id}/deactivate")->assertOk();
     $newcomer->get('/api/v1/navigation')->assertUnauthorized();
 
     // --- 10. Данные для поиска по дереву: папки, пространства и доски с названиями ----------------

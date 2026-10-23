@@ -31,7 +31,9 @@ class SpaceGrants
 
     public function create(User $actor, Space $space, User|Group $subject, StandardRole $role): AccessGrant
     {
-        $grant = AccessGrant::query()->create([
+        $grant = AccessGrant::query()->forceCreate([
+            // Выдача — в компании пространства (составные FK: узел и группа — той же компании)
+            'company_id' => $space->company_id,
             'nav_node_id' => NavNode::query()->where('space_id', $space->getKey())->valueOrFail('id'),
             'user_id' => $subject instanceof User ? $subject->getKey() : null,
             'group_id' => $subject instanceof Group ? $subject->getKey() : null,

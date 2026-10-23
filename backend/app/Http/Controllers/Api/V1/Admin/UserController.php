@@ -6,22 +6,26 @@ use App\Actions\Users\ChangeUserRoleAction;
 use App\Actions\Users\DeactivateUserAction;
 use App\Actions\Users\ReactivateUserAction;
 use App\Actions\Users\TransferOwnershipAction;
-use App\Enums\UserRole;
+use App\Enums\CompanyRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ListUsersRequest;
 use App\Http\Requests\Admin\TransferOwnershipRequest;
 use App\Http\Requests\Admin\UpdateUserRoleRequest;
 use App\Http\Resources\AdminUserResource;
+use App\Models\Company;
 use App\Models\User;
+use App\Services\Access\AccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 
+/** Люди компании (её «дома», ADR-0024): роль в компании, деактивация, передача владения. */
 class UserController extends Controller
 {
-    public function index(ListUsersRequest $request): AnonymousResourceCollection
+    public function index(ListUsersRequest $request, Company $company, AccessResolver $resolver): AnonymousResourceCollection
     {
         $users = User::query()
+            ->whereIn('id', $resolver->companyMemberIds($company))
             ->with('latestInvitation')
             ->when($request->validated('status'), fn ($q, $status) => $q->where('status', $status))
             ->when($request->validated('search'), function ($q, $search) {
@@ -30,39 +34,43 @@ class UserController extends Controller
             })
             ->orderBy('name')
             ->paginate(25);
+        // Роли в компании и права на каждого — одним запросом
+        $resolver->rememberCompanyPermissions($company, [$request->user(), ...$users->items()]);
 
         return AdminUserResource::collection($users);
     }
 
-    public function updateRole(UpdateUserRoleRequest $request, User $user, ChangeUserRoleAction $action): AdminUserResource
+    public function updateRole(UpdateUserRoleRequest $request, Company $company, User $user, ChangeUserRoleAction $action): AdminUserResource
     {
-        $user = $action->handle($request->user(), $user, $request->enum('role', UserRole::class));
+        $user = $action->handle($request->user(), $user, $company, $request->enum('role', CompanyRole::class));
 
         return new AdminUserResource($user->load('latestInvitation'));
     }
 
-    public function deactivate(Request $request, User $user, DeactivateUserAction $action): AdminUserResource
+    public function deactivate(Request $request, Company $company, User $user, DeactivateUserAction $action): AdminUserResource
     {
-        Gate::authorize('deactivate', $user);
+        Gate::authorize('deactivate', [$user, $company]);
 
-        return new AdminUserResource($action->handle($request->user(), $user)->load('latestInvitation'));
+        return new AdminUserResource($action->handle($request->user(), $user, $company)->load('latestInvitation'));
     }
 
-    public function reactivate(Request $request, User $user, ReactivateUserAction $action): AdminUserResource
+    public function reactivate(Request $request, Company $company, User $user, ReactivateUserAction $action): AdminUserResource
     {
-        Gate::authorize('reactivate', $user);
+        Gate::authorize('reactivate', [$user, $company]);
 
-        return new AdminUserResource($action->handle($request->user(), $user)->load('latestInvitation'));
+        return new AdminUserResource($action->handle($request->user(), $user, $company)->load('latestInvitation'));
     }
 
     /**
      * Передача владения (ADR-0017). Ответ — новый Владелец с правами, пересчитанными для бывшего (он уже
-     * администратор); роль читается из базы на каждый запрос — следующий запрос его сессии идёт с новыми правами.
+     * администратор своих компаний); роль читается из базы на каждый запрос — следующий запрос его сессии идёт с новыми
+     * правами.
      */
-    public function transferOwnership(TransferOwnershipRequest $request, User $user, TransferOwnershipAction $action): AdminUserResource
+    public function transferOwnership(TransferOwnershipRequest $request, Company $company, User $user, TransferOwnershipAction $action): AdminUserResource
     {
         $owner = $action->handle($request->user(), $user, 'admin_panel');
         $request->user()->refresh();
+        $company->forgetResolvedPermissions();
 
         return new AdminUserResource($owner->load('latestInvitation'));
     }

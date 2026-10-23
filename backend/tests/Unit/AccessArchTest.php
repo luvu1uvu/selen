@@ -24,10 +24,11 @@ arch('выдачи доступа: читает для прав точка пр�
     ]);
 
 it('таблицы прав в запросах — только в точке прав и явном списке мест, где выдачи показывают или меняют', function () {
-    // Права по выдачам, ролям и составу групп вычисляет только App\Services\Access. Остальные места — связи моделей
-    // и показ или изменение строк выдач, не вычисление прав; новое место — сюда, с объяснением
+    // Права по выдачам, ролям, составу групп и членству в компаниях вычисляет только App\Services\Access (ADR-0024).
+    // Остальные места — связи моделей и показ или изменение строк выдач, не вычисление прав; новое место — сюда,
+    // с объяснением
     $allowed = [
-        'Models/' => 'связи моделей (выдачи пространства и группы, состав группы)',
+        'Models/' => 'связи моделей (выдачи пространства и группы, состав группы, люди компании)',
         'Http/Controllers/Api/V1/SpaceMemberController.php' => 'показ личной выдачи во вкладке «Люди»',
     ];
     $app = realpath(__DIR__.'/../../app');
@@ -44,7 +45,7 @@ it('таблицы прав в запросах — только в точке �
         // Только строки кода (в том числе с псевдонимами и сырым SQL): упоминание в комментарии — не чтение
         foreach (token_get_all((string) file_get_contents($path)) as $token) {
             if (! is_array($token) || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
-                || preg_match('/\b(access_grants|role_permissions|roles|group_members)\b/', $token[1], $table) !== 1) {
+                || preg_match('/\b(access_grants|role_permissions|roles|group_members|company_members)\b/', $token[1], $table) !== 1) {
                 continue;
             }
             $permitted = $table[1] !== 'role_permissions'

@@ -107,7 +107,7 @@ it('модели истории запрещают удаление и прав�
 });
 
 it('восстановление из корзины тоже ничего не переписывает — только добавляет', function () {
-    $this->actingAs(admin())->postJson('/api/v1/admin/trash/cards/DEV-1/restore')->assertOk();
+    $this->actingAs(admin())->postJson(adminPath().'trash/cards/DEV-1/restore')->assertOk();
 
     [$cards, $transitions, $blocks, $events] = ($this->counts)();
     expect($cards)->toBe($this->before[0])

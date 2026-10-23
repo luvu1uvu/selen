@@ -31,6 +31,8 @@ class SpaceResource extends JsonResource
             'id' => $this->id,
             'key' => $this->key,
             'name' => $this->name,
+            // Компания пространства (только id, ADR-0024): справочники людей и групп для выдачи доступа — по ней
+            'company_id' => $this->company_id,
             'description' => $this->description,
             'archived_at' => $this->archived_at?->toIso8601ZuluString(),
             'my_role' => $access->highestRole(),

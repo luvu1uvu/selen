@@ -15,7 +15,7 @@ beforeEach(fn () => Notification::fake());
 it('создаёт приглашённого пользователя, приглашение и отправляет письмо', function () {
     $admin = admin();
 
-    $this->actingAs($admin)->postJson('/api/v1/admin/invitations', [
+    $this->actingAs($admin)->postJson(adminPath().'invitations', [
         'name' => '  Борис Новиков ',
         'email' => ' Boris@Selen.TEST ',
         'role' => 'member',
@@ -56,7 +56,7 @@ it('создаёт приглашённого пользователя, приг
 });
 
 it('формирует письмо-приглашение на русском без пароля', function () {
-    $this->actingAs(owner())->postJson('/api/v1/admin/invitations', [
+    $this->actingAs(owner())->postJson(adminPath().'invitations', [
         'name' => 'Борис', 'email' => 'boris@selen.test', 'role' => 'admin',
     ])->assertCreated();
 
@@ -81,7 +81,7 @@ it('отправляет письмо через очередь', function () {
 it('не приглашает существующий email', function () {
     member(['email' => 'boris@selen.test']);
 
-    $this->actingAs(admin())->postJson('/api/v1/admin/invitations', [
+    $this->actingAs(admin())->postJson(adminPath().'invitations', [
         'name' => 'Борис', 'email' => 'BORIS@selen.test', 'role' => 'member',
     ])->assertUnprocessable()->assertJsonPath('errors.email.0', __('selen.invitations.email_taken'));
 
@@ -89,13 +89,13 @@ it('не приглашает существующий email', function () {
 });
 
 it('валидирует данные приглашения', function () {
-    $this->actingAs(admin())->postJson('/api/v1/admin/invitations', ['email' => 'nope', 'role' => 'owner'])
+    $this->actingAs(admin())->postJson(adminPath().'invitations', ['email' => 'nope', 'role' => 'owner'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['name', 'email', 'role']);
 });
 
 it('не даёт участнику приглашать', function () {
-    $this->actingAs(member())->postJson('/api/v1/admin/invitations', [
+    $this->actingAs(member())->postJson(adminPath().'invitations', [
         'name' => 'Борис', 'email' => 'boris@selen.test', 'role' => 'member',
     ])->assertForbidden();
 

@@ -2,53 +2,55 @@
 
 namespace App\Policies;
 
+use App\Enums\Permission;
+use App\Models\Company;
 use App\Models\Group;
 use App\Models\User;
-use App\Services\Access\AccessResolver;
+use App\Policies\Concerns\ChecksCompanyPermission;
 use Illuminate\Auth\Access\Response;
 
 /**
- * Группы ведёт только системный администратор (ADR-0012). Архивная группа — только для чтения.
+ * Группы компании ведёт тот, у кого право компании «управлять группами» — администратор компании и Владелец
+ * (ADR-0012, ADR-0024). Архивная группа — только для чтения. Группа другой компании — 404.
  * Выдача доступа группе к пространству — SpacePolicy::manageMembers (администратор пространства).
  */
 class GroupPolicy
 {
-    public function viewAny(User $actor): bool
+    use ChecksCompanyPermission;
+
+    public function viewAny(User $actor, Company $company): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $company, Permission::CompanyManageGroups);
     }
 
-    public function view(User $actor, Group $group): bool
+    public function view(User $actor, Group $group): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $group->company, Permission::CompanyManageGroups);
     }
 
-    public function create(User $actor): bool
+    public function create(User $actor, Company $company): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $company, Permission::CompanyManageGroups);
     }
 
     /** Изменить название, описание, состав или доступы группы. */
     public function update(User $actor, Group $group): Response
     {
-        if (! $actor->isAdmin()) {
-            return Response::deny();
-        }
+        $response = $this->allowCompany($actor, $group->company, Permission::CompanyManageGroups);
 
-        return $group->isArchived() ? Response::deny(__('selen.groups.archived')) : Response::allow();
+        return $response->allowed() && $group->isArchived() ? Response::deny(__('selen.groups.archived')) : $response;
     }
 
-    public function archive(User $actor, Group $group): bool
+    public function archive(User $actor, Group $group): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $group->company, Permission::CompanyManageGroups);
     }
 
     /**
-     * Справочник активных групп для выдачи доступа: системный администратор и администраторы пространств
-     * (как справочник сотрудников).
+     * Справочник активных групп компании для выдачи доступа — как справочник людей (UserPolicy::viewDirectory).
      */
-    public function viewDirectory(User $actor): bool
+    public function viewDirectory(User $actor, Company $company): Response
     {
-        return $actor->isAdmin() || app(AccessResolver::class)->managesAccessAnywhere($actor);
+        return app(UserPolicy::class)->viewDirectory($actor, $company);
     }
 }

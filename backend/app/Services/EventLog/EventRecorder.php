@@ -4,6 +4,8 @@ namespace App\Services\EventLog;
 
 use App\Enums\EventType;
 use App\Models\AuthAuditEntry;
+use App\Models\Company;
+use App\Models\Contracts\HasCompany;
 use App\Models\EventLogEntry;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -29,6 +31,8 @@ class EventRecorder
      * @param  array<string, mixed>  $payload  снимок данных события: id и значения перечислений, без ПДн
      * @param  string|null  $attemptedEmail  введённый email, если пользователь не найден (только для auth.*,
      *                                       пишется в auth_audit, не в журнал)
+     * @param  Company|null  $company  компания события (ADR-0024); не задана — компания объекта (HasCompany),
+     *                                 у объекта-пользователя её нет: событие «о человеке» (вход, передача владения)
      */
     public function record(
         EventType $type,
@@ -37,8 +41,10 @@ class EventRecorder
         array $payload = [],
         ?CarbonInterface $occurredAt = null,
         ?string $attemptedEmail = null,
+        ?Company $company = null,
     ): EventLogEntry {
         $entry = EventLogEntry::query()->create([
+            'company_id' => $company?->getKey() ?? ($subject instanceof HasCompany ? $subject->companyId() : null),
             'occurred_at' => $occurredAt ?? Date::now(),
             'event_type' => $type->value,
             'actor_id' => $actor?->getKey(),

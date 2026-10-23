@@ -54,7 +54,7 @@ class SetFolderArchivedAction
 
             $attributes = ['archived_at' => null];
             if ($folder->parent_id !== null && NavNode::query()->whereKey($folder->parent_id)->whereNotNull('archived_at')->exists()) {
-                $attributes += ['parent_id' => null, 'position' => $this->positions->atEnd(NavNode::siblingsOf(null))];
+                $attributes += ['parent_id' => null, 'position' => $this->positions->atEnd(NavNode::siblingsOf($folder->company_id, null))];
             }
 
             $folder->forceFill($attributes)->save();

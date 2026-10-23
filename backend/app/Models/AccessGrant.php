@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\CardScope;
 use App\Enums\SpaceRole;
 use App\Enums\StandardRole;
+use App\Models\Concerns\BelongsToCompany;
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -14,11 +16,13 @@ use Illuminate\Support\Carbon;
 
 /**
  * Выдача доступа: субъект (пользователь или группа, в том числе «Все сотрудники») × узел дерева × роль
- * (docs/adr/0024-rights-2.md). В П2a узлы — только пространства, у субъекта на узле одна роль.
+ * (docs/adr/0024-rights-2.md). В П2a узлы — только пространства, у субъекта на узле одна роль. Компания выдачи —
+ * компания узла (составные FK: узел и группа — той же компании; роль — стандартная или этой компании, триггер).
  * Создаётся и меняется только через Actions (app/Actions/Spaces); права по выдачам вычисляет только
  * App\Services\Access\AccessResolver.
  *
  * @property int $id
+ * @property string $company_id
  * @property string $nav_node_id
  * @property string|null $user_id
  * @property string|null $group_id
@@ -33,8 +37,18 @@ use Illuminate\Support\Carbon;
  * @property-read Role $role
  */
 #[Fillable(['nav_node_id', 'user_id', 'group_id', 'role_id', 'granted_by'])]
-class AccessGrant extends Model
+class AccessGrant extends Model implements HasCompany
 {
+    use BelongsToCompany;
+
+    /** Выдача — в компании узла (составной FK проверяет и явно заданную). */
+    protected static function booted(): void
+    {
+        static::creating(function (AccessGrant $grant) {
+            $grant->company_id ??= NavNode::query()->whereKey($grant->nav_node_id)->value('company_id');
+        });
+    }
+
     /** @return BelongsTo<NavNode, $this> */
     public function navNode(): BelongsTo
     {

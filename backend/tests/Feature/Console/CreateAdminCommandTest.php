@@ -33,7 +33,8 @@ it('создаёт администратора, если Владелец уж�
         '--name' => 'Анна Админова', '--email' => 'anna@selen.test', '--password' => 'admin-password-1',
     ])->expectsOutputToContain('Администратор anna@selen.test создан')->assertSuccessful();
 
-    expect(User::query()->where('email', 'anna@selen.test')->sole()->role)->toBe(UserRole::Admin)
+    // Администратор «Компании 1» (ADR-0024: администраторы — у компаний)
+    expect(User::query()->where('email', 'anna@selen.test')->sole()->administers(company()))->toBeTrue()
         ->and(EventLogEntry::query()->sole()->payload)->toMatchArray(['via' => 'console', 'role' => 'admin']);
 });
 
@@ -44,7 +45,7 @@ it('создаёт администратора в интерактивном р
         ->expectsQuestion('Пароль', 'admin-password-1')
         ->assertSuccessful();
 
-    expect(User::query()->sole()->isAdmin())->toBeTrue();
+    expect(User::query()->sole()->administers(company()))->toBeTrue();
 });
 
 it('отказывает, если email занят', function () {

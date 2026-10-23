@@ -188,7 +188,7 @@ it('доска читается фиксированным числом запр
         return count(DB::getQueryLog());
     };
 
-    $label = Label::query()->forceCreate(['space_id' => null, 'name' => 'Метка', 'color' => '#ff0000']);
+    $label = Label::query()->forceCreate(['company_id' => company()->id, 'space_id' => null, 'name' => 'Метка', 'color' => '#ff0000']);
     $tag = function (Card $card) use ($label) {
         $card->labels()->attach($label->id);
         $card->forceFill(['responsible_id' => $this->admin->id])->save();

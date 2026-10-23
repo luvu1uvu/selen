@@ -111,7 +111,7 @@ it('не меняет ни ответ доски, ни поиск, ни метр
 it('удаление пустого пространства уносит строки сворачивания его дорожек', function () {
     $this->actingAs($this->viewer)->putJson("/api/v1/lanes/{$this->urgent}/collapsed")->assertNoContent();
 
-    $this->actingAs(admin())->deleteJson("/api/v1/admin/spaces/{$this->space->id}")->assertSuccessful();
+    $this->actingAs(admin())->deleteJson(adminPath()."spaces/{$this->space->id}")->assertSuccessful();
 
     expect(DB::table('collapsed_lanes')->count())->toBe(0);
 });

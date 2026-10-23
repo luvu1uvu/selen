@@ -24,7 +24,7 @@ beforeEach(function () {
 
 function companyLabel(string $name = 'Безопасность', string $color = '#ef4444'): Label
 {
-    return Label::query()->forceCreate(['space_id' => null, 'name' => $name, 'color' => $color]);
+    return Label::query()->forceCreate(['company_id' => company()->id, 'space_id' => null, 'name' => $name, 'color' => $color]);
 }
 
 function spaceLabel($space, string $name = 'Фронтенд', string $color = '#3b82f6'): Label
@@ -34,17 +34,17 @@ function spaceLabel($space, string $name = 'Фронтенд', string $color = '
 
 describe('общие метки компании', function () {
     it('создаёт и меняет только системный администратор', function () {
-        $this->actingAs($this->sysadmin)->postJson('/api/v1/admin/labels', ['name' => 'Безопасность', 'color' => '#EF4444'])
+        $this->actingAs($this->sysadmin)->postJson(adminPath().'labels', ['name' => 'Безопасность', 'color' => '#EF4444'])
             ->assertCreated()
             ->assertJsonPath('data.scope', 'company')
             ->assertJsonPath('data.color', '#ef4444');
         $label = Label::query()->sole();
 
         $this->actingAs($this->sysadmin)->patchJson("/api/v1/labels/{$label->id}", ['name' => 'ИБ'])->assertOk();
-        $this->actingAs($this->sysadmin)->getJson('/api/v1/admin/labels')->assertOk()->assertJsonPath('data.0.name', 'ИБ');
+        $this->actingAs($this->sysadmin)->getJson(adminPath().'labels')->assertOk()->assertJsonPath('data.0.name', 'ИБ');
 
-        $this->actingAs($this->spaceAdmin)->postJson('/api/v1/admin/labels', ['name' => 'X', 'color' => '#000000'])->assertForbidden();
-        $this->actingAs($this->spaceAdmin)->getJson('/api/v1/admin/labels')->assertForbidden();
+        $this->actingAs($this->spaceAdmin)->postJson(adminPath().'labels', ['name' => 'X', 'color' => '#000000'])->assertForbidden();
+        $this->actingAs($this->spaceAdmin)->getJson(adminPath().'labels')->assertForbidden();
         $this->actingAs($this->spaceAdmin)->patchJson("/api/v1/labels/{$label->id}", ['name' => 'Y'])->assertForbidden();
         $this->actingAs($this->spaceAdmin)->postJson("/api/v1/labels/{$label->id}/archive")->assertForbidden();
 
@@ -55,14 +55,14 @@ describe('общие метки компании', function () {
     it('архивирует и восстанавливает; название уникально среди активных без учёта регистра', function () {
         $label = companyLabel();
 
-        $this->actingAs($this->sysadmin)->postJson('/api/v1/admin/labels', ['name' => 'безопасность', 'color' => '#000000'])
+        $this->actingAs($this->sysadmin)->postJson(adminPath().'labels', ['name' => 'безопасность', 'color' => '#000000'])
             ->assertUnprocessable()->assertJsonPath('errors.name.0', __('selen.labels.name_taken'));
 
         $this->actingAs($this->sysadmin)->postJson("/api/v1/labels/{$label->id}/archive")->assertOk();
         $this->actingAs($this->sysadmin)->postJson("/api/v1/labels/{$label->id}/archive")->assertUnprocessable();
 
         // Пока метка в архиве, название свободно — и тогда восстановить её нельзя
-        $this->actingAs($this->sysadmin)->postJson('/api/v1/admin/labels', ['name' => 'Безопасность', 'color' => '#000000'])->assertCreated();
+        $this->actingAs($this->sysadmin)->postJson(adminPath().'labels', ['name' => 'Безопасность', 'color' => '#000000'])->assertCreated();
         $this->actingAs($this->sysadmin)->postJson("/api/v1/labels/{$label->id}/restore")
             ->assertUnprocessable()->assertJsonPath('errors.label.0', __('selen.labels.name_taken'));
     });
@@ -163,7 +163,7 @@ describe('метки на карточке', function () {
 });
 
 it('в журнале событий меток нет названий', function () {
-    $this->actingAs($this->sysadmin)->postJson('/api/v1/admin/labels', ['name' => 'Секретный проект', 'color' => '#ef4444'])->assertCreated();
+    $this->actingAs($this->sysadmin)->postJson(adminPath().'labels', ['name' => 'Секретный проект', 'color' => '#ef4444'])->assertCreated();
 
     expect(DB::table('event_log')->pluck('payload')->implode("\n"))->not->toContain('Секретный');
 });

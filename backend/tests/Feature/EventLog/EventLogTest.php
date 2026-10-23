@@ -53,18 +53,18 @@ it('показывает журнал администратору с фильт
     recordSomeEvent();
     app(EventRecorder::class)->record(EventType::Logout, $admin, $admin);
 
-    $this->actingAs($admin)->getJson('/api/v1/admin/events')
+    $this->actingAs($admin)->getJson(adminPath().'events')
         ->assertOk()
         ->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.event_type', 'auth.logout')
         ->assertJsonPath('data.0.actor.name', $admin->name)
         ->assertJsonPath('data.1.actor', null);
 
-    $this->actingAs($admin)->getJson('/api/v1/admin/events?event_type=user.created')
+    $this->actingAs($admin)->getJson(adminPath().'events?event_type=user.created')
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.payload.source', 'test');
 
-    $this->actingAs($admin)->getJson('/api/v1/admin/events?event_type=unknown.type')->assertUnprocessable();
+    $this->actingAs($admin)->getJson(adminPath().'events?event_type=unknown.type')->assertUnprocessable();
 });
 
 it('при откате транзакции событие тоже не сохраняется', function () {

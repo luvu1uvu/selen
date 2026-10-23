@@ -11,10 +11,13 @@ use Database\Factories\UserFactory;
 use Illuminate\Support\Facades\Route;
 
 /*
-| Матрица доступа админских маршрутов (ADR-0017): каждый маршрут /admin/* (и справочники для выбора людей и групп)
-| проверяется для Владельца, обычного администратора и участника. Маршруты над пользователем — с разными целями:
-| участник, другой администратор, сам Владелец, сам проверяемый администратор. Разрешено — ответ не 401/403/404
-| и не 5xx (может быть 200, 201, 204 или 422 — до бизнес-проверок дошло); запрещено — ровно 403.
+| Матрица доступа админских маршрутов по компаниям (ADR-0017, ADR-0024): каждый маршрут admin/companies/{company}/*
+| (и справочники для выбора людей и групп компании) проверяется для Владельца, администратора этой компании,
+| её участника, администратора и участника другой компании. Маршруты над пользователем — с разными целями:
+| участник, другой администратор компании, сам Владелец, сам проверяемый администратор. Разрешено — ответ
+| не 401/403/404 и не 5xx (может быть 200, 201, 204 или 422 — до бизнес-проверок дошло); запрещено — ровно 403;
+| другая компания — 404 с единым телом (её для него нет, как несуществующей).
+| Права компании выдаются лично и группам с П2c — тогда строки «с правом / без права» и гость.
 | Новый админский маршрут без строки здесь роняет тест «все админские маршруты есть в матрице».
 */
 
@@ -27,78 +30,78 @@ function adminEndpoints(): array
 {
     [$allow, $deny] = [true, false];
     $rows = [
-        // Пользователи: администраторами управляет только Владелец, Владельцем — никто
-        ['GET', 'admin/users', $allow, $allow, $deny],
-        ['PATCH', 'admin/users/{member}/role', $allow, $deny, $deny, ['role' => 'admin']],
-        ['PATCH', 'admin/users/{admin}/role', $allow, $deny, $deny, ['role' => 'member']],
-        ['PATCH', 'admin/users/{self-admin}/role', $allow, $deny, $deny, ['role' => 'member']],
-        ['PATCH', 'admin/users/{owner}/role', $deny, $deny, $deny, ['role' => 'member']],
-        ['POST', 'admin/users/{member}/deactivate', $allow, $allow, $deny],
-        ['POST', 'admin/users/{admin}/deactivate', $allow, $deny, $deny],
-        ['POST', 'admin/users/{owner}/deactivate', $deny, $deny, $deny],
-        ['POST', 'admin/users/{self-admin}/deactivate', $allow, $deny, $deny],
-        ['POST', 'admin/users/{self-admin}/reactivate', $allow, $deny, $deny],
-        ['POST', 'admin/users/{deactivated-member}/reactivate', $allow, $allow, $deny],
-        ['POST', 'admin/users/{deactivated-admin}/reactivate', $allow, $deny, $deny],
-        ['POST', 'admin/users/{owner}/reactivate', $deny, $deny, $deny],
-        ['GET', 'admin/users/{member}/access', $allow, $allow, $deny],
-        ['GET', 'admin/users/{member}/deactivation-impact', $allow, $allow, $deny],
-        ['GET', 'admin/users/{admin}/deactivation-impact', $allow, $deny, $deny],
-        ['GET', 'admin/users/{owner}/deactivation-impact', $deny, $deny, $deny],
-        ['POST', 'admin/users/{member}/transfer-ownership', $allow, $deny, $deny, ['password' => UserFactory::PASSWORD]],
-        ['POST', 'admin/users/{admin}/transfer-ownership', $allow, $deny, $deny, ['password' => UserFactory::PASSWORD]],
-        ['POST', 'admin/users/{owner}/transfer-ownership', $deny, $deny, $deny, ['password' => UserFactory::PASSWORD]],
+        // Пользователи компании: администраторами компании управляет только Владелец, Владельцем — никто
+        ['GET', 'admin/companies/{company}/users', $allow, $allow, $deny],
+        ['PATCH', 'admin/companies/{company}/users/{member}/role', $allow, $deny, $deny, ['role' => 'admin']],
+        ['PATCH', 'admin/companies/{company}/users/{admin}/role', $allow, $deny, $deny, ['role' => 'member']],
+        ['PATCH', 'admin/companies/{company}/users/{self-admin}/role', $allow, $deny, $deny, ['role' => 'member']],
+        ['PATCH', 'admin/companies/{company}/users/{owner}/role', $deny, $deny, $deny, ['role' => 'member']],
+        ['POST', 'admin/companies/{company}/users/{member}/deactivate', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/users/{admin}/deactivate', $allow, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{owner}/deactivate', $deny, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{self-admin}/deactivate', $allow, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{self-admin}/reactivate', $allow, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{deactivated-member}/reactivate', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/users/{deactivated-admin}/reactivate', $allow, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{owner}/reactivate', $deny, $deny, $deny],
+        ['GET', 'admin/companies/{company}/users/{member}/access', $allow, $allow, $deny],
+        ['GET', 'admin/companies/{company}/users/{member}/deactivation-impact', $allow, $allow, $deny],
+        ['GET', 'admin/companies/{company}/users/{admin}/deactivation-impact', $allow, $deny, $deny],
+        ['GET', 'admin/companies/{company}/users/{owner}/deactivation-impact', $deny, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{member}/transfer-ownership', $allow, $deny, $deny, ['password' => UserFactory::PASSWORD]],
+        ['POST', 'admin/companies/{company}/users/{admin}/transfer-ownership', $allow, $deny, $deny, ['password' => UserFactory::PASSWORD]],
+        ['POST', 'admin/companies/{company}/users/{owner}/transfer-ownership', $deny, $deny, $deny, ['password' => UserFactory::PASSWORD]],
 
         // Приглашения: с ролью администратора — только Владелец
-        ['GET', 'admin/invitations', $allow, $allow, $deny],
-        ['POST', 'admin/invitations', $allow, $allow, $deny, ['name' => 'Новый', 'email' => 'new@selen.test', 'role' => 'member']],
-        ['POST', 'admin/invitations', $allow, $deny, $deny, ['name' => 'Новый', 'email' => 'new@selen.test', 'role' => 'admin']],
-        ['POST', 'admin/invitations/{invitation-member}/resend', $allow, $allow, $deny],
-        ['POST', 'admin/invitations/{invitation-admin}/resend', $allow, $deny, $deny],
-        ['POST', 'admin/invitations/{invitation-member}/revoke', $allow, $allow, $deny],
-        ['POST', 'admin/invitations/{invitation-admin}/revoke', $allow, $deny, $deny],
+        ['GET', 'admin/companies/{company}/invitations', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/invitations', $allow, $allow, $deny, ['name' => 'Новый', 'email' => 'new@selen.test', 'role' => 'member']],
+        ['POST', 'admin/companies/{company}/invitations', $allow, $deny, $deny, ['name' => 'Новый', 'email' => 'new@selen.test', 'role' => 'admin']],
+        ['POST', 'admin/companies/{company}/invitations/{invitation-member}/resend', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/invitations/{invitation-admin}/resend', $allow, $deny, $deny],
+        ['POST', 'admin/companies/{company}/invitations/{invitation-member}/revoke', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/invitations/{invitation-admin}/revoke', $allow, $deny, $deny],
 
-        // Остальная админка — любой системный администратор
-        ['GET', 'admin/groups', $allow, $allow, $deny],
-        ['POST', 'admin/groups', $allow, $allow, $deny, ['name' => 'Новая группа']],
-        ['GET', 'admin/groups/{group}', $allow, $allow, $deny],
-        ['PATCH', 'admin/groups/{group}', $allow, $allow, $deny, ['name' => 'Переименованная']],
-        ['POST', 'admin/groups/{group}/archive', $allow, $allow, $deny],
-        ['POST', 'admin/groups/{group}/restore', $allow, $allow, $deny],
-        ['POST', 'admin/groups/{group}/members', $allow, $allow, $deny, ['user_id' => '{member}']],
+        // Остальная админка — администратор компании (права компании по умолчанию) и Владелец
+        ['GET', 'admin/companies/{company}/groups', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/groups', $allow, $allow, $deny, ['name' => 'Новая группа']],
+        ['GET', 'admin/companies/{company}/groups/{group}', $allow, $allow, $deny],
+        ['PATCH', 'admin/companies/{company}/groups/{group}', $allow, $allow, $deny, ['name' => 'Переименованная']],
+        ['POST', 'admin/companies/{company}/groups/{group}/archive', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/groups/{group}/restore', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/groups/{group}/members', $allow, $allow, $deny, ['user_id' => '{member}']],
         // Состав групп — доступ к пространствам, а не учётная запись: Владелец в группах — как все (ADR-0017)
-        ['POST', 'admin/groups/{group}/members', $allow, $allow, $deny, ['user_id' => '{owner}']],
-        ['DELETE', 'admin/groups/{group}/members/{member}', $allow, $allow, $deny],
-        ['PUT', 'admin/groups/{group}/spaces/{space}', $allow, $allow, $deny, ['role' => 'commenter']],
-        ['DELETE', 'admin/groups/{group}/spaces/{space}', $allow, $allow, $deny],
-        ['GET', 'admin/events', $allow, $allow, $deny],
-        ['GET', 'admin/spaces', $allow, $allow, $deny],
-        ['POST', 'admin/spaces', $allow, $allow, $deny, ['name' => 'Новое', 'key' => 'NEW']],
-        ['POST', 'admin/spaces/{space}/archive', $allow, $allow, $deny],
-        ['POST', 'admin/spaces/{space}/restore', $allow, $allow, $deny],
-        ['DELETE', 'admin/spaces/{space}', $allow, $allow, $deny],
-        ['PUT', 'admin/spaces/{space}/members/{member}', $allow, $allow, $deny, ['role' => 'editor']],
-        ['PUT', 'admin/spaces/{space}/members/{owner}', $allow, $allow, $deny, ['role' => 'editor']],
-        ['GET', 'admin/navigation', $allow, $allow, $deny],
-        ['POST', 'admin/folders', $allow, $allow, $deny, ['name' => 'Новая папка']],
-        ['POST', 'admin/folders/{folder}/archive', $allow, $allow, $deny],
-        ['POST', 'admin/folders/{folder}/restore', $allow, $allow, $deny],
-        ['DELETE', 'admin/folders/{folder}', $allow, $allow, $deny],
-        ['PATCH', 'admin/nav-nodes/{folder}', $allow, $allow, $deny, ['name' => 'Другая']],
-        ['POST', 'admin/nav-nodes/{folder}/move', $allow, $allow, $deny, ['parent_id' => null]],
-        ['GET', 'admin/trash/cards', $allow, $allow, $deny],
-        ['POST', 'admin/trash/cards/{trashed-card}/restore', $allow, $allow, $deny],
-        ['GET', 'admin/labels', $allow, $allow, $deny],
-        ['POST', 'admin/labels', $allow, $allow, $deny, ['name' => 'Срочно', 'color' => '#ff0000']],
-        ['GET', 'admin/card-types', $allow, $allow, $deny],
-        ['POST', 'admin/card-types', $allow, $allow, $deny, ['name' => 'Эпик']],
-        ['PATCH', 'admin/card-types/{card-type}', $allow, $allow, $deny, ['name' => 'История']],
-        ['POST', 'admin/card-types/{card-type}/archive', $allow, $allow, $deny],
-        ['POST', 'admin/card-types/{card-type}/restore', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/groups/{group}/members', $allow, $allow, $deny, ['user_id' => '{owner}']],
+        ['DELETE', 'admin/companies/{company}/groups/{group}/members/{member}', $allow, $allow, $deny],
+        ['PUT', 'admin/companies/{company}/groups/{group}/spaces/{space}', $allow, $allow, $deny, ['role' => 'commenter']],
+        ['DELETE', 'admin/companies/{company}/groups/{group}/spaces/{space}', $allow, $allow, $deny],
+        ['GET', 'admin/companies/{company}/events', $allow, $allow, $deny],
+        ['GET', 'admin/companies/{company}/spaces', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/spaces', $allow, $allow, $deny, ['name' => 'Новое', 'key' => 'NEW']],
+        ['POST', 'admin/companies/{company}/spaces/{space}/archive', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/spaces/{space}/restore', $allow, $allow, $deny],
+        ['DELETE', 'admin/companies/{company}/spaces/{space}', $allow, $allow, $deny],
+        ['PUT', 'admin/companies/{company}/spaces/{space}/members/{member}', $allow, $allow, $deny, ['role' => 'editor']],
+        ['PUT', 'admin/companies/{company}/spaces/{space}/members/{owner}', $allow, $allow, $deny, ['role' => 'editor']],
+        ['GET', 'admin/companies/{company}/navigation', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/folders', $allow, $allow, $deny, ['name' => 'Новая папка']],
+        ['POST', 'admin/companies/{company}/folders/{folder}/archive', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/folders/{folder}/restore', $allow, $allow, $deny],
+        ['DELETE', 'admin/companies/{company}/folders/{folder}', $allow, $allow, $deny],
+        ['PATCH', 'admin/companies/{company}/nav-nodes/{folder}', $allow, $allow, $deny, ['name' => 'Другая']],
+        ['POST', 'admin/companies/{company}/nav-nodes/{folder}/move', $allow, $allow, $deny, ['parent_id' => null]],
+        ['GET', 'admin/companies/{company}/trash/cards', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/trash/cards/{trashed-card}/restore', $allow, $allow, $deny],
+        ['GET', 'admin/companies/{company}/labels', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/labels', $allow, $allow, $deny, ['name' => 'Срочно', 'color' => '#ff0000']],
+        ['GET', 'admin/companies/{company}/card-types', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/card-types', $allow, $allow, $deny, ['name' => 'Эпик']],
+        ['PATCH', 'admin/companies/{company}/card-types/{card-type}', $allow, $allow, $deny, ['name' => 'История']],
+        ['POST', 'admin/companies/{company}/card-types/{card-type}/archive', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/card-types/{card-type}/restore', $allow, $allow, $deny],
 
-        // Справочники для выбора людей и групп: системный администратор (и администраторы пространств)
-        ['GET', 'users/directory', $allow, $allow, $deny],
-        ['GET', 'groups/directory', $allow, $allow, $deny],
+        // Справочники для выбора людей и групп компании: администратор компании (и администраторы её пространств)
+        ['GET', 'companies/{company}/users/directory', $allow, $allow, $deny],
+        ['GET', 'companies/{company}/groups/directory', $allow, $allow, $deny],
     ];
 
     $named = [];
@@ -120,10 +123,14 @@ const ADMIN_PLACEHOLDERS = [
 ];
 
 beforeEach(function () {
+    $other = otherCompany();
     $this->actors = [
         'owner' => owner(),
         'admin' => admin(),
         'member' => member(),
+        // Другая компания: администратор и участник
+        'other-admin' => admin(company: $other),
+        'other-member' => member(company: $other),
     ];
     $space = space(['key' => 'DEV']);
     $editor = member();
@@ -147,23 +154,24 @@ beforeEach(function () {
         '{space}' => $space->id,
         '{folder}' => makeFolder('Папка')->id,
         '{trashed-card}' => $card->key(),
-        '{card-type}' => CardType::query()->forceCreate(['name' => 'Тип', 'color' => '#123456'])->id,
+        '{card-type}' => CardType::query()->forceCreate(['name' => 'Тип', 'color' => '#123456', 'company_id' => company()->id])->id,
+        '{company}' => company()->id,
     ];
 });
 
-it('админский маршрут: Владелец, администратор, участник', function (string $method, string $path, bool $owner, bool $admin, bool $member, array $body, string $role) {
-    $expected = ['owner' => $owner, 'admin' => $admin, 'member' => $member][$role];
+it('админский маршрут: Владелец, администратор компании, участник; другая компания — 404', function (string $method, string $path, bool $owner, bool $admin, bool $member, array $body, string $role) {
+    $expected = ['owner' => $owner, 'admin' => $admin, 'member' => $member][$role] ?? null;
     $uri = '/api/v1/'.strtr($path, $this->objects);
     $body = array_map(fn (mixed $value) => is_string($value) ? strtr($value, $this->objects) : $value, $body);
 
-    $status = $this->actingAs($this->actors[$role])->json($method, $uri, $body)->status();
+    $response = $this->actingAs($this->actors[$role])->json($method, $uri, $body);
 
-    if ($expected) {
-        expect($status)->not->toBeIn([401, 403, 404])->toBeLessThan(500);
-    } else {
-        expect($status)->toBe(403);
-    }
-})->with(adminEndpoints())->with(['owner', 'admin', 'member']);
+    match ($expected) {
+        true => expect($response->status())->not->toBeIn([401, 403, 404])->toBeLessThan(500),
+        false => expect($response->status())->toBe(403),
+        null => $response->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]),
+    };
+})->with(adminEndpoints())->with(['owner', 'admin', 'member', 'other-admin', 'other-member']);
 
 it('все админские маршруты есть в матрице доступа', function () {
     $covered = collect(adminEndpoints())
@@ -172,7 +180,8 @@ it('все админские маршруты есть в матрице дос
         ->all();
 
     $routes = collect(Route::getRoutes()->getRoutes())
-        ->filter(fn ($route) => str_starts_with($route->uri(), 'api/v1/admin/'))
+        ->filter(fn ($route) => str_starts_with($route->uri(), 'api/v1/admin/')
+            || str_starts_with($route->uri(), 'api/v1/companies/'))
         ->flatMap(fn ($route) => collect($route->methods())
             ->reject(fn ($method) => $method === 'HEAD')
             ->map(fn ($method) => $method.' '.str_replace('api/v1/', '', $route->uri())))
@@ -185,11 +194,21 @@ it('все админские маршруты есть в матрице дос
     }
 });
 
-it('справочники людей и групп открыты администратору пространства без системной роли', function () {
+it('справочники людей и групп компании открыты администратору её пространства без роли в компании', function () {
     $spaceAdmin = member();
     addToSpace(space(['key' => 'OPS']), $spaceAdmin, SpaceRole::Admin);
+    $base = '/api/v1/companies/'.company()->id;
 
-    $this->actingAs($spaceAdmin)->getJson('/api/v1/users/directory')->assertOk();
-    $this->actingAs($spaceAdmin)->getJson('/api/v1/groups/directory')->assertOk();
-    $this->actingAs($spaceAdmin)->getJson('/api/v1/admin/users')->assertForbidden();
+    $this->actingAs($spaceAdmin)->getJson("{$base}/users/directory")->assertOk();
+    $this->actingAs($spaceAdmin)->getJson("{$base}/groups/directory")->assertOk();
+    $this->actingAs($spaceAdmin)->getJson(adminPath().'users')->assertForbidden();
+});
+
+it('все маршруты админки — в контексте компании (admin/companies/{company}/…)', function () {
+    $admin = collect(Route::getRoutes()->getRoutes())
+        ->map(fn ($route) => $route->uri())
+        ->filter(fn (string $uri) => str_starts_with($uri, 'api/v1/admin'));
+
+    expect($admin)->not->toBeEmpty()
+        ->and($admin->reject(fn (string $uri) => str_starts_with($uri, 'api/v1/admin/companies/{company}/'))->all())->toBe([]);
 });

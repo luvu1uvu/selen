@@ -48,7 +48,7 @@ it('вкладка работает от имени другого пользо�
         ->assertStatus(409)
         ->assertExactJson(['message' => __('selen.session_changed'), 'code' => 'session_changed']);
     $session->get('/api/v1/navigation')->assertStatus(409)->assertJsonMissingPath('data');
-    $session->post("/api/v1/admin/users/{$this->admin->id}/transfer-ownership", ['password' => UserFactory::PASSWORD])
+    $session->post(adminPath()."users/{$this->admin->id}/transfer-ownership", ['password' => UserFactory::PASSWORD])
         ->assertStatus(409);
 
     expect($this->owner->fresh())->name->toBe('Ольга')->isOwner()->toBeTrue()
@@ -61,11 +61,11 @@ it('сверка — до лимитов: запросы чужой вкладк
     $target = member();
 
     foreach (range(1, 8) as $i) {
-        $stale->post("/api/v1/admin/users/{$target->id}/transfer-ownership", ['password' => 'wrong'])->assertStatus(409);
+        $stale->post(adminPath()."users/{$target->id}/transfer-ownership", ['password' => 'wrong'])->assertStatus(409);
     }
 
     // Лимит смены пароля (6 в минуту) не израсходован: свой запрос проходит до проверки пароля
-    $session->post("/api/v1/admin/users/{$target->id}/transfer-ownership", ['password' => 'wrong'])
+    $session->post(adminPath()."users/{$target->id}/transfer-ownership", ['password' => 'wrong'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('password');
 });

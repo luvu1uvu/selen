@@ -6,6 +6,7 @@ use App\Actions\Cards\RestoreCardFromTrashAction;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TrashedCardResource;
 use App\Models\Card;
+use App\Models\Company;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\SpaceAccess;
@@ -20,14 +21,16 @@ use Illuminate\Support\Facades\Gate;
  */
 class TrashController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request, Company $company): AnonymousResourceCollection
     {
-        Gate::authorize('viewTrash', Card::class);
+        Gate::authorize('viewTrash', [Card::class, $company]);
         /** @var User $actor */
         $actor = $request->user();
         $accesses = Space::accessesOf($actor);
 
+        // Только карточки пространств компании (ADR-0024)
         $cards = Card::onlyTrashed()
+            ->whereIn('space_id', Space::query()->inCompany($company)->select('id'))
             // participants — для правила «только свои» (название — только тому, кто видел бы карточку)
             ->with(['space', 'board', 'deleter', 'participants:id'])
             ->orderByDesc('deleted_at')
@@ -39,10 +42,14 @@ class TrashController extends Controller
         return TrashedCardResource::collection($cards);
     }
 
-    public function restore(Request $request, string $key, RestoreCardFromTrashAction $action): TrashedCardResource
+    public function restore(Request $request, Company $company, string $key, RestoreCardFromTrashAction $action): TrashedCardResource
     {
-        Gate::authorize('restoreFromTrash', Card::class);
-        $card = Card::trashedByKey($key) ?? throw (new ModelNotFoundException)->setModel(Card::class);
+        Gate::authorize('restoreFromTrash', [Card::class, $company]);
+        // Карточка другой компании — как несуществующая
+        $card = Card::trashedByKey($key);
+        if ($card === null || $card->space->company_id !== $company->id) {
+            throw (new ModelNotFoundException)->setModel(Card::class);
+        }
 
         return new TrashedCardResource($action->handle($request->user(), $card)->load(['space', 'board', 'deleter', 'participants:id']));
     }

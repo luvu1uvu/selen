@@ -6,6 +6,7 @@ use App\Actions\Users\UserLock;
 use App\Enums\EventType;
 use App\Enums\InvitationState;
 use App\Enums\UserStatus;
+use App\Models\Company;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Notifications\InvitationNotification;
@@ -29,19 +30,19 @@ class ResendInvitationAction
         private readonly UserLock $lock,
     ) {}
 
-    public function handle(User $actor, Invitation $previous): Invitation
+    public function handle(User $actor, Invitation $previous, Company $company): Invitation
     {
         // Роль приглашённого — та, по которой политика пустила (приглашённым админом управляет только Владелец)
         $authorized = $previous->user;
 
-        $issued = DB::transaction(function () use ($actor, $previous, $authorized) {
+        $issued = DB::transaction(function () use ($actor, $previous, $authorized, $company) {
             $previous = Invitation::query()->lockForUpdate()->findOrFail($previous->id);
-            $user = $this->lock->lock($actor, $authorized);
+            $user = $this->lock->lock($actor, $authorized, $company);
 
             $this->ensureCanResend($previous, $user);
             $previousState = $previous->state();
 
-            $issued = $this->issuer->issue($user, $actor);
+            $issued = $this->issuer->issue($company, $user, $actor);
 
             $previous->forceFill([
                 'superseded_by_id' => $issued->invitation->id,

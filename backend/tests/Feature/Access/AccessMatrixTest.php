@@ -36,6 +36,9 @@ use Illuminate\Support\Facades\Storage;
 | Встроенная группа «Все сотрудники» (состав вычисляется): commenter и editor — как лично, «только свои» — чужая
 | карточка 404, деактивированный — 404.
 |
+| Другая компания (ADR-0024): её участник и администратор получают 404 на всех маршрутах (полная проверка изоляции —
+| CompanyIsolationTest).
+|
 | Путь — от /api/v1; веб-маршрут, который браузер открывает сам (ссылка на файл /files/{id}, UI-1b), — от корня («/…»).
 | Запросы матрицы — с Accept: application/json: 404 у всех одинаковый JSON (bootstrap/app.php).
 */
@@ -98,6 +101,8 @@ function spaceEndpoints(): array
         ['PUT', 'cards/{card}/labels', 'editor', Permission::CardUpdate],
 
         ['GET', 'spaces/{space}/labels', 'member', 'read'],
+        // Типы карточек компании пространства (ADR-0024)
+        ['GET', 'spaces/{space}/card-types', 'member', 'read'],
         ['POST', 'spaces/{space}/labels', 'admin', Permission::SpaceUpdate],
         ['PATCH', 'labels/{label}', 'admin', Permission::SpaceUpdate],
         ['POST', 'labels/{label}/archive', 'admin', Permission::SpaceUpdate],
@@ -230,6 +235,18 @@ it('Владелец без роли в пространстве, как и ад
     $this->actingAs(owner());
 
     ($this->call)($method, $path)->assertNotFound();
+})->with(spaceEndpoints());
+
+it('участник и администратор другой компании получают 404 с единым телом (ADR-0024)', function (string $method, string $path) {
+    $other = otherCompany();
+
+    foreach ([member(company: $other), admin(company: $other)] as $stranger) {
+        $this->actingAs($stranger);
+
+        ($this->call)($method, $path)
+            ->assertNotFound()
+            ->assertExactJson(['message' => __('selen.not_found')]);
+    }
 })->with(spaceEndpoints());
 
 it('commenter ничего не может изменить', function (string $method, string $path, string $level) {
@@ -368,7 +385,7 @@ it('через группу роли действуют так же, как ли
 })->with(spaceEndpoints());
 
 it('через «Все сотрудники» роли действуют так же, как лично; деактивированному — 404', function (string $method, string $path, string $level) {
-    $grant = grantGroup($this->space, Group::everyone(), SpaceRole::Commenter);
+    $grant = grantGroup($this->space, Group::everyone(company()), SpaceRole::Commenter);
     $user = member();
 
     foreach ([SpaceRole::Commenter, SpaceRole::Editor] as $role) {
@@ -383,7 +400,7 @@ it('через «Все сотрудники» роли действуют та�
 })->with(spaceEndpoints());
 
 it('через «Все сотрудники» в режиме «только свои карточки» чужая карточка — 404', function (string $method, string $path) {
-    grantGroup($this->space, Group::everyone(), SpaceRole::Editor, ownCardsOnly: true);
+    grantGroup($this->space, Group::everyone(company()), SpaceRole::Editor, ownCardsOnly: true);
     $this->actingAs(member());
 
     ($this->call)($method, $path)->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
@@ -473,7 +490,7 @@ it('право через группу и «Все сотрудники» дей
     $with = $required instanceof Permission ? [$required] : [];
     $user = member();
     // «Все сотрудники»: состав не хранится — пользователь входит в неё сам, потому что активен
-    $group = $source === 'group' ? addToGroup(makeGroup(), $user) : Group::everyone();
+    $group = $source === 'group' ? addToGroup(makeGroup(), $user) : Group::everyone(company());
     $grant = grantAccess($this->space, $group, makeRole([$other]));
     $this->actingAs($user);
 

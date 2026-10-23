@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Company;
 use App\Models\Group;
 use Closure;
 use Illuminate\Auth\Access\Response;
@@ -15,7 +16,7 @@ class SaveGroupRequest extends FormRequest
     {
         $group = $this->group();
 
-        return $group === null ? Gate::inspect('create', Group::class) : Gate::inspect('update', $group);
+        return $group === null ? Gate::inspect('create', [Group::class, $this->route('company')]) : Gate::inspect('update', $group);
     }
 
     /**
@@ -31,10 +32,14 @@ class SaveGroupRequest extends FormRequest
         ];
     }
 
-    /** Название уникально среди всех групп, включая архивные, без учёта регистра (индекс в БД). */
+    /** Название уникально среди групп компании, включая архивные, без учёта регистра (индекс в БД). */
     private function uniqueName(string $attribute, mixed $value, Closure $fail): void
     {
+        /** @var Company $company */
+        $company = $this->route('company');
+
         $taken = Group::query()
+            ->inCompany($company)
             ->whereRaw('lower(name) = lower(?)', [(string) $value])
             ->when($this->group(), fn ($q, Group $group) => $q->whereKeyNot($group->id))
             ->exists();

@@ -3,6 +3,7 @@
 namespace App\Actions\Groups;
 
 use App\Enums\EventType;
+use App\Models\Company;
 use App\Models\Group;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
@@ -20,11 +21,12 @@ class SaveGroupAction
     /**
      * @param  array{name?: string, description?: string|null}  $data
      */
-    public function handle(User $actor, array $data, ?Group $group = null): Group
+    public function handle(User $actor, Company $company, array $data, ?Group $group = null): Group
     {
-        return DB::transaction(function () use ($actor, $data, $group) {
+        return DB::transaction(function () use ($actor, $company, $data, $group) {
             if ($group === null) {
-                $group = Group::query()->create($data);
+                $group = new Group($data);
+                $group->forceFill(['company_id' => $company->id])->save();
                 $this->events->record(EventType::GroupCreated, $actor, $group);
 
                 return $group;

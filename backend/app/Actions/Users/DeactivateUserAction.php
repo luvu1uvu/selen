@@ -3,8 +3,8 @@
 namespace App\Actions\Users;
 
 use App\Enums\EventType;
-use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Models\Company;
 use App\Models\User;
 use App\Services\Auth\UserSessions;
 use App\Services\EventLog\EventRecorder;
@@ -14,7 +14,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Деактивация: пользователь не может войти, все его сессии и cookie «Запомнить меня»
- * становятся недействительными. Пользователь не удаляется.
+ * становятся недействительными. Пользователь не удаляется. В П2b-1 деактивируется учётная запись (как раньше,
+ * решение PM 23.10); деактивация в компании — П2c. Событие — в журнал компании, из админки которой деактивировали.
  */
 class DeactivateUserAction
 {
@@ -25,10 +26,10 @@ class DeactivateUserAction
         private readonly UserLock $lock,
     ) {}
 
-    public function handle(User $actor, User $user): User
+    public function handle(User $actor, User $user, Company $company): User
     {
-        return DB::transaction(function () use ($actor, $user) {
-            $user = $this->lock->lock($actor, $user);
+        return DB::transaction(function () use ($actor, $user, $company) {
+            $user = $this->lock->lock($actor, $user, $company);
 
             if ($user->status !== UserStatus::Active) {
                 throw ValidationException::withMessages(['user' => __('selen.users.not_active')]);
@@ -38,15 +39,15 @@ class DeactivateUserAction
                 throw ValidationException::withMessages(['user' => __('selen.users.owner_not_deactivated')]);
             }
 
-            // Только admin: Владельца деактивировать нельзя (выше), участник инвариант не затрагивает
-            if ($user->role === UserRole::Admin) {
-                $this->adminGuard->ensureAnotherActiveAdminExists($user);
+            // Только администратор компании: Владельца деактивировать нельзя (выше), участник инвариант не затрагивает
+            if ($company->permissionsOf($user)->isAdmin()) {
+                $this->adminGuard->ensureAnotherActiveAdminExists($user, $company);
             }
 
             $user->forceFill(['status' => UserStatus::Deactivated, 'deactivated_at' => Date::now()])->save();
             $this->sessions->terminate($user);
 
-            $this->events->record(EventType::UserDeactivated, $actor, $user);
+            $this->events->record(EventType::UserDeactivated, $actor, $user, company: $company);
 
             return $user;
         });

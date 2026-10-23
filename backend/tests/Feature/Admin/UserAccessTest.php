@@ -23,7 +23,7 @@ it('сводка показывает источники, в том числе �
     $old = addToGroup(makeGroup(['name' => 'Old', 'archived_at' => now()]), $olga);
     grantGroup($mgmt, $old, SpaceRole::Admin);
 
-    $data = $this->actingAs($this->admin)->getJson("/api/v1/admin/users/{$olga->id}/access")->assertOk()->json('data');
+    $data = $this->actingAs($this->admin)->getJson(adminPath()."users/{$olga->id}/access")->assertOk()->json('data');
 
     expect(collect($data['groups'])->pluck('name')->all())->toBe(['Все сотрудники', 'Analysts', 'Old'])
         ->and(collect($data['spaces'])->pluck('space.key')->all())->toBe(['BACK', 'IOS', 'MGMT']);
@@ -44,15 +44,15 @@ it('у деактивированного групповые источники 
     $gone = member(['status' => 'deactivated']);
     addToSpaceViaGroup(space(), $gone, SpaceRole::Editor);
 
-    $this->actingAs($this->admin)->getJson("/api/v1/admin/users/{$gone->id}/access")
+    $this->actingAs($this->admin)->getJson(adminPath()."users/{$gone->id}/access")
         ->assertJsonPath('data.spaces.0.has_access', false)
         ->assertJsonPath('data.spaces.0.sources.0.inactive_reason', 'user_deactivated');
 });
 
 it('доступна только системному администратору', function () {
     $user = member();
-    $this->actingAs(member())->getJson("/api/v1/admin/users/{$user->id}/access")->assertForbidden();
-    $this->actingAs(member())->getJson("/api/v1/admin/users/{$user->id}/deactivation-impact")->assertForbidden();
+    $this->actingAs(member())->getJson(adminPath()."users/{$user->id}/access")->assertForbidden();
+    $this->actingAs(member())->getJson(adminPath()."users/{$user->id}/deactivation-impact")->assertForbidden();
 });
 
 describe('деактивация последнего личного администратора', function () {
@@ -71,14 +71,14 @@ describe('деактивация последнего личного админ�
         // Деактивированный второй администратор тоже не считается
         addToSpace($dev, member(['status' => 'deactivated']), SpaceRole::Admin);
 
-        $this->actingAs($this->admin)->getJson("/api/v1/admin/users/{$anna->id}/deactivation-impact")
+        $this->actingAs($this->admin)->getJson(adminPath()."users/{$anna->id}/deactivation-impact")
             ->assertOk()
             ->assertJsonPath('data.last_admin_spaces.*.key', ['DEV']);
 
-        $this->postJson("/api/v1/admin/users/{$anna->id}/deactivate")->assertOk();
+        $this->postJson(adminPath()."users/{$anna->id}/deactivate")->assertOk();
 
         // В админке «Пространства» — без администратора первыми
-        $this->getJson('/api/v1/admin/spaces')
+        $this->getJson(adminPath().'spaces')
             ->assertJsonPath('data.0.key', 'DEV')
             ->assertJsonPath('data.0.has_active_admin', false)
             ->assertJsonPath('data.1.has_active_admin', true);
@@ -90,8 +90,8 @@ describe('деактивация последнего личного админ�
         addToSpace($dev, $anna, SpaceRole::Admin);
         $this->actingAs($this->admin);
 
-        $this->putJson("/api/v1/admin/spaces/{$dev->id}/members/".member()->id, ['role' => 'admin'])->assertOk();
+        $this->putJson(adminPath()."spaces/{$dev->id}/members/".member()->id, ['role' => 'admin'])->assertOk();
 
-        $this->getJson("/api/v1/admin/users/{$anna->id}/deactivation-impact")->assertJsonPath('data.last_admin_spaces', []);
+        $this->getJson(adminPath()."users/{$anna->id}/deactivation-impact")->assertJsonPath('data.last_admin_spaces', []);
     });
 });

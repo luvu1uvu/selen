@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Actions\Users\CreateAdminAction;
+use App\Models\Company;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -60,7 +61,8 @@ class CreateAdminCommand extends Command
             return self::FAILURE;
         }
 
-        $user = $action->handle($data['name'], $data['email'], $data['password']);
+        // Компании выбирать негде, пока она одна (экран «Компании» — П2b-2): администратор — «Компании 1»
+        $user = $action->handle(Company::primary(), $data['name'], $data['email'], $data['password']);
 
         $this->components->info($user->isOwner()
             ? "Владелец {$user->email} создан (Владельца в системе ещё не было). Теперь можно войти в систему."

@@ -20,7 +20,7 @@ beforeEach(function () {
 /** Дерево админки: id → узел. */
 function adminTree($test): Collection
 {
-    return collect($test->getJson('/api/v1/admin/navigation')->assertOk()->json('data'))->keyBy('id');
+    return collect($test->getJson(adminPath().'navigation')->assertOk()->json('data'))->keyBy('id');
 }
 
 it('доступна только системному администратору', function (string $method, string $uri) {
@@ -28,7 +28,7 @@ it('доступна только системному администрато�
     $user = member();
     addToSpace(space(), $user, SpaceRole::Admin);
 
-    $this->actingAs($user)->json($method, '/api/v1/admin/'.str_replace('{node}', $folder->id, $uri), [
+    $this->actingAs($user)->json($method, adminPath().''.str_replace('{node}', $folder->id, $uri), [
         'name' => 'Новая', 'parent_id' => null,
     ])->assertForbidden();
 })->with([
@@ -44,10 +44,10 @@ it('доступна только системному администрато�
 it('создаёт папки в корне и внутри папки, в конец; иконка необязательна', function () {
     $space = space(['key' => 'DEV', 'name' => 'Разработка']);
 
-    $response = $this->postJson('/api/v1/admin/folders', ['name' => '  Mobile ', 'icon' => '📱'])
+    $response = $this->postJson(adminPath().'folders', ['name' => '  Mobile ', 'icon' => '📱'])
         ->assertCreated()->assertJsonPath('meta.max_depth', 4);
     $mobileId = $response->json('meta.created_id');
-    $innerId = $this->postJson('/api/v1/admin/folders', ['name' => 'Apple', 'parent_id' => $mobileId, 'icon' => ''])
+    $innerId = $this->postJson(adminPath().'folders', ['name' => 'Apple', 'parent_id' => $mobileId, 'icon' => ''])
         ->assertCreated()->json('meta.created_id');
 
     $tree = adminTree($this);
@@ -68,17 +68,17 @@ it('проверяет название, иконку и родителя', func
     $archived = makeFolder('Архивная');
     $archived->forceFill(['archived_at' => now()])->save();
 
-    $this->postJson('/api/v1/admin/folders', ['name' => ''])->assertUnprocessable()->assertJsonValidationErrors('name');
+    $this->postJson(adminPath().'folders', ['name' => ''])->assertUnprocessable()->assertJsonValidationErrors('name');
     foreach (['a', '📦📦', 'ab', '1', '📦 x'] as $icon) {
-        $this->postJson('/api/v1/admin/folders', ['name' => 'Папка', 'icon' => $icon])
+        $this->postJson(adminPath().'folders', ['name' => 'Папка', 'icon' => $icon])
             ->assertUnprocessable()->assertJsonValidationErrors(['icon' => 'одна эмодзи']);
     }
     foreach (['👨‍👩‍👧', '👍🏽', '🇷🇺', '❤️'] as $icon) {
-        $this->postJson('/api/v1/admin/folders', ['name' => "Папка {$icon}", 'icon' => $icon])->assertCreated();
+        $this->postJson(adminPath().'folders', ['name' => "Папка {$icon}", 'icon' => $icon])->assertCreated();
     }
-    $this->postJson('/api/v1/admin/folders', ['name' => 'Папка', 'parent_id' => nodeOf($space)->id])
+    $this->postJson(adminPath().'folders', ['name' => 'Папка', 'parent_id' => nodeOf($space)->id])
         ->assertUnprocessable()->assertJsonValidationErrors(['parent_id' => 'активную папку']);
-    $this->postJson('/api/v1/admin/folders', ['name' => 'Папка', 'parent_id' => $archived->id])
+    $this->postJson(adminPath().'folders', ['name' => 'Папка', 'parent_id' => $archived->id])
         ->assertUnprocessable()->assertJsonValidationErrors('parent_id');
 });
 
@@ -88,20 +88,20 @@ it('ограничивает глубину папок четырьмя уров
         $level = makeFolder("Уровень {$depth}", $level);
     }
 
-    $this->postJson('/api/v1/admin/folders', ['name' => 'Пятый', 'parent_id' => $level->id])
+    $this->postJson(adminPath().'folders', ['name' => 'Пятый', 'parent_id' => $level->id])
         ->assertUnprocessable()->assertJsonValidationErrors(['parent_id' => 'не больше 4 уровней']);
 
     // Пространство в папке четвёртого уровня — можно
-    $this->postJson('/api/v1/admin/nav-nodes/'.nodeOf(space())->id.'/move', ['parent_id' => $level->id])->assertOk();
+    $this->postJson(adminPath().'nav-nodes/'.nodeOf(space())->id.'/move', ['parent_id' => $level->id])->assertOk();
 
     // Папку с вложенной нельзя опустить так, чтобы поддерево стало глубже 4
     $branch = makeFolder('Ветка');
     makeFolder('Лист', $branch);
     $third = NavNode::query()->where('name', 'Уровень 3')->firstOrFail();
-    $this->postJson("/api/v1/admin/nav-nodes/{$branch->id}/move", ['parent_id' => $third->id])
+    $this->postJson(adminPath()."nav-nodes/{$branch->id}/move", ['parent_id' => $third->id])
         ->assertUnprocessable()->assertJsonValidationErrors('parent_id');
     $second = NavNode::query()->where('name', 'Уровень 2')->firstOrFail();
-    $this->postJson("/api/v1/admin/nav-nodes/{$branch->id}/move", ['parent_id' => $second->id])->assertOk();
+    $this->postJson(adminPath()."nav-nodes/{$branch->id}/move", ['parent_id' => $second->id])->assertOk();
 });
 
 it('переименовывает папку и меняет иконки; название пространства здесь не меняется', function () {
@@ -109,12 +109,12 @@ it('переименовывает папку и меняет иконки; на
     $space = space(['name' => 'Пространство']);
     $spaceNode = nodeOf($space);
 
-    $this->patchJson("/api/v1/admin/nav-nodes/{$folder->id}", ['name' => 'Новое', 'icon' => '💡'])->assertOk();
-    $this->patchJson("/api/v1/admin/nav-nodes/{$spaceNode->id}", ['icon' => '📦'])->assertOk();
-    $this->patchJson("/api/v1/admin/nav-nodes/{$spaceNode->id}", ['icon' => '📦'])->assertOk(); // без изменений
-    $this->patchJson("/api/v1/admin/nav-nodes/{$spaceNode->id}", ['name' => 'Другое'])
+    $this->patchJson(adminPath()."nav-nodes/{$folder->id}", ['name' => 'Новое', 'icon' => '💡'])->assertOk();
+    $this->patchJson(adminPath()."nav-nodes/{$spaceNode->id}", ['icon' => '📦'])->assertOk();
+    $this->patchJson(adminPath()."nav-nodes/{$spaceNode->id}", ['icon' => '📦'])->assertOk(); // без изменений
+    $this->patchJson(adminPath()."nav-nodes/{$spaceNode->id}", ['name' => 'Другое'])
         ->assertUnprocessable()->assertJsonValidationErrors(['name' => 'в его настройках']);
-    $this->patchJson("/api/v1/admin/nav-nodes/{$folder->id}", ['icon' => null])->assertOk();
+    $this->patchJson(adminPath()."nav-nodes/{$folder->id}", ['icon' => null])->assertOk();
 
     expect($folder->fresh())->name->toBe('Новое')->icon->toBeNull()
         ->and($spaceNode->fresh()->icon)->toBe('📦')
@@ -129,7 +129,7 @@ it('переименовывает папку и меняет иконки; на
         ]);
 
     $folder->forceFill(['archived_at' => now()])->save();
-    $this->patchJson("/api/v1/admin/nav-nodes/{$folder->id}", ['name' => 'Ещё'])
+    $this->patchJson(adminPath()."nav-nodes/{$folder->id}", ['name' => 'Ещё'])
         ->assertUnprocessable()->assertJsonValidationErrors(['node' => 'в архиве']);
 });
 
@@ -141,17 +141,17 @@ it('перемещает узлы между папками, в корень и 
     $order = fn () => adminTree($this)->values()
         ->map(fn ($n) => str_repeat('  ', $n['depth'] - 1).($n['name'] ?? $n['space']['key']))->all();
 
-    $this->postJson("/api/v1/admin/nav-nodes/{$ios->id}/move", ['parent_id' => $mobile->id])->assertOk();
-    $this->postJson("/api/v1/admin/nav-nodes/{$android->id}/move", ['parent_id' => $mobile->id, 'before_id' => $ios->id])->assertOk();
+    $this->postJson(adminPath()."nav-nodes/{$ios->id}/move", ['parent_id' => $mobile->id])->assertOk();
+    $this->postJson(adminPath()."nav-nodes/{$android->id}/move", ['parent_id' => $mobile->id, 'before_id' => $ios->id])->assertOk();
     expect($order())->toBe(['Mobile', '  AND', '  IOS', 'FRONT']);
 
     // Выше / ниже — перестановка внутри той же папки
-    $this->postJson("/api/v1/admin/nav-nodes/{$android->id}/move", ['parent_id' => $mobile->id, 'after_id' => $ios->id])->assertOk();
-    $this->postJson("/api/v1/admin/nav-nodes/{$front->id}/move", ['parent_id' => null, 'before_id' => $mobile->id])->assertOk();
+    $this->postJson(adminPath()."nav-nodes/{$android->id}/move", ['parent_id' => $mobile->id, 'after_id' => $ios->id])->assertOk();
+    $this->postJson(adminPath()."nav-nodes/{$front->id}/move", ['parent_id' => null, 'before_id' => $mobile->id])->assertOk();
     expect($order())->toBe(['FRONT', 'Mobile', '  IOS', '  AND']);
 
     // В корень
-    $this->postJson("/api/v1/admin/nav-nodes/{$android->id}/move", ['parent_id' => null])->assertOk();
+    $this->postJson(adminPath()."nav-nodes/{$android->id}/move", ['parent_id' => null])->assertOk();
     expect($order())->toBe(['FRONT', 'Mobile', '  IOS', 'AND']);
 
     $moves = EventLogEntry::query()->where('event_type', 'nav_node.moved')->orderBy('id')->pluck('payload');
@@ -159,26 +159,26 @@ it('перемещает узлы между папками, в корень и 
         'node_id' => $android->id, 'space_id' => $android->space_id, 'from_parent_id' => $mobile->id, 'to_parent_id' => null,
     ])->and($moves)->toHaveCount(5);
 
-    $this->postJson("/api/v1/admin/nav-nodes/{$android->id}/move", [])->assertUnprocessable()->assertJsonValidationErrors('parent_id');
+    $this->postJson(adminPath()."nav-nodes/{$android->id}/move", [])->assertUnprocessable()->assertJsonValidationErrors('parent_id');
 });
 
 it('не перемещает папку в саму себя и во вложенную, архивные узлы не перемещаются', function () {
     $outer = makeFolder('Внешняя');
     $inner = makeFolder('Внутренняя', $outer);
 
-    $this->postJson("/api/v1/admin/nav-nodes/{$outer->id}/move", ['parent_id' => $outer->id])
+    $this->postJson(adminPath()."nav-nodes/{$outer->id}/move", ['parent_id' => $outer->id])
         ->assertUnprocessable()->assertJsonValidationErrors(['parent_id' => 'в саму себя']);
-    $this->postJson("/api/v1/admin/nav-nodes/{$outer->id}/move", ['parent_id' => $inner->id])
+    $this->postJson(adminPath()."nav-nodes/{$outer->id}/move", ['parent_id' => $inner->id])
         ->assertUnprocessable()->assertJsonValidationErrors('parent_id');
 
     $archivedSpace = space(['archived_at' => now()]);
-    $this->postJson('/api/v1/admin/nav-nodes/'.nodeOf($archivedSpace)->id.'/move', ['parent_id' => $outer->id])
+    $this->postJson(adminPath().'nav-nodes/'.nodeOf($archivedSpace)->id.'/move', ['parent_id' => $outer->id])
         ->assertUnprocessable()->assertJsonValidationErrors(['node' => 'восстановите']);
 
     $inner->forceFill(['archived_at' => now()])->save();
-    $this->postJson("/api/v1/admin/nav-nodes/{$inner->id}/move", ['parent_id' => null])
+    $this->postJson(adminPath()."nav-nodes/{$inner->id}/move", ['parent_id' => null])
         ->assertUnprocessable()->assertJsonValidationErrors('node');
-    $this->postJson('/api/v1/admin/nav-nodes/'.nodeOf(space())->id.'/move', ['parent_id' => $inner->id])
+    $this->postJson(adminPath().'nav-nodes/'.nodeOf(space())->id.'/move', ['parent_id' => $inner->id])
         ->assertUnprocessable()->assertJsonValidationErrors('parent_id');
 });
 
@@ -203,7 +203,7 @@ it('перемещение не меняет ключ, номера карточ
     ];
     $before = $snapshot();
 
-    $this->postJson("/api/v1/admin/nav-nodes/{$node->id}/move", ['parent_id' => null])->assertOk();
+    $this->postJson(adminPath()."nav-nodes/{$node->id}/move", ['parent_id' => null])->assertOk();
 
     expect($snapshot())->toEqual($before)
         ->and($group->fresh()->archived_at)->toBeNull();
@@ -217,14 +217,14 @@ it('архивирует только папку без активного со�
     $ios = space(['key' => 'IOS', 'name' => 'iOS']);
     placeIn(nodeOf($ios), $folder);
 
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/archive")->assertUnprocessable()
+    $this->postJson(adminPath()."folders/{$folder->id}/archive")->assertUnprocessable()
         ->assertJsonValidationErrors(['node' => 'Сначала перенесите содержимое папки: Apple, iOS.']);
 
     // Архивные пространство и папка не мешают и остаются внутри
     $ios->forceFill(['archived_at' => now()])->save();
-    $this->postJson("/api/v1/admin/folders/{$sub->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/archive")->assertUnprocessable()->assertJsonValidationErrors('node');
+    $this->postJson(adminPath()."folders/{$sub->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/archive")->assertUnprocessable()->assertJsonValidationErrors('node');
 
     $tree = adminTree($this);
     expect($tree[$folder->id]['archived_at'])->not->toBeNull()
@@ -232,21 +232,21 @@ it('архивирует только папку без активного со�
         ->and($tree[nodeOf($ios)->id]['parent_id'])->toBe($folder->id);
 
     // Узел пространства — не папка: 404
-    $this->postJson('/api/v1/admin/folders/'.nodeOf($ios)->id.'/archive')->assertNotFound();
+    $this->postJson(adminPath().'folders/'.nodeOf($ios)->id.'/archive')->assertNotFound();
 });
 
 it('восстанавливает папку на место, а если родитель в архиве — в корень', function () {
     $outer = makeFolder('Внешняя');
     $inner = makeFolder('Внутренняя', $outer);
-    $this->postJson("/api/v1/admin/folders/{$inner->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$inner->id}/archive")->assertOk();
 
-    $this->postJson("/api/v1/admin/folders/{$inner->id}/restore")->assertOk();
+    $this->postJson(adminPath()."folders/{$inner->id}/restore")->assertOk();
     expect($inner->fresh()->parent_id)->toBe($outer->id);
 
-    $this->postJson("/api/v1/admin/folders/{$inner->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$outer->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$inner->id}/restore")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$inner->id}/restore")->assertUnprocessable()->assertJsonValidationErrors('node');
+    $this->postJson(adminPath()."folders/{$inner->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$outer->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$inner->id}/restore")->assertOk();
+    $this->postJson(adminPath()."folders/{$inner->id}/restore")->assertUnprocessable()->assertJsonValidationErrors('node');
 
     expect($inner->fresh())->parent_id->toBeNull()->archived_at->toBeNull()
         ->and(EventLogEntry::query()->where('event_type', 'folder.restored')->orderBy('id')->pluck('payload')->all())
@@ -261,19 +261,19 @@ it('восстанавливает папку с архивными простр
     placeIn(nodeOf($two), $folder);
     placeIn(nodeOf($deep), $inner);
     foreach ([$one, $two, $deep] as $space) {
-        $this->postJson("/api/v1/admin/spaces/{$space->id}/archive")->assertOk();
+        $this->postJson(adminPath()."spaces/{$space->id}/archive")->assertOk();
     }
-    $this->postJson("/api/v1/admin/folders/{$inner->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$inner->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/archive")->assertOk();
 
     // Без галочки — только папка, пространства остаются в архиве внутри неё
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/restore")->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/restore")->assertOk();
     expect($folder->fresh()->archived_at)->toBeNull()
         ->and([$one->fresh()->archived_at, $two->fresh()->archived_at])->each->not->toBeNull();
 
     // С галочкой — и пространства прямо в папке, на своих местах; во вложенной архивной папке — нет
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/restore", ['restore_spaces' => true])->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/restore", ['restore_spaces' => true])->assertOk();
 
     $tree = adminTree($this);
     expect($one->fresh()->archived_at)->toBeNull()
@@ -285,8 +285,8 @@ it('восстанавливает папку с архивными простр
         ->toEqual(collect([$one->id, $two->id])->sort()->values()->all())
         ->and(EventLogEntry::query()->where('event_type', 'nav_node.moved')->count())->toBe(0);
 
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/archive", [])->assertUnprocessable();
-    $this->postJson("/api/v1/admin/folders/{$inner->id}/restore", ['restore_spaces' => 'да'])
+    $this->postJson(adminPath()."folders/{$folder->id}/archive", [])->assertUnprocessable();
+    $this->postJson(adminPath()."folders/{$inner->id}/restore", ['restore_spaces' => 'да'])
         ->assertUnprocessable()->assertJsonValidationErrors('restore_spaces');
 });
 
@@ -294,10 +294,10 @@ it('восстановленное пространство из архивно�
     $folder = makeFolder('Архив');
     $space = space(['key' => 'OLD']);
     placeIn(nodeOf($space), $folder);
-    $this->postJson("/api/v1/admin/spaces/{$space->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/archive")->assertOk();
+    $this->postJson(adminPath()."spaces/{$space->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/archive")->assertOk();
 
-    $this->postJson("/api/v1/admin/spaces/{$space->id}/restore")->assertOk();
+    $this->postJson(adminPath()."spaces/{$space->id}/restore")->assertOk();
 
     expect(nodeOf($space)->parent_id)->toBeNull()
         ->and(EventLogEntry::query()->where('event_type', 'nav_node.moved')->sole()->payload)->toEqual([
@@ -308,17 +308,17 @@ it('восстановленное пространство из архивно�
     // Пространство из активной папки остаётся на месте
     $active = makeFolder('Активная');
     placeIn(nodeOf($space), $active);
-    $this->postJson("/api/v1/admin/spaces/{$space->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/spaces/{$space->id}/restore")->assertOk();
+    $this->postJson(adminPath()."spaces/{$space->id}/archive")->assertOk();
+    $this->postJson(adminPath()."spaces/{$space->id}/restore")->assertOk();
     expect(nodeOf($space)->parent_id)->toBe($active->id);
 });
 
 it('новое пространство встаёт в конец корня, с иконкой', function () {
     makeFolder('Папка');
 
-    $this->postJson('/api/v1/admin/spaces', ['name' => 'Маркетинг', 'key' => 'MKT', 'icon' => 'x'])
+    $this->postJson(adminPath().'spaces', ['name' => 'Маркетинг', 'key' => 'MKT', 'icon' => 'x'])
         ->assertUnprocessable()->assertJsonValidationErrors('icon');
-    $this->postJson('/api/v1/admin/spaces', ['name' => 'Маркетинг', 'key' => 'MKT', 'icon' => '📣'])
+    $this->postJson(adminPath().'spaces', ['name' => 'Маркетинг', 'key' => 'MKT', 'icon' => '📣'])
         ->assertCreated()->assertJsonPath('data.icon', '📣');
 
     $last = adminTree($this)->values()->last();
@@ -333,7 +333,7 @@ it('новое пространство создаётся сразу в пап�
     $archived = makeFolder('Старое');
     $archived->forceFill(['archived_at' => now()])->save();
 
-    $this->postJson('/api/v1/admin/spaces', ['name' => 'Android', 'key' => 'AND', 'parent_id' => $folder->id])
+    $this->postJson(adminPath().'spaces', ['name' => 'Android', 'key' => 'AND', 'parent_id' => $folder->id])
         ->assertCreated();
 
     $tree = adminTree($this)->values();
@@ -342,20 +342,20 @@ it('новое пространство создаётся сразу в пап�
         ->and($tree->where('parent_id', $folder->id)->pluck('space.key')->values()->all())->toBe(['IOS', 'AND']);
 
     foreach ([$archived->id, nodeOf($first)->id, (string) str()->ulid()] as $parentId) {
-        $this->postJson('/api/v1/admin/spaces', ['name' => 'Ещё', 'key' => 'MORE', 'parent_id' => $parentId])
+        $this->postJson(adminPath().'spaces', ['name' => 'Ещё', 'key' => 'MORE', 'parent_id' => $parentId])
             ->assertUnprocessable()->assertJsonValidationErrors('parent_id');
     }
-    $this->postJson('/api/v1/admin/spaces', ['name' => 'Ещё', 'key' => 'MORE', 'parent_id' => 'не-ulid'])
+    $this->postJson(adminPath().'spaces', ['name' => 'Ещё', 'key' => 'MORE', 'parent_id' => 'не-ulid'])
         ->assertUnprocessable()->assertJsonValidationErrors('parent_id');
     expect(Space::query()->where('key', 'MORE')->exists())->toBeFalse();
 });
 
 it('в журнале дерева нет названий папок и ПДн', function () {
     $folder = makeFolder('Тайный проект «Альфа»');
-    $this->patchJson("/api/v1/admin/nav-nodes/{$folder->id}", ['name' => 'Тайный проект «Бета»', 'icon' => '🔒'])->assertOk();
-    $this->postJson("/api/v1/admin/nav-nodes/{$folder->id}/move", ['parent_id' => null])->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/archive")->assertOk();
-    $this->postJson("/api/v1/admin/folders/{$folder->id}/restore")->assertOk();
+    $this->patchJson(adminPath()."nav-nodes/{$folder->id}", ['name' => 'Тайный проект «Бета»', 'icon' => '🔒'])->assertOk();
+    $this->postJson(adminPath()."nav-nodes/{$folder->id}/move", ['parent_id' => null])->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/archive")->assertOk();
+    $this->postJson(adminPath()."folders/{$folder->id}/restore")->assertOk();
 
     expectNoPersonalDataInEventLog();
     $journal = DB::table('event_log')->pluck('payload')->implode("\n");

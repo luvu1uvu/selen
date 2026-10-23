@@ -74,7 +74,7 @@ it('пустая папка не видна в дереве ни системн�
             ->and($response->getContent())->not->toContain('Пустая')->not->toContain('"empty":true');
     }
 
-    $structure = collect($this->actingAs($this->admin)->getJson('/api/v1/admin/navigation')->json('data'));
+    $structure = collect($this->actingAs($this->admin)->getJson(adminPath().'navigation')->json('data'));
     expect($structure->pluck('name')->filter()->values()->all())->toBe(['Пустая', 'Вложенная пустая', 'Смешанная']);
 });
 
@@ -137,7 +137,7 @@ it('системному администратору — те же правил
     }
 
     // Полная структура со всеми названиями — только в «Структуре»
-    $structure = $this->getJson('/api/v1/admin/navigation')->assertOk()->json('data');
+    $structure = $this->getJson(adminPath().'navigation')->assertOk()->json('data');
     expect(collect($structure)->pluck('name')->filter()->values()->all())->toBe(['Операции', 'Пустая папка']);
 });
 
@@ -197,7 +197,7 @@ it('Владелец, как и администратор, не получае�
 });
 
 it('значок «доступно всем»: у пространства — доступ группы «Все сотрудники», у папки — все её активные пространства', function () {
-    $everyone = Group::everyone();
+    $everyone = Group::everyone(company());
     $root = makeFolder('Компания');
     $inner = makeFolder('Отделы', $root);
     $open1 = space(['key' => 'OPENA']);
@@ -236,10 +236,10 @@ it('у папки без активных пространств значка «
     $folder = makeFolder('Только архив');
     $space = space(['archived_at' => now()]);
     placeIn(nodeOf($space), $folder);
-    grantGroup($space, Group::everyone(), SpaceRole::Commenter);
+    grantGroup($space, Group::everyone(company()), SpaceRole::Commenter);
     $this->actingAs(admin());
 
-    $node = collect($this->getJson('/api/v1/admin/navigation')->assertOk()->json('data'))->firstWhere('id', $folder->id);
+    $node = collect($this->getJson(adminPath().'navigation')->assertOk()->json('data'))->firstWhere('id', $folder->id);
     expect($node['everyone'])->toBeFalse();
 });
 
@@ -261,7 +261,7 @@ it('число запросов не зависит от числа папок, 
             placeIn(nodeOf($space), makeFolder('Вложенная '.uniqid(), $folder));
             addToSpaceViaGroup($space, $this->user, SpaceRole::Commenter);
             makeBoard($space, admin());
-            grantGroup($space, Group::everyone(), SpaceRole::Commenter);
+            grantGroup($space, Group::everyone(company()), SpaceRole::Commenter);
         }
     };
 

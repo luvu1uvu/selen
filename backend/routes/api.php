@@ -87,16 +87,17 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
     Route::get('spaces/{space:key}', [SpaceController::class, 'show'])->name('spaces.show');
     Route::patch('spaces/{space:key}', [SpaceController::class, 'update'])->name('spaces.update');
 
+    // Человек и группа в адресе ищутся среди людей и групп компании пространства (scopeBindings, ADR-0024)
     Route::get('spaces/{space:key}/members', [SpaceMemberController::class, 'index'])->name('spaces.members.index');
     Route::post('spaces/{space:key}/members', [SpaceMemberController::class, 'store'])->name('spaces.members.store');
-    Route::patch('spaces/{space:key}/members/{user}', [SpaceMemberController::class, 'update'])->name('spaces.members.update');
-    Route::delete('spaces/{space:key}/members/{user}', [SpaceMemberController::class, 'destroy'])->name('spaces.members.destroy');
+    Route::patch('spaces/{space:key}/members/{user}', [SpaceMemberController::class, 'update'])->name('spaces.members.update')->scopeBindings();
+    Route::delete('spaces/{space:key}/members/{user}', [SpaceMemberController::class, 'destroy'])->name('spaces.members.destroy')->scopeBindings();
 
     // Доступ групп к пространству (ADR-0012)
     Route::get('spaces/{space:key}/groups', [SpaceGroupController::class, 'index'])->name('spaces.groups.index');
     Route::post('spaces/{space:key}/groups', [SpaceGroupController::class, 'store'])->name('spaces.groups.store');
-    Route::patch('spaces/{space:key}/groups/{group}', [SpaceGroupController::class, 'update'])->name('spaces.groups.update');
-    Route::delete('spaces/{space:key}/groups/{group}', [SpaceGroupController::class, 'destroy'])->name('spaces.groups.destroy');
+    Route::patch('spaces/{space:key}/groups/{group}', [SpaceGroupController::class, 'update'])->name('spaces.groups.update')->scopeBindings();
+    Route::delete('spaces/{space:key}/groups/{group}', [SpaceGroupController::class, 'destroy'])->name('spaces.groups.destroy')->scopeBindings();
 
     // --- Доски, колонки, дорожки, карточки (те же правила доступа) ------
     Route::get('spaces/{space:key}/boards', [BoardController::class, 'index'])->name('boards.index');
@@ -135,7 +136,7 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
     Route::get('cards/{card}/transitions', [CardController::class, 'transitions'])->name('cards.transitions');
     Route::get('cards/{card}/history', [CardController::class, 'history'])->name('cards.history');
     Route::post('cards/{card}/participants', [CardParticipantController::class, 'store'])->name('cards.participants.store');
-    Route::delete('cards/{card}/participants/{user}', [CardParticipantController::class, 'destroy'])->name('cards.participants.destroy');
+    Route::delete('cards/{card}/participants/{user}', [CardParticipantController::class, 'destroy'])->name('cards.participants.destroy')->scopeBindings();
     Route::put('cards/{card}/labels', [CardLabelController::class, 'update'])->name('cards.labels.update');
     Route::get('cards/{card}/mentionable', [CardController::class, 'mentionable'])->name('cards.mentionable');
 
@@ -177,13 +178,16 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
     Route::post('labels/{label}/archive', [LabelController::class, 'archive'])->name('labels.archive');
     Route::post('labels/{label}/restore', [LabelController::class, 'restore'])->name('labels.restore');
 
-    // Справочники
-    Route::get('users/directory', UserDirectoryController::class)->name('users.directory');
-    Route::get('groups/directory', GroupDirectoryController::class)->name('groups.directory');
-    Route::get('card-types', [CardTypeController::class, 'index'])->name('card-types.index');
+    // Справочники для работы — по компании сущности (ADR-0024): люди и группы компании для выдачи доступа,
+    // типы карточек — компании пространства
+    Route::get('companies/{company}/users/directory', UserDirectoryController::class)->name('users.directory');
+    Route::get('companies/{company}/groups/directory', GroupDirectoryController::class)->name('groups.directory');
+    Route::get('spaces/{space:key}/card-types', [CardTypeController::class, 'index'])->name('card-types.index');
 
-    // --- Администрирование (доступ проверяют Policies) ------------------
-    Route::prefix('admin')->name('admin.')->group(function () {
+    // --- Администрирование компании (доступ проверяют Policies, ADR-0024) ----
+    // Вложенные объекты ищутся только среди объектов компании из адреса (scoped binding: Company, Group, Space —
+    // resolveChildRouteBinding): объект другой компании — 404, как несуществующий
+    Route::prefix('admin/companies/{company}')->name('admin.')->scopeBindings()->group(function () {
         Route::get('users', [UserController::class, 'index'])->name('users.index');
         Route::patch('users/{user}/role', [UserController::class, 'updateRole'])->name('users.role');
         Route::post('users/{user}/deactivate', [UserController::class, 'deactivate'])->name('users.deactivate');

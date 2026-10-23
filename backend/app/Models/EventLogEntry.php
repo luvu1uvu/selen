@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -14,11 +15,13 @@ use LogicException;
  *
  * Создавать записи — только через App\Services\EventLog\EventRecorder.
  * Изменение и удаление запрещены здесь (исключение) и в БД (триггер).
+ * company_id — компания события (ADR-0024); пусто — событие без компании (вход, передача владения).
  *
  * @property int $id
  * @property Carbon $occurred_at
  * @property string $event_type
  * @property string|null $actor_id
+ * @property string|null $company_id
  * @property string|null $subject_type
  * @property string|null $subject_id
  * @property array<string, mixed> $payload
@@ -28,6 +31,8 @@ use LogicException;
  */
 class EventLogEntry extends Model
 {
+    use BelongsToCompany;
+
     protected $table = 'event_log';
 
     public $timestamps = false;

@@ -4,6 +4,7 @@ namespace App\Actions\Spaces;
 
 use App\Enums\Permission;
 use App\Models\AccessGrant;
+use App\Models\Company;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
@@ -46,8 +47,8 @@ class SpaceAdminGuard
      *
      * @return Collection<int, Space>
      */
-    public function lastAdminSpaces(User $user): Collection
+    public function lastAdminSpaces(User $user, Company $company): Collection
     {
-        return $this->resolver->lastManagerSpaces($user);
+        return $this->resolver->lastManagerSpaces($user, $company);
     }
 }

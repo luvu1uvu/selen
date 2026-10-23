@@ -100,7 +100,8 @@ class BoardDetailResource extends JsonResource
                     fn () => $card->customer_id === $user->id || $card->responsible_id === $user->id || (bool) $card->getAttribute('viewer_is_participant'),
                 ),
             ]),
-            'card_types' => CardTypeResource::collection(CardType::query()->ordered()->get()),
+            // Типы компании пространства доски (ADR-0024)
+            'card_types' => CardTypeResource::collection(CardType::query()->inCompany($this->resource->companyId())->ordered()->get()),
             // Справочники для фасадов: метки и ответственные, которые встречаются на карточках доски
             'labels' => LabelResource::collection($this->cards->flatMap->labels->unique('id')->values()),
             'people' => $this->cards->pluck('responsible')->filter()->unique('id')->values()->map(fn (User $u) => [

@@ -4,15 +4,16 @@ namespace App\Http\Requests\Admin;
 
 use App\Enums\EventType;
 use App\Models\EventLogEntry;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class ListEventsRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return Gate::allows('viewAny', EventLogEntry::class);
+        return Gate::inspect('viewAny', [EventLogEntry::class, $this->route('company')]);
     }
 
     /**

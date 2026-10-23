@@ -31,7 +31,7 @@ describe('папка', function () {
         $parent = makeFolder('Продукт');
         $folder = makeFolder('Пустая', $parent);
 
-        $tree = collect($this->deleteJson("/api/v1/admin/folders/{$folder->id}")->assertOk()->json('data'))->keyBy('id');
+        $tree = collect($this->deleteJson(adminPath()."folders/{$folder->id}")->assertOk()->json('data'))->keyBy('id');
 
         expect($tree->has($folder->id))->toBeFalse()
             ->and(NavNode::query()->whereKey($folder->id)->exists())->toBeFalse()
@@ -44,7 +44,7 @@ describe('папка', function () {
         $folder = makeFolder('Мобайл');
         $fill($folder);
 
-        $this->deleteJson("/api/v1/admin/folders/{$folder->id}")
+        $this->deleteJson(adminPath()."folders/{$folder->id}")
             ->assertUnprocessable()
             ->assertJsonPath('errors.node.0', __('selen.navigation.delete_not_empty'));
 
@@ -58,7 +58,7 @@ describe('папка', function () {
     ]);
 
     it('узел пространства через маршрут папки — 404', function () {
-        $this->deleteJson('/api/v1/admin/folders/'.nodeOf(space())->id)->assertNotFound();
+        $this->deleteJson(adminPath().'folders/'.nodeOf(space())->id)->assertNotFound();
     });
 });
 
@@ -68,7 +68,7 @@ describe('пространство', function () {
         $member = member();
         addToSpace($space, $member, SpaceRole::Editor);
         grantGroup($space, makeGroup(), SpaceRole::Commenter);
-        grantGroup($space, Group::everyone(), SpaceRole::Commenter);
+        grantGroup($space, Group::everyone(company()), SpaceRole::Commenter);
         $board = makeBoard($space, $this->admin, BoardTemplate::Development);
         $archived = makeBoard($space, $this->admin, BoardTemplate::Simple, 'Старая');
         $archived->forceFill(['archived_at' => now()])->save();
@@ -81,7 +81,7 @@ describe('пространство', function () {
         $nodeId = nodeOf($space)->id;
         expect(AccessGrant::query()->where('nav_node_id', $nodeId)->count())->toBeGreaterThan(1);
 
-        $this->deleteJson("/api/v1/admin/spaces/{$space->id}")->assertNoContent();
+        $this->deleteJson(adminPath()."spaces/{$space->id}")->assertNoContent();
 
         expect(Space::query()->whereKey($space->id)->exists())->toBeFalse()
             ->and(Board::query()->where('space_id', $space->id)->exists())->toBeFalse()
@@ -110,7 +110,7 @@ describe('пространство', function () {
         // лежит строка, — отсюда «то так, то наоборот». Первая доска с позицией позже второй без ORDER BY пришла бы второй
         $first->forceFill(['position' => FractionalIndex::between($second->position, null)])->save();
 
-        $this->deleteJson("/api/v1/admin/spaces/{$space->id}")->assertNoContent();
+        $this->deleteJson(adminPath()."spaces/{$space->id}")->assertNoContent();
 
         expect(EventLogEntry::query()->where('event_type', 'space.deleted')->sole()->payload)
             ->toEqual(['board_ids' => [$first->id, $second->id]]);
@@ -122,7 +122,7 @@ describe('пространство', function () {
         makeCard($board, 'To Do', $this->admin);
         makeCard($board, 'To Do', $this->admin)->forceFill(['archived_at' => now()])->save();
 
-        $this->deleteJson("/api/v1/admin/spaces/{$space->id}")
+        $this->deleteJson(adminPath()."spaces/{$space->id}")
             ->assertUnprocessable()
             ->assertJsonPath('errors.space.0', __('selen.spaces.delete_has_cards', ['count' => 2]));
 
@@ -139,7 +139,7 @@ describe('пространство', function () {
         $card->forceFill(['deleted_at' => now(), 'deleted_by' => $this->admin->id])->save();
         expect(Card::query()->where('space_id', $space->id)->exists())->toBeFalse();
 
-        $this->deleteJson("/api/v1/admin/spaces/{$space->id}")
+        $this->deleteJson(adminPath()."spaces/{$space->id}")
             ->assertUnprocessable()
             ->assertJsonPath('errors.space.0', __('selen.spaces.delete_has_cards', ['count' => 1]));
 
@@ -152,7 +152,7 @@ describe('пространство', function () {
         $user = member();
         addToSpace($space, $user, SpaceRole::Admin);
 
-        $this->actingAs($user)->deleteJson("/api/v1/admin/spaces/{$space->id}")->assertForbidden();
+        $this->actingAs($user)->deleteJson(adminPath()."spaces/{$space->id}")->assertForbidden();
         expect(Space::query()->whereKey($space->id)->exists())->toBeTrue();
     });
 });

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -74,7 +75,7 @@ use LogicException;
  * @property-read bool|null $is_blocked для фасада доски (withExists)
  */
 #[Fillable(['title', 'description', 'card_type_id', 'customer_id', 'responsible_id', 'due_date', 'due_at', 'is_urgent', 'estimate_hours'])]
-class Card extends Model
+class Card extends Model implements HasCompany
 {
     use HasUlids, SoftDeletes;
 
@@ -340,5 +341,26 @@ class Card extends Model
             ->whereHas('space', fn (Builder $q) => $q->where('key', $matches[1]))
             ->where('number', (int) $matches[2])
             ->first();
+    }
+
+    /** Компания карточки — компания её пространства (HasCompany: журнал событий). */
+    public function companyId(): string
+    {
+        return $this->relationLoaded('space')
+            ? $this->space->company_id
+            : (string) Space::query()->whereKey($this->space_id)->value('company_id');
+    }
+
+    /**
+     * Вложенный объект адреса (cards/{card}/participants/{user}) ищется среди людей компании карточки (scoped
+     * binding, ADR-0024): человек другой компании — 404.
+     *
+     * @param  string  $childType
+     * @param  mixed  $value
+     * @param  string|null  $field
+     */
+    public function resolveChildRouteBinding($childType, $value, $field): ?Model
+    {
+        return $this->space->company->resolveChildRouteBinding($childType, $value, $field);
     }
 }

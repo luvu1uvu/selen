@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
  * @property-read Board $board
  */
 #[Fillable(['board_id', 'name', 'position'])]
-class Lane extends Model
+class Lane extends Model implements HasCompany
 {
     use HasUlids;
 
@@ -49,5 +50,13 @@ class Lane extends Model
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
+    }
+
+    /** Компания дорожки — компания пространства доски (HasCompany: журнал событий). */
+    public function companyId(): string
+    {
+        return $this->relationLoaded('board')
+            ? $this->board->companyId()
+            : (string) Space::query()->whereIn('id', Board::query()->select('space_id')->whereKey($this->board_id))->value('company_id');
     }
 }

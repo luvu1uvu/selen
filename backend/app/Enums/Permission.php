@@ -6,7 +6,8 @@ namespace App\Enums;
  * Каталог прав (docs/adr/0024-rights-2.md, журнал «Права 2.0», раздел 3).
  *
  * Права сущности (scope = entity) входят в роли: роль — набор этих прав и область карточек (CardScope).
- * Права компании (scope = company) выдаются лично или группе компании, в роли не входят (с П2c).
+ * Права компании (scope = company) в роли не входят: с П2b-1 их даёт членство (Владелец — все, администратор компании —
+ * companyAdminDefaults()), выдача лично или группе компании — с П2c.
  * Политики проверяют права отсюда, а не названия ролей (CLAUDE.md, правило 11).
  *
  * Правила:
@@ -14,7 +15,7 @@ namespace App\Enums;
  * - новое право — case здесь, его место в StandardRole::permissions() и миграция прав стандартных ролей
  *   (и ролей с флагом «выдавать новые права», П2e);
  * - since() — с какого подэтапа или этапа право проверяется; до этого действие проверяется по-старому
- *   (например, папки и корзина — системным администратором до П2d) или его ещё нет.
+ *   (например, папки и корзина — правом компании до П2d) или его ещё нет.
  */
 enum Permission: string
 {
@@ -110,8 +111,30 @@ enum Permission: string
             self::SpaceViewSettings, self::FieldRead, self::FieldUpdate, self::FieldDelete => 'этап 5',
             self::TimeViewOthers, self::TimeEditOthers => 'этап 6',
             self::AutomationView, self::AutomationManage => 'этап 10',
+            // Админка компании (П2b-1): у Владельца и администратора компании по умолчанию; выдача — с П2c
+            self::CompanyInviteUsers, self::CompanyManageUsers, self::CompanyManageGroups,
+            self::CompanyManageDictionaries, self::CompanyManageStructure, self::CompanyManageAccess,
+            self::CompanyViewEventLog, self::CompanyManageTrash => 'П2b-1',
+            self::CompanyManageRoles => 'П2e',
+            self::CompanyDeleteUsers => 'LATER-105',
             default => 'П2c',
         };
+    }
+
+    /**
+     * Права компании администратора компании по умолчанию: все, кроме «удалять пользователей» и «аналитика
+     * трудозатрат» — их по умолчанию держит и выдаёт только Владелец (решение PM 23.10, В17).
+     *
+     * @return list<self>
+     */
+    public static function companyAdminDefaults(): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            fn (self $permission) => $permission->scope() === 'company'
+                && $permission !== self::CompanyDeleteUsers
+                && $permission !== self::CompanyViewTimeAnalytics,
+        ));
     }
 
     /**

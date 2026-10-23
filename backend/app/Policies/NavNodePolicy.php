@@ -2,28 +2,35 @@
 
 namespace App\Policies;
 
+use App\Enums\Permission;
+use App\Models\Company;
 use App\Models\NavNode;
 use App\Models\User;
+use App\Policies\Concerns\ChecksCompanyPermission;
+use Illuminate\Auth\Access\Response;
 
 /**
- * Дерево навигации ведёт только системный администратор (ADR-0013). Своё дерево (GET /navigation) видит
- * каждый — оно строится по его правам, политика для него не нужна.
+ * Дерево навигации компании ведёт тот, у кого право компании «управлять структурой» — администратор компании
+ * и Владелец (ADR-0013, ADR-0024; права на папки ролью — П2d). Своё дерево (GET /navigation) видит каждый — оно
+ * строится по его правам, политика для него не нужна.
  */
 class NavNodePolicy
 {
-    public function manage(User $actor): bool
+    use ChecksCompanyPermission;
+
+    public function manage(User $actor, Company $company): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $company, Permission::CompanyManageStructure);
     }
 
-    public function update(User $actor, NavNode $node): bool
+    public function update(User $actor, NavNode $node): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $node->company, Permission::CompanyManageStructure);
     }
 
     /** Удалить пустую папку навсегда (LATER-43). */
-    public function delete(User $actor, NavNode $node): bool
+    public function delete(User $actor, NavNode $node): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $node->company, Permission::CompanyManageStructure);
     }
 }

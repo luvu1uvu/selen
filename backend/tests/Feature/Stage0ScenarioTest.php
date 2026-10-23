@@ -30,7 +30,7 @@ it('проходит сквозной сценарий этапа 0', function (
     ])->assertOk()->assertJsonPath('data.role', 'owner');
 
     // 3. Приглашает пользователя
-    $adminBrowser->post('/api/v1/admin/invitations', [
+    $adminBrowser->post(adminPath().'invitations', [
         'name' => 'Борис Новиков',
         'email' => 'Boris@Selen.test',
         'role' => 'member',
@@ -110,7 +110,7 @@ it('проходит сквозной сценарий этапа 0', function (
     $borisBrowser->get('/api/v1/auth/me')->assertOk();
 
     // 9. Администратор деактивирует Бориса
-    $adminBrowser->post("/api/v1/admin/users/{$boris->id}/deactivate")
+    $adminBrowser->post(adminPath()."users/{$boris->id}/deactivate")
         ->assertOk()
         ->assertJsonPath('data.status', 'deactivated');
 
@@ -143,7 +143,7 @@ it('проходит сквозной сценарий этапа 0', function (
         'auth.login_failed',               // деактивирован
     ]);
 
-    $adminBrowser->get('/api/v1/admin/events')->assertOk()->assertJsonCount(15, 'data');
+    $adminBrowser->get(adminPath().'events')->assertOk()->assertJsonCount(15, 'data');
 
     // 12. В журнале нет персональных данных (решение этапа 1, ADR-0003)
     expectNoPersonalDataInEventLog();
