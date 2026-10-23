@@ -1,4 +1,13 @@
-import { useRef } from 'react'
+import { useRef, type FocusEvent } from 'react'
+
+/**
+ * Подсказка кнопки меню («⋯», «+») по фокусу — только при фокусе с клавиатуры. После пункта, выбранного мышью, меню
+ * возвращает фокус на кнопку, и подсказка висела бы, пока фокус не уйдёт: указатель над кнопкой не возвращался.
+ * Отменённое событие фокуса Radix Tooltip пропускает; наведение подсказку открывает, как раньше.
+ */
+export function hideHintUnlessKeyboard(event: FocusEvent<HTMLElement>) {
+  if (!event.currentTarget.matches(':focus-visible')) event.preventDefault()
+}
 
 /** Последний элемент с фокусом вне окон и меню — куда вернуть фокус, если окно сразу отдало его своему полю. */
 let restoring = false

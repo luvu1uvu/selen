@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { NavTreeNode } from '@/shared/types/api'
@@ -87,7 +87,7 @@ describe('Панель «Дерево»', () => {
     expect(linkTo(again, '/spaces/IOS')).toBeUndefined()
   })
 
-  it('значок «доступно всем» — у открытого всем пространства и у папки', async () => {
+  it('значок «доступно всем» — у открытого всем пространства и у папки, подсказка по наведению и фокусу (LATER-88)', async () => {
     signedInAs(member)
     withTree()
     const user = userEvent.setup()
@@ -95,16 +95,69 @@ describe('Панель «Дерево»', () => {
 
     const nav = await treeNav()
     const folder = await within(nav).findByRole('button', { name: /Mobile/ })
-    expect(
-      within(folder).getByText('Все пространства папки доступны всем сотрудникам'),
-    ).toBeInTheDocument()
-    expect(within(nav).getByRole('link', { name: /Management/ })).not.toHaveTextContent(
-      'Доступно всем сотрудникам',
+    const folderMark = within(nav).getByRole('img', {
+      name: 'Все пространства папки доступны всем сотрудникам',
+    })
+    // Значок — отдельный элемент с фокусом рядом с кнопкой строки, не внутри неё; подсказка — Tooltip, не title
+    expect(folder).not.toContainElement(folderMark)
+    expect(folderMark).toHaveAttribute('tabindex', '0')
+    expect(folderMark).not.toHaveAttribute('title')
+    await user.hover(folderMark)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'Все пространства папки доступны всем сотрудникам',
     )
+    await user.keyboard('{Escape}')
+    expect(within(nav).queryByRole('img', { name: 'Доступно всем сотрудникам' })).toBeNull()
 
     await user.click(folder)
     await waitFor(() => expect(linkTo(nav, '/spaces/IOS')).toBeDefined())
-    expect(linkTo(nav, '/spaces/IOS')).toHaveTextContent('Доступно всем сотрудникам')
+    const spaceMark = within(nav).getByRole('img', { name: 'Доступно всем сотрудникам' })
+    expect(linkTo(nav, '/spaces/IOS')).not.toContainElement(spaceMark)
+    // С клавиатуры: Tab со ссылки пространства — на значок, подсказка видна
+    act(() => linkTo(nav, '/spaces/IOS')!.focus())
+    await user.tab()
+    expect(spaceMark).toHaveFocus()
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Доступно всем сотрудникам')
+  })
+
+  describe('длинное название — «…», полное в подсказке у строки (LATER-109)', () => {
+    // jsdom не считает раскладку: «не помещается» — текст длиннее 12 символов (ширина содержимого больше видимой)
+    beforeEach(() => {
+      vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return (this.textContent?.length ?? 0) > 12 ? 200 : 50
+      })
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100)
+    })
+    afterEach(() => vi.restoreAllMocks())
+
+    it('подсказка — у самой ссылки, по наведению и по фокусу; у короткого названия подсказки нет', async () => {
+      const long = makeSpace({ id: 's-long', key: 'LONG', name: 'Подготовка задач к разработке' })
+      signedInAs(member)
+      withTree([makeNavSpace(long, { boards: [] }), makeNavSpace(mgmt, { boards: [] })])
+      const user = userEvent.setup()
+      renderApp('/')
+
+      const nav = await treeNav()
+      const link = await within(nav).findByRole('link', { name: 'Подготовка задач к разработке' })
+      // Название внутри ссылки фокус не получает: остановка Tab — сама ссылка
+      expect(within(link).getByText('Подготовка задач к разработке')).not.toHaveAttribute(
+        'tabindex',
+      )
+      await user.hover(link)
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Подготовка задач к разработке')
+      // jsdom не знает размеров: уход указателя Radix считает уходом на подсказку — закрываем Esc
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+
+      act(() => link.focus())
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Подготовка задач к разработке')
+
+      const short = within(nav).getByRole('link', { name: 'Management' })
+      act(() => short.focus())
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    })
   })
 
   it('переход по ссылке раскрывает путь к текущему пространству', async () => {
@@ -271,17 +324,26 @@ describe('Панель «Дерево»', () => {
 
     const nav = await treeNav()
     // У Владельца (системного администратора) в строке ещё кнопки «+» и «⋯» — берём саму папку
-    const folder = await within(nav).findByRole('button', { name: /^Новые направления/ })
-    expect(folder).toHaveTextContent('Новые направленияпустая')
-    expect(
-      within(folder).getByTitle(
-        'В папке нет ни одного пространства. Такие папки в дереве видит только Владелец',
-      ),
-    ).toBeInTheDocument()
+    const folder = await within(nav).findByRole('button', { name: 'Новые направления' })
+    // В строке «пустая» дважды: невидимое место внутри кнопки и сама пометка рядом с ней
+    const markOf = (button: HTMLElement) =>
+      within(button.parentElement!)
+        .queryAllByText('пустая')
+        .find((element) => !button.contains(element))
+    const mark = markOf(folder)!
+    // Пометка — рядом с кнопкой строки, с фокусом и подсказкой Tooltip, не title (LATER-88)
+    expect(folder).not.toContainElement(mark)
+    expect(mark).toHaveAttribute('tabindex', '0')
+    expect(mark).not.toHaveAttribute('title')
+    await user.hover(mark)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'В папке нет ни одного пространства. Такие папки в дереве видит только Владелец',
+    )
+    await user.unhover(mark)
     await user.click(folder)
-    const nested = await within(nav).findByRole('button', { name: /^Идеи/ })
-    expect(nested).toHaveTextContent('Идеипустая')
+    const nested = await within(nav).findByRole('button', { name: 'Идеи' })
+    expect(markOf(nested)).toHaveAttribute('tabindex', '0')
     // Обычная папка — без пометки
-    expect(within(nav).getByRole('button', { name: /Mobile$/ })).not.toHaveTextContent('пустая')
+    expect(markOf(within(nav).getByRole('button', { name: /Mobile$/ }))).toBeUndefined()
   })
 })

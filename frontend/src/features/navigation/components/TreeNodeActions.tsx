@@ -13,6 +13,8 @@ import {
   SquarePlus,
   Trash2,
 } from 'lucide-react'
+import type { ReactElement } from 'react'
+import { hideHintUnlessKeyboard } from '@/shared/ui/restore-focus'
 import type { NavTreeNode } from '@/shared/types/api'
 import {
   DropdownMenu,
@@ -21,10 +23,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import type { StructureActions } from '../useStructureActions'
 
 const buttonClass =
   'text-muted-foreground hover:bg-background hover:text-foreground flex size-6 items-center justify-center rounded'
+
+/**
+ * Подсказка кнопки-значка — Tooltip (CLAUDE.md, фронтенд, правило 8; LATER-88), по фокусу — только с клавиатуры: меню,
+ * закрытое мышью, возвращает фокус на кнопку, и подсказка висела бы (как у `ActionsMenu`).
+ */
+function TriggerHint({ label, children }: { label: string; children: ReactElement }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild onFocus={hideHintUnlessKeyboard}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 /**
  * Кнопки «+» и «⋯» строки дерева (docs/ui-reference/kaiten/README.md, «01 — Дерево»): видны при наведении
@@ -65,17 +83,16 @@ export function TreeNodeActions({
 
   return (
     // Видны при наведении, при фокусе с клавиатуры (:focus-visible, а не любой фокус: после закрытия меню
-    // мышью фокус возвращается на «+», и кнопки не должны оставаться) и пока открыто меню
-    <div className="bg-accent absolute top-1 right-1 flex items-center gap-0.5 rounded opacity-0 group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 has-data-[state=open]:opacity-100 pointer-coarse:opacity-100">
+    // мышью фокус возвращается на «+», и кнопки не должны оставаться) и пока открыто меню — по aria-expanded:
+    // data-state у кнопки — состояние подсказки, оно перекрывает состояние меню
+    <div className="bg-accent absolute top-1 right-1 flex items-center gap-0.5 rounded opacity-0 group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 has-[[aria-expanded=true]]:opacity-100 pointer-coarse:opacity-100">
       {(canAddInFolder || canAddBoard) && (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            className={buttonClass}
-            aria-label={t('tree.node.add', { name })}
-            title={t('tree.node.add', { name })}
-          >
-            <Plus className="size-4" />
-          </DropdownMenuTrigger>
+          <TriggerHint label={t('tree.node.add', { name })}>
+            <DropdownMenuTrigger className={buttonClass} aria-label={t('tree.node.add', { name })}>
+              <Plus className="size-4" />
+            </DropdownMenuTrigger>
+          </TriggerHint>
           <DropdownMenuContent align="start">
             {node.type === 'folder' ? (
               <>
@@ -105,13 +122,11 @@ export function TreeNodeActions({
       )}
       {adminNode && (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            className={buttonClass}
-            aria-label={t('tree.node.menu', { name })}
-            title={t('tree.node.menu', { name })}
-          >
-            <MoreHorizontal className="size-4" />
-          </DropdownMenuTrigger>
+          <TriggerHint label={t('tree.node.menu', { name })}>
+            <DropdownMenuTrigger className={buttonClass} aria-label={t('tree.node.menu', { name })}>
+              <MoreHorizontal className="size-4" />
+            </DropdownMenuTrigger>
+          </TriggerHint>
           <DropdownMenuContent align="start">
             {node.type === 'folder' && (
               <DropdownMenuItem

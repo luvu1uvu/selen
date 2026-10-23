@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Boxes, EyeOff, Folder, SquareKanban, UsersRound } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
@@ -29,25 +30,67 @@ export function NodeIcon({
   return <Icon aria-hidden className={cn('text-muted-foreground size-4 shrink-0', className)} />
 }
 
-/** Пометка пустой папки — в дереве её видит только Владелец (ADR-0017). */
-export function EmptyFolderMark() {
+const markFocus = 'focus-visible:ring-ring rounded-sm outline-none focus-visible:ring-[3px]'
+
+/**
+ * Пометка «пустая» пустой папки — в дереве её видит только Владелец (ADR-0017). Почему пустая — в подсказке Tooltip по
+ * наведению и по фокусу (LATER-88): пометка получает фокус, поэтому в дереве она стоит рядом с кнопкой папки, а не
+ * внутри неё (`NavTree`); `className`, `style` — её место там.
+ */
+export function EmptyFolderMark({
+  className,
+  style,
+}: {
+  className?: string
+  style?: CSSProperties
+}) {
   const { t } = useTranslation('spaces')
   return (
-    <span title={t('tree.emptyFolderHint')} className="ml-auto shrink-0 text-xs whitespace-nowrap">
-      {t('tree.emptyFolder')}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          className={cn('text-muted-foreground text-xs whitespace-nowrap', markFocus, className)}
+          style={style}
+        >
+          {t('tree.emptyFolder')}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{t('tree.emptyFolderHint')}</TooltipContent>
+    </Tooltip>
   )
 }
 
-/** Значок «доступно всем сотрудникам» (группа «Все сотрудники», ADR-0012). */
-export function EveryoneMark({ folder = false }: { folder?: boolean }) {
+/**
+ * Значок «доступно всем сотрудникам» (группа «Все сотрудники», ADR-0012). Подсказка — Tooltip по наведению и по фокусу
+ * (LATER-88, как `HiddenFromTreeMark`); в дереве значок стоит поверх строки, рядом со ссылкой (`NavTree`).
+ */
+export function EveryoneMark({
+  folder = false,
+  className,
+  style,
+}: {
+  folder?: boolean
+  className?: string
+  style?: CSSProperties
+}) {
   const { t } = useTranslation('spaces')
   const label = folder ? t('tree.folderEveryone') : t('tree.everyone')
   return (
-    <span title={label} className="flex shrink-0">
-      <UsersRound aria-hidden className="text-muted-foreground size-3.5" />
-      <span className="sr-only">{label}</span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={label}
+          tabIndex={0}
+          className={cn('flex shrink-0', markFocus, className)}
+          style={style}
+        >
+          <UsersRound aria-hidden className="text-muted-foreground size-3.5" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -63,12 +106,7 @@ export function HiddenFromTreeMark() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          role="img"
-          aria-label={label}
-          tabIndex={0}
-          className="focus-visible:ring-ring flex shrink-0 rounded-sm outline-none focus-visible:ring-[3px]"
-        >
+        <span role="img" aria-label={label} tabIndex={0} className={cn('flex shrink-0', markFocus)}>
           <EyeOff aria-hidden className="text-muted-foreground/70 size-3.5" />
         </span>
       </TooltipTrigger>

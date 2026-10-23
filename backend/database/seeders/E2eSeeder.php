@@ -74,6 +74,8 @@ use Illuminate\Database\Seeder;
  * Пачка UX-1 (acceptance/stage-ux1): в LAYOUT — «Длинные названия» (ТК-L74.1), в QA — метка «Бэкенд» (ТК-L80.1), MOB-1 —
  * ТК-L76.1 и ТК-L78.1.
  * Пустая папка «E2E Пустая» с вложенной «E2E Вложенная пустая» — в дереве видна только Владельцу (тест-кейсы 3c).
+ * Пачка UX-2 (LATER-109, tree-row.spec, acceptance/stage-ux2): в корне — папка с длинным названием, в ней такая же папка,
+ * в ней пространство LONGTREE с доской (названия — константы LONG_*; видит только администратор).
  * Приёмка UI-1a (окно карточки, acceptance/stage-ui1): пространство WIN «Окно карточки» — см. cardWindow().
  * Приёмка LATER-91 (подготовка к тёмной теме, acceptance/stage-L91): пространство THEME «Тёмная тема» — см. themePrep().
  */
@@ -81,6 +83,15 @@ class E2eSeeder extends Seeder
 {
     /** Дорожка с длинным названием на доске «Дорожки» (add-card.spec, LATER-49). */
     public const LONG_LANE = 'Очень длинное название дорожки для проверки многоточия в форме';
+
+    /** Дерево с длинными названиями (пачка UX-2, LATER-109): папка → папка → пространство LONGTREE → доска. */
+    public const LONG_FOLDER = 'E2E Папка с очень длинным названием, которое не помещается в дерево';
+
+    public const LONG_SUBFOLDER = 'E2E Вложенная папка с очень длинным названием для многоточия';
+
+    public const LONG_SPACE = 'E2E Пространство с очень длинным названием для проверки многоточия';
+
+    public const LONG_BOARD = 'E2E Доска с очень длинным названием на самом глубоком уровне дерева';
 
     public function run(): void
     {
@@ -239,6 +250,15 @@ class E2eSeeder extends Seeder
 
         $empty = app(CreateFolderAction::class)->handle($admin, 'E2E Пустая', null, null);
         app(CreateFolderAction::class)->handle($admin, 'E2E Вложенная пустая', null, $empty->id);
+
+        // Пачка UX-2 (LATER-109): длинные названия на всех уровнях дерева — папка, в ней папка, в ней пространство
+        // LONGTREE (только администратор) с доской
+        $longFolder = app(CreateFolderAction::class)->handle($admin, self::LONG_FOLDER, null, null);
+        $longSubfolder = app(CreateFolderAction::class)->handle($admin, self::LONG_SUBFOLDER, null, $longFolder->id);
+        $longSpace = app(CreateSpaceAction::class)->handle($admin, ['name' => self::LONG_SPACE, 'key' => 'LONGTREE'], [$admin]);
+        app(CreateBoardAction::class)->handle($admin, $longSpace, ['name' => self::LONG_BOARD], BoardTemplate::Empty);
+        $longNode = NavNode::query()->where('space_id', $longSpace->id)->sole();
+        app(MoveNavNodeAction::class)->handle($admin, $longNode, $longSubfolder->id, null, null);
 
         // Приёмка UI-1a — окно карточки (acceptance/stage-ui1, ТК-UI1.*): своё пространство, тест-кейсы меняют карточки
         $this->cardWindow($admin, $editor, $restricted);

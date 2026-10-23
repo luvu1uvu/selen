@@ -1,22 +1,13 @@
-import { useRef, type FocusEvent, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
-import { restoreFocusQuietly } from '@/shared/ui/restore-focus'
+import { hideHintUnlessKeyboard, restoreFocusQuietly } from '@/shared/ui/restore-focus'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 /** Обёртка обработчика пункта меню, который открывает окно (см. ActionsMenu). */
 export type OpensDialog = (open: () => void) => () => void
-
-/**
- * Подсказка «⋯» по фокусу — только при фокусе с клавиатуры. После пункта, выбранного мышью, меню возвращает фокус на «⋯»,
- * и подсказка висела бы, пока фокус не уйдёт: указатель над «⋯» не возвращался. Отменённое событие фокуса Radix Tooltip
- * пропускает; наведение подсказку открывает, как раньше.
- */
-function hideHintUnlessKeyboard(event: FocusEvent<HTMLButtonElement>) {
-  if (!event.currentTarget.matches(':focus-visible')) event.preventDefault()
-}
 
 /**
  * Кнопка «⋯» с меню действий: подпись для экранного диктора — она же в подсказке Tooltip по наведению и по фокусу

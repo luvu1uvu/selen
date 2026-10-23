@@ -17,7 +17,8 @@ export function fileReturnPath(search: string): string | null {
 }
 
 /** Страницы приложения, куда можно вернуться после входа: главная и разделы за входом (app/routes.tsx). */
-const APP_PAGE = /^\/(?:(?:spaces|boards|cards|admin)\/[^/\\]|(?:profile|file-not-found)(?:[?#]|$)|$|[?#])/
+const APP_PAGE =
+  /^\/(?:(?:spaces|boards|cards|admin)\/[^/\\]|(?:profile|file-not-found)(?:[?#]|$)|$|[?#])/
 
 /**
  * Куда вернуться после входа, если на вход отправили со страницы приложения (`RequireAuth`, LATER-104). Только адрес
