@@ -40,7 +40,8 @@ class DeleteSpaceAction
                 throw ValidationException::withMessages(['space' => __('selen.spaces.delete_has_cards', ['count' => $cards])]);
             }
 
-            $boardIds = Board::query()->where('space_id', $space->id)->pluck('id')->all();
+            // Порядок — явный: без ORDER BY PostgreSQL отдаёт строки как лежат, и журнал был то так, то наоборот (LATER-101)
+            $boardIds = Board::query()->where('space_id', $space->id)->orderBy('id')->pluck('id')->all();
             $this->events->record(EventType::SpaceDeleted, $actor, $space, ['board_ids' => $boardIds]);
 
             // От зависимых к основным: внешние ключи — RESTRICT. Подколонки — раньше колонок первого уровня
