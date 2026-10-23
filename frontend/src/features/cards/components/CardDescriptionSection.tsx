@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import type { CardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
+import { restoreFocusQuietly } from '@/shared/ui/restore-focus'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { useMentionableLoader, useUpdateCard } from '../queries'
 import { useAttachmentUpload } from '../useAttachmentUpload'
@@ -21,6 +22,19 @@ export function CardDescriptionSection({ card, canEdit }: { card: CardDetail; ca
   const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const [editing, setEditing] = useState(false)
+  // Редактор закрыт «Отменой» или сохранением — фокус на то, чем его открывают (серое поле или карандаш; на время
+  // редактора их нет — это уже новые элементы), а не на окно: иначе Tab уводит в начало окна (U-9 UX-ревью UI-1a)
+  const editControl = useRef<HTMLButtonElement>(null)
+  const refocus = useRef(false)
+  useEffect(() => {
+    if (editing || !refocus.current) return
+    refocus.current = false
+    restoreFocusQuietly(editControl.current)
+  }, [editing])
+  const closeEditor = () => {
+    refocus.current = true
+    setEditing(false)
+  }
   const update = useUpdateCard(card.key)
   const loadMentionable = useMentionableLoader(card.key)
   const { upload } = useAttachmentUpload(card.key)
@@ -30,6 +44,7 @@ export function CardDescriptionSection({ card, canEdit }: { card: CardDetail; ca
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
+            ref={editControl}
             variant="ghost"
             size="icon"
             className="size-8"
@@ -64,12 +79,12 @@ export function CardDescriptionSection({ card, canEdit }: { card: CardDetail; ca
           submitLabel={t('card.saveDescription')}
           busy={update.isPending}
           autoFocus
-          onCancel={() => setEditing(false)}
+          onCancel={closeEditor}
           onSubmit={async (doc) => {
             try {
               await update.mutateAsync({ description: doc })
               toast.success(t('card.saved'))
-              setEditing(false)
+              closeEditor()
             } catch (error) {
               toast.error(getErrorMessage(error, tc('errors.generic')))
             }
@@ -79,6 +94,7 @@ export function CardDescriptionSection({ card, canEdit }: { card: CardDetail; ca
         <LazyRichTextView doc={card.description} names={card.mentioned_users} />
       ) : canEdit ? (
         <button
+          ref={editControl}
           type="button"
           className="text-muted-foreground border-input hover:border-ring hover:text-foreground focus-visible:ring-ring min-h-16 rounded-md border border-dashed px-3 py-2 text-left text-sm outline-none focus-visible:ring-[3px]"
           onClick={() => setEditing(true)}

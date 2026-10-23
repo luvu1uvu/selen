@@ -175,6 +175,7 @@ export const SortableCardTile = memo(function SortableCardTile({
       role="button"
       tabIndex={0}
       aria-label={t('card.open', { key: card.key, title: card.title })}
+      data-card-tile={card.key}
       className={cn(
         'focus-visible:ring-ring rounded-md outline-none focus-visible:ring-2',
         draggable && 'cursor-grab active:cursor-grabbing',

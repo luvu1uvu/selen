@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { CalendarPlus, MoveRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { useCopyLink } from '@/shared/components/useCopyLink'
@@ -45,7 +46,7 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
           <TitleField card={card} />
         </>
       ) : (
-        <DialogTitle className="text-xl leading-snug font-semibold break-words">
+        <DialogTitle className="py-[3px] text-xl leading-snug font-semibold break-words">
           {card.title}
         </DialogTitle>
       )}
@@ -97,13 +98,18 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-xs">
         <TimeAgo
           at={card.created_at}
+          icon={CalendarPlus}
           text={(time) => t('card.created', { time })}
           hint={(date) => t('card.createdHint', { date, name: card.created_by.name })}
         />
         {card.moved_at && (
           <>
             <span aria-hidden>·</span>
-            <TimeAgo at={card.moved_at} text={(time) => t('card.moved', { time })} />
+            <TimeAgo
+              at={card.moved_at}
+              icon={MoveRight}
+              text={(time) => t('card.moved', { time })}
+            />
           </>
         )}
       </div>
@@ -179,7 +185,7 @@ function TitleField({ card }: { card: CardDetail }) {
       maxLength={500}
       aria-label={t('card.title')}
       data-own-escape
-      className="hover:border-input focus-visible:border-ring focus-visible:ring-ring -mx-1.5 w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-xl leading-snug font-semibold outline-none focus-visible:ring-2"
+      className="hover:border-input hover:bg-accent focus-visible:border-ring focus-visible:ring-ring -mx-1.5 w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-xl leading-snug font-semibold outline-none focus-visible:ring-2"
       onChange={(event) => setTitle(event.target.value.replace(/\s*\n\s*/g, ' '))}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {

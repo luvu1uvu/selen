@@ -130,7 +130,10 @@ describe('Окно карточки', () => {
       expect(within(window).getByText(/^Перемещена \d+ /)).toBeInTheDocument()
 
       created.focus()
-      expect(await screen.findByRole('tooltip')).toHaveTextContent('1 окт. 2026 г., 12:00, Борис')
+      // Кто создал — словами (V-4 UX-ревью UI-1a)
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(
+        '1 окт. 2026 г., 12:00 · создал(а) Борис',
+      )
     })
 
     it('не перемещали — только «Создана»; номер копирует ссылку на карточку', async () => {
@@ -207,6 +210,18 @@ describe('Окно карточки', () => {
       await userEvent.click(within(window).getByRole('button', { name: 'Закрыть' }))
       await waitFor(() => expect(router.state.location.pathname).toBe('/boards/board-1'))
       expect(router.state.historyAction).toBe('REPLACE')
+    })
+
+    it('открытое по прямой ссылке после закрытия отдаёт фокус плитке этой карточки (U-10 UX-ревью UI-1a)', async () => {
+      serveCard(makeCardDetail())
+      renderApp('/cards/DEV-1')
+      await screen.findByRole('dialog', { name: 'Первая' })
+
+      await userEvent.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Открыть DEV-1: Первая' })).toHaveFocus(),
+      )
     })
 
     it('«Назад» браузера закрывает окно', async () => {
@@ -801,6 +816,29 @@ describe('Окно карточки', () => {
       const history = within(window).getByRole('region', { name: 'Блокировки' })
       expect(within(history).getByText('Ждали макет')).toBeInTheDocument()
       expect(within(history).queryByText('Ждём доступ')).not.toBeInTheDocument()
+    })
+
+    it('«Отмена» во встроенной форме — фокус на кнопке, которая её открыла (U-9 UX-ревью UI-1a)', async () => {
+      serveCard(makeCardDetail())
+      renderApp('/cards/DEV-1')
+      const window = await screen.findByRole('dialog')
+
+      // Блокировка — из «+»: после «Отмена» фокус снова на «+»
+      const add = within(window).getByRole('button', { name: 'Добавить в карточку' })
+      await userEvent.click(add)
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Блокировка' }))
+      const form = await within(window).findByRole('form', { name: 'Новая блокировка' })
+      await userEvent.click(within(form).getByRole('button', { name: 'Отмена' }))
+      await waitFor(() => expect(add).toHaveFocus())
+
+      // Описание — из серого поля «Добавьте описание…»: после «Отмена» фокус снова на нём
+      await userEvent.click(within(window).getByRole('button', { name: 'Добавьте описание…' }))
+      const editor = await within(window).findByRole('textbox', { name: 'Описание' })
+      await waitFor(() => expect(editor).toHaveFocus())
+      await userEvent.click(within(window).getByRole('button', { name: 'Отмена' }))
+      await waitFor(() =>
+        expect(within(window).getByRole('button', { name: 'Добавьте описание…' })).toHaveFocus(),
+      )
     })
 
     it('файл, брошенный на окно, становится вложением', async () => {

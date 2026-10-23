@@ -45,6 +45,23 @@ const NON_TEXT_INPUTS = new Set([
   'image',
 ])
 
+/**
+ * Окно закрылось, а фокусу некуда вернуться (окно открыли по прямой ссылке — до него фокуса на странице не было): фокус —
+ * на плитку этой карточки, если она на доске, а не в body (U-10 UX-ревью UI-1a). Страница под окном после закрытия
+ * может ещё дорисовываться — несколько кадров ждём плитку; фокус уже где-то есть (вернули на плитку, с которой открыли,
+ * пользователь щёлкнул) — не трогаем.
+ */
+function focusTileAfterClose(cardKey: string) {
+  let frames = 30
+  const attempt = () => {
+    if (document.activeElement && document.activeElement !== document.body) return
+    const tile = document.querySelector<HTMLElement>(`[data-card-tile="${CSS.escape(cardKey)}"]`)
+    if (tile) tile.focus()
+    else if (--frames > 0) requestAnimationFrame(attempt)
+  }
+  requestAnimationFrame(attempt)
+}
+
 /** Поле, в котором печатают текст: первый Esc в нём выводит из поля, а не закрывает окно. */
 function isTextEntry(element: Element | null): element is HTMLElement {
   if (!(element instanceof HTMLElement)) return false
@@ -126,6 +143,8 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
         <DialogContent
           data-card-window
           closeLabel={tc('actions.close')}
+          // ✕ — вровень со строкой названия: её центр — 20 px поля и половина строки (U-12 UX-ревью UI-1a)
+          closeClassName="top-5"
           // Окно у верха экрана, высота — по содержимому, не выше экрана (прокручивается содержимое). 4rem — поля
           // сверху и снизу, как у верхнего края; на узком экране окно — на весь экран
           className="top-4 flex max-h-[calc(100dvh-2rem)] translate-y-0 flex-col gap-0 overflow-hidden p-0 outline-none max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:rounded-none max-sm:border-0 sm:top-8 sm:max-h-[calc(100dvh-4rem)] sm:max-w-3xl"
@@ -135,6 +154,7 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
             ;(event.currentTarget as HTMLElement | null)?.focus()
           }}
           onEscapeKeyDown={onEscapeKeyDown}
+          onCloseAutoFocus={() => focusTileAfterClose(cardKey)}
           onFocusCapture={(event) => {
             const target = event.target as Element
             if (isTextEntry(target)) lastField.current = target
