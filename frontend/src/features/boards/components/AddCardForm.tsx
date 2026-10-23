@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
@@ -6,11 +6,13 @@ import { useCreateCard } from '@/features/cards/queries'
 import { getErrorMessage } from '@/shared/api/errors'
 import type { Lane } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
+import { restoreFocusQuietly } from '@/shared/ui/restore-focus'
 import { Textarea } from '@/shared/ui/textarea'
 
 /**
  * Форма новой карточки в ячейке: Enter или «Создать» — создать (форма остаётся открытой для следующей),
- * Esc или «Отмена» — закрыть. Кнопки — внутри области названия (LATER-42).
+ * Esc или «Отмена» — закрыть, и фокус вернётся на кнопку, которая открыла форму («+» колонки или «+ Карточка» ячейки,
+ * LATER-107); ушли из пустой формы сами — фокус не трогаем. Кнопки — внутри области названия (LATER-42).
  *
  * place — куда встаёт карточка: «end» — в конец ячейки (кнопка под последней карточкой), «start» — в начало
  * (кнопка «+» в заголовке колонки, LATER-44). Если дорожек несколько, форма «в начало» даёт выбрать дорожку.
@@ -47,9 +49,17 @@ export function AddCardForm({
   const [title, setTitle] = useState('')
   const [laneId, setLaneId] = useState(initialLaneId)
   const createCard = useCreateCard(boardId)
+  // Кнопка, с которой открыли форму: при открытии фокус ещё на ней (форма забирает его полем названия)
+  const [opener] = useState(() =>
+    document.activeElement instanceof HTMLButtonElement ? document.activeElement : null,
+  )
+  const returnFocus = useRef(false)
+  // Фокус возвращаем, когда формы уже нет: «+ Карточка» ячейки, пока форма открыта, скрыта и фокус не примет
+  useEffect(() => () => void (returnFocus.current && restoreFocusQuietly(opener)), [opener])
 
   const close = () => {
     setTitle('')
+    returnFocus.current = true
     onClose()
   }
 
