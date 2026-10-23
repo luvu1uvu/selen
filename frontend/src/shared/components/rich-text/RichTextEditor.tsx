@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { EditorContent, ReactRenderer, useEditor, useEditorState, type Editor } from '@tiptap/react'
 import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion'
 import {
@@ -276,6 +276,7 @@ class EditorBridge {
 }
 
 function Toolbar({ editor, onLink }: { editor: Editor; onLink: () => void }) {
+  const [current, setCurrent] = useState(0)
   const { t } = useTranslation()
   const state = useEditorState({
     editor,
@@ -311,13 +312,29 @@ function Toolbar({ editor, onLink }: { editor: Editor; onLink: () => void }) {
     ['link', <Link2 />, onLink],
   ]
 
+  // Панель — одна остановка Tab (WAI-ARIA toolbar, U-4 UX-ревью UI-1a): Tab ведёт сразу в текст, по кнопкам — стрелки,
+  // Home и End; вернулись в панель — на ту кнопку, где были
+  const moveFocus = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = {
+      ArrowRight: 1,
+      ArrowLeft: -1,
+      Home: -current,
+      End: buttons.length - 1 - current,
+    }[event.key]
+    if (step === undefined) return
+    event.preventDefault()
+    const next = (current + step + buttons.length) % buttons.length
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('button')[next]?.focus()
+  }
+
   return (
     <div
       role="toolbar"
       aria-label={t('richText.toolbar')}
       className="flex flex-wrap gap-0.5 border-b p-1"
+      onKeyDown={moveFocus}
     >
-      {buttons.map(([key, icon, run]) => (
+      {buttons.map(([key, icon, run], index) => (
         <Hint key={key} label={t(`richText.tools.${key}`)}>
           <Button
             type="button"
@@ -326,6 +343,8 @@ function Toolbar({ editor, onLink }: { editor: Editor; onLink: () => void }) {
             className={cn('size-7', state[key] && 'bg-accent')}
             aria-label={t(`richText.tools.${key}`)}
             aria-pressed={state[key]}
+            tabIndex={index === current ? 0 : -1}
+            onFocus={() => setCurrent(index)}
             onMouseDown={(event) => event.preventDefault()}
             onClick={run}
           >

@@ -1,5 +1,5 @@
 import { createRef } from 'react'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { isEmptyDoc, type RichTextDoc } from './doc'
 import { attachmentImageUrl, isAllowedUrl } from './extensions'
@@ -125,6 +125,31 @@ describe('редактор', () => {
     expect(screen.getByText('Добавьте описание')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
     expect(onSubmit).toHaveBeenCalledWith(null)
+  })
+
+  it('панель форматирования — одна остановка Tab, по кнопкам — стрелки, Home и End (U-4 UX-ревью UI-1a)', async () => {
+    renderEditor()
+    const toolbar = screen.getByRole('toolbar', { name: 'Форматирование' })
+    const buttons = within(toolbar).getAllByRole('button')
+    expect(buttons.filter((button) => button.tabIndex === 0)).toEqual([buttons[0]])
+
+    buttons[0].focus()
+    await userEvent.keyboard('{ArrowRight}')
+    expect(screen.getByRole('button', { name: 'Курсив' })).toHaveFocus()
+    await userEvent.keyboard('{End}')
+    expect(buttons.at(-1)).toHaveFocus()
+    await userEvent.keyboard('{ArrowRight}')
+    expect(buttons[0]).toHaveFocus()
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(buttons.at(-1)).toHaveFocus()
+    await userEvent.keyboard('{Home}')
+    expect(buttons[0]).toHaveFocus()
+    await userEvent.keyboard('{ArrowRight}')
+    // Tab — из панели сразу в текст; вернулись — на ту кнопку, где были
+    await userEvent.tab()
+    expect(screen.getByRole('textbox', { name: 'Описание' })).toHaveFocus()
+    await userEvent.tab({ shift: true })
+    expect(screen.getByRole('button', { name: 'Курсив' })).toHaveFocus()
   })
 
   it('панель форматирования и ссылка: недопустимый адрес не применяется', async () => {
