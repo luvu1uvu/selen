@@ -84,7 +84,7 @@ function serveSession() {
       reply(() => ({ data: trees[session.user!.id] })),
     ),
     http.get(
-      '*/api/v1/admin/navigation',
+      '*/api/v1/admin/companies/:company/navigation',
       reply(() => ({
         data: [
           {
@@ -114,7 +114,7 @@ function serveSession() {
       })),
     ),
     http.get(
-      '*/api/v1/admin/users',
+      '*/api/v1/admin/companies/:company/users',
       reply(() => ({
         data: [makeAdminUser({ ...session.user!, permissions: NO_USER_PERMISSIONS })],
         meta: { current_page: 1, last_page: 1, per_page: 25, total: 1 },

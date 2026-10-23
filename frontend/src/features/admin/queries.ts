@@ -36,6 +36,7 @@ import {
   type EventFilters,
   type UserFilters,
 } from './api'
+import { useAdminCompanyId } from './company'
 
 export const adminKeys = {
   users: (filters: UserFilters) => ['admin', 'users', filters] as const,
@@ -51,43 +52,48 @@ export const adminKeys = {
 }
 
 export function useUsers(filters: UserFilters) {
+  const company = useAdminCompanyId()
   return useQuery({
     queryKey: adminKeys.users(filters),
-    queryFn: () => fetchUsers(filters),
+    queryFn: () => fetchUsers(company, filters),
     placeholderData: keepPreviousData,
   })
 }
 
 export function useInvitations(page: number) {
+  const company = useAdminCompanyId()
   return useQuery({
     queryKey: adminKeys.invitations(page),
-    queryFn: () => fetchInvitations(page),
+    queryFn: () => fetchInvitations(company, page),
     placeholderData: keepPreviousData,
   })
 }
 
 export function useEvents(filters: EventFilters) {
+  const company = useAdminCompanyId()
   return useQuery({
     queryKey: adminKeys.events(filters),
-    queryFn: () => fetchEvents(filters),
+    queryFn: () => fetchEvents(company, filters),
     placeholderData: keepPreviousData,
   })
 }
 
 export function useTrash(page: number) {
+  const company = useAdminCompanyId()
   return useQuery({
     queryKey: adminKeys.trash(page),
-    queryFn: () => fetchTrash(page),
+    queryFn: () => fetchTrash(company, page),
     placeholderData: keepPreviousData,
   })
 }
 
 /** Восстановленная карточка снова на доске и в поиске — перечитываем и их. */
 export function useRestoreFromTrash() {
+  const company = useAdminCompanyId()
   const queryClient = useQueryClient()
   const invalidate = useInvalidateAdmin()
   return useMutation({
-    mutationFn: restoreFromTrash,
+    mutationFn: (arg: Parameters<typeof restoreFromTrash>[1]) => restoreFromTrash(company, arg),
     onSuccess: () =>
       Promise.all([
         invalidate(),
@@ -98,11 +104,13 @@ export function useRestoreFromTrash() {
 }
 
 export function useAdminSpaces() {
-  return useQuery({ queryKey: adminKeys.spaces(), queryFn: fetchAdminSpaces })
+  const company = useAdminCompanyId()
+  return useQuery({ queryKey: adminKeys.spaces(), queryFn: () => fetchAdminSpaces(company) })
 }
 
 export function useAdminCardTypes() {
-  return useQuery({ queryKey: adminKeys.cardTypes(), queryFn: fetchAdminCardTypes })
+  const company = useAdminCompanyId()
+  return useQuery({ queryKey: adminKeys.cardTypes(), queryFn: () => fetchAdminCardTypes(company) })
 }
 
 /**
@@ -120,67 +128,98 @@ function useInvalidateAdmin() {
 }
 
 export function useChangeRole() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
   return useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: AssignableRole }) =>
-      changeUserRole(userId, role),
+      changeUserRole(company, userId, role),
     onSuccess: invalidate,
   })
 }
 
 /** Передача владения: роль текущего пользователя меняется — перечитываем и его (`/auth/me`). */
 export function useTransferOwnership() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ userId, password }: { userId: string; password: string }) =>
-      transferOwnership(userId, password),
+      transferOwnership(company, userId, password),
     onSuccess: () =>
       Promise.all([invalidate(), queryClient.invalidateQueries({ queryKey: currentUserKey })]),
   })
 }
 
 export function useDeactivateUser() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
-  return useMutation({ mutationFn: deactivateUser, onSuccess: invalidate })
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof deactivateUser>[1]) => deactivateUser(company, arg),
+    onSuccess: invalidate,
+  })
 }
 
 export function useReactivateUser() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
-  return useMutation({ mutationFn: reactivateUser, onSuccess: invalidate })
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof reactivateUser>[1]) => reactivateUser(company, arg),
+    onSuccess: invalidate,
+  })
 }
 
 export function useInviteUser() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
-  return useMutation({ mutationFn: inviteUser, onSuccess: invalidate })
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof inviteUser>[1]) => inviteUser(company, arg),
+    onSuccess: invalidate,
+  })
 }
 
 export function useResendInvitation() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
-  return useMutation({ mutationFn: resendInvitation, onSuccess: invalidate })
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof resendInvitation>[1]) => resendInvitation(company, arg),
+    onSuccess: invalidate,
+  })
 }
 
 export function useRevokeInvitation() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
-  return useMutation({ mutationFn: revokeInvitation, onSuccess: invalidate })
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof revokeInvitation>[1]) => revokeInvitation(company, arg),
+    onSuccess: invalidate,
+  })
 }
 
 export function useCreateSpace() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
-  return useMutation({ mutationFn: createSpace, onSuccess: invalidate })
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof createSpace>[1]) => createSpace(company, arg),
+    onSuccess: invalidate,
+  })
 }
 
 export function useArchiveSpace() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
-  return useMutation({ mutationFn: archiveSpace, onSuccess: invalidate })
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof archiveSpace>[1]) => archiveSpace(company, arg),
+    onSuccess: invalidate,
+  })
 }
 
 /** Открытые доска и карточки удалённого пространства перечитываются и показывают «не найдено». */
 export function useDeleteSpace() {
+  const company = useAdminCompanyId()
   const queryClient = useQueryClient()
   const invalidate = useInvalidateAdmin()
   return useMutation({
-    mutationFn: deleteSpace,
+    mutationFn: (arg: Parameters<typeof deleteSpace>[1]) => deleteSpace(company, arg),
     onSuccess: () =>
       Promise.all([
         invalidate(),
@@ -191,60 +230,71 @@ export function useDeleteSpace() {
 }
 
 export function useRestoreSpace() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
-  return useMutation({ mutationFn: restoreSpace, onSuccess: invalidate })
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof restoreSpace>[1]) => restoreSpace(company, arg),
+    onSuccess: invalidate,
+  })
 }
 
 export function useAssignSpaceRole() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
   return useMutation({
     mutationFn: ({ spaceId, userId, role }: { spaceId: string; userId: string; role: SpaceRole }) =>
-      assignSpaceRole(spaceId, userId, role),
+      assignSpaceRole(company, spaceId, userId, role),
     onSuccess: invalidate,
   })
 }
 
 export function useSaveCardType() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
   return useMutation({
     mutationFn: ({ id, ...payload }: { id?: string; name: string; color: string }) =>
-      saveCardType(payload, id),
+      saveCardType(company, payload, id),
     onSuccess: invalidate,
   })
 }
 
 export function useSetCardTypeArchived() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
   return useMutation({
     mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
-      setCardTypeArchived(id, archived),
+      setCardTypeArchived(company, id, archived),
     onSuccess: invalidate,
   })
 }
 
 export function useUserAccess(userId: string) {
+  const company = useAdminCompanyId()
   return useQuery({
     queryKey: adminKeys.userAccess(userId),
-    queryFn: () => fetchUserAccess(userId),
+    queryFn: () => fetchUserAccess(company, userId),
   })
 }
 
 /** Запрашивается при открытии диалога деактивации — данные всегда свежие. */
 export function useDeactivationImpact(userId: string | null) {
+  const company = useAdminCompanyId()
   return useQuery({
     queryKey: adminKeys.deactivationImpact(userId ?? ''),
-    queryFn: () => fetchDeactivationImpact(userId ?? ''),
+    queryFn: () => fetchDeactivationImpact(company, userId ?? ''),
     enabled: userId !== null,
     staleTime: 0,
   })
 }
 
 export function useGroups() {
-  return useQuery({ queryKey: adminKeys.groups(), queryFn: fetchGroups })
+  const company = useAdminCompanyId()
+  return useQuery({ queryKey: adminKeys.groups(), queryFn: () => fetchGroups(company) })
 }
 
 export function useGroup(id: string) {
-  return useQuery({ queryKey: adminKeys.group(id), queryFn: () => fetchGroup(id) })
+  const company = useAdminCompanyId()
+  return useQuery({ queryKey: adminKeys.group(id), queryFn: () => fetchGroup(company, id) })
 }
 
 /**
@@ -259,40 +309,45 @@ function useInvalidateGroups() {
 }
 
 export function useSaveGroup() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateGroups()
   return useMutation({
     mutationFn: ({ id, ...payload }: { id?: string; name: string; description: string | null }) =>
-      saveGroup(payload, id),
+      saveGroup(company, payload, id),
     onSuccess: invalidate,
   })
 }
 
 export function useSetGroupArchived() {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateGroups()
   return useMutation({
     mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
-      setGroupArchived(id, archived),
+      setGroupArchived(company, id, archived),
     onSuccess: invalidate,
   })
 }
 
 export function useAddGroupMember(groupId: string) {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateGroups()
   return useMutation({
-    mutationFn: (userId: string) => addGroupMember(groupId, userId),
+    mutationFn: (userId: string) => addGroupMember(company, groupId, userId),
     onSuccess: invalidate,
   })
 }
 
 export function useRemoveGroupMember(groupId: string) {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateGroups()
   return useMutation({
-    mutationFn: (userId: string) => removeGroupMember(groupId, userId),
+    mutationFn: (userId: string) => removeGroupMember(company, groupId, userId),
     onSuccess: invalidate,
   })
 }
 
 export function useAssignGroupSpace(groupId: string) {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateGroups()
   return useMutation({
     mutationFn: ({
@@ -302,15 +357,16 @@ export function useAssignGroupSpace(groupId: string) {
       spaceId: string
       role: SpaceRole
       own_cards_only: boolean
-    }) => assignGroupSpace(groupId, spaceId, payload),
+    }) => assignGroupSpace(company, groupId, spaceId, payload),
     onSuccess: invalidate,
   })
 }
 
 export function useRevokeGroupSpace(groupId: string) {
+  const company = useAdminCompanyId()
   const invalidate = useInvalidateGroups()
   return useMutation({
-    mutationFn: (spaceId: string) => revokeGroupSpace(groupId, spaceId),
+    mutationFn: (spaceId: string) => revokeGroupSpace(company, groupId, spaceId),
     onSuccess: invalidate,
   })
 }

@@ -10,11 +10,13 @@ import { useDirectory } from '../queries'
 const SEARCH_DELAY_MS = 250
 
 /**
- * Выбор сотрудника из справочника (без деактивированных): поле поиска и список найденных.
- * excludeIds — кого не предлагать (например, уже участников); onlyActive — без ещё не принявших приглашение.
+ * Выбор сотрудника компании из справочника (без деактивированных): поле поиска и список найденных.
+ * companyId — чьих людей предлагать (ADR-0024); excludeIds — кого не предлагать (например, уже участников);
+ * onlyActive — без ещё не принявших приглашение.
  */
 export function UserPicker({
   id,
+  companyId,
   value,
   onChange,
   excludeIds = [],
@@ -22,6 +24,7 @@ export function UserPicker({
   invalid = false,
 }: {
   id: string
+  companyId: string
   value: DirectoryUser | null
   onChange: (user: DirectoryUser | null) => void
   excludeIds?: string[]
@@ -37,7 +40,7 @@ export function UserPicker({
     return () => clearTimeout(timer)
   }, [search])
 
-  const directory = useDirectory(debounced, value === null)
+  const directory = useDirectory(companyId, debounced, value === null)
   const options = (directory.data ?? []).filter(
     (user) => !excludeIds.includes(user.id) && (!onlyActive || user.status === 'active'),
   )

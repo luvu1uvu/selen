@@ -12,15 +12,19 @@ export async function fetchSpaceLabels(spaceKey: string): Promise<Label[]> {
   return data.data
 }
 
-/** Общие метки компании (админка). */
-export async function fetchCompanyLabels(): Promise<Label[]> {
-  const { data } = await api.get<Collection<Label>>('/admin/labels')
+/** Общие метки компании (админка компании, ADR-0024). */
+export async function fetchCompanyLabels(company: string): Promise<Label[]> {
+  const { data } = await api.get<Collection<Label>>(`/admin/companies/${company}/labels`)
   return data.data
 }
 
-/** Создать метку: в пространстве или (spaceKey = null) общую метку компании. */
-export async function createLabel(spaceKey: string | null, payload: LabelPayload): Promise<Label> {
-  const url = spaceKey ? `/spaces/${spaceKey}/labels` : '/admin/labels'
+/** Создать метку: в пространстве или (spaceKey = null) общую метку компании админки. */
+export async function createLabel(
+  company: string,
+  spaceKey: string | null,
+  payload: LabelPayload,
+): Promise<Label> {
+  const url = spaceKey ? `/spaces/${spaceKey}/labels` : `/admin/companies/${company}/labels`
   const { data } = await api.post<Resource<Label>>(url, payload)
   return data.data
 }

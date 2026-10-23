@@ -2,8 +2,18 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { AdminUser } from '@/shared/types/api'
-import { makeAdminUser, makeUser, NO_USER_PERMISSIONS, server, signedInAs } from '@/test/server'
+import {
+  makeAdminUser,
+  makeUser,
+  NO_USER_PERMISSIONS,
+  server,
+  signedInAs,
+  TEST_COMPANY_ID,
+} from '@/test/server'
 import { renderApp } from '@/test/render'
+
+/** Адреса админки компании тестов (ADR-0024). */
+const ADMIN = `/admin/companies/${TEST_COMPANY_ID}`
 
 const owner = makeUser({
   id: 'owner-1',
@@ -25,7 +35,7 @@ describe('Админка пользователей', () => {
 
   it('отличает отозванное приглашение от деактивации', async () => {
     server.use(
-      http.get('*/api/v1/admin/users', () =>
+      http.get('*/api/v1/admin/companies/:company/users', () =>
         HttpResponse.json(
           page([
             self(owner),
@@ -60,8 +70,10 @@ describe('Админка пользователей', () => {
   it('Владелец приглашает администратора через диалог', async () => {
     let body: unknown
     server.use(
-      http.get('*/api/v1/admin/users', () => HttpResponse.json(page([self(owner)]))),
-      http.post('*/api/v1/admin/invitations', async ({ request }) => {
+      http.get('*/api/v1/admin/companies/:company/users', () =>
+        HttpResponse.json(page([self(owner)])),
+      ),
+      http.post('*/api/v1/admin/companies/:company/invitations', async ({ request }) => {
         body = await request.json()
         return HttpResponse.json({ data: {} }, { status: 201 })
       }),
@@ -82,7 +94,11 @@ describe('Админка пользователей', () => {
 
   it('обычный администратор приглашает только участника', async () => {
     signedInAs(admin)
-    server.use(http.get('*/api/v1/admin/users', () => HttpResponse.json(page([self(admin)]))))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/users', () =>
+        HttpResponse.json(page([self(admin)])),
+      ),
+    )
     renderApp('/admin/users')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Пригласить' }))
@@ -97,8 +113,10 @@ describe('Админка пользователей', () => {
 
   it('показывает ошибку валидации с сервера в диалоге приглашения', async () => {
     server.use(
-      http.get('*/api/v1/admin/users', () => HttpResponse.json(page([self(owner)]))),
-      http.post('*/api/v1/admin/invitations', () =>
+      http.get('*/api/v1/admin/companies/:company/users', () =>
+        HttpResponse.json(page([self(owner)])),
+      ),
+      http.post('*/api/v1/admin/companies/:company/invitations', () =>
         HttpResponse.json(
           { message: 'x', errors: { email: ['Пользователь с таким email уже существует.'] } },
           { status: 422 },
@@ -120,15 +138,15 @@ describe('Админка пользователей', () => {
   it('деактивирует пользователя после подтверждения', async () => {
     let deactivated = false
     server.use(
-      http.get('*/api/v1/admin/users', () =>
+      http.get('*/api/v1/admin/companies/:company/users', () =>
         HttpResponse.json(
           page([self(owner), makeAdminUser({ id: 'u-2', name: 'Борис', role: 'member' })]),
         ),
       ),
-      http.get('*/api/v1/admin/users/u-2/deactivation-impact', () =>
+      http.get('*/api/v1/admin/companies/:company/users/u-2/deactivation-impact', () =>
         HttpResponse.json({ data: { last_admin_spaces: [] } }),
       ),
-      http.post('*/api/v1/admin/users/u-2/deactivate', () => {
+      http.post('*/api/v1/admin/companies/:company/users/u-2/deactivate', () => {
         deactivated = true
         return HttpResponse.json({ data: makeAdminUser({ id: 'u-2', status: 'deactivated' }) })
       }),
@@ -149,7 +167,11 @@ describe('Админка пользователей', () => {
   })
 
   it('не показывает меню действий для самого себя', async () => {
-    server.use(http.get('*/api/v1/admin/users', () => HttpResponse.json(page([self(owner)]))))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/users', () =>
+        HttpResponse.json(page([self(owner)])),
+      ),
+    )
     renderApp('/admin/users')
 
     const row = (await screen.findAllByText('owner@selen.test'))[0].closest('tr')!
@@ -160,7 +182,7 @@ describe('Админка пользователей', () => {
   it('бейдж «Владелец»; обычному администратору нет действий с Владельцем и администраторами', async () => {
     signedInAs(admin)
     server.use(
-      http.get('*/api/v1/admin/users', () =>
+      http.get('*/api/v1/admin/companies/:company/users', () =>
         HttpResponse.json(
           page([
             makeAdminUser({ ...owner, permissions: NO_USER_PERMISSIONS }),
@@ -231,12 +253,12 @@ describe('Админка пользователей', () => {
   it('Владелец назначает администратора из меню', async () => {
     let body: unknown
     server.use(
-      http.get('*/api/v1/admin/users', () =>
+      http.get('*/api/v1/admin/companies/:company/users', () =>
         HttpResponse.json(
           page([self(owner), makeAdminUser({ id: 'u-2', name: 'Борис', role: 'member' })]),
         ),
       ),
-      http.patch('*/api/v1/admin/users/u-2/role', async ({ request }) => {
+      http.patch('*/api/v1/admin/companies/:company/users/u-2/role', async ({ request }) => {
         body = await request.json()
         return HttpResponse.json({ data: makeAdminUser({ id: 'u-2', role: 'admin' }) })
       }),
@@ -263,8 +285,10 @@ describe('Админка пользователей', () => {
 
     beforeEach(() => {
       server.use(
-        http.get('*/api/v1/admin/users', () => HttpResponse.json(page([self(owner)]))),
-        http.get('*/api/v1/users/directory', () =>
+        http.get('*/api/v1/admin/companies/:company/users', () =>
+          HttpResponse.json(page([self(owner)])),
+        ),
+        http.get('*/api/v1/companies/:company/users/directory', () =>
           HttpResponse.json({
             data: [
               boris,
@@ -280,10 +304,13 @@ describe('Админка пользователей', () => {
       let request: { url: string; body: unknown } | undefined
       let meCalls = 0
       server.use(
-        http.post('*/api/v1/admin/users/:id/transfer-ownership', async ({ request: req }) => {
-          request = { url: req.url, body: await req.json() }
-          return HttpResponse.json({ data: makeAdminUser({ ...boris, role: 'owner' }) })
-        }),
+        http.post(
+          '*/api/v1/admin/companies/:company/users/:id/transfer-ownership',
+          async ({ request: req }) => {
+            request = { url: req.url, body: await req.json() }
+            return HttpResponse.json({ data: makeAdminUser({ ...boris, role: 'owner' }) })
+          },
+        ),
         http.get('*/api/v1/auth/me', () => {
           meCalls++
           return HttpResponse.json({ data: meCalls > 1 ? { ...owner, role: 'admin' } : owner })
@@ -305,7 +332,7 @@ describe('Админка пользователей', () => {
       expect(
         await screen.findByText('Владение передано: Борис — новый Владелец'),
       ).toBeInTheDocument()
-      expect(request?.url).toContain('/admin/users/u-boris/transfer-ownership')
+      expect(request?.url).toContain(`${ADMIN}/users/u-boris/transfer-ownership`)
       expect(request?.body).toEqual({ password: 'secret-password' })
       // Роль текущего пользователя перечитана: кнопка пропала — он больше не Владелец
       await screen.findByRole('button', { name: 'Пригласить' })
@@ -314,7 +341,7 @@ describe('Админка пользователей', () => {
 
     it('без сотрудника и пароля — ошибки в полях; неверный пароль — ошибка с сервера', async () => {
       server.use(
-        http.post('*/api/v1/admin/users/:id/transfer-ownership', () =>
+        http.post('*/api/v1/admin/companies/:company/users/:id/transfer-ownership', () =>
           HttpResponse.json(
             { message: 'x', errors: { password: ['Неверный пароль.'] } },
             { status: 422 },

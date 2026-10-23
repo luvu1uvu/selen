@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { EmojiField } from '@/features/navigation/components/EmojiField'
 import { isSingleEmoji } from '@/features/navigation/emoji'
+import { useAdminCompanyId } from '@/features/admin/company'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { applyValidationErrors, getErrorBody, getErrorMessage } from '@/shared/api/errors'
 import type { DirectoryUser } from '@/shared/types/api'
@@ -44,6 +45,7 @@ export function CreateSpaceDialog({
   /** Папка дерева, в которой создать пространство (по умолчанию — корень). */
   parent?: { id: string; name: string } | null
 } = {}) {
+  const company = useAdminCompanyId()
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
   const [ownOpen, setOwnOpen] = useState(false)
@@ -204,6 +206,7 @@ export function CreateSpaceDialog({
                 </div>
               )}
               <UserPicker
+                companyId={company}
                 id="space-admins"
                 value={null}
                 excludeIds={admins.map((admin) => admin.id)}

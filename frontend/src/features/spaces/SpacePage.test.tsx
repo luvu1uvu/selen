@@ -44,7 +44,7 @@ describe('Страница пространства', () => {
     let body: unknown
     serve(makeSpace())
     server.use(
-      http.get('*/api/v1/users/directory', () =>
+      http.get('*/api/v1/companies/:company/users/directory', () =>
         HttpResponse.json({
           data: [{ id: 'u-3', name: 'Вера', email: 'vera@selen.test', status: 'active' }],
         }),
@@ -71,7 +71,11 @@ describe('Страница пространства', () => {
 
   it('не даёт добавить участника без выбора сотрудника', async () => {
     serve(makeSpace())
-    server.use(http.get('*/api/v1/users/directory', () => HttpResponse.json({ data: [] })))
+    server.use(
+      http.get('*/api/v1/companies/:company/users/directory', () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    )
     renderApp('/spaces/DEV')
 
     await userEvent.click(await screen.findByRole('tab', { name: 'Участники' }))

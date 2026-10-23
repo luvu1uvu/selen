@@ -2,7 +2,10 @@
 
 import type { RichTextDoc } from '@/shared/components/rich-text/doc'
 
-/** Системная роль (ADR-0017): Владелец и администратор — системные администраторы (`isSystemAdmin`). */
+/**
+ * Роль для интерфейса (ADR-0017, ADR-0024): owner — Владелец; admin — у текущего пользователя администратор хотя бы
+ * одной компании, у людей админки — администратор этой компании (`isSystemAdmin`); member — участник.
+ */
 export type UserRole = 'owner' | 'admin' | 'member'
 /** Роль, которую назначают сменой роли и приглашением; Владелец — только передачей владения. */
 export type AssignableRole = Exclude<UserRole, 'owner'>
@@ -32,6 +35,8 @@ export interface User {
   created_at: string
   /** Последнее приглашение пользователя — только в админских ответах. */
   invitation?: InvitationSummary | null
+  /** Компании, которыми управляет текущий пользователь (только `/auth/me` и вход), — адреса админки. */
+  admin_companies?: { id: string }[]
 }
 
 /** Что текущий администратор может сделать с пользователем (UserPolicy, ADR-0017) — подсказка интерфейсу. */
@@ -87,6 +92,8 @@ export interface Space {
   id: string
   key: string
   name: string
+  /** Компания пространства (ADR-0024): справочники людей и групп для выдачи доступа — по ней. */
+  company_id: string
   description: string | null
   archived_at: string | null
   my_role: SpaceRole | null

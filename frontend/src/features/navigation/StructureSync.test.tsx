@@ -45,22 +45,25 @@ function statefulServer() {
 
   server.use(
     http.get('*/api/v1/navigation', () => HttpResponse.json({ data: tree() })),
-    http.get('*/api/v1/admin/navigation', () =>
+    http.get('*/api/v1/admin/companies/:company/navigation', () =>
       HttpResponse.json({ data: adminNodes(), meta: { max_depth: 4 } }),
     ),
-    http.post('*/api/v1/admin/folders', async ({ request }) => {
+    http.post('*/api/v1/admin/companies/:company/folders', async ({ request }) => {
       folders.push(((await request.json()) as { name: string }).name)
       return HttpResponse.json({ data: adminNodes(), meta: { max_depth: 4 } }, { status: 201 })
     }),
-    http.post('*/api/v1/admin/nav-nodes/:id/move', async ({ params, request }) => {
-      const body = (await request.json()) as { after_id?: string; before_id?: string }
-      const key = String(params.id).replace('node-', '')
-      order = order.filter((item) => item !== key)
-      const neighbour = (body.after_id ?? body.before_id ?? '').replace('node-', '')
-      const index = order.indexOf(neighbour) + (body.after_id ? 1 : 0)
-      order.splice(index, 0, key)
-      return HttpResponse.json({ data: adminNodes(), meta: { max_depth: 4 } })
-    }),
+    http.post(
+      '*/api/v1/admin/companies/:company/nav-nodes/:id/move',
+      async ({ params, request }) => {
+        const body = (await request.json()) as { after_id?: string; before_id?: string }
+        const key = String(params.id).replace('node-', '')
+        order = order.filter((item) => item !== key)
+        const neighbour = (body.after_id ?? body.before_id ?? '').replace('node-', '')
+        const index = order.indexOf(neighbour) + (body.after_id ? 1 : 0)
+        order.splice(index, 0, key)
+        return HttpResponse.json({ data: adminNodes(), meta: { max_depth: 4 } })
+      },
+    ),
   )
 }
 

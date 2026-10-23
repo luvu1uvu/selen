@@ -59,10 +59,14 @@ export async function removeMember(key: string, userId: string): Promise<void> {
   await api.delete(`/spaces/${key}/members/${userId}`)
 }
 
-export async function searchDirectory(search: string): Promise<DirectoryUser[]> {
-  const { data } = await api.get<Collection<DirectoryUser>>('/users/directory', {
-    params: { search: search || undefined },
-  })
+/** Сотрудники компании для выбора (ADR-0024: только её люди) — компания пространства или админки. */
+export async function searchDirectory(company: string, search: string): Promise<DirectoryUser[]> {
+  const { data } = await api.get<Collection<DirectoryUser>>(
+    `/companies/${company}/users/directory`,
+    {
+      params: { search: search || undefined },
+    },
+  )
   return data.data
 }
 
@@ -96,8 +100,10 @@ export async function removeSpaceGroup(key: string, groupId: string): Promise<vo
   await api.delete(`/spaces/${key}/groups/${groupId}`)
 }
 
-/** Активные группы для выдачи доступа (системный администратор и администраторы пространств). */
-export async function fetchGroupDirectory(): Promise<DirectoryGroup[]> {
-  const { data } = await api.get<Collection<DirectoryGroup>>('/groups/directory')
+/** Активные группы компании для выдачи доступа (администратор компании и администраторы её пространств). */
+export async function fetchGroupDirectory(company: string): Promise<DirectoryGroup[]> {
+  const { data } = await api.get<Collection<DirectoryGroup>>(
+    `/companies/${company}/groups/directory`,
+  )
   return data.data
 }

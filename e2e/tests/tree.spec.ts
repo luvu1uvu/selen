@@ -125,7 +125,10 @@ test('пространство из «+» на папке сразу появл�
   await expect(dialog.getByText('Оно появится в папке «E2E Мобильные».')).toBeVisible()
   await dialog.getByLabel('Название').fill(`E2E Новое ${key}`)
   await dialog.getByLabel('Ключ').fill(key)
-  const created = page.waitForResponse((r) => r.url().endsWith('/api/v1/admin/spaces') && r.request().method() === 'POST')
+  // Админка — в компании (ADR-0024): /api/v1/admin/companies/{id}/spaces
+  const created = page.waitForResponse(
+    (r) => /\/api\/v1\/admin\/companies\/[^/]+\/spaces$/.test(r.url()) && r.request().method() === 'POST',
+  )
   await dialog.getByRole('button', { name: 'Создать' }).click()
   const response = await created
   expect(response.status(), await response.text()).toBe(201)

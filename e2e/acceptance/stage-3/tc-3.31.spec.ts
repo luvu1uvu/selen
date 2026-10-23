@@ -55,9 +55,13 @@ async function expectHintHidden(page: Page) {
 
 async function api<T>(page: Page, path: string): Promise<T> {
   // Как SPA: Referer — Sanctum считает запрос с cookie «своим» только со своего адреса; X-Selen-User — пользователь
-  // вкладки, то есть тот, кто сейчас в сессии (/auth/me), — без него сервер запрос не выполнит (ADR-0002, LATER-57)
+  // вкладки, то есть тот, кто сейчас в сессии (/auth/me), — без него сервер запрос не выполнит (ADR-0002, LATER-57).
+  // Адрес админки — в компании, которой он управляет (ADR-0024, П2b-1: admin/companies/{id}/…)
   const headers = { Accept: 'application/json', Referer: page.url() }
-  const me = (await (await page.request.get('/api/v1/auth/me', { headers })).json()) as { data: { id: string } }
+  const me = (await (await page.request.get('/api/v1/auth/me', { headers })).json()) as {
+    data: { id: string; admin_companies: { id: string }[] }
+  }
+  path = path.replace('/api/v1/admin/', `/api/v1/admin/companies/${me.data.admin_companies[0]?.id}/`)
   const response = await page.request.get(path, {
     headers: { ...headers, 'X-Selen-User': me.data.id },
   })

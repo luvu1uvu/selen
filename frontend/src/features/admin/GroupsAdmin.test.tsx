@@ -55,13 +55,15 @@ const adminSpace = (id: string, key: string, name: string): AdminSpace => ({
 describe('Админка: группы', () => {
   beforeEach(() => {
     signedInAs(admin)
-    server.use(http.get('*/api/v1/admin/spaces', () => HttpResponse.json({ data: [] })))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/spaces', () => HttpResponse.json({ data: [] })),
+    )
   })
 
   it('список групп; архивные — по флажку; создание открывает страницу группы', async () => {
     let body: unknown
     server.use(
-      http.get('*/api/v1/admin/groups', () =>
+      http.get('*/api/v1/admin/companies/:company/groups', () =>
         HttpResponse.json({
           data: [
             makeGroup(),
@@ -69,14 +71,14 @@ describe('Админка: группы', () => {
           ],
         }),
       ),
-      http.post('*/api/v1/admin/groups', async ({ request }) => {
+      http.post('*/api/v1/admin/companies/:company/groups', async ({ request }) => {
         body = await request.json()
         return HttpResponse.json(
           { data: makeGroup({ id: 'g-new', name: 'Contractors' }) },
           { status: 201 },
         )
       }),
-      http.get('*/api/v1/admin/groups/g-new', () =>
+      http.get('*/api/v1/admin/companies/:company/groups/g-new', () =>
         HttpResponse.json({
           data: makeGroup({ id: 'g-new', name: 'Contractors', members: [], spaces: [] }),
         }),
@@ -103,25 +105,30 @@ describe('Админка: группы', () => {
   it('страница группы: добавляет человека, выдаёт доступ к пространству и меняет роль', async () => {
     const requests: { url: string; body: unknown }[] = []
     server.use(
-      http.get('*/api/v1/admin/groups/g-1', () => HttpResponse.json({ data: makeGroup() })),
-      http.get('*/api/v1/users/directory', () =>
+      http.get('*/api/v1/admin/companies/:company/groups/g-1', () =>
+        HttpResponse.json({ data: makeGroup() }),
+      ),
+      http.get('*/api/v1/companies/:company/users/directory', () =>
         HttpResponse.json({
           data: [{ id: 'u-ivan', name: 'Иван', email: 'ivan@selen.test', status: 'active' }],
         }),
       ),
-      http.get('*/api/v1/admin/spaces', () =>
+      http.get('*/api/v1/admin/companies/:company/spaces', () =>
         HttpResponse.json({
           data: [adminSpace('s-ios', 'IOS', 'iOS'), adminSpace('s-and', 'AND', 'Android')],
         }),
       ),
-      http.post('*/api/v1/admin/groups/g-1/members', async ({ request }) => {
+      http.post('*/api/v1/admin/companies/:company/groups/g-1/members', async ({ request }) => {
         requests.push({ url: 'members', body: await request.json() })
         return HttpResponse.json({ data: makeGroup() })
       }),
-      http.put('*/api/v1/admin/groups/g-1/spaces/:spaceId', async ({ request, params }) => {
-        requests.push({ url: `spaces/${String(params.spaceId)}`, body: await request.json() })
-        return HttpResponse.json({ data: makeGroup() })
-      }),
+      http.put(
+        '*/api/v1/admin/companies/:company/groups/g-1/spaces/:spaceId',
+        async ({ request, params }) => {
+          requests.push({ url: `spaces/${String(params.spaceId)}`, body: await request.json() })
+          return HttpResponse.json({ data: makeGroup() })
+        },
+      ),
     )
     renderApp('/admin/groups/g-1')
 
@@ -156,8 +163,10 @@ describe('Админка: группы', () => {
   it('исключает человека из группы после подтверждения', async () => {
     let removed = false
     server.use(
-      http.get('*/api/v1/admin/groups/g-1', () => HttpResponse.json({ data: makeGroup() })),
-      http.delete('*/api/v1/admin/groups/g-1/members/u-olga', () => {
+      http.get('*/api/v1/admin/companies/:company/groups/g-1', () =>
+        HttpResponse.json({ data: makeGroup() }),
+      ),
+      http.delete('*/api/v1/admin/companies/:company/groups/g-1/members/u-olga', () => {
         removed = true
         return new HttpResponse(null, { status: 204 })
       }),
@@ -176,10 +185,10 @@ describe('Админка: группы', () => {
   it('архивная группа — только для чтения, её можно восстановить', async () => {
     let restored = false
     server.use(
-      http.get('*/api/v1/admin/groups/g-1', () =>
+      http.get('*/api/v1/admin/companies/:company/groups/g-1', () =>
         HttpResponse.json({ data: makeGroup({ archived_at: '2026-10-05T00:00:00Z' }) }),
       ),
-      http.post('*/api/v1/admin/groups/g-1/restore', () => {
+      http.post('*/api/v1/admin/companies/:company/groups/g-1/restore', () => {
         restored = true
         return HttpResponse.json({ data: makeGroup() })
       }),
@@ -253,7 +262,9 @@ describe('Админка: доступ пользователя', () => {
       ],
     }
     server.use(
-      http.get('*/api/v1/admin/users/u-olga/access', () => HttpResponse.json({ data: access })),
+      http.get('*/api/v1/admin/companies/:company/users/u-olga/access', () =>
+        HttpResponse.json({ data: access }),
+      ),
     )
     renderApp('/admin/users/u-olga')
 
@@ -280,7 +291,7 @@ describe('Админка: деактивация последнего админ
     let deactivated = false
     let assigned: unknown
     server.use(
-      http.get('*/api/v1/admin/users', () =>
+      http.get('*/api/v1/admin/companies/:company/users', () =>
         HttpResponse.json({
           data: [
             makeAdminUser({ ...admin, permissions: NO_USER_PERMISSIONS }),
@@ -289,23 +300,26 @@ describe('Админка: деактивация последнего админ
           meta: { current_page: 1, last_page: 1, per_page: 25, total: 2 },
         }),
       ),
-      http.get('*/api/v1/admin/users/u-anna/deactivation-impact', () =>
+      http.get('*/api/v1/admin/companies/:company/users/u-anna/deactivation-impact', () =>
         HttpResponse.json({
           data: {
             last_admin_spaces: [{ id: 's-dev', key: 'DEV', name: 'Dev', archived_at: null }],
           },
         }),
       ),
-      http.get('*/api/v1/users/directory', () =>
+      http.get('*/api/v1/companies/:company/users/directory', () =>
         HttpResponse.json({
           data: [{ id: 'u-boris', name: 'Борис', email: 'boris@selen.test', status: 'active' }],
         }),
       ),
-      http.put('*/api/v1/admin/spaces/s-dev/members/u-boris', async ({ request }) => {
-        assigned = await request.json()
-        return HttpResponse.json({ data: adminSpace('s-dev', 'DEV', 'Dev') })
-      }),
-      http.post('*/api/v1/admin/users/u-anna/deactivate', () => {
+      http.put(
+        '*/api/v1/admin/companies/:company/spaces/s-dev/members/u-boris',
+        async ({ request }) => {
+          assigned = await request.json()
+          return HttpResponse.json({ data: adminSpace('s-dev', 'DEV', 'Dev') })
+        },
+      ),
+      http.post('*/api/v1/admin/companies/:company/users/u-anna/deactivate', () => {
         deactivated = true
         return HttpResponse.json({ data: { ...anna, status: 'deactivated' } })
       }),

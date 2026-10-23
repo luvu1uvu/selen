@@ -2,8 +2,18 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { AdminNavNode, AdminNavigation } from '@/shared/types/api'
-import { makeNavSpace, makeSpace, makeUser, server, signedInAs } from '@/test/server'
+import {
+  makeNavSpace,
+  makeSpace,
+  makeUser,
+  server,
+  signedInAs,
+  TEST_COMPANY_ID,
+} from '@/test/server'
 import { renderApp } from '@/test/render'
+
+/** Адреса админки компании тестов (ADR-0024). */
+const ADMIN = `/admin/companies/${TEST_COMPANY_ID}`
 
 const admin = makeUser({ id: 'admin-1', name: 'Сергей' })
 
@@ -69,9 +79,9 @@ function recordMutations() {
     return HttpResponse.json(navigation())
   }
   server.use(
-    http.post('*/api/v1/admin/nav-nodes/:id/move', record),
-    http.patch('*/api/v1/admin/nav-nodes/:id', record),
-    http.post('*/api/v1/admin/folders/:id/restore', record),
+    http.post('*/api/v1/admin/companies/:company/nav-nodes/:id/move', record),
+    http.patch('*/api/v1/admin/companies/:company/nav-nodes/:id', record),
+    http.post('*/api/v1/admin/companies/:company/folders/:id/restore', record),
   )
   return calls
 }
@@ -85,7 +95,11 @@ async function openMenu(name: string) {
 describe('Админка: «Структура»', () => {
   beforeEach(() => {
     signedInAs(admin)
-    server.use(http.get('*/api/v1/admin/navigation', () => HttpResponse.json(navigation())))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/navigation', () =>
+        HttpResponse.json(navigation()),
+      ),
+    )
   })
 
   it('показывает дерево с ключами и значками, архивные пространства — на местах, архивные папки — отдельно', async () => {
@@ -183,11 +197,13 @@ describe('Админка: «Структура»', () => {
   it('удаление навсегда: пустая папка — с подтверждением, непустая — недоступно (LATER-43)', async () => {
     const empty = folder('f-empty', 'Пустая')
     server.use(
-      http.get('*/api/v1/admin/navigation', () => HttpResponse.json(navigation([...nodes, empty]))),
+      http.get('*/api/v1/admin/companies/:company/navigation', () =>
+        HttpResponse.json(navigation([...nodes, empty])),
+      ),
     )
     let deleted: unknown = null
     server.use(
-      http.delete('*/api/v1/admin/folders/:id', ({ params }) => {
+      http.delete('*/api/v1/admin/companies/:company/folders/:id', ({ params }) => {
         deleted = params.id
         return HttpResponse.json(navigation())
       }),
@@ -235,7 +251,7 @@ describe('Админка: «Структура»', () => {
 
     await waitFor(() =>
       expect(calls).toEqual([
-        { path: '/admin/nav-nodes/n-back/move', body: { parent_id: 'f-store' } },
+        { path: `${ADMIN}/nav-nodes/n-back/move`, body: { parent_id: 'f-store' } },
       ]),
     )
     expect(await screen.findByText('Перемещено')).toBeInTheDocument()
@@ -250,7 +266,11 @@ describe('Админка: «Структура»', () => {
       folder('x', 'X'),
       folder('y', 'Y', { parent_id: 'x', depth: 2 }),
     ]
-    server.use(http.get('*/api/v1/admin/navigation', () => HttpResponse.json(navigation(deep))))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/navigation', () =>
+        HttpResponse.json(navigation(deep)),
+      ),
+    )
     renderApp('/admin/structure')
 
     const user = await openMenu('X')
@@ -282,8 +302,8 @@ describe('Админка: «Структура»', () => {
     await waitFor(() => expect(calls).toHaveLength(2))
 
     expect(calls).toEqual([
-      { path: '/admin/nav-nodes/n-back/move', body: { parent_id: null, after_id: 'n-mgmt' } },
-      { path: '/admin/nav-nodes/n-back/move', body: { parent_id: null, before_id: 'f-mobile' } },
+      { path: `${ADMIN}/nav-nodes/n-back/move`, body: { parent_id: null, after_id: 'n-mgmt' } },
+      { path: `${ADMIN}/nav-nodes/n-back/move`, body: { parent_id: null, before_id: 'f-mobile' } },
     ])
 
     // Первый и последний в своей папке
@@ -324,7 +344,7 @@ describe('Админка: «Структура»', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
     await waitFor(() =>
       expect(calls).toEqual([
-        { path: '/admin/nav-nodes/f-mobile', body: { name: 'Мобильные', icon: null } },
+        { path: `${ADMIN}/nav-nodes/f-mobile`, body: { name: 'Мобильные', icon: null } },
       ]),
     )
     expect(await screen.findByText('Изменения сохранены')).toBeInTheDocument()
@@ -342,13 +362,13 @@ describe('Админка: «Структура»', () => {
     await user.click(within(dialog).getByRole('button', { name: '💡' }))
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
     await waitFor(() =>
-      expect(calls).toEqual([{ path: '/admin/nav-nodes/n-mgmt', body: { icon: '💡' } }]),
+      expect(calls).toEqual([{ path: `${ADMIN}/nav-nodes/n-mgmt`, body: { icon: '💡' } }]),
     )
   })
 
   it('ошибка сервера при сохранении — сообщение, а не поле', async () => {
     server.use(
-      http.post('*/api/v1/admin/folders', () =>
+      http.post('*/api/v1/admin/companies/:company/folders', () =>
         HttpResponse.json(
           {
             message: 'Папка в архиве',
@@ -374,7 +394,7 @@ describe('Админка: «Структура»', () => {
   it('архивирование с подтверждением; 422 «сначала перенесите содержимое» — сообщением', async () => {
     let archived = 0
     server.use(
-      http.post('*/api/v1/admin/folders/:id/archive', () => {
+      http.post('*/api/v1/admin/companies/:company/folders/:id/archive', () => {
         archived++
         return HttpResponse.json(
           { message: 'Сначала перенесите содержимое: iOS', errors: { folder: ['…'] } },
@@ -404,7 +424,7 @@ describe('Админка: «Структура»', () => {
     await user.click(within(row).getByRole('button', { name: 'Восстановить' }))
     await waitFor(() =>
       expect(calls).toEqual([
-        { path: '/admin/folders/f-empty-old/restore', body: { restore_spaces: false } },
+        { path: `${ADMIN}/folders/f-empty-old/restore`, body: { restore_spaces: false } },
       ]),
     )
     expect(await screen.findByText('Папка восстановлена')).toBeInTheDocument()
@@ -428,7 +448,7 @@ describe('Админка: «Структура»', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Восстановить' }))
     await waitFor(() =>
       expect(calls).toEqual([
-        { path: '/admin/folders/f-old/restore', body: { restore_spaces: false } },
+        { path: `${ADMIN}/folders/f-old/restore`, body: { restore_spaces: false } },
       ]),
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
@@ -439,7 +459,7 @@ describe('Админка: «Структура»', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Восстановить' }))
     await waitFor(() =>
       expect(calls.at(-1)).toEqual({
-        path: '/admin/folders/f-old/restore',
+        path: `${ADMIN}/folders/f-old/restore`,
         body: { restore_spaces: true },
       }),
     )
@@ -447,7 +467,11 @@ describe('Админка: «Структура»', () => {
   })
 
   it('пустое дерево — подсказка и нет архивных', async () => {
-    server.use(http.get('*/api/v1/admin/navigation', () => HttpResponse.json(navigation([]))))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/navigation', () =>
+        HttpResponse.json(navigation([])),
+      ),
+    )
     renderApp('/admin/structure')
 
     expect(await screen.findByText('В дереве пока ничего нет')).toBeInTheDocument()

@@ -2,18 +2,23 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import type { AdminUser, AdminUserPermissions, NavTreeSpace, Space, User } from '@/shared/types/api'
 
-/** Фабрика пользователя для тестов. */
+/** Компания тестов («Компания 1», ADR-0024): адреса админки — admin/companies/{id}/…. */
+export const TEST_COMPANY_ID = '01JTESTCOMPANY0000000000000'
+
+/** Фабрика пользователя для тестов: администратор (и Владелец) управляет компанией тестов. */
 export function makeUser(overrides: Partial<User> = {}): User {
+  const role = overrides.role ?? 'admin'
   return {
     id: '01JTESTUSER0000000000000000',
     name: 'Анна Админова',
     email: 'admin@selen.test',
-    role: 'admin',
+    role,
     status: 'active',
     timezone: 'Europe/Moscow',
     last_login_at: null,
     deactivated_at: null,
     created_at: '2026-01-01T00:00:00Z',
+    admin_companies: role === 'member' ? [] : [{ id: TEST_COMPANY_ID }],
     ...overrides,
   }
 }
@@ -46,6 +51,7 @@ export function makeSpace(overrides: Partial<Space> = {}): Space {
     id: '01JTESTSPACE000000000000000',
     key: 'DEV',
     name: 'Разработка',
+    company_id: TEST_COMPANY_ID,
     description: null,
     archived_at: null,
     my_role: 'admin',
@@ -80,11 +86,11 @@ export const defaultHandlers = [
   ),
   http.get('*/api/v1/spaces', () => HttpResponse.json({ data: [] })),
   http.get('*/api/v1/navigation', () => HttpResponse.json({ data: [] })),
-  http.get('*/api/v1/admin/navigation', () =>
+  http.get('*/api/v1/admin/companies/:company/navigation', () =>
     HttpResponse.json({ data: [], meta: { max_depth: 4 } }),
   ),
   http.get('*/api/v1/spaces/:key/boards', () => HttpResponse.json({ data: [] })),
-  http.get('*/api/v1/users/directory', () => HttpResponse.json({ data: [] })),
+  http.get('*/api/v1/companies/:company/users/directory', () => HttpResponse.json({ data: [] })),
   // Панель карточки: комментарии, участники и метки пространства — пусто, если тест не задал своё
   http.get('*/api/v1/cards/:key/comments', () => HttpResponse.json({ data: [], users: {} })),
   http.get('*/api/v1/spaces/:key/members', () => HttpResponse.json({ data: [] })),

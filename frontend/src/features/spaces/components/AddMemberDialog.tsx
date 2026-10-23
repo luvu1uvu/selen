@@ -25,11 +25,14 @@ import { UserPicker } from './UserPicker'
  */
 export function AddMemberDialog({
   spaceKey,
+  companyId,
   memberIds,
   presetUser = null,
   onClose,
 }: {
   spaceKey: string
+  /** Компания пространства: предлагаются только её люди (ADR-0024). */
+  companyId: string
   memberIds: string[]
   presetUser?: DirectoryUser | null
   onClose?: () => void
@@ -100,6 +103,7 @@ export function AddMemberDialog({
             ) : (
               <UserPicker
                 id="member-user"
+                companyId={companyId}
                 value={user}
                 onChange={(next) => {
                   setUser(next)

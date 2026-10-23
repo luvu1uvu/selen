@@ -251,7 +251,7 @@ describe('Панель «Дерево»', () => {
     withTree()
     let body: unknown = null
     server.use(
-      http.post('*/api/v1/admin/folders', async ({ request }) => {
+      http.post('*/api/v1/admin/companies/:company/folders', async ({ request }) => {
         body = await request.json()
         return HttpResponse.json({ data: [], meta: { max_depth: 4 } }, { status: 201 })
       }),

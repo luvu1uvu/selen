@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { boardKeys } from '@/features/boards/queries'
+import { useAdminCompanyId } from '@/features/admin/company'
 import { cardKeys } from '@/features/cards/queries'
 import {
   createLabel,
@@ -25,7 +26,8 @@ export function useSpaceLabels(spaceKey: string, enabled = true) {
 }
 
 export function useCompanyLabels() {
-  return useQuery({ queryKey: labelKeys.company(), queryFn: fetchCompanyLabels })
+  const company = useAdminCompanyId()
+  return useQuery({ queryKey: labelKeys.company(), queryFn: () => fetchCompanyLabels(company) })
 }
 
 /** Название и цвет метки видны на досках и в карточках — перечитываем и их. */
@@ -42,9 +44,11 @@ function useLabelsChanged() {
 /** Создание (без id) или изменение метки. spaceKey = null — общая метка компании. */
 export function useSaveLabel(spaceKey: string | null) {
   const changed = useLabelsChanged()
+  // Компания общей метки — компании админки (метки пространства создаются в его компании на сервере)
+  const company = useAdminCompanyId()
   return useMutation({
     mutationFn: ({ id, ...payload }: LabelPayload & { id?: string }) =>
-      id ? updateLabel(id, payload) : createLabel(spaceKey, payload),
+      id ? updateLabel(id, payload) : createLabel(company, spaceKey, payload),
     onSuccess: changed,
   })
 }

@@ -104,7 +104,7 @@ describe('Окно карточки', () => {
       http.get('*/api/v1/spaces/DEV/boards', () => HttpResponse.json({ data: boards })),
       http.get('*/api/v1/cards/DEV-1/history', () => HttpResponse.json(makeCardHistory())),
       http.get('*/api/v1/cards/DEV-1/comments', () => HttpResponse.json({ data: [], users: {} })),
-      http.get('*/api/v1/card-types', () =>
+      http.get('*/api/v1/spaces/:key/card-types', () =>
         HttpResponse.json({ data: makeBoardDetail().card_types }),
       ),
     )

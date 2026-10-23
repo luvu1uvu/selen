@@ -33,10 +33,12 @@ import { CardLabelsField } from './CardLabelsField'
 import { EmptyValue } from './EmptyValue'
 import { PersonLine, PersonPicker } from './PersonPicker'
 
-function useActiveCardTypes(enabled: boolean) {
+/** Типы карточек компании пространства (ADR-0024). */
+function useActiveCardTypes(spaceKey: string, enabled: boolean) {
   return useQuery({
-    queryKey: ['card-types'],
-    queryFn: async () => (await api.get<Collection<CardType>>('/card-types')).data.data,
+    queryKey: ['card-types', spaceKey],
+    queryFn: async () =>
+      (await api.get<Collection<CardType>>(`/spaces/${spaceKey}/card-types`)).data.data,
     enabled,
   })
 }
@@ -217,7 +219,7 @@ export function CardMainParams({
 
 function TypeField({ card, canEdit }: { card: CardDetail; canEdit: boolean }) {
   const { t } = useTranslation('boards')
-  const types = useActiveCardTypes(canEdit)
+  const types = useActiveCardTypes(card.space.key, canEdit)
   const { save, pending } = useSave(card.key)
   if (!canEdit) return <TypeChip type={card.card_type} />
 
