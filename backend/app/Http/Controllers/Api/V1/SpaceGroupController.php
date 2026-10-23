@@ -10,9 +10,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Spaces\StoreSpaceGroupRequest;
 use App\Http\Requests\Spaces\UpdateSpaceGroupRequest;
 use App\Http\Resources\SpaceGroupResource;
+use App\Models\AccessGrant;
 use App\Models\Group;
 use App\Models\Space;
-use App\Models\SpaceGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -30,9 +30,9 @@ class SpaceGroupController extends Controller
         Gate::authorize('viewAccessSources', $space);
 
         $grants = $space->groupGrants()
-            ->with(['group' => fn ($q) => $q->withCount('members')])
+            ->with(['group' => fn ($q) => $q->withCount('members'), 'role'])
             ->get()
-            ->sortBy(fn (SpaceGroup $grant) => mb_strtolower($grant->group->name))
+            ->sortBy(fn (AccessGrant $grant) => mb_strtolower((string) $grant->group?->name))
             ->values();
 
         return SpaceGroupResource::collection($grants);
@@ -78,8 +78,8 @@ class SpaceGroupController extends Controller
         return response()->noContent();
     }
 
-    private function resource(SpaceGroup $grant): SpaceGroupResource
+    private function resource(AccessGrant $grant): SpaceGroupResource
     {
-        return new SpaceGroupResource($grant->load(['group' => fn ($q) => $q->withCount('members')]));
+        return new SpaceGroupResource($grant->load(['group' => fn ($q) => $q->withCount('members'), 'role']));
     }
 }

@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\Enums\SpaceRole;
+use App\Enums\Permission;
 use App\Models\Attachment;
 use App\Models\User;
 use App\Policies\Concerns\ChecksSpaceRole;
@@ -27,8 +27,9 @@ class AttachmentPolicy
 
     public function delete(User $actor, Attachment $attachment): Response
     {
+        // Свой файл удаляет тот, кто может прикладывать файлы; чужой — тот, кто редактирует карточку
         $isUploader = $attachment->uploaded_by === $actor->id;
 
-        return $this->allowCard($actor, $attachment->card, fn (SpaceRole $role) => $isUploader || $role->canEditCards());
+        return $this->allowCard($actor, $attachment->card, $isUploader ? Permission::CardComment : Permission::CardUpdate);
     }
 }

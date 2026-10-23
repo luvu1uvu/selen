@@ -3,46 +3,52 @@
 namespace App\Actions\Spaces;
 
 use App\Enums\EventType;
+use App\Enums\StandardRole;
+use App\Models\AccessGrant;
 use App\Models\Space;
-use App\Models\SpaceMember;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Режим «только свои карточки» для участника (ADR-0008): ограничение доступа, а не фильтр.
- * Применим к ролям editor и commenter; администратор пространства видит всё.
+ * Применим к ролям editor и commenter; администратор пространства видит всё. В модели прав (ADR-0024) —
+ * смена стандартной роли на вариант «— только свои карточки» и обратно.
  */
 class SetSpaceMemberRestrictionAction
 {
     public function __construct(
         private readonly EventRecorder $events,
         private readonly SpaceAdminGuard $guard,
+        private readonly SpaceGrants $grants,
     ) {}
 
-    public function handle(User $actor, Space $space, User $user, bool $ownCardsOnly): SpaceMember
+    public function handle(User $actor, Space $space, User $user, bool $ownCardsOnly): AccessGrant
     {
         return DB::transaction(function () use ($actor, $space, $user, $ownCardsOnly) {
             $space = $this->guard->lock($space);
-            $member = $space->members()->where('user_id', $user->getKey())->firstOrFail();
+            $grant = $this->grants->personal($space, $user) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
+            $role = $this->grants->standardRoleOf($grant)->legacyRole();
 
-            if ($member->own_cards_only === $ownCardsOnly) {
-                return $member;
+            if ($grant->ownCardsOnly() === $ownCardsOnly) {
+                return $grant;
             }
 
-            if ($ownCardsOnly && $member->role->canManageSpace()) {
+            if ($ownCardsOnly && $role->canManageSpace()) {
                 throw ValidationException::withMessages(['own_cards_only' => __('selen.spaces.admin_not_restricted')]);
             }
 
-            $member->update(['own_cards_only' => $ownCardsOnly]);
+            $grant = $this->grants->changeRole($grant, StandardRole::fromLegacy($role, $ownCardsOnly));
+
             $this->events->record(EventType::SpaceMemberRestrictionChanged, $actor, $space, [
                 'user_id' => $user->id,
                 'from' => ! $ownCardsOnly,
                 'to' => $ownCardsOnly,
             ]);
 
-            return $member;
+            return $grant;
         });
     }
 }

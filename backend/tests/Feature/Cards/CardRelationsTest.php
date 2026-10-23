@@ -4,7 +4,6 @@ use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
 use App\Models\CardRelation;
 use App\Models\EventLogEntry;
-use App\Models\SpaceMember;
 
 /*
 | Связи «родитель — дочерняя» (этап 2c): несколько родителей, только внутри пространства, без циклов,
@@ -125,7 +124,7 @@ describe('режим «только свои карточки»', function () {
     beforeEach(function () {
         $this->restricted = member();
         addToSpace($this->space, $this->restricted, SpaceRole::Editor);
-        SpaceMember::query()->where('user_id', $this->restricted->id)->update(['own_cards_only' => true]);
+        restrictToOwnCards($this->restricted);
         // Своя у него только DEV-1
         $this->epic->forceFill(['responsible_id' => $this->restricted->id])->save();
     });

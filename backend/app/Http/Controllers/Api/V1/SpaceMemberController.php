@@ -13,9 +13,9 @@ use App\Http\Resources\SpacePersonResource;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
+use App\Services\Access\AccessResolver;
 use App\Services\Access\AccessSource;
 use App\Services\Access\SpaceAccess;
-use App\Services\Access\SpaceAccessResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -30,7 +30,7 @@ use Illuminate\Support\Facades\Gate;
  */
 class SpaceMemberController extends Controller
 {
-    public function index(Request $request, Space $space, SpaceAccessResolver $resolver): AnonymousResourceCollection
+    public function index(Request $request, Space $space, AccessResolver $resolver): AnonymousResourceCollection
     {
         Gate::authorize('view', $space);
 
@@ -81,7 +81,7 @@ class SpaceMemberController extends Controller
     /** Один человек после изменения его личного участия — в том же виде, что в списке. */
     private function person(Request $request, Space $space, User $user): SpacePersonResource
     {
-        $access = app(SpaceAccessResolver::class)->forSpace($user, $space);
+        $access = app(AccessResolver::class)->forSpace($user, $space);
 
         return new SpacePersonResource($this->people($request, $space, collect([$user->id => $access]), collect([$user->id => $user]))[0]);
     }
@@ -97,7 +97,7 @@ class SpaceMemberController extends Controller
         $showSources = Gate::forUser($request->user())->allows('viewAccessSources', $space);
 
         $personal = $showSources
-            ? $space->members()->whereIn('user_id', $accesses->keys())->get()->keyBy('user_id')
+            ? $space->personalGrants()->with('role')->whereIn('access_grants.user_id', $accesses->keys())->get()->keyBy('user_id')
             : collect();
         $groupIds = $accesses->flatMap(fn (SpaceAccess $access) => array_filter(array_map(
             fn (AccessSource $source) => $source->groupId,

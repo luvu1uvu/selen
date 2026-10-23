@@ -4,7 +4,6 @@ use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
 use App\Models\Attachment;
 use App\Models\EventLogEntry;
-use App\Models\SpaceMember;
 use App\Services\Attachments\AttachmentFiles;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Date;
@@ -145,7 +144,7 @@ describe('доступ', function () {
         $outsider = member();
         $restricted = member();
         addToSpace($this->space, $restricted, SpaceRole::Editor);
-        SpaceMember::query()->where('user_id', $restricted->id)->update(['own_cards_only' => true]);
+        restrictToOwnCards($restricted);
 
         foreach ([$outsider, $restricted] as $user) {
             $this->actingAs($user)->get("/api/v1/attachments/{$file->id}", ['Accept' => 'application/json'])->assertNotFound();

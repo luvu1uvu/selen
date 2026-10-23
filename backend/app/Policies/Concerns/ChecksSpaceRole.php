@@ -2,7 +2,7 @@
 
 namespace App\Policies\Concerns;
 
-use App\Enums\SpaceRole;
+use App\Enums\Permission;
 use App\Models\Board;
 use App\Models\Card;
 use App\Models\Space;
@@ -19,9 +19,9 @@ use Illuminate\Auth\Access\Response;
  * - архивное пространство доступно участникам только для чтения;
  * - карточка, которую пользователь не видит (режим «только свои карточки», ADR-0008), — 404.
  *
- * Права берутся только из Space::accessOf() — итоговых прав по всем источникам (личное участие и группы,
- * ADR-0012): действие разрешено, если его целиком разрешает хотя бы один источник.
- * Системная роль admin здесь намеренно не учитывается.
+ * Права берутся только из Space::accessOf() — итоговых прав по всем источникам (личные выдачи и группы,
+ * ADR-0012): действие разрешено, если его целиком разрешает хотя бы один источник. Проверяются права каталога
+ * (App\Enums\Permission, ADR-0024), а не названия ролей. Системная роль admin здесь намеренно не учитывается.
  */
 trait ChecksSpaceRole
 {
@@ -30,61 +30,38 @@ trait ChecksSpaceRole
         return $space->accessOf($actor)->isMember() ? Response::allow() : Response::denyAsNotFound();
     }
 
-    /**
-     * @param  callable(SpaceRole): bool  $permits
-     */
-    protected function allowRole(User $actor, Space $space, callable $permits): Response
+    /** Действие в пространстве без конкретной карточки: нужное право хотя бы у одного источника. */
+    protected function allowPermission(User $actor, Space $space, Permission $permission): Response
     {
-        return $this->decide($actor, $space, fn (SpaceAccess $access) => $access->allows($permits));
+        return $this->decide($actor, $space, fn (SpaceAccess $access) => $access->allows($permission));
     }
 
-    protected function allowSpaceAdmin(User $actor, Space $space): Response
+    /** Изменения на доске: как allowPermission, плюс архивная доска — только для чтения. */
+    protected function allowOnBoard(User $actor, Board $board, Permission $permission): Response
     {
-        return $this->allowRole($actor, $space, fn (SpaceRole $role) => $role->canManageSpace());
-    }
-
-    /**
-     * Изменения на доске: как allowRole, плюс архивная доска — только для чтения.
-     *
-     * @param  callable(SpaceRole): bool  $permits
-     */
-    protected function allowOnBoard(User $actor, Board $board, callable $permits): Response
-    {
-        return $this->onBoard($board, $this->allowRole($actor, $board->space, $permits));
-    }
-
-    protected function allowBoardStructure(User $actor, Board $board): Response
-    {
-        return $this->allowOnBoard($actor, $board, fn (SpaceRole $role) => $role->canManageSpace());
-    }
-
-    protected function allowCardEditing(User $actor, Board $board): Response
-    {
-        return $this->allowOnBoard($actor, $board, fn (SpaceRole $role) => $role->canEditCards());
+        return $this->onBoard($board, $this->allowPermission($actor, $board->space, $permission));
     }
 
     /**
      * Действие с карточкой и всем, что в ней (комментарии, файлы, чек-листы...).
-     * Сначала видимость: невидимая карточка не существует (404) для любой роли. Затем роль:
-     * без $permits — достаточно видеть карточку, иначе — источник, который разрешает роль и (без ограничения
-     * или карточка «своя»), плюс правила архива пространства и доски.
-     *
-     * @param  (callable(SpaceRole): bool)|null  $permits
+     * Сначала видимость: невидимая карточка не существует (404) для любой роли. Затем право:
+     * без $permission — достаточно видеть карточку, иначе — источник, у роли которого есть право и (область
+     * «все карточки» или карточка «своя»), плюс правила архива пространства и доски.
      */
-    protected function allowCard(User $actor, Card $card, ?callable $permits = null): Response
+    protected function allowCard(User $actor, Card $card, ?Permission $permission = null): Response
     {
         if (! app(CardVisibility::class)->canSee($actor, $card)) {
             return Response::denyAsNotFound();
         }
 
-        if ($permits === null) {
+        if ($permission === null) {
             return Response::allow();
         }
 
         $response = $this->decide(
             $actor,
             $card->space,
-            fn (SpaceAccess $access) => $access->allowsOnCard($permits, fn () => $card->involves($actor)),
+            fn (SpaceAccess $access) => $access->allowsOnCard($permission, fn () => $card->involves($actor)),
         );
 
         return $this->onBoard($card->board, $response);

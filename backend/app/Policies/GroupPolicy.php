@@ -4,7 +4,7 @@ namespace App\Policies;
 
 use App\Models\Group;
 use App\Models\User;
-use App\Services\Access\SpaceAccessResolver;
+use App\Services\Access\AccessResolver;
 use Illuminate\Auth\Access\Response;
 
 /**
@@ -49,6 +49,6 @@ class GroupPolicy
      */
     public function viewDirectory(User $actor): bool
     {
-        return $actor->isAdmin() || app(SpaceAccessResolver::class)->administersAnySpace($actor);
+        return $actor->isAdmin() || app(AccessResolver::class)->managesAccessAnywhere($actor);
     }
 }

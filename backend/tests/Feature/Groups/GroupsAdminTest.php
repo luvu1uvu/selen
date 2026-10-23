@@ -1,9 +1,9 @@
 <?php
 
 use App\Enums\SpaceRole;
+use App\Models\AccessGrant;
 use App\Models\EventLogEntry;
 use App\Models\Group;
-use App\Models\SpaceGroup;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -111,7 +111,7 @@ describe('доступ группы к пространствам из адми�
             ->assertJsonValidationErrors(['own_cards_only' => __('selen.spaces.admin_not_restricted')]);
         $this->deleteJson("/api/v1/admin/groups/{$group->id}/spaces/{$space->id}")->assertNoContent();
 
-        expect(SpaceGroup::query()->count())->toBe(0)
+        expect(AccessGrant::query()->whereNotNull('group_id')->count())->toBe(0)
             ->and(EventLogEntry::query()->where('event_type', 'like', 'space.group_%')->orderBy('id')->get(['event_type', 'payload'])
                 ->map(fn ($e) => [$e->event_type, $e->payload])->all())
             ->toEqual([
@@ -122,17 +122,16 @@ describe('доступ группы к пространствам из адми�
             ]);
     });
 
-    it('архивной группе доступ не выдаётся; CHECK в БД защищает от admin с ограничением', function () {
+    it('архивной группе доступ не выдаётся; БД защищает от admin с ограничением', function () {
         $group = makeGroup(['archived_at' => now()]);
         $space = space();
 
         // Архивная группа — только для чтения (как в админке)
         $this->actingAs($this->admin)->putJson("/api/v1/admin/groups/{$group->id}/spaces/{$space->id}", ['role' => 'editor'])->assertForbidden();
 
-        expect(fn () => DB::table('space_groups')->insert([
-            'space_id' => $space->id, 'group_id' => makeGroup()->id, 'role' => 'admin', 'own_cards_only' => true,
-            'created_at' => now(), 'updated_at' => now(),
-        ]))->toThrow(QueryException::class);
+        // «Администратор» не может стать ролью с областью «только свои карточки» (триггер roles_scope_check, ADR-0024)
+        expect(fn () => DB::transaction(fn () => DB::table('roles')->where('key', 'admin')->update(['card_scope' => 'own'])))
+            ->toThrow(QueryException::class);
     });
 });
 

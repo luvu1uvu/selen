@@ -1,21 +1,22 @@
 <?php
 
+use App\Enums\Permission;
 use App\Enums\SpaceRole;
 use App\Models\Card;
 use App\Models\Space;
-use App\Services\Access\SpaceAccessResolver;
+use App\Services\Access\AccessResolver;
 use App\Services\Cards\CardVisibility;
 use Illuminate\Support\Facades\DB;
 
 /*
-| Итоговые права по источникам (ADR-0012): SpaceAccessResolver и SpaceAccess без HTTP.
+| Итоговые права по источникам (ADR-0012, ADR-0024): AccessResolver и SpaceAccess без HTTP, по правам каталога.
 */
 
 beforeEach(function () {
     $this->space = space();
     $this->user = member();
-    $this->resolver = app(SpaceAccessResolver::class);
-    $this->editCards = fn (SpaceRole $role) => $role->canEditCards();
+    $this->resolver = app(AccessResolver::class);
+    $this->editCards = Permission::CardUpdate;
 });
 
 it('без источников доступа нет', function () {
@@ -34,7 +35,7 @@ it('личный источник и группы складываются, ит
     $access = $this->resolver->forSpace($this->user, $this->space);
 
     expect($access->sources)->toHaveCount(2)
-        ->and($access->personal()?->role)->toBe(SpaceRole::Commenter)
+        ->and($access->personal()?->legacyRole())->toBe(SpaceRole::Commenter)
         ->and($access->sources[1]->groupId)->toBe($group->id)
         ->and($access->highestRole())->toBe(SpaceRole::Editor)
         ->and($access->canSeeAllCards())->toBeTrue()
@@ -93,14 +94,14 @@ it('списки: права во всех пространствах и под�
     expect($accesses->keys()->sort()->values()->all())->toBe(collect([$this->space->id, $other->id])->sort()->values()->all())
         ->and($accesses[$other->id]->highestRole())->toBe(SpaceRole::Admin)
         ->and(Space::query()->visibleTo($this->user)->pluck('id')->all())->not->toContain($hidden->id)
-        ->and($this->resolver->administersAnySpace($this->user))->toBeTrue();
+        ->and($this->resolver->managesAccessAnywhere($this->user))->toBeTrue();
 });
 
 it('кеш прав живёт на экземпляре пространства', function () {
     addToSpace($this->space, $this->user, SpaceRole::Editor);
     expect($this->space->roleOf($this->user))->toBe(SpaceRole::Editor);
 
-    DB::table('space_members')->where('user_id', $this->user->id)->delete();
+    DB::table('access_grants')->where('user_id', $this->user->id)->delete();
     expect($this->space->roleOf($this->user))->toBe(SpaceRole::Editor);
 
     $this->space->forgetResolvedAccess();

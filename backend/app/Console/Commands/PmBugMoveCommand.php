@@ -26,7 +26,7 @@ class PmBugMoveCommand extends Command
         return $this->reportingErrors(function () use ($move) {
             $bot = PmStand::requireUser((string) $this->option('bot'), 'заведите его: make pm-qa-bot');
             $card = PmStand::requireCard((string) $this->argument('card'));
-            Gate::forUser($bot)->authorize('update', $card);
+            Gate::forUser($bot)->authorize('move', $card);
 
             $column = PmStand::requireColumn($card->board, (string) $this->argument('column'));
             $move->handle($bot, $card, $column, $card->lane, null, null);

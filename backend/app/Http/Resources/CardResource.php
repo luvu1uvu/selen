@@ -32,12 +32,12 @@ class CardResource extends JsonResource
         /** @var User $user */
         $user = $request->user();
         $times = app(CardFlowMetrics::class)->forCard($this->resource);
-        // Исключённые из пространства остаются на карточке с пометкой (роль — только через roleOf)
+        // Исключённые из пространства остаются на карточке с пометкой (доступ — только через accessOf)
         $person = fn (?User $person) => $person === null ? null : [
             'id' => $person->id,
             'name' => $person->name,
             'status' => $person->status,
-            'in_space' => $this->space->roleOf($person) !== null,
+            'in_space' => $this->space->accessOf($person)->isMember(),
         ];
 
         // Связанные и блокирующие карточки — глазами зрителя: невидимая — «Скрытая карточка» (ADR-0008)
@@ -124,7 +124,7 @@ class CardResource extends JsonResource
                 'edit' => Gate::forUser($user)->allows('update', $this->resource),
                 // Комментировать и прикладывать файлы — все роли, включая commenter
                 'comment' => Gate::forUser($user)->allows('comment', $this->resource),
-                // В корзину — только системный администратор (ADR-0015)
+                // В корзину — до П2d только системный администратор (ADR-0015)
                 'delete' => Gate::forUser($user)->allows('delete', $this->resource),
                 // Для зрителя действует режим «только свои карточки» (ADR-0008)
                 'restricted' => app(CardVisibility::class)->isRestricted($user, $this->space),

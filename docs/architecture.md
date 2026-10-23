@@ -34,7 +34,7 @@
 | Form Requests | `app/Http/Requests` | валидация входа, иногда авторизация (`authorize()`) |
 | Controllers | `app/Http/Controllers/Api/V1` | тонкие: Request → Action → Resource; HTTP-специфика (сессия) |
 | **Actions** | `app/Actions/{Auth,Invitations,Users,Spaces,Groups,CardTypes,Labels,Boards,Columns,Lanes,Cards,Comments,Checklists,CardLinks,Attachments,CardRelations,CardBlocks}` | бизнес-операция целиком, в транзакции, с записью события |
-| Services | `app/Services` | переиспользуемое: `SpaceAccessResolver` + `SpaceAccess` (итоговые права по источникам доступа, ADR-0012), `EventRecorder`, `UserSessions`, `InvitationIssuer`, `Positioner`, `CardPlacement` (положение карточки, автоснятие блокировок), `CardFlowMetrics`, `CardVisibility` (кто видит карточку, «Скрытая карточка»), `CardPeople` (участники, автоназначение), `CardHistory` (лента истории), `MentionSync`, `AttachmentFiles` |
+| Services | `app/Services` | переиспользуемое: `AccessResolver` + `SpaceAccess` (итоговые права по источникам доступа и правам каталога, ADR-0012, ADR-0024), `EventRecorder`, `UserSessions`, `InvitationIssuer`, `Positioner`, `CardPlacement` (положение карточки, автоснятие блокировок), `CardFlowMetrics`, `CardVisibility` (кто видит карточку, «Скрытая карточка»), `CardPeople` (участники, автоназначение), `CardHistory` (лента истории), `MentionSync`, `AttachmentFiles` |
 | Policies | `app/Policies` | кто может выполнять действие; доступ к пространствам — трейт `Policies/Concerns/ChecksSpaceRole` (ADR-0005) |
 | Resources | `app/Http/Resources` | формат JSON-ответов |
 | Models / Enums | `app/Models`, `app/Enums` | Eloquent-модели, роли, статусы, каталог событий |
@@ -59,10 +59,11 @@
 | `event_log` | `id` bigint identity, `occurred_at` timestamptz(6), `event_type`, `actor_id`, `subject_type`, `subject_id`, `payload` jsonb (только id и enum, без ПДн), `meta` jsonb (`source`) |
 | `auth_audit` | `occurred_at`, `event_log_id`, `event_type`, `user_id`, `email_attempted`, `ip`, `user_agent` — НЕ append-only, хранится 12 мес. (ADR-0003) |
 | `spaces` | `id` ULID, `name`, `key` (unique, `^[A-Z]{2,10}$`), `description`, `last_card_number`, `archived_at`, timestamps |
-| `space_members` | `space_id`, `user_id` (unique пара), `role` admin/editor/commenter, `own_cards_only` (режим «только свои карточки», не у admin — CHECK) — личное участие |
+| `roles` | `id` ULID, `key` (стандартные: admin, editor, commenter, editor_own, commenter_own), `name`, `card_scope` all/own, `grants_new_permissions`, `position` — роли: набор прав каталога и область карточек (ADR-0024) |
+| `role_permissions` | `role_id`, `permission` (значение `App\Enums\Permission`; PK пара; роль с «управлением доступом» — только с областью all, триггер) |
+| `access_grants` | `nav_node_id` (в П2a — узел пространства), `user_id` или `group_id` (ровно одно — CHECK), `role_id`, `granted_by`, timestamps — выдачи доступа; у субъекта на узле одна роль до П2d |
 | `groups` | `id` ULID, `name` (unique без учёта регистра), `description`, `system_key` (`everyone` — встроенная «Все сотрудники», состав вычисляется), `archived_at` — группы пользователей (ADR-0012) |
 | `group_members` | `group_id`, `user_id` (PK пара), `added_by`, `created_at` |
-| `space_groups` | `space_id`, `group_id` (unique пара), `role`, `own_cards_only` (не у admin — CHECK) — доступ группы к пространству |
 | `nav_nodes` | `id` ULID, `parent_id` (null — корень), `type` folder/space, `name` (у папки), `icon` (эмодзи), `space_id` (unique), `position` (COLLATE "C"), `archived_at` (у папки) — дерево навигации (ADR-0013) |
 | `card_types` | `id` ULID, `name` (unique), `color` `#rrggbb`, `is_default` (ровно один), `archived_at` |
 | `boards` | `id` ULID, `space_id`, `name`, `description`, `position` (COLLATE "C"), `auto_assign_on_move`, `archived_at` |
@@ -104,14 +105,16 @@
 один, назначает и снимает администраторов, передаёт владение; его учётную запись не меняет никто.
 Матрица доступа в тестах покрывает каждый маршрут пространства.
 
-Режим «только свои карточки» ([adr/0008-own-cards-only.md](adr/0008-own-cards-only.md)) — флаг участника
-(editor или commenter): он видит только карточки, где он заказчик, ответственный или участник; остальные — 404
+Режим «только свои карточки» ([adr/0008-own-cards-only.md](adr/0008-own-cards-only.md)) — область карточек роли
+(«Редактор / Комментатор — только свои карточки»): участник видит только карточки, где он заказчик, ответственный или участник; остальные — 404
 везде, включая доску и счётчики колонок. Единая точка правила — `CardVisibility`.
 
 **Группы пользователей** ([adr/0012-groups.md](adr/0012-groups.md)): у человека несколько источников доступа —
-личное участие и группы (роль + «только свои карточки» на всю группу). Действие разрешено, если его целиком
-разрешает хотя бы один источник. Источники читает только `SpaceAccessResolver` (один запрос `UNION ALL`), права
-кешируются на экземпляре `Space` (`accessOf`). В пространстве всегда есть личный администратор; администраторы через
+личная выдача и выдачи группам (роль на всю группу). Действие разрешено, если его целиком разрешает хотя бы один
+источник. **Каталог прав и роли** ([adr/0024-rights-2.md](adr/0024-rights-2.md)): роль — набор прав
+`App\Enums\Permission` и область карточек (все / свои); стандартные роли — «Администратор», «Редактор»,
+«Комментатор» и два варианта «— только свои карточки»; политики проверяют права каталога. Выдачи и права ролей читает
+только `AccessResolver` (один запрос `UNION ALL`), права кешируются на экземпляре `Space` (`accessOf`). В пространстве всегда есть личный администратор; администраторы через
 группы — дополнительные. Группы ведёт системный администратор; архивная группа доступа не даёт. Встроенная группа
 «Все сотрудники» — все активные пользователи (состав вычисляется резолвером, не хранится; без роли admin).
 
@@ -212,6 +215,6 @@ IP и user agent входов — в `auth_audit` с автоочисткой ч
 
 - **Отчёты (этап 9):** строятся по `card_transitions` (ADR-0006) и `card_blocks` (время разрешения блокировок, ADR-0011).
 - **Документы в дереве (этап 8):** новый `nav_nodes.type = document` со своей ссылкой; видимость папки — по тому же
-  правилу «внутри есть доступный элемент» (ADR-0013). Новые источники доступа — только в `SpaceAccessResolver`.
+  правилу «внутри есть доступный элемент» (ADR-0013). Новые источники доступа — только в `AccessResolver`.
 - **Realtime и уведомления (этап 4):** Laravel Reverb (стандарт Laravel); упоминания уже хранятся в `mentions`.
 - **Деплой:** один VPS, тот же набор сервисов; prod-конфиг nginx и инструкция — к пилоту.

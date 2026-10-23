@@ -5,8 +5,12 @@ use App\Actions\Cards\CreateCardAction;
 use App\Actions\Cards\MoveCardAction;
 use App\Actions\Navigation\CreateFolderAction;
 use App\Enums\BoardTemplate;
+use App\Enums\CardScope;
+use App\Enums\Permission;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
 use App\Enums\UserRole;
+use App\Models\AccessGrant;
 use App\Models\Attachment;
 use App\Models\Board;
 use App\Models\BoardColumn;
@@ -21,9 +25,8 @@ use App\Models\EventLogEntry;
 use App\Models\Group;
 use App\Models\Lane;
 use App\Models\NavNode;
+use App\Models\Role;
 use App\Models\Space;
-use App\Models\SpaceGroup;
-use App\Models\SpaceMember;
 use App\Models\User;
 use App\Services\Attachments\AttachmentFiles;
 use App\Services\Positions\Positioner;
@@ -84,10 +87,51 @@ function space(array $attributes = []): Space
     return Space::factory()->create($attributes);
 }
 
-/** Добавить участника в обход Actions (подготовка данных теста). */
-function addToSpace(Space $space, User $user, SpaceRole $role): SpaceMember
+/** Добавить участника (личная выдача) в обход Actions: роль API или стандартная роль (подготовка данных теста). */
+function addToSpace(Space $space, User $user, SpaceRole|StandardRole $role): AccessGrant
 {
-    return SpaceMember::query()->create(['space_id' => $space->id, 'user_id' => $user->id, 'role' => $role]);
+    return grantAccess($space, $user, $role instanceof SpaceRole ? StandardRole::fromLegacy($role) : $role);
+}
+
+/** Выдача доступа к пространству в обход Actions: пользователю или группе, стандартная роль или любая роль. */
+function grantAccess(Space $space, User|Group $subject, StandardRole|Role $role): AccessGrant
+{
+    return AccessGrant::query()->create([
+        'nav_node_id' => nodeOf($space)->id,
+        'user_id' => $subject instanceof User ? $subject->id : null,
+        'group_id' => $subject instanceof Group ? $subject->id : null,
+        'role_id' => ($role instanceof Role ? $role : Role::standard($role))->id,
+    ])->load('role');
+}
+
+/** Режим «только свои карточки» для личных выдач пользователя (в пространстве или во всех) в обход Actions. */
+function restrictToOwnCards(User $user, ?Space $space = null): void
+{
+    AccessGrant::query()->where('user_id', $user->id)->when($space !== null, fn ($q) => $q->onSpace($space))->with('role')->get()
+        ->each(fn (AccessGrant $grant) => $grant->forceFill([
+            'role_id' => standardRole(StandardRole::fromLegacy($grant->standardRole()->legacyRole(), ownCardsOnly: true))->id,
+        ])->save());
+}
+
+/** Стандартная роль из базы (её создаёт миграция). */
+function standardRole(StandardRole $role): Role
+{
+    return Role::standard($role);
+}
+
+/**
+ * Роль с заданным набором прав — как пользовательская роль (П2e), для матрицы по правам каталога.
+ * Чтение (Permission::alwaysGranted) входит в любую роль.
+ *
+ * @param  list<Permission>  $permissions
+ */
+function makeRole(array $permissions, CardScope $scope = CardScope::All): Role
+{
+    $role = Role::query()->forceCreate(['name' => 'Роль '.Str::random(8), 'card_scope' => $scope, 'position' => 'a9']);
+    $values = collect([...Permission::alwaysGranted(), ...$permissions])->map(fn (Permission $p) => $p->value)->unique();
+    DB::table('role_permissions')->insert($values->map(fn (string $p) => ['role_id' => $role->id, 'permission' => $p])->all());
+
+    return $role;
 }
 
 /** Группа пользователей в обход Actions (подготовка данных теста). */
@@ -106,15 +150,10 @@ function addToGroup(Group $group, User ...$users): Group
     return $group;
 }
 
-/** Выдать группе доступ к пространству в обход Actions. */
-function grantGroup(Space $space, Group $group, SpaceRole $role, bool $ownCardsOnly = false): SpaceGroup
+/** Выдать группе доступ к пространству в обход Actions (роль API + «только свои карточки»). */
+function grantGroup(Space $space, Group $group, SpaceRole $role, bool $ownCardsOnly = false): AccessGrant
 {
-    return SpaceGroup::query()->create([
-        'space_id' => $space->id,
-        'group_id' => $group->id,
-        'role' => $role,
-        'own_cards_only' => $ownCardsOnly,
-    ]);
+    return grantAccess($space, $group, StandardRole::fromLegacy($role, $ownCardsOnly));
 }
 
 /** Доступ к пространству только через новую группу (пользователь в ней один). */

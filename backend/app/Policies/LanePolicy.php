@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permission;
 use App\Models\Lane;
 use App\Models\User;
 use App\Policies\Concerns\ChecksSpaceRole;
@@ -23,6 +24,6 @@ class LanePolicy
 
     public function manage(User $actor, Lane $lane): Response
     {
-        return $this->allowBoardStructure($actor, $lane->board);
+        return $this->allowOnBoard($actor, $lane->board, Permission::BoardUpdate);
     }
 }

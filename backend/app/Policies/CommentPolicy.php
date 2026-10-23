@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\Enums\SpaceRole;
+use App\Enums\Permission;
 use App\Models\Comment;
 use App\Models\User;
 use App\Policies\Concerns\ChecksSpaceRole;
@@ -15,7 +15,7 @@ class CommentPolicy
 
     public function modify(User $actor, Comment $comment): Response
     {
-        $response = $this->allowCard($actor, $comment->card, fn (SpaceRole $role) => true);
+        $response = $this->allowCard($actor, $comment->card, Permission::CardComment);
 
         if ($response->allowed() && $comment->author_id !== $actor->id) {
             return Response::deny(__('selen.comments.not_author'));

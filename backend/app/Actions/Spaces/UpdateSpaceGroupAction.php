@@ -4,16 +4,18 @@ namespace App\Actions\Spaces;
 
 use App\Enums\EventType;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
+use App\Models\AccessGrant;
 use App\Models\Group;
 use App\Models\Space;
-use App\Models\SpaceGroup;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Изменение доступа группы: роль и/или режим «только свои карточки» — атомарно.
+ * Изменение доступа группы: роль и/или режим «только свои карточки» — атомарно (одна стандартная роль выдачи).
  * При назначении admin ограничение снимается (отдельное событие с via: role_changed), как у участников.
  */
 class UpdateSpaceGroupAction
@@ -21,6 +23,7 @@ class UpdateSpaceGroupAction
     public function __construct(
         private readonly EventRecorder $events,
         private readonly SpaceAdminGuard $guard,
+        private readonly SpaceGrants $grants,
     ) {}
 
     public function handle(
@@ -30,12 +33,13 @@ class UpdateSpaceGroupAction
         ?SpaceRole $role,
         ?bool $ownCardsOnly,
         ?string $via = null,
-    ): SpaceGroup {
+    ): AccessGrant {
         return DB::transaction(function () use ($actor, $space, $group, $role, $ownCardsOnly, $via) {
             $space = $this->guard->lock($space);
-            $grant = $space->groupGrants()->where('group_id', $group->id)->firstOrFail();
-            $fromRole = $grant->role;
-            $fromRestricted = $grant->own_cards_only;
+            $grant = $this->grants->ofGroup($space, $group) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
+
+            $fromRole = $this->grants->standardRoleOf($grant)->legacyRole();
+            $fromRestricted = $grant->ownCardsOnly();
             $toRole = $role ?? $fromRole;
             $toRestricted = $toRole->canManageSpace() ? false : ($ownCardsOnly ?? $fromRestricted);
 
@@ -47,7 +51,7 @@ class UpdateSpaceGroupAction
                 throw ValidationException::withMessages(['own_cards_only' => __('selen.spaces.admin_not_restricted')]);
             }
 
-            $grant->forceFill(['role' => $toRole, 'own_cards_only' => $toRestricted])->save();
+            $grant = $this->grants->changeRole($grant, StandardRole::fromLegacy($toRole, $toRestricted));
 
             if ($toRole !== $fromRole) {
                 $this->events->record(EventType::SpaceGroupRoleChanged, $actor, $space, array_filter([

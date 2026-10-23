@@ -3,7 +3,6 @@
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
 use App\Enums\UserStatus;
-use App\Models\SpaceMember;
 use App\Models\User;
 use App\Services\Attachments\AttachmentFiles;
 use Database\Factories\UserFactory;
@@ -73,7 +72,7 @@ it('нет доступа, «только свои», корзина, удалё
     $outsider = member();
     $restricted = member();
     addToSpace($this->space, $restricted, SpaceRole::Editor);
-    SpaceMember::query()->where('user_id', $restricted->id)->update(['own_cards_only' => true]);
+    restrictToOwnCards($restricted);
     $removed = makeAttachment($this->card, $this->editor, 'удалённый.png', PNG_1X1, 'image/png');
     $removed->forceFill(['deleted_at' => now(), 'deleted_by' => $this->editor->id])->save();
     $trashedCard = makeCard($this->board, 'To Do', $this->editor, 'В корзине');

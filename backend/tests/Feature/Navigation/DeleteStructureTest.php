@@ -4,6 +4,7 @@ use App\Actions\Columns\CreateColumnAction;
 use App\Actions\Labels\SaveLabelAction;
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
+use App\Models\AccessGrant;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Card;
@@ -13,8 +14,6 @@ use App\Models\Label;
 use App\Models\Lane;
 use App\Models\NavNode;
 use App\Models\Space;
-use App\Models\SpaceGroup;
-use App\Models\SpaceMember;
 use App\Support\FractionalIndex;
 
 /*
@@ -79,6 +78,8 @@ describe('пространство', function () {
         app(SaveLabelAction::class)->handle($this->admin, ['name' => 'Срочно', 'color' => '#ef4444'], space: $space);
         $other = space(['key' => 'KEEP']);
         $keepBoard = makeBoard($other, $this->admin);
+        $nodeId = nodeOf($space)->id;
+        expect(AccessGrant::query()->where('nav_node_id', $nodeId)->count())->toBeGreaterThan(1);
 
         $this->deleteJson("/api/v1/admin/spaces/{$space->id}")->assertNoContent();
 
@@ -86,8 +87,7 @@ describe('пространство', function () {
             ->and(Board::query()->where('space_id', $space->id)->exists())->toBeFalse()
             ->and(BoardColumn::query()->whereIn('board_id', [$board->id, $archived->id])->exists())->toBeFalse()
             ->and(Lane::query()->whereIn('board_id', [$board->id, $archived->id])->exists())->toBeFalse()
-            ->and(SpaceMember::query()->where('space_id', $space->id)->exists())->toBeFalse()
-            ->and(SpaceGroup::query()->where('space_id', $space->id)->exists())->toBeFalse()
+            ->and(AccessGrant::query()->where('nav_node_id', $nodeId)->exists())->toBeFalse()
             ->and(Label::query()->where('space_id', $space->id)->exists())->toBeFalse()
             ->and(NavNode::query()->where('space_id', $space->id)->exists())->toBeFalse()
             // Соседнее пространство не тронуто

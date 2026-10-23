@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\SpaceRole;
+use App\Models\AccessGrant;
 use App\Models\EventLogEntry;
 use App\Models\NavNode;
 use App\Models\Space;
@@ -197,8 +198,7 @@ it('перемещение не меняет ключ, номера карточ
         DB::table('spaces')->where('id', $space->id)->first(['key', 'name', 'last_card_number', 'archived_at']),
         DB::table('cards')->where('space_id', $space->id)->orderBy('number')->get(['id', 'number', 'board_id', 'column_id', 'position']),
         DB::table('card_transitions')->where('card_id', $card->id)->orderBy('id')->get(),
-        DB::table('space_members')->where('space_id', $space->id)->orderBy('user_id')->get(['user_id', 'role', 'own_cards_only']),
-        DB::table('space_groups')->where('space_id', $space->id)->get(['group_id', 'role', 'own_cards_only']),
+        AccessGrant::query()->onSpace($space)->orderBy('id')->get(['user_id', 'group_id', 'role_id'])->toArray(),
         DB::table('event_log')->where('subject_type', 'card')->orderBy('id')->get(['id', 'event_type', 'payload']),
     ];
     $before = $snapshot();

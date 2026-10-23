@@ -4,7 +4,7 @@ namespace App\Policies;
 
 use App\Enums\UserRole;
 use App\Models\User;
-use App\Services\Access\SpaceAccessResolver;
+use App\Services\Access\AccessResolver;
 
 /**
  * Права на управление пользователями. Бизнес-ограничения (последний администратор и т. п.)
@@ -26,7 +26,7 @@ class UserPolicy
      */
     public function viewDirectory(User $actor): bool
     {
-        return $actor->isAdmin() || app(SpaceAccessResolver::class)->administersAnySpace($actor);
+        return $actor->isAdmin() || app(AccessResolver::class)->managesAccessAnywhere($actor);
     }
 
     /** Назначает и снимает администратора только Владелец (себе — нет: его роль меняет только передача). */

@@ -2,8 +2,8 @@
 
 namespace App\Http\Resources;
 
+use App\Models\AccessGrant;
 use App\Models\Group;
-use App\Models\SpaceMember;
 use App\Models\User;
 use App\Services\Access\AccessSource;
 use App\Services\Access\SpaceAccess;
@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  * Зрителю, у которого все источники с режимом «только свои карточки» (подрядчик), отдаётся только
  * сам пользователь: ни ролей, ни названий групп (поправка PM к этапу 3).
  *
- * @property array{user: User, access: SpaceAccess, personal: SpaceMember|null, groups: Collection<string, Group>, show_sources: bool} $resource
+ * @property array{user: User, access: SpaceAccess, personal: AccessGrant|null, groups: Collection<string, Group>, show_sources: bool} $resource
  */
 class SpacePersonResource extends JsonResource
 {
@@ -48,9 +48,10 @@ class SpacePersonResource extends JsonResource
         return $person + [
             // Самая сильная роль — для показа; права считаются по источникам
             'role' => $access->highestRole(),
+            // Личная выдача в прежнем виде API: роль + «только свои карточки» (ADR-0024, П2a)
             'personal' => $personal === null ? null : [
-                'role' => $personal->role,
-                'own_cards_only' => $personal->own_cards_only,
+                'role' => $personal->legacyRole(),
+                'own_cards_only' => $personal->ownCardsOnly(),
                 'added_at' => $personal->created_at->toIso8601ZuluString(),
             ],
             'groups' => collect($access->sources)
@@ -58,8 +59,8 @@ class SpacePersonResource extends JsonResource
                 ->map(fn (AccessSource $source) => [
                     'id' => $source->groupId,
                     'name' => $groups->get((string) $source->groupId)?->name,
-                    'role' => $source->role,
-                    'own_cards_only' => $source->ownCardsOnly,
+                    'role' => $source->legacyRole(),
+                    'own_cards_only' => $source->ownCardsOnly(),
                 ])
                 ->sortBy(fn (array $group) => mb_strtolower((string) $group['name']))
                 ->values(),

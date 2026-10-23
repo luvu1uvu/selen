@@ -4,7 +4,6 @@ use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
 use App\Models\EventLogEntry;
 use App\Models\Mention;
-use App\Models\SpaceMember;
 use App\Models\User;
 use App\Support\RichText\RichTextDocument;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +24,7 @@ beforeEach(function () {
     addToSpace($this->space, $this->editor, SpaceRole::Editor);
     addToSpace($this->space, $this->colleague, SpaceRole::Commenter);
     addToSpace($this->space, $this->restricted, SpaceRole::Editor);
-    SpaceMember::query()->where('user_id', $this->restricted->id)->update(['own_cards_only' => true]);
+    restrictToOwnCards($this->restricted);
     $this->board = makeBoard($this->space, $this->editor, BoardTemplate::Simple);
     $this->card = makeCard($this->board, 'To Do', $this->editor);
     $this->describe = fn (?array $doc) => $this->actingAs($this->editor)->patchJson('/api/v1/cards/DEV-1', ['description' => $doc]);

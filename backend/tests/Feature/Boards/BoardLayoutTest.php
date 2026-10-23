@@ -6,7 +6,6 @@ use App\Enums\SpaceRole;
 use App\Models\Board;
 use App\Models\BoardRow;
 use App\Models\EventLogEntry;
-use App\Models\SpaceMember;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -188,7 +187,7 @@ it('список досок: число листовых колонок, вид�
 it('«только свои карточки»: счётчик — только свои видимые карточки (ADR-0008)', function () {
     $restricted = member();
     addToSpace($this->space, $restricted, SpaceRole::Editor);
-    SpaceMember::query()->where('space_id', $this->space->id)->where('user_id', $restricted->id)->update(['own_cards_only' => true]);
+    restrictToOwnCards($restricted, $this->space);
     makeCard($this->a, 'To Do', $this->owner, 'Чужая');
     makeCard($this->a, 'To Do', $restricted, 'Своя');
 

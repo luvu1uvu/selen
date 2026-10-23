@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permission;
 use App\Models\Space;
 use App\Models\User;
 use App\Policies\Concerns\ChecksSpaceRole;
@@ -58,15 +59,16 @@ class SpacePolicy
         return $this->allowMember($actor, $space);
     }
 
+    /** Название, описание, иконка (ADR-0024: «редактирование» пространства). */
     public function update(User $actor, Space $space): Response
     {
-        return $this->allowSpaceAdmin($actor, $space);
+        return $this->allowPermission($actor, $space, Permission::SpaceUpdate);
     }
 
-    /** Добавлять и исключать людей и группы, менять их роли (ADR-0005, ADR-0012). */
+    /** Добавлять и исключать людей и группы, менять их роли (ADR-0005, ADR-0012): «управление доступом». */
     public function manageMembers(User $actor, Space $space): Response
     {
-        return $this->allowSpaceAdmin($actor, $space);
+        return $this->allowPermission($actor, $space, Permission::SpaceManageAccess);
     }
 
     /**
@@ -84,9 +86,9 @@ class SpacePolicy
         return $access->isRestricted() ? Response::deny() : Response::allow();
     }
 
-    /** Создать метку пространства. */
+    /** Создать метку пространства — часть редактирования пространства (ADR-0024). */
     public function createLabel(User $actor, Space $space): Response
     {
-        return $this->allowSpaceAdmin($actor, $space);
+        return $this->allowPermission($actor, $space, Permission::SpaceUpdate);
     }
 }

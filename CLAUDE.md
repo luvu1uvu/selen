@@ -58,12 +58,12 @@ Artisan: `docker compose exec php php artisan <команда>` — это dev �
 backend/                 Laravel: API — только /api/v1; веб-маршрут — только выдача файлов /files/{id} (ADR-0010);
                          Blade-страниц нет
   app/Actions/           бизнес-логика: один класс = одно действие (handle())
-  app/Services/          переиспользуемые сервисы (Access/SpaceAccessResolver, EventRecorder, UserSessions, InvitationIssuer)
+  app/Services/          переиспользуемые сервисы (Access/AccessResolver, EventRecorder, UserSessions, InvitationIssuer)
   app/Http/Controllers/Api/V1/   тонкие контроллеры
   app/Http/Requests/     валидация (Form Requests)
   app/Http/Resources/    формат ответов API (API Resources)
   app/Policies/          права доступа
-  app/Enums/             UserRole, UserStatus, InvitationState, EventType (каталог событий)
+  app/Enums/             UserRole, UserStatus, InvitationState, EventType (каталог событий), Permission (каталог прав), StandardRole
   lang/ru/selen.php, mail.php   наши тексты (остальные файлы lang/ru — пакет laravel-lang, не править)
 frontend/src/
   app/                   роутер, guard'ы, layout'ы, QueryClient
@@ -106,17 +106,22 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
    `--database=pgsql_owner` (новое место запуска миграций — с этим флагом). Новая append-only таблица — `REVOKE`
    лишних прав у роли приложения в её миграции и строка в `docker/postgres/sql/grants.sql`.
 10. Пароли и токены не логировать и не класть в payload событий. Параметры с секретами помечать `#[\SensitiveParameter]`.
-11. **Доступ к содержимому пространств** — только через политики с трейтом `ChecksSpaceRole` (ADR-0005):
-    не участник — 404, нехватка роли — 403. **Права — только из `Space::accessOf()` / `Space::accessesOf()`**
-    (итоговые права по источникам: личное участие и группы, ADR-0012); источники из БД читает только
-    `App\Services\Access\SpaceAccessResolver` — никаких прямых запросов к `space_members`/`space_groups` для прав.
-    Действие разрешено, если его целиком разрешает хотя бы один источник (роль и «только свои» не смешиваются).
-    В пространстве всегда есть хотя бы один **личный** активный администратор (ADR-0012); деактивация пользователя
-    этот инвариант не проверяет — только предупреждает.
-    Каждый новый маршрут пространства/доски/карточки — в матрицу `tests/Feature/Access/AccessMatrixTest.php`
-    (иначе тест упадёт).
-    **Режим «только свои карточки» (ADR-0008):** любая выборка карточек для пользователя — через
-    `CardVisibility::scope()`, любая сущность внутри карточки (комментарии, файлы, чек-листы...) — с проверкой
+11. **Доступ — только через единую точку прав (ADR-0024; ADR-0005, 0012).** Права на пространство и карточки —
+    только из `Space::accessOf()` / `Space::accessesOf()` (итог по источникам: личные выдачи, группы, «Все
+    сотрудники»). Таблицы прав (`access_grants`, `roles`, `role_permissions`, `group_members`) для вычисления читает
+    только `App\Services\Access\AccessResolver` (arch-тест `tests/Unit/AccessArchTest.php`); выдачи меняют только
+    Actions пространств. Политики (трейт `ChecksSpaceRole`) проверяют **права каталога** (`App\Enums\Permission`),
+    не названия ролей; действие с карточкой разрешено, если право и карточку (по области роли) даёт один и тот же
+    источник. Нет доступа — 404, нет права — 403. Новое право — case в `Permission`, место в
+    `StandardRole::permissions()` и миграция прав стандартных ролей (сверяет `StandardRolesTest`). API пространств
+    пока прежний: роль `admin | editor | commenter` + `own_cards_only` ↔ стандартная роль (`StandardRole::fromLegacy`).
+    Папки, создание, перемещение, архив и удаление пространства и корзину до П2d проверяет системный администратор.
+    Каждый новый маршрут пространства/доски/карточки — в матрицу `tests/Feature/Access/AccessMatrixTest.php` вместе
+    с его правом каталога (иначе тест упадёт).
+    **Инвариант:** в пространстве всегда есть хотя бы один **личный** активный администратор — личная выдача
+    с правом «управление доступом» (ADR-0012); деактивация пользователя его не проверяет — только предупреждает.
+    **Область карточек (ADR-0008):** «только свои карточки» — область роли; любая выборка карточек для пользователя —
+    через `CardVisibility::scope()`, любая сущность внутри карточки (комментарии, файлы, чек-листы...) — с проверкой
     через `CardPolicy` / `allowCard()`. Чужая карточка — 404. Новое место применения — в таблицу ADR-0008.
     **Дерево навигации (ADR-0013):** папки доступа не дают; дерево пользователя строит только
     `NavigationTree::forUser` — папка без доступного пользователю пространства не попадает ни в один ответ
@@ -260,7 +265,7 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
   команды из белого списка, ничего не меняет.
   - **Когда:** полный аудит — в конце каждого этапа (до отчёта этапа) и перед пилотом, отчёт —
     `docs/security/audit-ГГГГ-ММ.md`. Точечный (по изменениям ветки) — в подэтапе или хотфиксе, если затронуты вход
-    и сессии, права (политики, `SpaceAccessResolver`, `CardVisibility`, дерево, админка), файлы (вложения, выдача) или
+    и сессии, права (политики, `AccessResolver`, `CardVisibility`, дерево, админка), файлы (вложения, выдача) или
     инфраструктура (Docker, nginx, скрипты хоста и стенда, CI); итог — строкой в отчёте подэтапа. **Не чаще** —
     бережём лимиты.
   - **Находки:** «критично» — PM сразу, не дожидаясь отчёта; «критично» и «важно» — карточки `make pm-bug` с
@@ -374,6 +379,9 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
   «unbound variable» (у PM в терминале так упали `make pm-backup` и `make backup`; у сессии локаль `C`, и ошибка
   не видна). Переменную вплотную перед не-ASCII символом — только `${VAR}»`. Проверяет `scripts/check-scripts.sh`
   (`make lint`, CI).
+- **Стандартные роли меняют только миграции** (ADR-0024): под ролью приложения триггер `standard_roles_guard` отвечает
+  ошибкой на любое изменение строк `roles` с `key` и их `role_permissions` — и в тестах. Роль с нужным набором прав для
+  теста — `makeRole([...])` (tests/Pest.php), выдача в обход Actions — `grantAccess()` / `addToSpace()`.
 - **Роль приложения не меняет схему и историю** (ADR-0016): `php artisan migrate` без `--database=pgsql_owner` падает
   на правах (схема не меняется), `UPDATE`/`DELETE`/`TRUNCATE` истории в тестах — ошибка прав 42501, а не текст
   триггера. Триггеры проверять под владельцем: `asOwner($sql)` (tests/Pest.php). Тесты — `RefreshDatabaseAsOwner`.

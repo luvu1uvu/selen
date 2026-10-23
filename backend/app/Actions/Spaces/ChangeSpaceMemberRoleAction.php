@@ -4,44 +4,45 @@ namespace App\Actions\Spaces;
 
 use App\Enums\EventType;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
+use App\Models\AccessGrant;
 use App\Models\Space;
-use App\Models\SpaceMember;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Смена роли участника. Администратор пространства видит всё, поэтому при назначении admin
- * режим «только свои карточки» снимается (отдельное событие в журнале).
+ * режим «только свои карточки» снимается (отдельное событие в журнале). Роль + флаг API — стандартная роль
+ * личной выдачи (ADR-0024).
  */
 class ChangeSpaceMemberRoleAction
 {
     public function __construct(
         private readonly EventRecorder $events,
         private readonly SpaceAdminGuard $guard,
+        private readonly SpaceGrants $grants,
     ) {}
 
-    public function handle(User $actor, Space $space, User $user, SpaceRole $role, ?string $via = null): SpaceMember
+    public function handle(User $actor, Space $space, User $user, SpaceRole $role, ?string $via = null): AccessGrant
     {
         return DB::transaction(function () use ($actor, $space, $user, $role, $via) {
             $space = $this->guard->lock($space);
-            $member = $space->members()->where('user_id', $user->getKey())->firstOrFail();
-            $from = $member->role;
+            $grant = $this->grants->personal($space, $user) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
+            $current = $this->grants->standardRoleOf($grant);
+            $from = $current->legacyRole();
 
             if ($from === $role) {
-                return $member;
+                return $grant;
             }
 
-            if ($from === SpaceRole::Admin) {
+            if ($this->guard->managesAccess($grant)) {
                 $this->guard->ensureAnotherAdminRemains($space, $user);
             }
 
-            $wasRestricted = $member->own_cards_only;
-            $member->role = $role;
-            if ($role->canManageSpace()) {
-                $member->own_cards_only = false;
-            }
-            $member->save();
+            $wasRestricted = $current->ownCardsOnly();
+            $grant = $this->grants->changeRole($grant, StandardRole::fromLegacy($role, ! $role->canManageSpace() && $wasRestricted));
 
             $this->events->record(EventType::SpaceMemberRoleChanged, $actor, $space, array_filter([
                 'user_id' => $user->id,
@@ -50,7 +51,7 @@ class ChangeSpaceMemberRoleAction
                 'via' => $via,
             ]));
 
-            if ($wasRestricted && ! $member->own_cards_only) {
+            if ($wasRestricted && ! $grant->ownCardsOnly()) {
                 $this->events->record(EventType::SpaceMemberRestrictionChanged, $actor, $space, [
                     'user_id' => $user->id,
                     'from' => true,
@@ -59,7 +60,7 @@ class ChangeSpaceMemberRoleAction
                 ]);
             }
 
-            return $member;
+            return $grant;
         });
     }
 }

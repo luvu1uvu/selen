@@ -2,17 +2,19 @@
 
 namespace App\Services\Access;
 
+use App\Enums\Permission;
 use App\Enums\SpaceRole;
 use Closure;
 
 /**
- * Итоговые права пользователя в пространстве — набор действующих источников (docs/adr/0012-groups.md).
+ * Итоговые права пользователя в пространстве — набор действующих источников (ADR-0012, ADR-0024).
  *
- * Главное правило: действие разрешено, если его ЦЕЛИКОМ разрешает хотя бы один источник. Роль одного
- * источника не сочетается с ограничением другого: личный commenter без ограничения и группа editor
- * с «только своими карточками» — видит все карточки, а редактирует только свои.
+ * Главное правило: действие разрешено, если его ЦЕЛИКОМ разрешает хотя бы один источник. Права роли одного
+ * источника не сочетаются с областью карточек другого: личный «Комментатор» и группа «Редактор — только свои
+ * карточки» — видит все карточки, а редактирует только свои.
  *
- * Объект строит только SpaceAccessResolver; читают его политики (ChecksSpaceRole), CardVisibility и ресурсы.
+ * Объект строит только AccessResolver; читают его политики (ChecksSpaceRole), CardVisibility и ресурсы.
+ * Права — из каталога (App\Enums\Permission), не названия ролей.
  */
 final readonly class SpaceAccess
 {
@@ -26,58 +28,54 @@ final readonly class SpaceAccess
         return new self;
     }
 
-    /** Есть ли у пользователя хоть какой-то доступ к пространству. */
+    /** Есть ли у пользователя хоть какой-то доступ к пространству (чтение входит в любую роль). */
     public function isMember(): bool
     {
         return $this->sources !== [];
     }
 
-    /** Видит ли все карточки: хотя бы один источник без режима «только свои карточки». */
+    /** Видит ли все карточки: хотя бы один источник с областью «все карточки». */
     public function canSeeAllCards(): bool
     {
-        return $this->any(fn (AccessSource $source) => ! $source->ownCardsOnly);
+        return $this->any(fn (AccessSource $source) => $source->seesAllCards());
     }
 
-    /** Режим «только свои карточки» действует: доступ есть, но все источники с ограничением. */
+    /** Режим «только свои карточки» действует: доступ есть, но у всех источников область «свои». */
     public function isRestricted(): bool
     {
         return $this->isMember() && ! $this->canSeeAllCards();
     }
 
-    /**
-     * Действие в пространстве без конкретной карточки (структура, участники, создание карточки).
-     *
-     * @param  callable(SpaceRole): bool  $permits
-     */
-    public function allows(callable $permits): bool
+    /** Действие в пространстве без конкретной карточки (структура, доступ, доски, создание карточки). */
+    public function allows(Permission $permission): bool
     {
-        return $this->any(fn (AccessSource $source) => $permits($source->role));
+        return $this->any(fn (AccessSource $source) => $source->permits($permission));
     }
 
     /**
-     * Действие с конкретной карточкой: источник должен разрешать роль и (не иметь ограничения или
-     * карточка «своя»). $involves вычисляется лениво — только если встретился источник с ограничением.
+     * Действие с конкретной карточкой: право и карточку даёт один и тот же источник — у него есть право и
+     * (область «все карточки» или карточка «своя»). $involves вычисляется лениво — только если встретился
+     * источник с правом и областью «свои».
      *
-     * @param  callable(SpaceRole): bool  $permits
      * @param  Closure(): bool  $involves
      */
-    public function allowsOnCard(callable $permits, Closure $involves): bool
+    public function allowsOnCard(Permission $permission, Closure $involves): bool
     {
         $involved = null;
 
-        return $this->any(function (AccessSource $source) use ($permits, $involves, &$involved) {
-            if (! $permits($source->role)) {
+        return $this->any(function (AccessSource $source) use ($permission, $involves, &$involved) {
+            if (! $source->permits($permission)) {
                 return false;
             }
 
-            return ! $source->ownCardsOnly || ($involved ??= $involves());
+            return $source->seesAllCards() || ($involved ??= $involves());
         });
     }
 
-    /** Самая сильная роль среди источников — только для показа (my_role); права — через allows*(). */
+    /** Самая сильная роль API среди источников — только для показа (my_role); права — через allows*(). */
     public function highestRole(): ?SpaceRole
     {
-        $roles = array_map(fn (AccessSource $source) => $source->role, $this->sources);
+        $roles = array_map(fn (AccessSource $source) => $source->legacyRole(), $this->sources);
 
         foreach ([SpaceRole::Admin, SpaceRole::Editor, SpaceRole::Commenter] as $role) {
             if (in_array($role, $roles, true)) {
@@ -88,7 +86,7 @@ final readonly class SpaceAccess
         return null;
     }
 
-    /** Личное участие, если оно есть. */
+    /** Личная выдача, если она есть. */
     public function personal(): ?AccessSource
     {
         foreach ($this->sources as $source) {

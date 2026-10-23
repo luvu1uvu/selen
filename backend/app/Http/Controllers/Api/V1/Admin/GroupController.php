@@ -121,7 +121,7 @@ class GroupController extends Controller
     {
         return Group::query()
             ->withCount(['members', 'spaceGrants'])
-            ->with(['members', 'spaceGrants.space'])
+            ->with(['members', 'spaceGrants.space', 'spaceGrants.role'])
             ->findOrFail($group->id);
     }
 }

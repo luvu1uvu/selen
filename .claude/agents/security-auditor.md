@@ -65,9 +65,11 @@ hooks:
 Для каждого пункта ищи доказательства в коде, а не в документах; документ (ADR, CLAUDE.md) — это то, как должно быть.
 
 ### 1. Единая точка прав (ADR-0005, 0008, 0012, 0013, 0015, 0017)
-- Права в пространстве — только `Space::accessOf()` / `Space::accessesOf()` → `App\Services\Access\SpaceAccessResolver`.
-  Grep `space_members|space_groups|group_members` по `backend/app`: прямые запросы для прав вне резолвера — находка
-  (Actions управления участниками и группами — не права, это норма).
+- Права в пространстве — только `Space::accessOf()` / `Space::accessesOf()` → `App\Services\Access\AccessResolver`
+  (ADR-0024: выдачи `access_grants`, роли `roles` / `role_permissions`, права каталога `App\Enums\Permission`).
+  Grep `access_grants|role_permissions|group_members|AccessGrant` по `backend/app`: прямые запросы для прав вне
+  резолвера — находка (Actions управления участниками и группами, `SpaceGrants`, показ выдач в ресурсах — не права,
+  это норма). Политики проверяют права каталога, а не роли (`SpaceRole`, `StandardRole` в `app/Policies` — находка).
 - Политики пространства, доски, карточки — с трейтом `ChecksSpaceRole`: не участник — 404, нехватка роли — 403.
   Каждый контроллер или Form Request вызывает авторизацию; маршрут без неё — находка. Сверь `routes/api.php` с
   матрицами `tests/Feature/Access/AccessMatrixTest.php` и `AdminAccessMatrixTest.php`.

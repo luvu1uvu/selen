@@ -3,7 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\ColumnCategory;
-use App\Enums\SpaceRole;
+use App\Enums\Permission;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Card;
@@ -61,7 +61,7 @@ class BoardDetailResource extends JsonResource
             'permissions' => [
                 'manage' => Gate::forUser($user)->allows('manage', $this->resource),
                 'edit_cards' => $editCards,
-                // Удалять карточки в корзину — только системный администратор (ADR-0015)
+                // Удалять карточки в корзину — до П2d только системный администратор (ADR-0015)
                 'delete_cards' => Gate::forUser($user)->allows('deleteCards', $this->resource),
             ],
             // Без колонки «готово» метрики lead/cycle time по доске не посчитаются
@@ -94,9 +94,9 @@ class BoardDetailResource extends JsonResource
                 'attachments_count' => (int) $card->attachments_count,
                 // Есть активная блокировка — карточка выделяется на доске (ADR-0011)
                 'is_blocked' => (bool) $card->is_blocked,
-                // Можно ли менять и перемещать: при источнике с «только своими» — только свои (ADR-0012)
+                // Можно ли перетаскивать: при источнике с «только своими» — только свои (ADR-0012)
                 'can_edit' => $editCards && $access->allowsOnCard(
-                    fn (SpaceRole $role) => $role->canEditCards(),
+                    Permission::CardMove,
                     fn () => $card->customer_id === $user->id || $card->responsible_id === $user->id || (bool) $card->getAttribute('viewer_is_participant'),
                 ),
             ]),

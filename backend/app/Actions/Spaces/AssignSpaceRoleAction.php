@@ -3,8 +3,8 @@
 namespace App\Actions\Spaces;
 
 use App\Enums\SpaceRole;
+use App\Models\AccessGrant;
 use App\Models\Space;
-use App\Models\SpaceMember;
 use App\Models\User;
 
 /**
@@ -18,12 +18,13 @@ class AssignSpaceRoleAction
     public function __construct(
         private readonly AddSpaceMemberAction $add,
         private readonly ChangeSpaceMemberRoleAction $change,
+        private readonly SpaceGrants $grants,
     ) {}
 
-    public function handle(User $actor, Space $space, User $user, SpaceRole $role): SpaceMember
+    public function handle(User $actor, Space $space, User $user, SpaceRole $role): AccessGrant
     {
         // Вложенные Actions блокируют пространство и перепроверяют состав участников сами
-        $isMember = $space->members()->where('user_id', $user->getKey())->exists();
+        $isMember = $this->grants->personal($space, $user) !== null;
 
         return $isMember
             ? $this->change->handle($actor, $space, $user, $role, self::VIA)

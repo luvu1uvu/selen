@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\Enums\SpaceRole;
+use App\Enums\Permission;
 use App\Models\Card;
 use App\Models\User;
 use App\Policies\Concerns\ChecksSpaceRole;
@@ -22,25 +22,38 @@ class CardPolicy
         return $this->allowCard($actor, $card);
     }
 
-    /** Комментировать и прикладывать файлы — любая роль, включая commenter (решение PM). */
+    /** Комментировать и прикладывать файлы — любая стандартная роль, включая «Комментатора» (решение PM). */
     public function comment(User $actor, Card $card): Response
     {
-        return $this->allowCard($actor, $card, fn (SpaceRole $role) => true);
+        return $this->allowCard($actor, $card, Permission::CardComment);
     }
 
-    /** Поля, люди, метки, чек-листы, ссылки, перемещение, архив. */
+    /** Поля, заказчик и ответственный, метки, чек-листы, ссылки, связи, блокировки. */
     public function update(User $actor, Card $card): Response
     {
-        return $this->allowCard($actor, $card, fn (SpaceRole $role) => $role->canEditCards());
+        return $this->allowCard($actor, $card, Permission::CardUpdate);
+    }
+
+    /** Перемещение по колонкам и доскам, архив и возврат из архива. */
+    public function move(User $actor, Card $card): Response
+    {
+        return $this->allowCard($actor, $card, Permission::CardMove);
+    }
+
+    /** Добавить или убрать участника карточки. */
+    public function invite(User $actor, Card $card): Response
+    {
+        return $this->allowCard($actor, $card, Permission::CardInvite);
     }
 
     /**
-     * Удалить в корзину — только системный администратор (решение PM), и только там, где он видит карточку
-     * и может что-то менять: невидимая — 404, архивное пространство или доска — 403. Роль в пространстве — любая.
+     * Удалить в корзину — до П2d только системный администратор (решение PM; с П2d — право «удаление в корзину»
+     * роли), и только там, где он видит карточку и может что-то менять: невидимая — 404, архивное пространство
+     * или доска — 403. Роль в пространстве — любая (чтение есть в любой роли).
      */
     public function delete(User $actor, Card $card): Response
     {
-        $response = $this->allowCard($actor, $card, fn (SpaceRole $role) => true);
+        $response = $this->allowCard($actor, $card, Permission::SpaceRead);
 
         return $response->allowed() && ! $actor->isAdmin() ? Response::deny() : $response;
     }

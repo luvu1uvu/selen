@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\Permission;
 use App\Models\Space;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class SpaceResource extends JsonResource
     {
         /** @var User $user */
         $user = $request->user();
-        $role = $this->roleOf($user);
+        $access = $this->accessOf($user);
         $writable = ! $this->isArchived();
 
         return [
@@ -32,10 +33,12 @@ class SpaceResource extends JsonResource
             'name' => $this->name,
             'description' => $this->description,
             'archived_at' => $this->archived_at?->toIso8601ZuluString(),
-            'my_role' => $role,
+            'my_role' => $access->highestRole(),
             'permissions' => [
-                'manage' => $writable && (bool) $role?->canManageSpace(),
-                'edit_cards' => $writable && (bool) $role?->canEditCards(),
+                // Прежний составной флаг администратора пространства (доски, метки, участники); на права каталога
+                // по отдельности интерфейс перейдёт с пользовательскими ролями (П2e)
+                'manage' => $writable && $access->allows(Permission::SpaceUpdate),
+                'edit_cards' => $writable && $access->allows(Permission::CardUpdate),
                 // Источники доступа (вкладка «Группы»): не показываются при «только своих карточках» во всех источниках
                 'view_access_sources' => Gate::forUser($user)->allows('viewAccessSources', $this->resource),
             ],

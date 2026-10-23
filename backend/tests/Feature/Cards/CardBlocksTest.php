@@ -4,7 +4,6 @@ use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
 use App\Models\CardBlock;
 use App\Models\EventLogEntry;
-use App\Models\SpaceMember;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -145,7 +144,7 @@ it('архивная карточка: блокировки не меняютс�
 it('пользователь с ограничением видит блокирующую карточку как скрытую и не может ею блокировать', function () {
     $restricted = member();
     addToSpace($this->space, $restricted, SpaceRole::Editor);
-    SpaceMember::query()->where('user_id', $restricted->id)->update(['own_cards_only' => true]);
+    restrictToOwnCards($restricted);
     $this->card->forceFill(['responsible_id' => $restricted->id])->save();
     makeBlock($this->card, $this->editor, $this->blocker, null);
 

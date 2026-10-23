@@ -6,6 +6,7 @@ use App\Actions\Attachments\UploadAttachmentAction;
 use App\Actions\Boards\CreateBoardAction;
 use App\Actions\Boards\MoveBoardAction;
 use App\Actions\CardBlocks\BlockCardAction;
+use App\Actions\Cards\AddCardParticipantAction;
 use App\Actions\Cards\CreateCardAction;
 use App\Actions\Cards\MoveCardAction;
 use App\Actions\Cards\SetCardArchivedAction;
@@ -15,7 +16,9 @@ use App\Actions\Checklists\AddChecklistAction;
 use App\Actions\Checklists\AddChecklistItemAction;
 use App\Actions\Columns\CreateColumnAction;
 use App\Actions\Comments\AddCommentAction;
+use App\Actions\Groups\AddGroupMemberAction;
 use App\Actions\Groups\SaveGroupAction;
+use App\Actions\Groups\SetGroupArchivedAction;
 use App\Actions\Labels\SaveLabelAction;
 use App\Actions\Lanes\CreateLaneAction;
 use App\Actions\Navigation\CreateFolderAction;
@@ -82,6 +85,8 @@ use Illuminate\Http\UploadedFile;
  * в ней пространство LONGTREE с доской (названия — константы LONG_*; видит только администратор).
  * Приёмка UI-1a (окно карточки, acceptance/stage-ui1): пространство WIN «Окно карточки» — см. cardWindow().
  * Приёмка LATER-91 (подготовка к тёмной теме, acceptance/stage-L91): пространство THEME «Тёмная тема» — см. themePrep().
+ * Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4): пространства RROLES, RREAD, RGROUPS, RALL, RINTERN,
+ * группы «E2E Руководители», «E2E Подрядчики», архивная «E2E Стажёры» — см. rights2().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  */
 class E2eSeeder extends Seeder
@@ -106,7 +111,7 @@ class E2eSeeder extends Seeder
         User::factory()->owner()->create(['name' => 'E2E Владелец', 'email' => 'e2e-owner@selen.test']);
         $admin = User::factory()->admin()->create(['name' => 'E2E Администратор', 'email' => 'e2e-admin@selen.test']);
         $editor = User::factory()->create(['name' => 'E2E Редактор', 'email' => 'e2e-editor@selen.test']);
-        User::factory()->create(['name' => 'E2E Посторонний', 'email' => 'e2e-outsider@selen.test']);
+        $outsider = User::factory()->create(['name' => 'E2E Посторонний', 'email' => 'e2e-outsider@selen.test']);
         $restricted = User::factory()->create(['name' => 'E2E Подрядчик', 'email' => 'e2e-restricted@selen.test']);
         User::factory()->create(['name' => 'E2E Аналитик', 'email' => 'e2e-analyst@selen.test']);
         // ТК-3.26 (acceptance/stage-3): Владелец назначает его администратором и снимает. Не входит в систему —
@@ -274,8 +279,85 @@ class E2eSeeder extends Seeder
         // Приёмка LATER-91 — подготовка к тёмной теме (acceptance/stage-L91, ТК-L91.3–L91.6)
         $this->themePrep($admin, $editor, $restricted, $candidate);
 
+        // Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4)
+        $this->rights2($admin, $editor, $restricted, $outsider);
+
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
+    }
+
+    /**
+     * «Права 2.0», П2a (приёмочные тесты ТК-R2.1–R2.4, e2e/acceptance/stage-R2): прежние сценарии прав на своих
+     * пространствах вместо «Разработки», «Эксплуатации», «Маркетинга» и «Компании» демо-данных. e2e-admin — единственный
+     * личный администратор каждого (Анна и Егор тест-кейсов). Не входят в систему: «E2E Руководитель» (Григорий —
+     * сводка «Доступ», ТК-R2.4) и «E2E Участник ролей» (Борис ТК-R2.3: ему меняют роль и «только свои»).
+     *
+     * - RROLES «Права: роли», доска «Продукт» (шаблон «Простой»): e2e-editor — editor (Борис, ТК-R2.1), e2e-restricted —
+     *   editor «только свои» (Жанна, ТК-R2.2), «E2E Руководитель» — editor лично и commenter через группу
+     *   «E2E Руководители», «E2E Участник ролей» — editor. Карточки: RROLES-1 «Переносит редактор» (To Do, ТК-R2.1
+     *   переносит и переименовывает), RROLES-2 «Чужая задача» (To Do), RROLES-3 «Задача подрядчика» (To Do, ответственный
+     *   e2e-restricted — ТК-R2.2 переименовывает), RROLES-4 «Подрядчик — участник» (In Progress, e2e-restricted —
+     *   участник), RROLES-5 «Готовая чужая» (Done).
+     * - RREAD «Права: чтение», доска «Обсуждение»: e2e-editor — commenter (Вера, ТК-R2.1); RREAD-1 «Для комментария» (To Do).
+     * - RGROUPS «Права: группы», доска «Заявки»: группа «E2E Подрядчики» (e2e-restricted) — editor «только свои»,
+     *   «E2E Руководители» — commenter; RGROUPS-1 «Заявка подрядчика» (ответственный e2e-restricted),
+     *   RGROUPS-2 «Чужая заявка» (ТК-R2.2, ТК-R2.4).
+     * - RALL «Права: для всех» — без участников, кроме e2e-admin: ТК-R2.4 на время теста выдаёт доступ «Всем сотрудникам»
+     *   и отзывает (постоянная выдача открыла бы пространство e2e-outsider и e2e-analyst — no-access.spec, groups.spec).
+     * - RINTERN «Права: стажёры»: архивная группа «E2E Стажёры» (e2e-outsider) — commenter; доступа не даёт (ТК-R2.4).
+     */
+    private function rights2(User $admin, User $editor, User $restricted, User $outsider): void
+    {
+        $lead = User::factory()->create(['name' => 'E2E Руководитель', 'email' => 'e2e-lead@selen.test']);
+        $member = User::factory()->create(['name' => 'E2E Участник ролей', 'email' => 'e2e-roles@selen.test']);
+        $addMember = app(AddSpaceMemberAction::class);
+        $grant = app(GrantSpaceGroupAction::class);
+        $board = function (Space $space, string $name) use ($admin) {
+            $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => $name], BoardTemplate::Simple);
+            $lane = Lane::query()->where('board_id', $board->id)->sole();
+            $column = fn (string $column) => BoardColumn::query()->where('board_id', $board->id)->where('name', $column)->sole();
+
+            return fn (string $title, string $columnName = 'To Do') => app(CreateCardAction::class)
+                ->handle($admin, $board, ['title' => $title], $column($columnName), $lane);
+        };
+
+        $leads = app(SaveGroupAction::class)->handle($admin, ['name' => 'E2E Руководители']);
+        app(AddGroupMemberAction::class)->handle($admin, $leads, $lead);
+        $contractors = app(SaveGroupAction::class)->handle($admin, ['name' => 'E2E Подрядчики']);
+        app(AddGroupMemberAction::class)->handle($admin, $contractors, $restricted);
+
+        $roles = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: роли', 'key' => 'RROLES'], [$admin]);
+        foreach ([$editor, $restricted, $lead, $member] as $user) {
+            $addMember->handle($admin, $roles, $user, SpaceRole::Editor);
+        }
+        app(SetSpaceMemberRestrictionAction::class)->handle($admin, $roles, $restricted, true);
+        $grant->handle($admin, $roles, $leads, SpaceRole::Commenter);
+        $card = $board($roles, 'Продукт');
+        $card('Переносит редактор');
+        $card('Чужая задача');
+        app(UpdateCardAction::class)->handle($admin, $card('Задача подрядчика'), ['responsible_id' => $restricted->id]);
+        app(AddCardParticipantAction::class)->handle($admin, $card('Подрядчик — участник', 'In Progress'), $restricted);
+        $card('Готовая чужая', 'Done');
+
+        $read = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: чтение', 'key' => 'RREAD'], [$admin]);
+        $addMember->handle($admin, $read, $editor, SpaceRole::Commenter);
+        // Не «Продукт»: две одноимённые доски в раскрытом дереве (RROLES и RREAD) не различить по названию
+        $board($read, 'Обсуждение')('Для комментария');
+
+        $groups = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: группы', 'key' => 'RGROUPS'], [$admin]);
+        $grant->handle($admin, $groups, $contractors, SpaceRole::Editor, ownCardsOnly: true);
+        $grant->handle($admin, $groups, $leads, SpaceRole::Commenter);
+        $card = $board($groups, 'Заявки');
+        app(UpdateCardAction::class)->handle($admin, $card('Заявка подрядчика'), ['responsible_id' => $restricted->id]);
+        $card('Чужая заявка');
+
+        app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: для всех', 'key' => 'RALL'], [$admin]);
+
+        $interns = app(SaveGroupAction::class)->handle($admin, ['name' => 'E2E Стажёры']);
+        app(AddGroupMemberAction::class)->handle($admin, $interns, $outsider);
+        $archive = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Права: стажёры', 'key' => 'RINTERN'], [$admin]);
+        $grant->handle($admin, $archive, $interns, SpaceRole::Commenter);
+        app(SetGroupArchivedAction::class)->handle($admin, $interns, true);
     }
 
     /**
