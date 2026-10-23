@@ -88,6 +88,8 @@ use Illuminate\Http\UploadedFile;
  * Приёмка LATER-91 (подготовка к тёмной теме, acceptance/stage-L91): пространство THEME «Тёмная тема» — см. themePrep().
  * Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4): пространства RROLES, RREAD, RGROUPS, RALL, RINTERN,
  * группы «E2E Руководители», «E2E Подрядчики», архивная «E2E Стажёры» — см. rights2().
+ * Приёмка «Права 2.0», П2b-1 — компании (acceptance/stage-R2, ТК-R2.5–R2.8): пространство RCOMP «Права: компания»
+ * и четыре человека, которые не входят в систему, — см. companies().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  */
 class E2eSeeder extends Seeder
@@ -283,6 +285,9 @@ class E2eSeeder extends Seeder
         // Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4)
         $this->rights2($admin, $editor, $restricted, $outsider);
 
+        // Приёмка «Права 2.0», П2b-1 — компании (acceptance/stage-R2, ТК-R2.5–R2.8)
+        $this->companies($admin);
+
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
     }
@@ -359,6 +364,37 @@ class E2eSeeder extends Seeder
         $archive = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: стажёры', 'key' => 'RINTERN'], [$admin]);
         $grant->handle($admin, $archive, $interns, SpaceRole::Commenter);
         app(SetGroupArchivedAction::class)->handle($admin, $interns, true);
+    }
+
+    /**
+     * «Права 2.0», П2b-1 — компании (приёмочные тесты ТК-R2.5–R2.8, e2e/acceptance/stage-R2): всё — в «Компании 1»,
+     * для пользователей как раньше. Свои люди и пространство вместо «Демо Участника», «Бориса», «Дины», «Маркетинга»,
+     * «Компании» и «Разработки» демо-данных — тест-кейсы меняют роль, состав групп, участников, тип карточки и корзину,
+     * не задевая данные других тестов. Никто из них не входит в систему.
+     *
+     * - «E2E Роль компании» — участник: ТК-R2.5 делает его администратором и возвращает «Участник» («Демо Участник»).
+     * - «E2E Деактивированный» — деактивирован: пометка в списке «Пользователи» (ТК-R2.5).
+     * - «E2E Сотрудник группы» — ТК-R2.6 добавляет его в новую группу («Борис Петров»); группа получает доступ к RCOMP.
+     * - «E2E Сотрудник компании» — ТК-R2.7 добавляет его участником RCOMP с ролью «Комментатор» («Дина»).
+     * - RCOMP «Права: компания» (e2e-admin — единственный личный администратор: Анна и admin@ тест-кейсов), доска
+     *   «Продукт» (шаблон «Простой»), в To Do: RCOMP-1 «Сменить тип» (тип по умолчанию — ТК-R2.7 меняет на «Баг»;
+     *   ТК-R2.6 смотрит в ней выбор меток и типов, ничего не меняя), RCOMP-2 «В корзину и обратно» (ТК-R2.8 удаляет
+     *   в корзину и восстанавливает). ТК-R2.6 переносит RCOMP в новую папку «Структуры» и возвращает в корень.
+     */
+    private function companies(User $admin): void
+    {
+        User::factory()->create(['name' => 'E2E Роль компании', 'email' => 'e2e-company-role@selen.test']);
+        User::factory()->deactivated()->create(['name' => 'E2E Деактивированный', 'email' => 'e2e-deactivated@selen.test']);
+        User::factory()->create(['name' => 'E2E Сотрудник группы', 'email' => 'e2e-company-group@selen.test']);
+        User::factory()->create(['name' => 'E2E Сотрудник компании', 'email' => 'e2e-company-member@selen.test']);
+
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: компания', 'key' => 'RCOMP'], [$admin]);
+        $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Продукт'], BoardTemplate::Simple);
+        $lane = Lane::query()->where('board_id', $board->id)->sole();
+        $todo = BoardColumn::query()->where('board_id', $board->id)->where('name', 'To Do')->sole();
+        foreach (['Сменить тип', 'В корзину и обратно'] as $title) {
+            app(CreateCardAction::class)->handle($admin, $board, ['title' => $title], $todo, $lane);
+        }
     }
 
     /**
