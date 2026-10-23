@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Notifications\ResetPasswordNotification;
+use App\Services\Access\AccessResolver;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -128,7 +129,9 @@ class User extends Authenticatable
      */
     public function companies(): BelongsToMany
     {
-        return $this->belongsToMany(Company::class, 'company_members')->withPivot(['kind', 'is_admin'])->withTimestamps();
+        return $this->belongsToMany(Company::class, 'company_members')->withPivot(['kind', 'is_admin'])
+            ->wherePivot('kind', AccessResolver::HOME)
+            ->withTimestamps();
     }
 
     /**

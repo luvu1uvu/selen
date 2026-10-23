@@ -52,7 +52,9 @@ class Company extends Model
      */
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'company_members')->withPivot(['kind', 'is_admin'])->withTimestamps();
+        return $this->belongsToMany(User::class, 'company_members')->withPivot(['kind', 'is_admin'])
+            ->wherePivot('kind', AccessResolver::HOME)
+            ->withTimestamps();
     }
 
     /** @return HasMany<Space, $this> */

@@ -231,7 +231,10 @@ class AccessResolver
                 ->selectRaw('1')));
     }
 
-    /** Членство «дом» — единственный вид членства в П2b-1 (CHECK); все чтения company_members — отсюда. */
+    /**
+     * Членство «дом» — единственный вид членства в П2b-1 (CHECK). Условие «дом» — во всех выборках членства: здесь,
+     * в activeMember() и во «Все сотрудники», и в связях Company::users / User::companies (привязка {user} в адресах).
+     */
     private function homes(): Builder
     {
         return DB::table('company_members')->where('kind', self::HOME);

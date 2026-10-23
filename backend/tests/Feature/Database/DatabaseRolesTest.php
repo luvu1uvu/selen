@@ -47,6 +47,9 @@ it('историю нельзя изменить, удалить или очис
     'переходы: TRUNCATE' => ['TRUNCATE card_transitions'],
     'блокировки: DELETE' => ['DELETE FROM card_blocks'],
     'блокировки: TRUNCATE' => ['TRUNCATE card_blocks'],
+    // Компании не удаляются (ADR-0024, В10): миграция create_companies и grants.sql отзывают DELETE и TRUNCATE
+    'компании: DELETE' => ['DELETE FROM companies'],
+    'компании: TRUNCATE' => ['TRUNCATE companies CASCADE'],
 ]);
 
 it('триггеры нельзя отключить или подменить, схему — изменить; обхода через параметры нет — ошибка прав', function (string $sql) {
