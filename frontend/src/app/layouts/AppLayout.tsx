@@ -229,17 +229,17 @@ export function AppLayout() {
             />
           )}
         </nav>
-        <Hint label={t('nav.closeMenu')}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="mt-auto md:hidden"
-            onClick={closeMenu}
-            aria-label={t('nav.closeMenu')}
-          >
-            <X />
-          </Button>
-        </Hint>
+        {/* Без подсказки: внутри выезжающего меню фокус с клавиатуры открыл бы её, и первый Esc закрыл бы подсказку, а не
+            меню (LATER-108); «Открыть меню» снаружи — с подсказкой, фокус на неё возвращается без подсказки */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="mt-auto md:hidden"
+          onClick={closeMenu}
+          aria-label={t('nav.closeMenu')}
+        >
+          <X />
+        </Button>
       </div>
       <div className={cn('bg-sidebar w-64 border-r', panelCollapsed && 'md:hidden')}>
         {activeSection === 'admin' ? (

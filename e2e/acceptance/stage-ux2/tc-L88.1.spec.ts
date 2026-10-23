@@ -47,10 +47,14 @@ test('ТК-L88.1. «Доступно всем» — подсказка мышь�
   await expectHint(page, HINT)
   await moveMouseAway(page)
 
-  // 2. Щёлкнуть строку пространства, затем Tab — фокус (рамка) на значке, подсказка видна
+  // 2. Щёлкнуть строку пространства, затем Tab — на стрелку раскрытия, ещё Tab — фокус (рамка) на значке, подсказка
+  // видна. Тест-кейс уточнён по U-4 UX-ревью пачки UX-2: порядок Tab — как на экране (стрелка левее значка), а писался
+  // при прежнем порядке «строка → значок → стрелка»
   await row.click()
   await expect(page).toHaveURL(/\/spaces\/QA/)
   await expect(row).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(nav.getByRole('button', { name: /^(Раскрыть|Свернуть) «Сквозные тесты»$/ })).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(mark).toBeFocused()
   expect(await ringOf(mark), 'рамка фокуса у значка').not.toBeNull()
