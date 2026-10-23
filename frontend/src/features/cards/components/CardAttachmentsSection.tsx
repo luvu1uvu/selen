@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download, FileIcon, Link2, Paperclip, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
-import { copyText } from '@/shared/lib/browser'
 import { sizeParts } from '@/shared/lib/size'
 import type { Attachment, CardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import { Hint } from '@/shared/components/Hint'
+import { TruncatedTrigger } from '@/shared/components/TruncatedText'
+import { useCopyLink } from '@/shared/components/useCopyLink'
 import { deleteAttachment } from '../api'
 import { fileLink } from '../cardWindow'
 import { useCardContentMutation } from '../queries'
@@ -180,23 +181,23 @@ function downloadUrl(attachment: Attachment) {
 
 /**
  * Имя файла — ссылка: то, что браузер показывает сам (картинки, видео, PDF по содержимому), открывается в новой
- * вкладке, остальное скачивается; «Скачать» — отдельной кнопкой (решение PM 22.10, UI-1b).
+ * вкладке, остальное скачивается; «Скачать» — отдельной кнопкой (решение PM 22.10, UI-1b). Обрезанное имя — полностью в
+ * подсказке у ссылки, по наведению и по фокусу (под превью на него остаётся ~140 px, U-5 UX-ревью UI-1b).
  */
 function FileNameLink({ attachment }: { attachment: Attachment }) {
-  return attachment.opens_in_browser ? (
-    <a
-      href={attachment.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="truncate hover:underline"
-      title={attachment.name}
-    >
-      {attachment.name}
-    </a>
-  ) : (
-    <a href={attachment.url} className="truncate hover:underline" title={attachment.name} download>
-      {attachment.name}
-    </a>
+  const ref = useRef<HTMLAnchorElement>(null)
+  const opens = attachment.opens_in_browser
+  return (
+    <TruncatedTrigger text={attachment.name} nameRef={ref}>
+      <a
+        ref={ref}
+        href={attachment.url}
+        className="min-w-0 truncate hover:underline"
+        {...(opens ? { target: '_blank', rel: 'noopener noreferrer' } : { download: true })}
+      >
+        {attachment.name}
+      </a>
+    </TruncatedTrigger>
   )
 }
 
@@ -208,20 +209,17 @@ function AttachmentActions({
   onRemove: (attachment: Attachment) => void
 }) {
   const { t } = useTranslation('boards')
-  const { t: tc } = useTranslation()
+  const copy = useCopyLink()
   return (
-    <span className="ml-auto flex shrink-0 items-center">
+    <span className="ml-auto flex shrink-0 items-center gap-0.5">
       <Hint label={t('attachments.copyLink', { name: attachment.name })}>
         <Button
           variant="ghost"
           size="icon"
           className="size-6"
           aria-label={t('attachments.copyLink', { name: attachment.name })}
-          onClick={async () => {
-            // Ссылку можно отправить коллеге: откроется у того, кто видит карточку (UI-1b, LATER-51)
-            if (await copyText(fileLink(attachment))) toast.success(t('attachments.linkCopied'))
-            else toast.error(tc('errors.copyFailed'))
-          }}
+          // Ссылку можно отправить коллеге: откроется у того, кто видит карточку (UI-1b, LATER-51)
+          onClick={() => copy.copy(fileLink(attachment), t('attachments.linkCopied'))}
         >
           <Link2 />
         </Button>
@@ -250,6 +248,7 @@ function AttachmentActions({
           </Button>
         </Hint>
       )}
+      {copy.dialog}
     </span>
   )
 }

@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { api } from '@/shared/api/client'
@@ -323,27 +323,33 @@ describe('Карточка: описание, комментарии, чек-л�
     const docx = within(section).getByRole('link', { name: 'report.docx' })
     expect(docx).toHaveAttribute('download')
     expect(docx).not.toHaveAttribute('target')
-    // «Скачать» — всегда скачиванием; ссылку на файл можно скопировать (UI-1b)
-    expect(within(section).getByRole('link', { name: 'Скачать spec.pdf' })).toHaveAttribute(
+    // «Скачать» — всегда скачиванием; ссылку на файл можно скопировать (UI-1b); имя файла в подписи — в «ёлочках»
+    expect(within(section).getByRole('link', { name: 'Скачать «spec.pdf»' })).toHaveAttribute(
       'href',
       '/files/doc?download=1',
     )
-    // В jsdom буфера обмена нет — как у страницы не на https: не «скопирована», а объяснение
+    // В jsdom буфера обмена нет — как у страницы не на https: не «скопирована», а окно с выделенной ссылкой, чтобы
+    // скопировать её вручную (U-6 UX-ревью UI-1b)
     await userEvent.click(
-      within(section).getByRole('button', { name: 'Скопировать ссылку на spec.pdf' }),
+      within(section).getByRole('button', { name: 'Скопировать ссылку на «spec.pdf»' }),
     )
-    expect(
-      await screen.findByText('Не удалось скопировать: браузер не дал доступа к буферу обмена.'),
-    ).toBeInTheDocument()
+    const manual = await screen.findByRole('dialog', { name: 'Скопируйте ссылку' })
+    const field = within(manual).getByRole<HTMLInputElement>('textbox', { name: 'Ссылка' })
+    expect(field).toHaveValue(`${window.location.origin}/files/doc`)
+    expect(field).toHaveFocus()
+    expect(field).toHaveAttribute('readonly')
+    expect([field.selectionStart, field.selectionEnd]).toEqual([0, field.value.length])
+    await userEvent.click(within(manual).getByRole('button', { name: 'Закрыть' }))
+    await waitFor(() => expect(manual).not.toBeInTheDocument())
     // setup() даёт буфер обмена
     await userEvent
       .setup()
-      .click(within(section).getByRole('button', { name: 'Скопировать ссылку на spec.pdf' }))
+      .click(within(section).getByRole('button', { name: 'Скопировать ссылку на «spec.pdf»' }))
     expect(await screen.findByText('Ссылка на файл скопирована')).toBeInTheDocument()
     expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/files/doc`)
     expect(within(section).getByText('3 МБ')).toBeInTheDocument()
     expect(
-      within(section).queryByRole('button', { name: 'Удалить spec.pdf' }),
+      within(section).queryByRole('button', { name: 'Удалить «spec.pdf»' }),
     ).not.toBeInTheDocument()
 
     // Браузер не смог воспроизвести видео — сообщение и «Скачать» вместо плеера
@@ -363,7 +369,7 @@ describe('Карточка: описание, комментарии, чек-л�
     expect(within(section).queryByLabelText('demo.mp4')).not.toBeInTheDocument()
 
     // Просмотр в полный размер
-    await userEvent.click(within(section).getByRole('button', { name: 'Открыть screen.png' }))
+    await userEvent.click(within(section).getByRole('button', { name: 'Открыть «screen.png»' }))
     expect(await screen.findByRole('dialog', { name: 'screen.png' })).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
 
@@ -381,7 +387,7 @@ describe('Карточка: описание, комментарии, чек-л�
       { method: 'UPLOAD', path: '/cards/DEV-1/attachments', body: 'notes.txt' },
     ])
 
-    await userEvent.click(within(section).getByRole('button', { name: 'Удалить screen.png' }))
+    await userEvent.click(within(section).getByRole('button', { name: 'Удалить «screen.png»' }))
     await vi.waitFor(() =>
       expect(calls.at(-1)).toEqual({
         method: 'DELETE',

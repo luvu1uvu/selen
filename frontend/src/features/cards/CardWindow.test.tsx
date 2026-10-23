@@ -545,13 +545,7 @@ describe('Окно карточки', () => {
         within(main)
           .getAllByRole('term', { hidden: true })
           .map((term) => term.textContent)
-      expect(terms()).toEqual([
-        'Расположение',
-        'Тип',
-        'Ответственный',
-        'Участники',
-        'Срочно',
-      ])
+      expect(terms()).toEqual(['Расположение', 'Тип', 'Ответственный', 'Участники', 'Срочно'])
 
       // «+» → «Срок»: строка появилась, фокус — в дате; закрыли без срока — строки снова нет
       await userEvent.click(

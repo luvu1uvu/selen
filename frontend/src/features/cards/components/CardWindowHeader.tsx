@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
-import { copyText } from '@/shared/lib/browser'
+import { useCopyLink } from '@/shared/components/useCopyLink'
 import type { CardDetail } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { DialogDescription, DialogTitle } from '@/shared/ui/dialog'
@@ -24,10 +24,8 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
     ? `${card.column.parent_name} / ${card.column.name}`
     : card.column.name
 
-  const copyLink = async () => {
-    if (await copyText(cardLink(card.key))) toast.success(t('card.linkCopied'))
-    else toast.error(tc('errors.copyFailed'))
-  }
+  const copy = useCopyLink()
+  const copyLink = () => copy.copy(cardLink(card.key), t('card.linkCopied'))
 
   const changeCustomer = async (id: string) => {
     if (id === card.customer.id) return

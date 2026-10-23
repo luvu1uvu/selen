@@ -5,18 +5,16 @@ import { authFile } from './helpers'
 /**
  * Уведомления (правила вида, раздел 7, «Уведомление»): поверх окна карточки нажимаются и щелчок по ним окно не закрывает
  * (LATER-102); текст `text-sm`, контраст не меньше 4,5:1, подписи для экранного диктора — по-русски (LATER-103).
- * Уведомление вызывает копирование ссылки на карточку: буфер обмена подменён — удаётся или нет по флагу страницы.
+ * Успех — копирование ссылки на карточку (буфер обмена подменён: в стеке E2E его нет — адрес не localhost); ошибка —
+ * сбой сохранения «Срочно» (ответ сервера подменён, карточка не меняется).
  */
 test.use({ storageState: authFile('e2e-editor@selen.test') })
 
 async function openCard(page: Page) {
   await page.addInitScript(() => {
-    const flags = window as unknown as { copyFails?: boolean }
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
-      value: {
-        writeText: () => (flags.copyFails ? Promise.reject(new Error('denied')) : Promise.resolve()),
-      },
+      value: { writeText: () => Promise.resolve() },
     })
   })
   await page.goto('/cards/QA-3')
@@ -47,8 +45,15 @@ test('текст уведомлений — 14 px и не меньше 4,5:1, п
   await copyKey(page).click()
   const success = page.locator('[data-sonner-toast][data-type="success"]')
   await expect(success).toBeVisible()
-  await page.evaluate(() => ((window as unknown as { copyFails?: boolean }).copyFails = true))
-  await copyKey(page).click()
+  await page.route('**/api/v1/cards/QA-3', (route) =>
+    route.request().method() === 'PATCH'
+      ? route.fulfill({ status: 500, json: { message: 'Сбой сервера' } })
+      : route.fallback(),
+  )
+  await page
+    .getByRole('region', { name: 'Основные параметры' })
+    .getByRole('checkbox', { name: 'Срочно' })
+    .click()
   const error = page.locator('[data-sonner-toast][data-type="error"]')
   await expect(error).toBeVisible()
   // Новое уведомление — сверху, предыдущее под ним свёрнуто: раскрыть стопку, чтобы замерить оба

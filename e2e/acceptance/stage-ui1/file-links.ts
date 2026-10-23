@@ -56,7 +56,7 @@ export async function uploadFiles(page: Page, card: Locator, files: UploadFile[]
   await (await chooser).setFiles(files)
   for (const file of files) {
     await expect(
-      card.getByRole('button', { name: `Скопировать ссылку на ${file.name}`, exact: true }),
+      card.getByRole('button', { name: `Скопировать ссылку на «${file.name}»`, exact: true }),
     ).toBeVisible()
   }
 }
@@ -69,7 +69,7 @@ export async function copyFileLink(page: Page, card: Locator, name: string) {
   await page.evaluate(() => {
     ;(window as unknown as { __copied?: string }).__copied = undefined
   })
-  await card.getByRole('button', { name: `Скопировать ссылку на ${name}`, exact: true }).click()
+  await card.getByRole('button', { name: `Скопировать ссылку на «${name}»`, exact: true }).click()
   await expect(page.getByText('Ссылка на файл скопирована').last()).toBeVisible()
   await expect.poll(() => copiedText(page)).not.toBeNull()
   const link = (await copiedText(page))!

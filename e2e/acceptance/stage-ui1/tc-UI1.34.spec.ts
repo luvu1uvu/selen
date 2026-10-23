@@ -17,7 +17,7 @@ test('ТК-UI1.34. «Скачать» скачивает даже картинк
 
   // 1. У картинки в «Файлах» — «Скачать …»: файл сохраняется, вкладка с картинкой не открывается
   const files = card.getByRole('region', { name: 'Файлы' })
-  const button = files.getByRole('link', { name: `Скачать ${name}`, exact: true })
+  const button = files.getByRole('link', { name: `Скачать «${name}»`, exact: true })
   const download = page.waitForEvent('download')
   await button.click()
   expect((await download).suggestedFilename()).toBe(name)
