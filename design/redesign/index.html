@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Направления облика Selen</title>
+<style>
+:root { --bg: #f6f6f9; --fg: #1d1d26; --muted: #5d5d6b; --card: #ffffff; --line: #e1e1e8; --accent: #5650e6; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg: #131317; --fg: #ececf2; --muted: #a2a2ae; --card: #1c1c21; --line: #2e2e36; --accent: #9894fa; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1200px; margin: 0 auto; padding: 40px 24px 64px; }
+h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.2; text-wrap: balance; }
+.lead { margin: 0 0 32px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
+.dir { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 12px; align-content: start; }
+.dir h2 { margin: 0; font-size: 22px; }
+.tag { margin: 2px 0 0; color: var(--muted); }
+.dir p { margin: 0; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.go { padding: 6px 12px; border-radius: 8px; background: var(--accent); color: var(--bg); text-decoration: none; font-weight: 600; font-size: 14px; }
+.go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.thumbs img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }
+.thumbs a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.swatches { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.swatches li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.sw { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); flex: none; }
+.swatches small { color: var(--muted); margin-left: auto; }
+code { font-size: 13px; color: var(--muted); }
+dl { margin: 0; display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 6px 12px; font-size: 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+.note { margin-top: 32px; color: var(--muted); font-size: 14px; max-width: 80ch; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Направления облика Selen</h1>
+  <p class="lead">Шаг 1 «Редизайна» (LATER-72, LATER-89). Раскладка и поведение — как в приложении и в Kaiten, меняется
+  только облик. У каждого направления — доска, окно карточки и страница пространства; тема переключается в меню
+  пользователя справа вверху («Светлая / Тёмная / Как в системе»). Данные — демо-данные dev.</p>
+  <div class="grid">
+      <article class="dir">
+        <header><h2>Графит</h2><p class="tag">Уровни тоном, а не линиями — ближе всего к референсу PM</p></header>
+        <div class="links"><a class="go" href="graphite/board.html">Доска</a><a class="go" href="graphite/card.html">Окно карточки</a><a class="go" href="graphite/space.html">Пространство</a></div>
+        <div class="thumbs">
+          <a href="graphite/board.html?theme=light"><img src="../../docs/stages/redesign/graphite-board-light.png" alt="«Графит», доска, светлая тема" loading="lazy"></a>
+          <a href="graphite/board.html?theme=dark"><img src="../../docs/stages/redesign/graphite-board-dark.png" alt="«Графит», доска, тёмная тема" loading="lazy"></a>
+        </div>
+        <p>Поверхности различаются тоном: холст, блок доски и карточка — три ступени одного графита (в светлой теме — лунного серебра). Рамок почти нет: остаются тонкие линии между колонками (решение PM) и границы полей. Шапка и панель пространства лежат прямо на холсте — название пространства крупно, как в референсе, но в той же строке. Больше воздуха в карточке, крупнее скругления.</p>
+        <p><b>Запоминается:</b> Ни одной рамки вокруг досок и карточек — только тон.</p>
+        <ul class="swatches"><li><span class="sw" style="background:#e7e7ee"></span><b>Лунное серебро</b> <code>#e7e7ee</code><small>холст, светлая</small></li><li><span class="sw" style="background:#131317"></span><b>Графит</b> <code>#131317</code><small>холст, тёмная</small></li><li><span class="sw" style="background:#5650e6"></span><b>Сумеречный индиго</b> <code>#5650e6</code><small>акцент, светлая</small></li><li><span class="sw" style="background:#9894fa"></span><b>Лавандовый свет</b> <code>#9894fa</code><small>акцент, тёмная</small></li><li><span class="sw" style="background:#1d1d26"></span><b>Чернила</b> <code>#1d1d26</code><small>текст, светлая</small></li></ul>
+        <dl>
+          <dt>Шрифт</dt><dd>Системный (SF Pro, Segoe UI). Системный шрифт: родная отрисовка кириллицы на Mac и Windows, ничего не загружается.<br>название пространства 20/600; доска 16/600; колонка 14/600; карточка 14/500; вторичное 12; номер карточки — тем же шрифтом, ровные цифры (tabular-nums), без моноширинного.</dd>
+          <dt>Плотность</dt><dd>Средняя, с воздухом: карточка — поля 12 × 10 px, между карточками 10 px</dd>
+          <dt>Скругления</dt><dd>карточка 10 px, кнопки и поля 10 px, меню 12 px, блок доски 16 px, окно 16 px</dd>
+          <dt>Поверхности</dt><dd>Светлая: холст #e7e7ee → доска #f3f3f7 → карточка белая с волосяной тенью (без рамки). Тёмная: холст #131317 → доска #1c1c21 → карточка #27272e; теней нет, меню и окна — фон popover и рамка.</dd>
+          <dt>Контраст</dt><dd>все 94 пар в норме; самая низкая — «Акцент текстом на выбранной строке», 4,61:1 при норме 4,50</dd>
+        </dl>
+      </article>
+      <article class="dir">
+        <header><h2>Линия</h2><p class="tag">Эволюция текущего вида: тонкие линии, плотность Kaiten, индиго вместо чёрного</p></header>
+        <div class="links"><a class="go" href="lines/board.html">Доска</a><a class="go" href="lines/card.html">Окно карточки</a><a class="go" href="lines/space.html">Пространство</a></div>
+        <div class="thumbs">
+          <a href="lines/board.html?theme=light"><img src="../../docs/stages/redesign/lines-board-light.png" alt="«Линия», доска, светлая тема" loading="lazy"></a>
+          <a href="lines/board.html?theme=dark"><img src="../../docs/stages/redesign/lines-board-dark.png" alt="«Линия», доска, тёмная тема" loading="lazy"></a>
+        </div>
+        <p>Сохраняет то, что сотрудники уже видели на стенде: всё очерчено тонкими линиями, плотность — как сейчас (как в Kaiten), скругления небольшие. Меняются палитра и акцент: почти чёрная главная кнопка становится индиго, выбранное (строка дерева, раздел, вкладка) — лавандовой подложкой с полоской акцента. Тёмная тема — палитра из резюме ux-reviewer к LATER-89, уже проверенная на контраст. Самое дешёвое внедрение.</p>
+        <p><b>Запоминается:</b> Точная графика линий и индиго-полоска у всего выбранного.</p>
+        <ul class="swatches"><li><span class="sw" style="background:#ffffff"></span><b>Бумага</b> <code>#ffffff</code><small>фон, светлая</small></li><li><span class="sw" style="background:#ecedf1"></span><b>Холст</b> <code>#ecedf1</code><small>холст, светлая</small></li><li><span class="sw" style="background:#4f46e5"></span><b>Индиго</b> <code>#4f46e5</code><small>акцент, светлая</small></li><li><span class="sw" style="background:#111113"></span><b>Графит</b> <code>#111113</code><small>холст, тёмная</small></li><li><span class="sw" style="background:#8b8cf8"></span><b>Сирень</b> <code>#8b8cf8</code><small>акцент, тёмная</small></li></ul>
+        <dl>
+          <dt>Шрифт</dt><dd>Системный (SF Pro, Segoe UI). Как сейчас: системный шрифт, привычная плотность.<br>название пространства 20/600; доска 16/600; колонка 14/600; карточка 14/400; вторичное 12; номер карточки — моноширинный, как сейчас.</dd>
+          <dt>Плотность</dt><dd>Плотная, как сейчас: карточка — поля 12 × 8 px, между карточками 8 px</dd>
+          <dt>Скругления</dt><dd>как сейчас: карточка 6 px, кнопки и поля 6 px, меню 6 px, блок доски 12 px, окно 8 px</dd>
+          <dt>Поверхности</dt><dd>Светлая: холст #ecedf1 → доска белая с рамкой → карточка белая с рамкой и тенью xs. Тёмная: холст #111113 → доска #1f1f23 → карточка #29292e, рамки #2f2f35, теней нет.</dd>
+          <dt>Контраст</dt><dd>все 94 пар в норме; самая низкая — «Акцент текстом на выбранной строке», 4,72:1 при норме 4,50</dd>
+        </dl>
+      </article>
+      <article class="dir">
+        <header><h2>Луна</h2><p class="tag">Характер из имени: Selen — Селена, ночной индиго и лунное серебро, свой шрифт</p></header>
+        <div class="links"><a class="go" href="luna/board.html">Доска</a><a class="go" href="luna/card.html">Окно карточки</a><a class="go" href="luna/space.html">Пространство</a></div>
+        <div class="thumbs">
+          <a href="luna/board.html?theme=light"><img src="../../docs/stages/redesign/luna-board-light.png" alt="«Луна», доска, светлая тема" loading="lazy"></a>
+          <a href="luna/board.html?theme=dark"><img src="../../docs/stages/redesign/luna-board-dark.png" alt="«Луна», доска, тёмная тема" loading="lazy"></a>
+        </div>
+        <p>Имя продукта даёт образ: Селена — луна. Полоса разделов — полоса ночного индиго в обеих темах: по ней Selen узнаётся с первого взгляда. Нейтральные цвета чуть подкрашены в сторону акцента (лунное серебро), рамки — тонкие, того же оттенка. Свой шрифт Onest (открытая лицензия, создан для кириллицы) делает заголовки и цифры узнаваемыми. Метки — «таблетки» со скруглением.</p>
+        <p><b>Запоминается:</b> Ночная индиго-полоса разделов и шрифт Onest.</p>
+        <ul class="swatches"><li><span class="sw" style="background:#1f1b4d"></span><b>Ночной индиго</b> <code>#1f1b4d</code><small>полоса разделов</small></li><li><span class="sw" style="background:#e8e8f3"></span><b>Лунное серебро</b> <code>#e8e8f3</code><small>холст, светлая</small></li><li><span class="sw" style="background:#4c44df"></span><b>Индиго</b> <code>#4c44df</code><small>акцент, светлая</small></li><li><span class="sw" style="background:#0f0f19"></span><b>Ночь</b> <code>#0f0f19</code><small>холст, тёмная</small></li><li><span class="sw" style="background:#a9a5ff"></span><b>Лунный свет</b> <code>#a9a5ff</code><small>акцент, тёмная</small></li></ul>
+        <dl>
+          <dt>Шрифт</dt><dd>Onest (OFL, размещается у нас, ~50 КБ кириллица + латиница). Свой шрифт: современный гротеск с хорошей кириллицей и переменной насыщенностью. Файлы — в репозитории и в сборке, без внешних сервисов.<br>название пространства 20/650; доска 16/600; колонка 14/600; карточка 14/450; вторичное 12; номер карточки — Onest с ровными цифрами, насыщенность 500.</dd>
+          <dt>Плотность</dt><dd>Средняя: карточка — поля 12 × 10 px, между карточками 8 px</dd>
+          <dt>Скругления</dt><dd>карточка 8 px, кнопки и поля 8 px, меню 10 px, блок доски 14 px, окно 14 px; метки — таблетки</dd>
+          <dt>Поверхности</dt><dd>Светлая: холст #e8e8f3 → доска белая с подкрашенной рамкой → карточка белая с рамкой и мягкой индиго-тенью. Тёмная: холст #0f0f19 → доска #181827 → карточка #212135, рамки #2b2b42.</dd>
+          <dt>Контраст</dt><dd>все 94 пар в норме; самая низкая — «Ошибка, удаление (destructive) на фоне окна», 4,83:1 при норме 4,50</dd>
+        </dl>
+      </article>
+  </div>
+  <p class="note">Прототипы — самостоятельные HTML-файлы: открываются двойным щелчком, без сервера и интернета. Щелчок
+  по карточке открывает её окно, шевроны сворачивают дорожки и доски, подсказки — по наведению и с клавиатуры.
+  Контраст всех пар — design/redesign/contrast.md.</p>
+</main>
+</body>
+</html>
