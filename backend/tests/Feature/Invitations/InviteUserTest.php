@@ -94,6 +94,9 @@ it('не приглашает существующий email: один отве�
 });
 
 it('лимит приглашений: 10 в минуту на приглашающего, отказы тоже считаются; другой администратор — свой счётчик', function () {
+    // Время стоит: окно лимита отсчитывается от первой попытки, и смена секунды между ней и отказом давала
+    // «59 сек.» вместо «1 мин.» (LATER-116)
+    $this->freezeTime();
     $admin = admin();
     $this->actingAs($admin);
     $invite = fn (string $email) => $this->postJson(adminPath().'invitations', ['name' => 'Новый', 'email' => $email, 'role' => 'member']);
@@ -109,8 +112,13 @@ it('лимит приглашений: 10 в минуту на приглаша�
     $this->postJson(adminPath().'invitations/'.Invitation::query()->firstOrFail()->id.'/resend')->assertTooManyRequests();
     $this->actingAs(admin())->postJson(adminPath().'invitations', ['name' => 'Новый', 'email' => 'other@selen.test', 'role' => 'member'])->assertCreated();
 
-    $this->travel(61)->seconds();
+    // Меньше минуты до конца окна — точно, в секундах (отказ 429 попыткой не считается)
+    $this->travel(15)->seconds();
     $this->actingAs($admin);
+    $invite('new10@selen.test')->assertTooManyRequests()
+        ->assertJsonPath('message', 'Слишком много приглашений: не больше 10 в минуту и 300 в сутки. Продолжить можно через 45 сек.');
+
+    $this->travel(46)->seconds();
     $invite('new10@selen.test')->assertCreated();
     expect(User::query()->where('email', 'like', 'new%')->count())->toBe(10);
 });
