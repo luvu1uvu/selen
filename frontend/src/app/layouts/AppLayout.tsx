@@ -259,7 +259,7 @@ function AdminPanel({
           <PanelLeftClose />
         </Button>
       </div>
-      <nav aria-label={t('nav.admin')} className="grid gap-0.5 overflow-y-auto px-2 pt-1 pb-4">
+      <nav aria-label={t('nav.admin')} className="grid scroll-py-1 gap-0.5 overflow-y-auto px-2 pt-1 pb-4">
         {isOwner(user) && (
           <>
             <AdminLink to="/admin/companies" icon={Building} onNavigate={onNavigate}>
