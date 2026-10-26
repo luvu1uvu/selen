@@ -21,9 +21,11 @@ export function AdminCompanyLayout() {
 
   if (!known) return <AdminNotFound />
 
+  // Другая компания — страница заново (key): без строк прошлой компании до ответа, фильтры и поиск — с начала
+  // (аудит П2b-2, S-2)
   return (
     <AdminCompanyContext.Provider value={companyId}>
-      <Outlet />
+      <Outlet key={companyId} />
     </AdminCompanyContext.Provider>
   )
 }

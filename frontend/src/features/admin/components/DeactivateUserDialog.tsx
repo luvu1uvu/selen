@@ -25,7 +25,7 @@ export function DeactivateUserDialog({
   user,
   onClose,
 }: {
-  user: User | null
+  user: Pick<User, 'id' | 'name'> | null
   onClose: () => void
 }) {
   const { t } = useTranslation('admin')

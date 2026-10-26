@@ -84,8 +84,12 @@ export interface AdminUserPermissions {
   owner_only: boolean
 }
 
-/** Пользователь в админке «Пользователи». */
-export interface AdminUser extends User {
+/**
+ * Пользователь в админке «Пользователи». У Владельца в компании, где он не «дом», время входа и часовой пояс не
+ * приходят (null).
+ */
+export interface AdminUser extends Omit<User, 'timezone'> {
+  timezone: string | null
   permissions: AdminUserPermissions
 }
 

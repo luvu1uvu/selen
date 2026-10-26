@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Models\Company;
 use App\Models\Invitation;
 use App\Models\User;
+use App\Services\Access\AccessResolver;
 use Illuminate\Http\Request;
 
 /**
@@ -29,7 +30,14 @@ class AdminUserResource extends UserResource
         $company = $request->route('company');
         $user = $this->resource;
 
-        return $this->account($company->roleOf($user)) + [
+        $account = $this->account($company->roleOf($user));
+        // Владелец — участник всех компаний (строка «Владелец»), но время его входов и часовой пояс — только компаниям,
+        // где он «дом» (аудит П2b-2, S-3: минимум ПДн)
+        if ($user->isOwner() && ! app(AccessResolver::class)->isHome($user, $company)) {
+            $account = ['last_login_at' => null, 'timezone' => null] + $account;
+        }
+
+        return $account + [
             'permissions' => [
                 'update_role' => $actor->can('updateRole', [$user, $company]),
                 'deactivate' => $actor->can('deactivate', [$user, $company]),

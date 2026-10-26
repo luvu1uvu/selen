@@ -25,10 +25,19 @@ beforeEach(function () {
 it('Владелец — в «Пользователях» каждой компании, его доступ в ней открывается; управлять им нельзя', function () {
     $this->actingAs($this->secondAdmin);
 
+    $this->owner->forceFill(['last_login_at' => now()])->save();
     $row = collect($this->getJson(adminPath($this->second).'users')->assertOk()->json('data'))->firstWhere('id', $this->owner->id);
     expect($row)->not->toBeNull()
         ->and($row['role'])->toBe('owner')
-        ->and($row['permissions'])->each->toBeFalse();
+        ->and($row['permissions'])->each->toBeFalse()
+        // Время входов и часовой пояс Владельца — только компаниям, где он «дом» (аудит S-3)
+        ->and($row['last_login_at'])->toBeNull()
+        ->and($row['timezone'])->toBeNull();
+    // В «Компании 1», где он «дом», — как у всех
+    $home = collect($this->actingAs(admin())->getJson(adminPath().'users')->assertOk()->json('data'))->firstWhere('id', $this->owner->id);
+    expect($home['last_login_at'])->not->toBeNull()
+        ->and($home['timezone'])->toBe('Europe/Moscow');
+    $this->actingAs($this->secondAdmin);
 
     // В «Все сотрудники» чужой компании Владелец не входит (её состав — «дома»)
     $this->getJson(adminPath($this->second)."users/{$this->owner->id}/access")->assertOk()
