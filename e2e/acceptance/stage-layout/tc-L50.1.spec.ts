@@ -31,14 +31,20 @@ async function expectTopBarInPlace(page: Page, panelHeading: string) {
   expect(page_.height).toBe(LAPTOP.height)
 }
 
-/** Прокрутить колесом `main` обычной страницы вниз до конца. */
+/**
+ * Прокрутить колесом `main` обычной страницы вниз до конца. Колесо — внутри ожидания: страница может дорасти после
+ * первого прокручивания (данные приходят после заголовка — раздел «Пользователи» с П2b-2: заголовок и вкладки
+ * в общем макете видны раньше таблицы), тогда крутим ещё, пока не дойдём до настоящего конца.
+ */
 async function scrollMainToEnd(page: Page) {
   const main = page.getByRole('main')
   const box = (await main.boundingBox())!
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await page.mouse.wheel(0, 20_000)
   await expect
-    .poll(() => main.evaluate((e) => e.scrollHeight - e.clientHeight - e.scrollTop))
+    .poll(async () => {
+      await page.mouse.wheel(0, 20_000)
+      return main.evaluate((e) => e.scrollHeight - e.clientHeight - e.scrollTop)
+    })
     .toBeLessThanOrEqual(1)
   return main.evaluate((e) => e.scrollTop)
 }
