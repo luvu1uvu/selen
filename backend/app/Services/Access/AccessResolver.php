@@ -2,6 +2,7 @@
 
 namespace App\Services\Access;
 
+use App\Enums\AccessInactiveReason;
 use App\Enums\CardScope;
 use App\Enums\Permission;
 use App\Enums\StandardRole;
@@ -400,7 +401,7 @@ class AccessResolver
      * компании, включая недействующие, с причиной. Пространства — по названию. Человек — участник компании
      * (его ищет привязка маршрута среди людей компании).
      *
-     * @return Collection<int, array{space: Space, access: SpaceAccess, sources: list<array{group: Group|null, source: AccessSource, inactive_reason: 'group_archived'|'user_deactivated'|'user_invited'|null}>}>
+     * @return Collection<int, array{space: Space, access: SpaceAccess, sources: list<array{group: Group|null, source: AccessSource, inactive_reason: AccessInactiveReason|null}>}>
      */
     public function explain(User $user, Company $company): Collection
     {
@@ -442,10 +443,10 @@ class AccessResolver
                     'group' => $group,
                     'source' => $this->source($grant, $permissions),
                     'inactive_reason' => match (true) {
-                        $group->isArchived() => 'group_archived',
-                        $deactivated => 'user_deactivated',
+                        $group->isArchived() => AccessInactiveReason::GroupArchived,
+                        $deactivated => AccessInactiveReason::UserDeactivated,
                         // В «Все сотрудники» приглашённый входит после принятия приглашения
-                        $group->system_key === Group::EVERYONE && $user->status === UserStatus::Invited => 'user_invited',
+                        $group->system_key === Group::EVERYONE && $user->status === UserStatus::Invited => AccessInactiveReason::UserInvited,
                         default => null,
                     },
                 ];
