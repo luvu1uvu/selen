@@ -69,3 +69,37 @@ export const COMPANY_KEY = 'RCOMP'
 
 /** Метка для одноразовых названий (группа, метка, тип, папка, приглашение): тест можно повторить на том же стеке. */
 export const stamp = () => Date.now().toString(36)
+
+/*
+ * «Права 2.0», П2b-2 — несколько компаний (docs/stages/rights-2.md, «Как проверить руками (П2b-2…)», ТК-R2.9–R2.15).
+ * Данные — E2eSeeder::moreCompanies вместо демо «Компании 2» и «Компании 3»: irina@ (администратор обеих) →
+ * e2e-multi-admin, oleg@ (два «дома») → e2e-two-homes (входит) и «E2E Два дома без входа» (его деактивирует Владелец),
+ * kirill@ (сотрудник второй компании) → e2e-multi-admin, zhanna@ («только свои») → e2e-restricted в QA.
+ */
+export const COMPANY_1 = 'Компания 1'
+export const COMPANY_2 = 'E2E Компания 2'
+export const COMPANY_3 = 'E2E Компания 3'
+
+/** Уведомления по ссылке на недоступное (одинаковые для «нет доступа» и «нет такой», ADR-0024). */
+export const NO_CARD = 'Нет доступа к карточке или она не существует'
+export const NO_SPACE = 'Нет доступа к пространству или оно не существует'
+
+/** «Администрирование» в полосе разделов: раздел панели запоминается — уже открытый повторное нажатие закрыло бы. */
+export async function openAdminPanel(page: Page) {
+  const rail = page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name: 'Администрирование' })
+  await expect(rail).toBeVisible()
+  if ((await rail.getAttribute('aria-pressed')) !== 'true') await rail.click()
+  const panel = page.getByRole('navigation', { name: 'Администрирование' })
+  await expect(panel).toBeVisible()
+  return panel
+}
+
+/** Выбор компании над меню «Администрирования» (только у того, у кого компаний несколько). */
+export const companySelect = (page: Page) =>
+  page.getByRole('navigation', { name: 'Администрирование' }).getByLabel('Компания', { exact: true })
+
+/** Вкладки раздела «Пользователи»: ссылки «Пользователи», «Группы», «Приглашения». */
+export const usersTabs = (page: Page) => page.getByRole('navigation', { name: 'Разделы «Пользователей»' })
+
+/** Заголовок компании в дереве — область с её названием (только у того, у кого компаний несколько). */
+export const treeCompany = (page: Page, name: string) => tree(page).getByRole('region', { name, exact: true })

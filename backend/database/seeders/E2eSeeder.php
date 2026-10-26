@@ -383,6 +383,9 @@ class E2eSeeder extends Seeder
      *   компаний; editor в RHOME «Дом: первая компания» (Компания 1, администратор e2e-admin) и в RSECOND;
      *   деактивировать его может только Владелец.
      * - «E2E Сотрудник второй» (e2e-second@selen.test, не входит) — участник «E2E Компании 2», editor в RSECOND.
+     * - «E2E Два дома без входа» (e2e-two-homes-idle@selen.test, не входит) — тоже «дом» в «Компании 1» и «E2E
+     *   Компании 2»: ТК-R2.12 (шаги 2–3) — у администратора «Компании 1» в его строке нет действий, Владелец
+     *   деактивирует его и возвращает. Деактивация завершает сессии — у e2e-two-homes она сбросила бы сохранённый вход.
      * - RSECOND «Вторая компания: продажи» в папке «E2E Клиенты» (E2E Компания 2), доска «Сделки», RSECOND-1 «Сделка
      *   второй компании»; RTHIRD «Третья компания: склад» (E2E Компания 3), доска «Поставки», RTHIRD-1 «Поставка».
      */
@@ -397,6 +400,9 @@ class E2eSeeder extends Seeder
         $twoHomes = User::factory()->create(['name' => 'E2E Два дома', 'email' => 'e2e-two-homes@selen.test']);
         $twoHomes->companies()->attach($second->id, ['kind' => 'home']);
         $member = User::factory()->inCompany($second)->create(['name' => 'E2E Сотрудник второй', 'email' => 'e2e-second@selen.test']);
+        // ТК-R2.12: человек с двумя «домами», которого деактивирует и возвращает Владелец (в систему не входит)
+        $idle = User::factory()->create(['name' => 'E2E Два дома без входа', 'email' => 'e2e-two-homes-idle@selen.test']);
+        $idle->companies()->attach($second->id, ['kind' => 'home']);
 
         $home = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Дом: первая компания', 'key' => 'RHOME'], [$admin]);
         app(AddSpaceMemberAction::class)->handle($admin, $home, $twoHomes, SpaceRole::Editor);
