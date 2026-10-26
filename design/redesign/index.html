@@ -20,6 +20,9 @@ h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.2; text-wrap: balance; }
 .links { display: flex; flex-wrap: wrap; gap: 8px; }
 .go { padding: 6px 12px; border-radius: 8px; background: var(--accent); color: var(--bg); text-decoration: none; font-weight: 600; font-size: 14px; }
 .go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.thumbs img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }
+.thumbs a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
 .swatches { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .swatches li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .sw { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); flex: none; }
@@ -41,6 +44,10 @@ dd { margin: 0; }
       <article class="dir">
         <header><h2>Графит</h2><p class="tag">Уровни тоном, а не линиями — ближе всего к референсу PM</p></header>
         <div class="links"><a class="go" href="graphite/board.html">Доска</a><a class="go" href="graphite/card.html">Окно карточки</a><a class="go" href="graphite/space.html">Пространство</a></div>
+        <div class="thumbs">
+          <a href="graphite/board.html?theme=light"><img src="../../docs/stages/redesign/graphite-board-light.png" alt="«Графит», доска, светлая тема" loading="lazy"></a>
+          <a href="graphite/board.html?theme=dark"><img src="../../docs/stages/redesign/graphite-board-dark.png" alt="«Графит», доска, тёмная тема" loading="lazy"></a>
+        </div>
         <p>Поверхности различаются тоном: холст, блок доски и карточка — три ступени одного графита (в светлой теме — лунного серебра). Рамок почти нет: остаются тонкие линии между колонками (решение PM) и границы полей. Шапка и панель пространства лежат прямо на холсте — название пространства крупно, как в референсе, но в той же строке. Больше воздуха в карточке, крупнее скругления.</p>
         <p><b>Запоминается:</b> Ни одной рамки вокруг досок и карточек — только тон.</p>
         <ul class="swatches"><li><span class="sw" style="background:#e9e9ef"></span><b>Лунное серебро</b> <code>#e9e9ef</code><small>холст, светлая</small></li><li><span class="sw" style="background:#131317"></span><b>Графит</b> <code>#131317</code><small>холст, тёмная</small></li><li><span class="sw" style="background:#5650e6"></span><b>Сумеречный индиго</b> <code>#5650e6</code><small>акцент, светлая</small></li><li><span class="sw" style="background:#9894fa"></span><b>Лавандовый свет</b> <code>#9894fa</code><small>акцент, тёмная</small></li><li><span class="sw" style="background:#1d1d26"></span><b>Чернила</b> <code>#1d1d26</code><small>текст, светлая</small></li></ul>
@@ -55,6 +62,10 @@ dd { margin: 0; }
       <article class="dir">
         <header><h2>Линия</h2><p class="tag">Эволюция текущего вида: тонкие линии, плотность Kaiten, индиго вместо чёрного</p></header>
         <div class="links"><a class="go" href="lines/board.html">Доска</a><a class="go" href="lines/card.html">Окно карточки</a><a class="go" href="lines/space.html">Пространство</a></div>
+        <div class="thumbs">
+          <a href="lines/board.html?theme=light"><img src="../../docs/stages/redesign/lines-board-light.png" alt="«Линия», доска, светлая тема" loading="lazy"></a>
+          <a href="lines/board.html?theme=dark"><img src="../../docs/stages/redesign/lines-board-dark.png" alt="«Линия», доска, тёмная тема" loading="lazy"></a>
+        </div>
         <p>Сохраняет то, что сотрудники уже видели на стенде: всё очерчено тонкими линиями, плотность — как сейчас (как в Kaiten), скругления небольшие. Меняются палитра и акцент: почти чёрная главная кнопка становится индиго, выбранное (строка дерева, раздел, вкладка) — лавандовой подложкой с полоской акцента. Тёмная тема — палитра из резюме ux-reviewer к LATER-89, уже проверенная на контраст. Самое дешёвое внедрение.</p>
         <p><b>Запоминается:</b> Точная графика линий и индиго-полоска у всего выбранного.</p>
         <ul class="swatches"><li><span class="sw" style="background:#ffffff"></span><b>Бумага</b> <code>#ffffff</code><small>фон, светлая</small></li><li><span class="sw" style="background:#ecedf1"></span><b>Холст</b> <code>#ecedf1</code><small>холст, светлая</small></li><li><span class="sw" style="background:#4f46e5"></span><b>Индиго</b> <code>#4f46e5</code><small>акцент, светлая</small></li><li><span class="sw" style="background:#111113"></span><b>Графит</b> <code>#111113</code><small>холст, тёмная</small></li><li><span class="sw" style="background:#8b8cf8"></span><b>Сирень</b> <code>#8b8cf8</code><small>акцент, тёмная</small></li></ul>
@@ -69,6 +80,10 @@ dd { margin: 0; }
       <article class="dir">
         <header><h2>Луна</h2><p class="tag">Характер из имени: Selen — Селена, ночной индиго и лунное серебро, свой шрифт</p></header>
         <div class="links"><a class="go" href="luna/board.html">Доска</a><a class="go" href="luna/card.html">Окно карточки</a><a class="go" href="luna/space.html">Пространство</a></div>
+        <div class="thumbs">
+          <a href="luna/board.html?theme=light"><img src="../../docs/stages/redesign/luna-board-light.png" alt="«Луна», доска, светлая тема" loading="lazy"></a>
+          <a href="luna/board.html?theme=dark"><img src="../../docs/stages/redesign/luna-board-dark.png" alt="«Луна», доска, тёмная тема" loading="lazy"></a>
+        </div>
         <p>Имя продукта даёт образ: Селена — луна. Полоса разделов — полоса ночного индиго в обеих темах: по ней Selen узнаётся с первого взгляда. Нейтральные цвета чуть подкрашены в сторону акцента (лунное серебро), рамки — тонкие, того же оттенка. Свой шрифт Onest (открытая лицензия, создан для кириллицы) делает заголовки и цифры узнаваемыми. Метки — «таблетки» со скруглением.</p>
         <p><b>Запоминается:</b> Ночная индиго-полоса разделов и шрифт Onest.</p>
         <ul class="swatches"><li><span class="sw" style="background:#1f1b4d"></span><b>Ночной индиго</b> <code>#1f1b4d</code><small>полоса разделов</small></li><li><span class="sw" style="background:#e8e8f3"></span><b>Лунное серебро</b> <code>#e8e8f3</code><small>холст, светлая</small></li><li><span class="sw" style="background:#4c44df"></span><b>Индиго</b> <code>#4c44df</code><small>акцент, светлая</small></li><li><span class="sw" style="background:#0f0f19"></span><b>Ночь</b> <code>#0f0f19</code><small>холст, тёмная</small></li><li><span class="sw" style="background:#a9a5ff"></span><b>Лунный свет</b> <code>#a9a5ff</code><small>акцент, тёмная</small></li></ul>

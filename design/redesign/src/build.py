@@ -203,6 +203,10 @@ def index_html():
       <article class="dir">
         <header><h2>{esc(d["title"])}</h2><p class="tag">{esc(d["tagline"])}</p></header>
         <div class="links">{links}</div>
+        <div class="thumbs">
+          <a href="{name}/board.html?theme=light"><img src="../../docs/stages/redesign/{name}-board-light.png" alt="«{esc(d["title"])}», доска, светлая тема" loading="lazy"></a>
+          <a href="{name}/board.html?theme=dark"><img src="../../docs/stages/redesign/{name}-board-dark.png" alt="«{esc(d["title"])}», доска, тёмная тема" loading="lazy"></a>
+        </div>
         <p>{esc(d["idea"])}</p>
         <p><b>Запоминается:</b> {esc(d["memorable"])}</p>
         <ul class="swatches">{swatches}</ul>
@@ -236,6 +240,9 @@ h1 {{ margin: 0 0 8px; font-size: 28px; line-height: 1.2; text-wrap: balance; }}
 .links {{ display: flex; flex-wrap: wrap; gap: 8px; }}
 .go {{ padding: 6px 12px; border-radius: 8px; background: var(--accent); color: var(--bg); text-decoration: none; font-weight: 600; font-size: 14px; }}
 .go:focus-visible {{ outline: 2px solid var(--accent); outline-offset: 2px; }}
+.thumbs {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }}
+.thumbs img {{ display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }}
+.thumbs a:focus-visible {{ outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }}
 .swatches {{ list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }}
 .swatches li {{ display: flex; align-items: center; gap: 8px; font-size: 14px; }}
 .sw {{ width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); flex: none; }}
