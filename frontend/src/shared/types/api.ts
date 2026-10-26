@@ -10,6 +10,8 @@ export type UserRole = 'owner' | 'admin' | 'member'
 /** Роль, которую назначают сменой роли и приглашением; Владелец — только передачей владения. */
 export type AssignableRole = Exclude<UserRole, 'owner'>
 export type UserStatus = 'invited' | 'active' | 'deactivated'
+/** Тема оформления (App\Enums\Theme, ADR-0025). */
+export type Theme = 'light' | 'dark' | 'system'
 export type InvitationState = 'pending' | 'expired' | 'accepted' | 'revoked' | 'superseded'
 
 export interface UserRef {
@@ -30,6 +32,8 @@ export interface User {
   role: UserRole
   status: UserStatus
   timezone: string
+  /** Тема оформления — только у текущего пользователя (`/auth/me`, вход, профиль); в админских списках её нет. */
+  theme?: Theme
   last_login_at: string | null
   deactivated_at: string | null
   created_at: string

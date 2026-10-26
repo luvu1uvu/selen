@@ -37,6 +37,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
     role,
     status: 'active',
     timezone: 'Europe/Moscow',
+    theme: 'light',
     last_login_at: null,
     deactivated_at: null,
     created_at: '2026-01-01T00:00:00Z',

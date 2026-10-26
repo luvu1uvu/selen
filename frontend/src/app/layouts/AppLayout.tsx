@@ -8,10 +8,13 @@ import {
   FolderTree,
   LogOut,
   Menu,
+  Monitor,
+  Moon,
   Network,
   PanelLeftClose,
   ScrollText,
   ShieldCheck,
+  Sun,
   Tag,
   Tags,
   Trash2,
@@ -21,10 +24,12 @@ import {
 } from 'lucide-react'
 import { adminUrl, defaultAdminCompany, hasCompanyPermission } from '@/features/admin/company'
 import { useCurrentUser, useLogout } from '@/features/auth/queries'
+import { useUpdateTheme } from '@/features/profile/queries'
 import { TreePanel } from '@/features/navigation/components/TreePanel'
 import { Hint } from '@/shared/components/Hint'
 import { adminCompanies, isOwner, isSystemAdmin } from '@/shared/lib/roles'
-import type { CompanyPermission } from '@/shared/types/api'
+import { isTheme } from '@/shared/lib/theme'
+import type { CompanyPermission, Theme } from '@/shared/types/api'
 import { cn } from '@/shared/lib/utils'
 import { useMediaQuery } from '@/shared/lib/useMediaQuery'
 import { usePersistentState } from '@/shared/lib/usePersistentState'
@@ -36,6 +41,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
@@ -105,6 +112,44 @@ function AdminLink({
       <Icon className="size-4" />
       {children}
     </NavLink>
+  )
+}
+
+/** Темы в меню пользователя — в порядке решения PM (LATER-89): «Светлая / Тёмная / Как в системе». */
+const THEMES: { value: Theme; icon: typeof Users }[] = [
+  { value: 'light', icon: Sun },
+  { value: 'dark', icon: Moon },
+  { value: 'system', icon: Monitor },
+]
+
+/**
+ * Выбор темы — только в меню пользователя (решения PM 21.10, LATER-89, пп. 6–8). Меню после выбора не закрывается:
+ * видно, что выбрано, и можно сразу сравнить.
+ */
+function ThemeMenuGroup() {
+  const { t } = useTranslation()
+  const { data: user } = useCurrentUser()
+  const updateTheme = useUpdateTheme()
+  return (
+    <DropdownMenuRadioGroup
+      value={user?.theme ?? 'light'}
+      onValueChange={(value) => isTheme(value) && updateTheme.mutate(value)}
+      aria-label={t('theme.title')}
+    >
+      <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+        {t('theme.title')}
+      </DropdownMenuLabel>
+      {THEMES.map(({ value, icon: Icon }) => (
+        <DropdownMenuRadioItem
+          key={value}
+          value={value}
+          onSelect={(event) => event.preventDefault()}
+        >
+          <Icon />
+          {t(`theme.${value}`)}
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
   )
 }
 
@@ -424,6 +469,8 @@ export function AppLayout() {
                   {user?.email}
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <ThemeMenuGroup />
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => navigate('/profile')}>
                 <UserIcon />

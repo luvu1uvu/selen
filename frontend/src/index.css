@@ -3,41 +3,48 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Цветовые токены в стиле shadcn/ui (base color: neutral) */
+/* Токены двух тем (ADR-0025). Значения — направление «Линия» «Редизайна» (docs/stages/redesign.md, шаг 1; контраст —
+   design/redesign/contrast.md, проверяет src/theme-tokens.test.ts): светлая — :root, тёмная — .dark на <html>.
+   Состояния светлой темы (danger, success, warning, категории) — прежние цвета Tailwind (LATER-91), без изменений */
 :root {
+  color-scheme: light;
   --radius: 0.5rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  /* #636363: не меньше 4,5:1 и на сером — muted, холст, заблокированная карточка (LATER-91; было #737373) */
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  /* Акцент — сине-фиолетовый «индиго» в обеих темах (решение PM 21.10, LATER-89, п. 9) */
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  /* Вторичный текст: не меньше 4,5:1 и на сером — muted, холст, заблокированная карточка */
+  --muted-foreground: #62626b;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  /* Рамка фокуса — без прозрачности, #737373: не меньше 3:1 к белому, серому и холсту (LATER-91) */
-  --ring: oklch(0.556 0 0);
-  --sidebar: oklch(0.985 0 0);
+  --destructive-foreground: #ffffff;
+  --border: #e4e4e7;
+  /* Граница полей ввода — не меньше 3:1 к фону (решение PM 26.10, шаг 1, п. 6): поле узнаётся по границе */
+  --input: #8c8c96;
+  /* Рамка фокуса — цветом акцента, без прозрачности (решение PM 26.10, шаг 1, п. 5) */
+  --ring: #4f46e5;
+  --sidebar: #f7f7f8;
+  /* Выбранное: строка дерева, пункт админки, раздел полосы — подложка; признак формы — полоска акцента (заливка к
+     фону дерева меньше 3:1). Значок выбранного раздела полосы — selected-foreground */
+  --selected: #e3e2f6;
+  --selected-foreground: #4338ca;
   /* Холст страницы досок: свободное место вокруг блоков досок заметно темнее самих досок (как в Kaiten) */
-  --canvas: oklch(0.945 0.003 265);
+  --canvas: #ecedf1;
   /* Блок доски на холсте и его закреплённые части (шапка, заголовки колонок, полоса прокрутки) */
-  --board: oklch(1 0 0);
-  /* Полоса дорожки: непрозрачный лёгкий фон — muted 40 % поверх фона доски */
-  --lane: oklch(0.988 0 0);
+  --board: #ffffff;
+  /* Полоса дорожки — непрозрачная: её фон наследуют закреплённые части */
+  --lane: #fafafb;
   /* Затемнение под окнами и выезжающей панелью */
   --overlay: oklch(0 0 0 / 50%);
-  /* Затенение края тела доски, которую можно листать вбок */
-  --edge-shade: oklch(0.145 0 0 / 15%);
 
   /* Состояния (Tailwind red / emerald / amber): текст на фоне и на карточке, текст на поверхности состояния,
      поверхность сообщения (Alert) и заблокированной карточки, поверхность бейджа, граница сообщения */
@@ -62,10 +69,69 @@
   --warning-muted: oklch(0.962 0.059 95.617);
   --warning-border: oklch(0.924 0.12 95.746);
 
-  /* Категории колонок — точка в заголовке колонки, не меньше 3:1 к белому */
+  /* Категории колонок — точка в заголовке колонки, не меньше 3:1 к доске */
   --category-queue: oklch(0.554 0.046 257.417);
   --category-progress: oklch(0.546 0.245 262.881);
   --category-done: oklch(0.596 0.145 163.225);
+}
+
+/* Тёмная тема: уровни тоном — холст → доска → карточка светлее (решение PM 26.10, шаг 1, п. 4); главная кнопка —
+   светлый акцент с тёмным текстом (решение PM 21.10, п. 5); состояния — палитра ux-reviewer (LATER-89) */
+.dark {
+  color-scheme: dark;
+  --background: #19191c;
+  --foreground: #ededef;
+  --card: #29292e;
+  --card-foreground: #ededef;
+  --popover: #2a2a2f;
+  --popover-foreground: #ededef;
+  --primary: #8b8cf8;
+  --primary-foreground: #14142b;
+  --secondary: #2f2f35;
+  --secondary-foreground: #ededef;
+  --muted: #2f2f35;
+  --muted-foreground: #a1a1aa;
+  --accent: #2f2f35;
+  --accent-foreground: #ededef;
+  --destructive: #f87171;
+  --destructive-foreground: #1c0a0a;
+  --border: #2f2f35;
+  --input: #77777f;
+  --ring: #8b8cf8;
+  --sidebar: #1c1c20;
+  --selected: #2b2b42;
+  --selected-foreground: #a5a6fb;
+  --canvas: #111113;
+  --board: #1f1f23;
+  --lane: #25252a;
+  --overlay: oklch(0 0 0 / 65%);
+
+  --danger: #f87171;
+  --danger-foreground: #fca5a5;
+  --danger-surface: #3a2227;
+  --danger-muted: #4a2a30;
+  --danger-border: #7f2d35;
+  --danger-outline: #ef4444;
+  --success: #34d399;
+  --success-foreground: #6ee7b7;
+  --success-surface: #1d3330;
+  --success-muted: #25403b;
+  --success-border: #2f5f55;
+  --warning-foreground: #fcd34d;
+  --warning-surface: #352c1f;
+  --warning-muted: #4a3c28;
+  --warning-border: #6b5426;
+
+  --category-queue: #94a3b8;
+  --category-progress: #60a5fa;
+  --category-done: #34d399;
+}
+
+/* Смена темы — без «перетекания» цветов: на время переключения переходы выключены (installTheme) */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
 }
 
 @theme inline {
@@ -96,11 +162,12 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
   --color-canvas: var(--canvas);
   --color-board: var(--board);
   --color-lane: var(--lane);
   --color-overlay: var(--overlay);
-  --color-edge-shade: var(--edge-shade);
   --color-danger: var(--danger);
   --color-danger-foreground: var(--danger-foreground);
   --color-danger-surface: var(--danger-surface);

@@ -1,6 +1,7 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import userEvent from '@testing-library/user-event'
-import { makeUser, signedInAs } from '@/test/server'
+import { makeUser, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 const admin = makeUser({ id: 'admin-1', name: 'Сергей' })
@@ -118,5 +119,79 @@ describe('Меню на узком экране (LATER-108)', () => {
     const menu = await screen.findByRole('dialog', { name: 'Меню' })
     await user.click(screen.getByRole('button', { name: 'Закрыть меню' }))
     await waitFor(() => expect(menu).not.toBeInTheDocument())
+  })
+})
+
+/**
+ * Тема — только в меню пользователя (решения PM 21.10, LATER-89, пп. 6–8): «Светлая / Тёмная / Как в системе», по
+ * умолчанию светлая; выбор меняет тему сразу и сохраняется на сервере, меню не закрывается (ADR-0025).
+ */
+describe('Тема в меню пользователя', () => {
+  const root = document.documentElement
+
+  async function openUserMenu() {
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Меню пользователя' }))
+    return user
+  }
+
+  it('три пункта группы «Тема», у текущей темы — отметка', async () => {
+    signedInAs(makeUser({ theme: 'system' }))
+    renderApp('/')
+    await openUserMenu()
+
+    const group = await screen.findByRole('group', { name: 'Тема' })
+    const items = within(group).getAllByRole('menuitemradio')
+    expect(items.map((item) => item.textContent)).toEqual(['Светлая', 'Тёмная', 'Как в системе'])
+    expect(within(group).getByRole('menuitemradio', { name: 'Как в системе' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    expect(within(group).getByRole('menuitemradio', { name: 'Светлая' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    )
+  })
+
+  it('«Тёмная» — тема меняется сразу, выбор уходит на сервер и в браузер, меню остаётся открытым', async () => {
+    signedInAs(admin)
+    const sent: unknown[] = []
+    server.use(
+      http.put('*/api/v1/profile/theme', async ({ request }) => {
+        const body = (await request.json()) as { theme: string }
+        sent.push(body)
+        return HttpResponse.json({ data: { ...admin, theme: body.theme } })
+      }),
+    )
+    renderApp('/')
+    expect(root).not.toHaveClass('dark')
+    const user = await openUserMenu()
+
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Тёмная' }))
+
+    expect(root).toHaveClass('dark')
+    expect(window.localStorage.getItem('selen.theme')).toBe('dark')
+    await waitFor(() => expect(sent).toEqual([{ theme: 'dark' }]))
+    expect(screen.getByRole('menuitemradio', { name: 'Тёмная' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+  })
+
+  it('сервер не сохранил — прежняя тема и уведомление', async () => {
+    signedInAs(admin)
+    server.use(
+      http.put('*/api/v1/profile/theme', () =>
+        HttpResponse.json({ message: 'Ошибка' }, { status: 500 }),
+      ),
+    )
+    renderApp('/')
+    const user = await openUserMenu()
+
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Тёмная' }))
+
+    expect(await screen.findByText('Тема не сохранилась. Выберите её ещё раз.')).toBeInTheDocument()
+    expect(root).not.toHaveClass('dark')
+    expect(window.localStorage.getItem('selen.theme')).toBe('light')
   })
 })
