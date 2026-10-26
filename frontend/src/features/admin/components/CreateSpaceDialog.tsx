@@ -150,7 +150,7 @@ export function CreateSpaceDialog({
           >
             <Input
               id="space-key"
-              className="font-mono uppercase"
+              className="uppercase tabular-nums"
               maxLength={10}
               autoComplete="off"
               aria-invalid={!!errors.key}

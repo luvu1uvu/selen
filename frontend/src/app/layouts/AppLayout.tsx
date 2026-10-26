@@ -74,8 +74,11 @@ function RailButton({
       aria-pressed={active}
       title={label}
       className={cn(
-        'text-muted-foreground hover:bg-accent hover:text-foreground flex size-10 items-center justify-center rounded-lg transition-colors',
-        active && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+        'text-muted-foreground hover:bg-accent hover:text-foreground relative flex size-10 items-center justify-center rounded-lg transition-colors',
+        // Активный раздел — подложка selected и полоска акцента 3 px у края полосы (признак формы, не только тон); кнопка
+        // стоит в 8 px от края полосы 56 px — полоска на -left-2, ширина 3 px — вне шкалы, как в прототипе «Линии»
+        active &&
+          'bg-selected text-selected-foreground hover:bg-selected hover:text-selected-foreground before:bg-primary before:absolute before:inset-y-2 before:-left-2 before:w-[3px] before:rounded-r-[3px]',
       )}
     >
       <Icon className="size-5" />
@@ -105,7 +108,9 @@ function AdminLink({
       className={({ isActive }) =>
         cn(
           'text-muted-foreground hover:bg-accent hover:text-foreground flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors',
-          (active ?? isActive) && 'bg-accent text-foreground font-medium',
+          // Выбранный пункт — как выбранная строка дерева (NavTree)
+          (active ?? isActive) &&
+            'bg-selected hover:bg-selected group-hover/row:bg-selected text-foreground font-medium shadow-[inset_2px_0_0_var(--primary)]',
         )
       }
     >
@@ -254,7 +259,7 @@ function AdminPanel({
           <PanelLeftClose />
         </Button>
       </div>
-      <nav aria-label={t('nav.admin')} className="grid gap-0.5 overflow-y-auto px-2 pb-4">
+      <nav aria-label={t('nav.admin')} className="grid gap-0.5 overflow-y-auto px-2 pt-1 pb-4">
         {isOwner(user) && (
           <>
             <AdminLink to="/admin/companies" icon={Building} onNavigate={onNavigate}>

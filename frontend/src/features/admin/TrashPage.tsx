@@ -61,7 +61,7 @@ export function TrashPage() {
             <TableRow key={card.id}>
               <TableCell className="max-w-xs">
                 <div className="flex min-w-0 items-baseline gap-2">
-                  <span className="shrink-0 font-mono text-xs">{card.key}</span>
+                  <span className="shrink-0 text-xs tabular-nums">{card.key}</span>
                   {card.title_hidden ? (
                     <span className="text-muted-foreground italic">{t('trash.titleHidden')}</span>
                   ) : (

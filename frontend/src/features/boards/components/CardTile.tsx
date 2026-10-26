@@ -36,7 +36,9 @@ export const CardTileView = memo(function CardTileView({
   return (
     <div
       className={cn(
-        'bg-card rounded-md border border-l-4 px-3 py-2 text-left text-sm shadow-xs',
+        // Тень — только в светлой теме: на тёмной её не видно, карточку отделяют тон и рамка (наведение — рамка светлее)
+        'bg-card rounded-md border border-l-4 px-3 py-2 text-left text-sm shadow-xs dark:shadow-none',
+        !card.is_blocked && 'dark:hover:border-input/50 hover:shadow-sm dark:hover:shadow-none',
         card.is_urgent && 'ring-danger-outline/50 ring-1',
         card.is_blocked && 'border-danger-outline bg-danger-surface ring-danger-outline ring-1',
         className,
@@ -45,7 +47,7 @@ export const CardTileView = memo(function CardTileView({
     >
       <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs">
         <span className="flex items-center gap-1">
-          <span className="font-mono">{card.key}</span>
+          <span className="tabular-nums">{card.key}</span>
           {card.is_blocked && (
             <span
               className="text-danger inline-flex items-center gap-0.5 font-medium"
@@ -68,7 +70,8 @@ export const CardTileView = memo(function CardTileView({
       )}
       <div className="mt-1 line-clamp-3 break-words">{card.title}</div>
       {hasFooter && (
-        <div className="mt-1.5 flex items-center gap-1.5">
+        // Переносится: у карточки со сроком, «Срочно» и счётчиками аватар иначе выходил за край
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
           {card.is_urgent && (
             <span
               className="text-danger inline-flex items-center gap-0.5 text-xs font-medium"
@@ -177,7 +180,7 @@ export const SortableCardTile = memo(function SortableCardTile({
       aria-label={t('card.open', { key: card.key, title: card.title })}
       data-card-tile={card.key}
       className={cn(
-        'focus-visible:ring-ring rounded-md outline-none focus-visible:ring-2',
+        'rounded-md',
         draggable && 'cursor-grab active:cursor-grabbing',
         // Место, куда упадёт карточка, — пунктирная рамка её размера (на белой доске без серых ячеек полупрозрачная
         // карточка терялась); outline, а не border, — размер не меняется

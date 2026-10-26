@@ -87,7 +87,7 @@ export function SpacesAdminPage() {
               <TableCell>
                 <div className="flex flex-wrap items-center gap-2 font-medium">
                   {space.name}
-                  <Badge variant="secondary" className="font-mono">
+                  <Badge variant="secondary" className="tabular-nums">
                     {space.key}
                   </Badge>
                   {space.archived_at && (

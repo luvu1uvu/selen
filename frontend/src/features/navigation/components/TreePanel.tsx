@@ -271,7 +271,7 @@ export function TreePanel({
         )}
       </div>
 
-      <nav aria-label={t('tree.title')} className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <nav aria-label={t('tree.title')} className="min-h-0 flex-1 overflow-y-auto px-2 pt-1 pb-4">
         {treeQuery.isError && (
           <p className="text-destructive px-2 text-xs">{tc('errors.loadFailed')}</p>
         )}

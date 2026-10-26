@@ -160,7 +160,7 @@ function CategoryDot({ category }: { category: BoardColumn['category'] }) {
           role="img"
           aria-label={label}
           tabIndex={0}
-          className="focus-visible:ring-ring inline-flex size-6 items-center justify-center rounded-md outline-none focus-visible:ring-[3px]"
+          className="inline-flex size-6 items-center justify-center rounded-md"
           data-category={category}
         >
           <span className={cn('size-2 rounded-full', CATEGORY_DOTS[category])} />

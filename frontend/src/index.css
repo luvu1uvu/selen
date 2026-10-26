@@ -200,6 +200,14 @@
   * {
     @apply border-border outline-ring;
   }
+  /* Рамка фокуса с клавиатуры — одна на всё приложение (решение PM 26.10, шаг 1, п. 5; ADR-0025): цветом акцента, 2 px
+     с отступом 2 px — видна и на главной кнопке, и на любой поверхности обеих тем; от щелчка мышью её нет. Свои — у полей
+     ввода (ring-2 без отступа: у текстового поля рамка видна и от щелчка), у пункта меню и вкладки в прокручиваемой полосе
+     (внутри, -outline-offset-2). Элементу без рамки (окно, получившее фокус при открытии) — outline-none */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
   body {
     @apply bg-background text-foreground antialiased;
   }
@@ -263,8 +271,9 @@
   .rich-text hr {
     @apply border-border my-3;
   }
+  /* Подложка muted — прозрачные картинки и скриншоты на белом видны в обеих темах */
   .rich-text img {
-    @apply my-2 max-h-96 max-w-full rounded-md border;
+    @apply bg-muted my-2 max-h-96 max-w-full rounded-md border;
   }
   .rich-text .mention {
     @apply bg-primary/10 text-primary rounded px-1 font-medium;

@@ -51,7 +51,7 @@ function DialogContent({
         <DialogPrimitive.Close
           aria-label={closeLabel}
           className={cn(
-            'bg-background hover:bg-accent focus-visible:ring-ring absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px]',
+            'bg-background hover:bg-accent absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100',
             closeClassName,
           )}
         >

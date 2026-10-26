@@ -43,10 +43,10 @@ export function CardPicker({
           <li key={card.id}>
             <button
               type="button"
-              className="hover:bg-muted flex w-full items-baseline gap-2 px-2 py-1.5 text-left text-sm"
+              className="hover:bg-muted flex w-full items-baseline gap-2 px-2 py-1.5 text-left text-sm focus-visible:-outline-offset-2"
               onClick={() => onPick(card)}
             >
-              <span className="font-mono text-xs">{card.key}</span>
+              <span className="text-xs tabular-nums">{card.key}</span>
               <span className="min-w-0 flex-1 truncate">{card.title}</span>
               <span className="text-muted-foreground shrink-0 text-xs">{card.column.name}</span>
             </button>

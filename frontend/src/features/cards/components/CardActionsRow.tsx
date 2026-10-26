@@ -77,7 +77,7 @@ export function CardActionsRow({
       <div className="relative ml-auto flex items-center gap-2">
         <ActionsMenu
           label={t('card.actions', { title: card.title })}
-          className="bg-background rounded-full border shadow-xs"
+          className="bg-background rounded-full border shadow-xs dark:shadow-none"
         >
           {(opensDialog) => (
             <>

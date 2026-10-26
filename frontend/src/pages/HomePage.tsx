@@ -36,7 +36,7 @@ export function HomePage() {
           >
             <div className="flex items-center justify-between gap-2">
               <span className="truncate font-medium">{space.name}</span>
-              <Badge variant="secondary" className="font-mono">
+              <Badge variant="secondary" className="tabular-nums">
                 {space.key}
               </Badge>
             </div>

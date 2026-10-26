@@ -116,7 +116,7 @@ function SpacesTable({ access }: { access: UserAccess }) {
             <TableCell>
               <div className="flex flex-wrap items-center gap-2 font-medium">
                 {entry.space.name}
-                <Badge variant="secondary" className="font-mono">
+                <Badge variant="secondary" className="tabular-nums">
                   {entry.space.key}
                 </Badge>
                 {entry.space.archived_at && (

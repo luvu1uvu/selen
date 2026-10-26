@@ -180,7 +180,7 @@ export function CardWindow({ cardKey, backTo }: { cardKey: string; backTo: strin
             <CardWindowBody key={card.key} card={card} onDeleted={closeDeleted} />
           ) : (
             <div className="grid grid-cols-1 gap-2 p-6">
-              <DialogTitle className="font-mono text-base">{cardKey}</DialogTitle>
+              <DialogTitle className="text-base tabular-nums">{cardKey}</DialogTitle>
               <DialogDescription>{tc('states.loading')}</DialogDescription>
             </div>
           )}

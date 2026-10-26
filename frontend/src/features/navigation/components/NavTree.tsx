@@ -10,7 +10,10 @@ import { EmptyFolderMark, EveryoneMark, NodeIcon } from './NodeIcon'
 // Подсветка при наведении — и когда указатель над значком или стрелкой поверх строки (`group/row`)
 const rowClass =
   'text-muted-foreground hover:bg-accent hover:text-foreground group-hover/row:bg-accent group-hover/row:text-foreground flex h-8 w-full min-w-0 items-center gap-1.5 rounded-md pr-2 text-sm transition-colors'
-const activeClass = 'bg-accent text-foreground font-medium'
+// Выбранная строка — подложка selected и полоска акцента 2 px слева (заливка к фону дерева меньше 3:1 — нужен признак
+// формы), font-medium; при наведении остаётся выбранной, наведение отличается от выбранного
+const activeClass =
+  'bg-selected hover:bg-selected group-hover/row:bg-selected text-foreground font-medium shadow-[inset_2px_0_0_var(--primary)]'
 // Список дерева — одна колонка minmax(0, 1fr): у колонки `auto` ширину задаёт самое длинное название строки, и дерево
 // прокручивалось вбок вместо «…» (LATER-109)
 const listClass = 'grid grid-cols-1 gap-0.5'

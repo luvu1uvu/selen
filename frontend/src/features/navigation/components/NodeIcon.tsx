@@ -30,7 +30,7 @@ export function NodeIcon({
   return <Icon aria-hidden className={cn('text-muted-foreground size-4 shrink-0', className)} />
 }
 
-const markFocus = 'focus-visible:ring-ring rounded-sm outline-none focus-visible:ring-[3px]'
+const markFocus = ' rounded-sm'
 
 /**
  * Пометка «пустая» пустой папки — в дереве её видит только Владелец (ADR-0017). Почему пустая — в подсказке Tooltip по

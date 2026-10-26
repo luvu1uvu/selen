@@ -40,7 +40,7 @@ export function UsersSection() {
                 cn(
                   // Рамка фокуса — внутрь: полоса вкладок прокручивается вбок и срезала бы наружную (U-1 UX-ревью П2b-2);
                   // font-medium у всех — выбранная не меняет ширину и соседи не сдвигаются (U-8)
-                  'text-muted-foreground hover:text-foreground focus-visible:ring-ring -mb-px flex min-w-24 shrink-0 flex-col items-center gap-1 border-b-2 border-transparent px-3 pt-1 pb-2 text-sm font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-inset',
+                  'text-muted-foreground hover:text-foreground -mb-px flex min-w-24 shrink-0 flex-col items-center gap-1 border-b-2 border-transparent px-3 pt-1 pb-2 text-sm font-medium transition-colors focus-visible:-outline-offset-2',
                   isActive && 'border-primary text-foreground',
                 )
               }

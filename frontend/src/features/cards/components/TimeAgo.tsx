@@ -30,7 +30,7 @@ export function TimeAgo({
           dateTime={at}
           tabIndex={0}
           aria-description={exact}
-          className="focus-visible:ring-ring inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-[3px]"
+          className="inline-flex items-center gap-1 rounded-sm"
         >
           {Icon && <Icon aria-hidden className="size-3 shrink-0" />}
           {text(formatRelative(at) ?? t('card.justNow'))}
