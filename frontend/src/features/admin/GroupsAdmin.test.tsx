@@ -2,7 +2,14 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { AdminSpace, AdminUser, Group, UserAccess } from '@/shared/types/api'
-import { makeAdminUser, makeUser, NO_USER_PERMISSIONS, server, signedInAs } from '@/test/server'
+import {
+  makeAdminUser,
+  makeUser,
+  NO_USER_PERMISSIONS,
+  server,
+  signedInAs,
+  TEST_COMPANY_ID,
+} from '@/test/server'
 import { renderApp } from '@/test/render'
 
 const admin = makeUser({ id: 'admin-1', name: 'Сергей' })
@@ -88,7 +95,7 @@ describe('Админка: группы', () => {
 
     expect(await screen.findByRole('link', { name: 'Analysts' })).toHaveAttribute(
       'href',
-      '/admin/groups/g-1',
+      `/admin/c/${TEST_COMPANY_ID}/groups/g-1`,
     )
     expect(screen.queryByText('Old')).not.toBeInTheDocument()
     await userEvent.click(screen.getByLabelText('Показывать архивные'))
@@ -135,7 +142,7 @@ describe('Админка: группы', () => {
     expect(await screen.findByRole('heading', { name: 'Analysts' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Ольга' })).toHaveAttribute(
       'href',
-      '/admin/users/u-olga',
+      `/admin/c/${TEST_COMPANY_ID}/users/u-olga`,
     )
 
     await userEvent.type(screen.getByLabelText('Добавить в группу'), 'Ив')

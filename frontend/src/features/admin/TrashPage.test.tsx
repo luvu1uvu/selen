@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { TrashedCard } from '@/shared/types/api'
-import { makeUser, server, signedInAs } from '@/test/server'
+import { makeUser, server, signedInAs, TEST_COMPANY_ID } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 const trashed = (key: string, title: string, archived = false): TrashedCard => ({
@@ -107,7 +107,7 @@ describe('Корзина', () => {
     const nav = await screen.findByRole('navigation', { name: 'Администрирование' })
     expect(within(nav).getByRole('link', { name: 'Корзина' })).toHaveAttribute(
       'href',
-      '/admin/trash',
+      `/admin/c/${TEST_COMPANY_ID}/trash`,
     )
     unmount()
 

@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { makeBoardDetail } from '@/test/boards'
-import { makeUser, server, signedInAs } from '@/test/server'
+import { makeUser, server, signedInAs, TEST_COMPANY_ID } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 // Код страницы меток так и не пришёл (медленная сеть): видна заглушка
@@ -23,7 +23,7 @@ describe('Первая загрузка страницы-чанка (HydrateFall
 
   it('пока код страницы грузится — «Загрузка…» на месте страницы, каркас и дерево уже видны', async () => {
     signedInAs(makeUser())
-    renderApp('/admin/labels')
+    renderApp(`/admin/c/${TEST_COMPANY_ID}/labels`)
 
     expect(await screen.findByRole('navigation', { name: 'Дерево' })).toBeInTheDocument()
     expect(within(screen.getByRole('main')).getByText('Загрузка…')).toBeInTheDocument()

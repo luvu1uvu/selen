@@ -6,6 +6,7 @@ import {
   makeNavSpace,
   makeSpace,
   makeUser,
+  navTree,
   server,
   signedInAs,
   TEST_COMPANY_ID,
@@ -145,8 +146,8 @@ describe('Админка: «Структура»', () => {
     // В дереве администратора — только iOS в папке Mobile (у него доступ лишь туда)
     server.use(
       http.get('*/api/v1/navigation', () =>
-        HttpResponse.json({
-          data: [
+        HttpResponse.json(
+          navTree([
             {
               type: 'folder',
               id: 'f-mobile',
@@ -158,8 +159,8 @@ describe('Админка: «Структура»', () => {
                 makeNavSpace(makeSpace({ id: 's-IOS', key: 'IOS', name: 'iOS' }), { id: 'n-ios' }),
               ],
             },
-          ],
-        }),
+          ]),
+        ),
       ),
     )
     renderApp('/admin/structure')

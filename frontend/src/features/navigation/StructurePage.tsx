@@ -11,6 +11,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react'
+import { useAdminCompanyId } from '@/features/admin/company'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { TruncatedText, TruncatedTrigger } from '@/shared/components/TruncatedText'
 import type { AdminNavNode } from '@/shared/types/api'
@@ -44,9 +45,13 @@ export function StructurePage() {
   // Узлы дерева текущего пользователя (тот же запрос, что у сайдбара, id узлов общие): остальные активные
   // узлы помечаются «Не видно в вашем дереве». Пока дерево не загружено — без пометок.
   const treeQuery = useNavigation()
+  const company = useAdminCompanyId()
   const inMyTree = useMemo(
-    () => (treeQuery.data ? treeNodeIds(treeQuery.data) : null),
-    [treeQuery.data],
+    () =>
+      treeQuery.data
+        ? treeNodeIds(treeQuery.data.find((tree) => tree.id === company)?.items ?? [])
+        : null,
+    [treeQuery.data, company],
   )
   const archivedFolders = all.filter((node) => node.type === 'folder' && node.archived_at)
 

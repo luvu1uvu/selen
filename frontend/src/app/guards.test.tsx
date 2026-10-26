@@ -1,5 +1,5 @@
 import { screen } from '@testing-library/react'
-import { makeUser, signedInAs } from '@/test/server'
+import { makeUser, signedInAs, TEST_COMPANY_ID } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 describe('Доступ к страницам', () => {
@@ -33,7 +33,8 @@ describe('Доступ к страницам', () => {
     signedInAs(makeUser({ role: 'owner' }))
     const { router } = renderApp('/admin/users')
     expect(await screen.findByRole('heading', { name: 'Пользователи' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/admin/users')
+    // Прежний адрес — в админку компании (ADR-0024)
+    expect(router.state.location.pathname).toBe(`/admin/c/${TEST_COMPANY_ID}/users`)
     expect(screen.getByRole('button', { name: 'Администрирование' })).toBeInTheDocument()
   })
 })

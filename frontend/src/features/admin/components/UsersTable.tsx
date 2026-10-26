@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 import { KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAdminUrl } from '@/features/admin/company'
 import { useCurrentUser } from '@/features/auth/queries'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
@@ -35,6 +36,7 @@ export function UsersTable() {
   const { t: tc } = useTranslation()
   const { data: me } = useCurrentUser()
   const navigate = useNavigate()
+  const url = useAdminUrl()
   const [status, setStatus] = useState<UserStatus | ''>('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -143,7 +145,7 @@ export function UsersTable() {
                 <TableCell>
                   <div className="font-medium">
                     <Link
-                      to={`/admin/users/${user.id}`}
+                      to={url(`users/${user.id}`)}
                       className="hover:underline"
                       title={t('users.actions.access')}
                     >
@@ -176,24 +178,25 @@ export function UsersTable() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" asChild>
-                          <Link
-                            to={`/admin/users/${user.id}`}
-                            aria-label={t('users.actions.access')}
-                          >
+                          <Link to={url(`users/${user.id}`)} aria-label={t('users.actions.access')}>
                             <KeyRound />
                           </Link>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
                         <p>{t('users.actions.access')}</p>
-                        {!isMe && <p>{t('users.actionsUnavailable')}</p>}
+                        {!isMe && (
+                          <p>
+                            {can.owner_only ? t('users.ownerOnly') : t('users.actionsUnavailable')}
+                          </p>
+                        )}
                       </TooltipContent>
                     </Tooltip>
                   ) : (
                     <ActionsMenu label={t('users.actions.menu', { name: user.name })}>
                       {(dialog) => (
                         <>
-                          <DropdownMenuItem onSelect={() => navigate(`/admin/users/${user.id}`)}>
+                          <DropdownMenuItem onSelect={() => navigate(url(`users/${user.id}`))}>
                             {t('users.actions.access')}
                           </DropdownMenuItem>
                           {canChangeRole && (

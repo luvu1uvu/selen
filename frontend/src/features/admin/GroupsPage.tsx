@@ -6,17 +6,20 @@ import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Label } from '@/shared/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { useAdminUrl } from './company'
 import { GroupDialog } from './components/GroupDialog'
 import { useGroups } from './queries'
 
 /**
- * Группы пользователей (ADR-0012): ведёт системный администратор. Группа получает доступ к пространствам
- * с ролью и режимом «только свои карточки»; права человека — по всем его источникам.
+ * Вкладка «Группы» раздела «Пользователи» (ADR-0012): группы компании ведёт её администратор (право компании
+ * «управлять группами», ADR-0024). Группа получает доступ к пространствам с ролью и режимом «только свои карточки»;
+ * права человека — по всем его источникам.
  */
 export function GroupsPage() {
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
   const navigate = useNavigate()
+  const url = useAdminUrl()
   const groupsQuery = useGroups()
   const [showArchived, setShowArchived] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -24,12 +27,9 @@ export function GroupsPage() {
   const groups = (groupsQuery.data ?? []).filter((group) => showArchived || !group.archived_at)
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('groups.title')}</h1>
-          <p className="text-muted-foreground max-w-2xl text-sm">{t('groups.description')}</p>
-        </div>
+        <p className="text-muted-foreground max-w-2xl text-sm">{t('groups.description')}</p>
         <Button onClick={() => setCreating(true)}>{t('groups.create')}</Button>
       </div>
 
@@ -64,7 +64,7 @@ export function GroupsPage() {
             <TableRow key={group.id}>
               <TableCell>
                 <div className="flex flex-wrap items-center gap-2 font-medium">
-                  <Link to={`/admin/groups/${group.id}`} className="hover:underline">
+                  <Link to={url(`groups/${group.id}`)} className="hover:underline">
                     {group.name}
                   </Link>
                   {group.system && <Badge variant="secondary">{t('groups.systemBadge')}</Badge>}
@@ -86,7 +86,7 @@ export function GroupsPage() {
       <GroupDialog
         group={creating ? 'new' : null}
         onClose={() => setCreating(false)}
-        onCreated={(group) => navigate(`/admin/groups/${group.id}`)}
+        onCreated={(group) => navigate(url(`groups/${group.id}`))}
       />
     </div>
   )

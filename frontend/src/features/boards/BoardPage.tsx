@@ -5,7 +5,7 @@ import { OPEN_FROM_PAGE } from '@/features/cards/cardWindow'
 import { CardWindow } from '@/features/cards/components/CardWindow'
 import { useCard } from '@/features/cards/queries'
 import { getErrorStatus } from '@/shared/api/errors'
-import { NotFoundState } from '@/shared/components/NotFoundState'
+import { useLeaveInaccessible } from '@/shared/lib/useLeaveInaccessible'
 import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import { Alert } from '@/shared/ui/alert'
 import { BoardBlock } from './components/BoardBlock'
@@ -13,7 +13,7 @@ import { useBoard } from './queries'
 
 /**
  * Доска (/boards/:boardId) и та же доска с открытой карточкой (/cards/:cardKey).
- * Чужая или несуществующая доска/карточка — «не найдено».
+ * Нет доступа к доске или карточке или её нет — одно и то же: на главную с уведомлением (ADR-0024, вопрос 9 плана).
  *
  * Страница — холст (ADR-0019): верхняя панель приложения на месте, холст прокручивается по вертикали, доска
  * занимает его до низа; шапка доски и заголовки колонок закреплены вверху холста.
@@ -36,19 +36,18 @@ export function BoardPage() {
   const boardMissing = boardQuery.isError && getErrorStatus(boardQuery.error) === 404
   const board = boardMissing ? undefined : boardQuery.data
   const cardMissing = !!cardKey && cardQuery.isError
+  const cardNotFound = cardMissing && getErrorStatus(cardQuery.error) === 404
   // Открытая поверх карточка — та же страница: прокрутка доски под ней не сбрасывается
   useScrollMemory(canvasRef, {
     name: 'canvas',
     page: `board:${board?.id}`,
     ready: !!board && !cardMissing,
   })
+  useLeaveInaccessible(cardNotFound, tc('errors.noCardAccess'))
+  useLeaveInaccessible(!cardMissing && boardMissing, tc('errors.noBoardAccess'))
 
   if (cardMissing) {
-    return getErrorStatus(cardQuery.error) === 404 ? (
-      <PageMessage>
-        <NotFoundState title={t('card.notFound')} text={t('card.notFoundText')} />
-      </PageMessage>
-    ) : (
+    return cardNotFound ? null : (
       <PageMessage>
         <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
       </PageMessage>
@@ -56,11 +55,7 @@ export function BoardPage() {
   }
 
   if (boardQuery.isError && !board) {
-    return boardMissing ? (
-      <PageMessage>
-        <NotFoundState title={t('board.notFound')} text={t('board.notFoundText')} />
-      </PageMessage>
-    ) : (
+    return boardMissing ? null : (
       <PageMessage>
         <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
       </PageMessage>

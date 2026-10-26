@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Navigate, Outlet, useLocation } from 'react-router'
+import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router'
+import { adminUrl, defaultAdminCompany } from '@/features/admin/company'
 import { useCurrentUser } from '@/features/auth/queries'
 import { appReturnPath, fileReturnPath, openServerPage } from '@/shared/lib/browser'
 import { isSystemAdmin } from '@/shared/lib/roles'
@@ -105,4 +106,18 @@ export function RequireAdmin() {
 
   if (!isSystemAdmin(user)) return <Navigate to="/" replace />
   return <Outlet />
+}
+
+/**
+ * «Администрирование» без компании в адресе (/admin и прежние адреса /admin/users, /admin/groups/…) — в админку
+ * компании по умолчанию: последней выбранной или первой (ADR-0024). Компаний нет — на главную.
+ */
+export function AdminRedirect() {
+  const { data: user } = useCurrentUser()
+  const { '*': rest = '' } = useParams()
+  const { search } = useLocation()
+  const company = defaultAdminCompany(user)
+
+  if (!company) return <Navigate to="/" replace />
+  return <Navigate to={adminUrl(company.id, rest || 'users') + search} replace />
 }

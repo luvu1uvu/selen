@@ -13,6 +13,7 @@ import {
   deactivateUser,
   fetchAdminCardTypes,
   fetchAdminSpaces,
+  fetchCompanies,
   fetchDeactivationImpact,
   fetchEvents,
   fetchGroup,
@@ -30,6 +31,7 @@ import {
   revokeGroupSpace,
   revokeInvitation,
   saveCardType,
+  saveCompany,
   saveGroup,
   setCardTypeArchived,
   setGroupArchived,
@@ -38,23 +40,60 @@ import {
 } from './api'
 import { useAdminCompanyId } from './company'
 
+/**
+ * Ключи админки — с компанией (ADR-0024): после смены компании не видны данные прошлой. Всё под ['admin', …] —
+ * изменения перечитывают админку целиком (useInvalidateAdmin); список компаний Владельца — ['admin', 'companies'].
+ */
 export const adminKeys = {
-  users: (filters: UserFilters) => ['admin', 'users', filters] as const,
-  invitations: (page: number) => ['admin', 'invitations', page] as const,
-  events: (filters: EventFilters) => ['admin', 'events', filters] as const,
-  spaces: () => ['admin', 'spaces'] as const,
-  cardTypes: () => ['admin', 'card-types'] as const,
-  groups: () => ['admin', 'groups'] as const,
-  group: (id: string) => ['admin', 'groups', id] as const,
-  userAccess: (userId: string) => ['admin', 'user-access', userId] as const,
-  deactivationImpact: (userId: string) => ['admin', 'deactivation-impact', userId] as const,
-  trash: (page: number) => ['admin', 'trash', page] as const,
+  companies: () => ['admin', 'companies'] as const,
+  users: (company: string, filters: UserFilters) => ['admin', company, 'users', filters] as const,
+  invitations: (company: string, page: number) => ['admin', company, 'invitations', page] as const,
+  events: (company: string, filters: EventFilters) =>
+    ['admin', company, 'events', filters] as const,
+  spaces: (company: string) => ['admin', company, 'spaces'] as const,
+  cardTypes: (company: string) => ['admin', company, 'card-types'] as const,
+  groups: (company: string) => ['admin', company, 'groups'] as const,
+  group: (company: string, id: string) => ['admin', company, 'groups', id] as const,
+  userAccess: (company: string, userId: string) =>
+    ['admin', company, 'user-access', userId] as const,
+  deactivationImpact: (company: string, userId: string) =>
+    ['admin', company, 'deactivation-impact', userId] as const,
+  trash: (company: string, page: number) => ['admin', company, 'trash', page] as const,
+}
+
+/** Компании — экран Владельца. */
+export function useCompanies(enabled = true) {
+  return useQuery({ queryKey: adminKeys.companies(), queryFn: fetchCompanies, enabled })
+}
+
+/**
+ * Создать или переименовать компанию. Компании Владельца в `/auth/me` (выбор компании, названия) — перечитываем, как
+ * и дерево (названия компаний в заголовках).
+ */
+export function useSaveCompany() {
+  const queryClient = useQueryClient()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: ({ id, name }: { id?: string; name: string }) => saveCompany({ name }, id),
+    onSuccess: () =>
+      Promise.all([invalidate(), queryClient.invalidateQueries({ queryKey: currentUserKey })]),
+  })
+}
+
+/** Назначить или снять администратора компании (Владелец, экран «Компании»): компания — из аргумента, не из адреса. */
+export function useSetCompanyAdmin() {
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: ({ company, userId, admin }: { company: string; userId: string; admin: boolean }) =>
+      changeUserRole(company, userId, admin ? 'admin' : 'member'),
+    onSuccess: invalidate,
+  })
 }
 
 export function useUsers(filters: UserFilters) {
   const company = useAdminCompanyId()
   return useQuery({
-    queryKey: adminKeys.users(filters),
+    queryKey: adminKeys.users(company, filters),
     queryFn: () => fetchUsers(company, filters),
     placeholderData: keepPreviousData,
   })
@@ -63,7 +102,7 @@ export function useUsers(filters: UserFilters) {
 export function useInvitations(page: number) {
   const company = useAdminCompanyId()
   return useQuery({
-    queryKey: adminKeys.invitations(page),
+    queryKey: adminKeys.invitations(company, page),
     queryFn: () => fetchInvitations(company, page),
     placeholderData: keepPreviousData,
   })
@@ -72,7 +111,7 @@ export function useInvitations(page: number) {
 export function useEvents(filters: EventFilters) {
   const company = useAdminCompanyId()
   return useQuery({
-    queryKey: adminKeys.events(filters),
+    queryKey: adminKeys.events(company, filters),
     queryFn: () => fetchEvents(company, filters),
     placeholderData: keepPreviousData,
   })
@@ -81,7 +120,7 @@ export function useEvents(filters: EventFilters) {
 export function useTrash(page: number) {
   const company = useAdminCompanyId()
   return useQuery({
-    queryKey: adminKeys.trash(page),
+    queryKey: adminKeys.trash(company, page),
     queryFn: () => fetchTrash(company, page),
     placeholderData: keepPreviousData,
   })
@@ -105,12 +144,15 @@ export function useRestoreFromTrash() {
 
 export function useAdminSpaces() {
   const company = useAdminCompanyId()
-  return useQuery({ queryKey: adminKeys.spaces(), queryFn: () => fetchAdminSpaces(company) })
+  return useQuery({ queryKey: adminKeys.spaces(company), queryFn: () => fetchAdminSpaces(company) })
 }
 
 export function useAdminCardTypes() {
   const company = useAdminCompanyId()
-  return useQuery({ queryKey: adminKeys.cardTypes(), queryFn: () => fetchAdminCardTypes(company) })
+  return useQuery({
+    queryKey: adminKeys.cardTypes(company),
+    queryFn: () => fetchAdminCardTypes(company),
+  })
 }
 
 /**
@@ -271,7 +313,7 @@ export function useSetCardTypeArchived() {
 export function useUserAccess(userId: string) {
   const company = useAdminCompanyId()
   return useQuery({
-    queryKey: adminKeys.userAccess(userId),
+    queryKey: adminKeys.userAccess(company, userId),
     queryFn: () => fetchUserAccess(company, userId),
   })
 }
@@ -280,7 +322,7 @@ export function useUserAccess(userId: string) {
 export function useDeactivationImpact(userId: string | null) {
   const company = useAdminCompanyId()
   return useQuery({
-    queryKey: adminKeys.deactivationImpact(userId ?? ''),
+    queryKey: adminKeys.deactivationImpact(company, userId ?? ''),
     queryFn: () => fetchDeactivationImpact(company, userId ?? ''),
     enabled: userId !== null,
     staleTime: 0,
@@ -289,12 +331,15 @@ export function useDeactivationImpact(userId: string | null) {
 
 export function useGroups() {
   const company = useAdminCompanyId()
-  return useQuery({ queryKey: adminKeys.groups(), queryFn: () => fetchGroups(company) })
+  return useQuery({ queryKey: adminKeys.groups(company), queryFn: () => fetchGroups(company) })
 }
 
 export function useGroup(id: string) {
   const company = useAdminCompanyId()
-  return useQuery({ queryKey: adminKeys.group(id), queryFn: () => fetchGroup(company, id) })
+  return useQuery({
+    queryKey: adminKeys.group(company, id),
+    queryFn: () => fetchGroup(company, id),
+  })
 }
 
 /**

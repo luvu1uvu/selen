@@ -12,7 +12,8 @@ const SEARCH_DELAY_MS = 250
 /**
  * Выбор сотрудника компании из справочника (без деактивированных): поле поиска и список найденных.
  * companyId — чьих людей предлагать (ADR-0024); excludeIds — кого не предлагать (например, уже участников);
- * onlyActive — без ещё не принявших приглашение.
+ * onlyActive — без ещё не принявших приглашение; homes — только «дома» компании (состав группы, администраторы
+ * компании), без Владельца, если он не её сотрудник.
  */
 export function UserPicker({
   id,
@@ -21,6 +22,7 @@ export function UserPicker({
   onChange,
   excludeIds = [],
   onlyActive = false,
+  homes = false,
   invalid = false,
 }: {
   id: string
@@ -29,6 +31,7 @@ export function UserPicker({
   onChange: (user: DirectoryUser | null) => void
   excludeIds?: string[]
   onlyActive?: boolean
+  homes?: boolean
   invalid?: boolean
 }) {
   const { t } = useTranslation('spaces')
@@ -40,7 +43,7 @@ export function UserPicker({
     return () => clearTimeout(timer)
   }, [search])
 
-  const directory = useDirectory(companyId, debounced, value === null)
+  const directory = useDirectory(companyId, debounced, value === null, homes)
   const options = (directory.data ?? []).filter(
     (user) => !excludeIds.includes(user.id) && (!onlyActive || user.status === 'active'),
   )

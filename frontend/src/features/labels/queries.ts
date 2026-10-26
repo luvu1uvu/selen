@@ -14,7 +14,7 @@ import {
 export const labelKeys = {
   all: ['labels'] as const,
   space: (spaceKey: string) => ['labels', 'space', spaceKey] as const,
-  company: () => ['labels', 'company'] as const,
+  company: (company: string) => ['labels', 'company', company] as const,
 }
 
 export function useSpaceLabels(spaceKey: string, enabled = true) {
@@ -27,7 +27,10 @@ export function useSpaceLabels(spaceKey: string, enabled = true) {
 
 export function useCompanyLabels() {
   const company = useAdminCompanyId()
-  return useQuery({ queryKey: labelKeys.company(), queryFn: () => fetchCompanyLabels(company) })
+  return useQuery({
+    queryKey: labelKeys.company(company),
+    queryFn: () => fetchCompanyLabels(company),
+  })
 }
 
 /** Название и цвет метки видны на досках и в карточках — перечитываем и их. */

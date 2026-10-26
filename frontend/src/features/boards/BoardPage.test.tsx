@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { BoardDetail } from '@/shared/types/api'
@@ -262,15 +262,16 @@ describe('Доска', () => {
     ).toBeInTheDocument()
   })
 
-  it('чужая или несуществующая доска — «не найдено»', async () => {
+  it('чужая или несуществующая доска — на главную с уведомлением (ADR-0024)', async () => {
     server.use(
       http.get('*/api/v1/boards/nope', () =>
         HttpResponse.json({ message: 'Не найдено.' }, { status: 404 }),
       ),
     )
-    renderApp('/boards/nope')
+    const { router } = renderApp('/boards/nope')
 
-    expect(await screen.findByText('Доска не найдена')).toBeInTheDocument()
+    expect(await screen.findByText('Нет доступа к доске или она не существует')).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 })
 
@@ -342,14 +343,17 @@ describe('Карточка по ссылке', () => {
     await vi.waitFor(() => expect(body).toEqual({ title: 'Переименована' }))
   })
 
-  it('без доступа по прямой ссылке — «Карточка не найдена»', async () => {
+  it('без доступа по прямой ссылке — на главную с уведомлением, одинаковым для «нет доступа» и «нет такой»', async () => {
     server.use(
       http.get('*/api/v1/cards/DEV-1', () =>
         HttpResponse.json({ message: 'Не найдено.' }, { status: 404 }),
       ),
     )
-    renderApp('/cards/DEV-1')
+    const { router } = renderApp('/cards/DEV-1')
 
-    expect(await screen.findByText('Карточка не найдена')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Нет доступа к карточке или она не существует'),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 })

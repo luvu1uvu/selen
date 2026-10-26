@@ -59,12 +59,19 @@ export async function removeMember(key: string, userId: string): Promise<void> {
   await api.delete(`/spaces/${key}/members/${userId}`)
 }
 
-/** Сотрудники компании для выбора (ADR-0024: только её люди) — компания пространства или админки. */
-export async function searchDirectory(company: string, search: string): Promise<DirectoryUser[]> {
+/**
+ * Сотрудники компании для выбора (ADR-0024: только её люди и Владелец — ему можно выдать доступ) — компания
+ * пространства или админки. homes — только её «дома»: состав группы (Владельца без «дома» в группу не добавить).
+ */
+export async function searchDirectory(
+  company: string,
+  search: string,
+  homes = false,
+): Promise<DirectoryUser[]> {
   const { data } = await api.get<Collection<DirectoryUser>>(
     `/companies/${company}/users/directory`,
     {
-      params: { search: search || undefined },
+      params: { search: search || undefined, homes: homes ? 1 : undefined },
     },
   )
   return data.data

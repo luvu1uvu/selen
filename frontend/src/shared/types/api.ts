@@ -35,8 +35,41 @@ export interface User {
   created_at: string
   /** Последнее приглашение пользователя — только в админских ответах. */
   invitation?: InvitationSummary | null
-  /** Компании, которыми управляет текущий пользователь (только `/auth/me` и вход), — адреса админки. */
-  admin_companies?: { id: string }[]
+  /** Компании, которыми управляет текущий пользователь (только `/auth/me` и вход), — адреса и меню админки. */
+  admin_companies?: AdminCompany[]
+}
+
+/** Право компании (App\Enums\Permission, область company, ADR-0024). */
+export type CompanyPermission =
+  | 'company.invite_users'
+  | 'company.manage_users'
+  | 'company.delete_users'
+  | 'company.manage_groups'
+  | 'company.manage_dictionaries'
+  | 'company.manage_roles'
+  | 'company.manage_structure'
+  | 'company.manage_access'
+  | 'company.view_event_log'
+  | 'company.manage_trash'
+  | 'company.view_time_analytics'
+
+/**
+ * Компания, которой управляет текущий пользователь (`/auth/me`, ADR-0024): название — только если их несколько
+ * (выбор компании); права — пункты меню админки.
+ */
+export interface AdminCompany {
+  id: string
+  name: string | null
+  permissions: CompanyPermission[]
+}
+
+/** Компания на экране Владельца «Компании»: люди («дома» без деактивированных) и администраторы. */
+export interface Company {
+  id: string
+  name: string
+  created_at: string
+  people_count: number
+  admins: { id: string; name: string; email: string; status: UserStatus }[]
 }
 
 /** Что текущий администратор может сделать с пользователем (UserPolicy, ADR-0017) — подсказка интерфейсу. */
@@ -47,6 +80,8 @@ export interface AdminUserPermissions {
   /** Повторить или отозвать приглашение пользователя. */
   manage_invitation: boolean
   transfer_ownership: boolean
+  /** Деактивировать и вернуть может только Владелец: у человека «дома» в нескольких компаниях (до П2c). */
+  owner_only: boolean
 }
 
 /** Пользователь в админке «Пользователи». */
@@ -528,6 +563,16 @@ export interface AdminSpace {
   /** Есть личный не деактивированный администратор (инвариант ADR-0012). */
   has_active_admin: boolean
   my_role: SpaceRole | null
+}
+
+/**
+ * Дерево навигации одной компании (GET /navigation, ADR-0013, ADR-0024): ответ — деревья компаний, где пользователю есть
+ * что показать; название — только если таких компаний несколько (заголовки в дереве).
+ */
+export interface NavCompanyTree {
+  id: string
+  name: string | null
+  items: NavTreeNode[]
 }
 
 /** Узел дерева навигации пользователя (GET /navigation, ADR-0013). */

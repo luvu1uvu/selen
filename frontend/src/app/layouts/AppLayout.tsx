@@ -1,7 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, NavLink, Outlet, useLocation, useMatches, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useMatch, useMatches, useNavigate } from 'react-router'
 import {
+  Building,
   Building2,
   FolderTree,
   LogOut,
@@ -15,13 +16,14 @@ import {
   Trash2,
   User as UserIcon,
   Users,
-  UsersRound,
   X,
 } from 'lucide-react'
+import { adminUrl, defaultAdminCompany, hasCompanyPermission } from '@/features/admin/company'
 import { useCurrentUser, useLogout } from '@/features/auth/queries'
 import { TreePanel } from '@/features/navigation/components/TreePanel'
 import { Hint } from '@/shared/components/Hint'
-import { isSystemAdmin } from '@/shared/lib/roles'
+import { adminCompanies, isOwner, isSystemAdmin } from '@/shared/lib/roles'
+import type { CompanyPermission } from '@/shared/types/api'
 import { cn } from '@/shared/lib/utils'
 import { useMediaQuery } from '@/shared/lib/useMediaQuery'
 import { usePersistentState } from '@/shared/lib/usePersistentState'
@@ -35,6 +37,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
+import { NativeSelect } from '@/shared/ui/select'
 import { Sheet, SheetContent, SheetTitle } from '@/shared/ui/sheet'
 import type { RouteHandle } from '../routeHandle'
 
@@ -75,11 +78,14 @@ function RailButton({
 function AdminLink({
   to,
   icon: Icon,
+  active,
   children,
   onNavigate,
 }: {
   to: string
   icon: typeof Users
+  /** Пункт раздела с вкладками и страницами внутри («Пользователи») — активен на любой из них. */
+  active?: boolean
   children: ReactNode
   onNavigate: () => void
 }) {
@@ -91,7 +97,7 @@ function AdminLink({
       className={({ isActive }) =>
         cn(
           'text-muted-foreground hover:bg-accent hover:text-foreground flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors',
-          isActive && 'bg-accent text-foreground font-medium',
+          (active ?? isActive) && 'bg-accent text-foreground font-medium',
         )
       }
     >
@@ -101,7 +107,63 @@ function AdminLink({
   )
 }
 
-/** Панель «Администрирование» — разделы админки системного администратора. */
+/** Пункты админки компании: адрес внутри /admin/c/<компания>/ и право компании, которое его открывает. */
+const ADMIN_SECTIONS: {
+  path: string
+  icon: typeof Users
+  label:
+    | 'nav.users'
+    | 'nav.spaces'
+    | 'nav.structure'
+    | 'nav.cardTypes'
+    | 'nav.labels'
+    | 'nav.trash'
+    | 'nav.events'
+  permissions: CompanyPermission[]
+}[] = [
+  {
+    path: 'users',
+    icon: Users,
+    label: 'nav.users',
+    // Вкладки «Пользователи», «Группы», «Приглашения» — пункт виден, если открыта хоть одна
+    permissions: ['company.manage_users', 'company.manage_groups', 'company.invite_users'],
+  },
+  {
+    path: 'spaces',
+    icon: Building2,
+    label: 'nav.spaces',
+    permissions: ['company.manage_structure'],
+  },
+  {
+    path: 'structure',
+    icon: FolderTree,
+    label: 'nav.structure',
+    permissions: ['company.manage_structure'],
+  },
+  {
+    path: 'card-types',
+    icon: Tags,
+    label: 'nav.cardTypes',
+    permissions: ['company.manage_dictionaries'],
+  },
+  { path: 'labels', icon: Tag, label: 'nav.labels', permissions: ['company.manage_dictionaries'] },
+  { path: 'trash', icon: Trash2, label: 'nav.trash', permissions: ['company.manage_trash'] },
+  {
+    path: 'events',
+    icon: ScrollText,
+    label: 'nav.events',
+    permissions: ['company.view_event_log'],
+  },
+]
+
+/** Адреса раздела «Пользователи»: его вкладки и страницы человека и группы. */
+const USERS_PATHS = ['users', 'groups', 'invitations']
+
+/**
+ * Панель «Администрирование» (ADR-0024): у Владельца — «Компании»; сверху — выбор компании (только если их
+ * несколько: у кого компания одна, её названия нигде нет); пункты меню — по правам компании. Компания панели — из адреса
+ * админки компании, на других страницах — последняя выбранная.
+ */
 function AdminPanel({
   onCollapse,
   onNavigate,
@@ -110,16 +172,25 @@ function AdminPanel({
   onNavigate: () => void
 }) {
   const { t } = useTranslation()
-  const links = [
-    { to: '/admin/users', icon: Users, label: t('nav.users') },
-    { to: '/admin/groups', icon: UsersRound, label: t('nav.groups') },
-    { to: '/admin/spaces', icon: Building2, label: t('nav.spaces') },
-    { to: '/admin/structure', icon: FolderTree, label: t('nav.structure') },
-    { to: '/admin/card-types', icon: Tags, label: t('nav.cardTypes') },
-    { to: '/admin/labels', icon: Tag, label: t('nav.labels') },
-    { to: '/admin/trash', icon: Trash2, label: t('nav.trash') },
-    { to: '/admin/events', icon: ScrollText, label: t('nav.events') },
-  ]
+  const { data: user } = useCurrentUser()
+  const navigate = useNavigate()
+  const companies = adminCompanies(user)
+  const match = useMatch('/admin/c/:companyId/*')
+  const company =
+    companies.find((item) => item.id === match?.params.companyId) ?? defaultAdminCompany(user)
+  // Раздел адреса: users, groups, spaces… (на странице человека или группы — её список)
+  const section = match?.params['*']?.split('/')[0] ?? ''
+  const sections = ADMIN_SECTIONS.filter((item) =>
+    item.permissions.some((permission) => hasCompanyPermission(company, permission)),
+  )
+
+  // Другая компания — тот же раздел в ней (со страницы человека или группы — их список)
+  const selectCompany = (id: string) => {
+    const same =
+      ADMIN_SECTIONS.some((item) => item.path === section) || USERS_PATHS.includes(section)
+    navigate(adminUrl(id, same ? section : 'users'))
+    onNavigate()
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -137,11 +208,45 @@ function AdminPanel({
         </Button>
       </div>
       <nav aria-label={t('nav.admin')} className="grid gap-0.5 overflow-y-auto px-2 pb-4">
-        {links.map((link) => (
-          <AdminLink key={link.to} to={link.to} icon={link.icon} onNavigate={onNavigate}>
-            {link.label}
-          </AdminLink>
-        ))}
+        {isOwner(user) && (
+          <>
+            <AdminLink to="/admin/companies" icon={Building} onNavigate={onNavigate}>
+              {t('nav.companies')}
+            </AdminLink>
+            <div className="my-2 border-t" />
+          </>
+        )}
+        {companies.length > 1 && company && (
+          <div className="mb-2 px-0.5">
+            <label htmlFor="admin-company" className="sr-only">
+              {t('nav.company')}
+            </label>
+            <NativeSelect
+              id="admin-company"
+              value={company.id}
+              onChange={(event) => selectCompany(event.target.value)}
+              className="bg-background h-8 font-medium"
+            >
+              {companies.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+        )}
+        {company &&
+          sections.map((item) => (
+            <AdminLink
+              key={item.path}
+              to={adminUrl(company.id, item.path)}
+              icon={item.icon}
+              active={item.path === 'users' ? !!match && USERS_PATHS.includes(section) : undefined}
+              onNavigate={onNavigate}
+            >
+              {t(item.label)}
+            </AdminLink>
+          ))}
       </nav>
     </div>
   )
@@ -171,7 +276,7 @@ export function AppLayout() {
     setMenuOpen(false)
   }
   // Выбранный раздел — самостоятельное состояние (как в Kaiten): не зависит от открытой страницы,
-  // запоминается для пользователя в браузере. «Администрирование» — только системному администратору.
+  // запоминается для пользователя в браузере. «Администрирование» — только администратору компании и Владельцу.
   const [section, setSection] = usePersistentState<Section>(
     `selen.nav.section.${user?.id ?? 'guest'}`,
     'tree',

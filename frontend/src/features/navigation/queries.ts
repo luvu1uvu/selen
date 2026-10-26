@@ -13,22 +13,23 @@ import {
 
 /**
  * Дерево пользователя лежит под ключом ['spaces', ...]: всё, что меняет пространства, доски и права
- * (и инвалидирует ['spaces']), обновляет и дерево. Полное дерево — под ['admin', ...].
+ * (и инвалидирует ['spaces']), обновляет и дерево. Полное дерево компании — под ['admin', компания, ...].
  */
 export const navigationKeys = {
   tree: () => ['spaces', 'navigation'] as const,
-  admin: () => ['admin', 'navigation'] as const,
+  admin: (company: string) => ['admin', company, 'navigation'] as const,
 }
 
+/** Дерево пользователя по компаниям (у кого компания одна — одно дерево без названия). */
 export function useNavigation() {
   return useQuery({ queryKey: navigationKeys.tree(), queryFn: fetchNavigation })
 }
 
-/** Полное дерево «Структуры»; в дереве сайдбара — только для системного администратора (enabled). */
+/** Полное дерево «Структуры» компании; в дереве сайдбара — только её администратору (enabled). */
 export function useAdminNavigation(enabled = true) {
   const company = useAdminCompanyId()
   return useQuery({
-    queryKey: navigationKeys.admin(),
+    queryKey: navigationKeys.admin(company),
     queryFn: () => fetchAdminNavigation(company),
     enabled,
   })
@@ -42,15 +43,15 @@ function useStructureMutation<TVariables>(
   mutationFn: (company: string, variables: TVariables) => Promise<AdminNavigation>,
 ) {
   const queryClient = useQueryClient()
-  // Дерево компании админки (ADR-0024; пока компания одна)
+  // Дерево компании админки или раздела дерева сайдбара (ADR-0024)
   const company = useAdminCompanyId()
   return useMutation({
     mutationFn: (variables: TVariables) => mutationFn(company, variables),
     onSuccess: (tree) => {
-      queryClient.setQueryData(navigationKeys.admin(), tree)
+      queryClient.setQueryData(navigationKeys.admin(company), tree)
       return Promise.all([
         queryClient.invalidateQueries({ queryKey: ['spaces'] }),
-        queryClient.invalidateQueries({ queryKey: ['admin', 'spaces'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', company, 'spaces'] }),
       ])
     },
   })
