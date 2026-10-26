@@ -59,7 +59,7 @@ function TabsTrigger({
         onBlur?.(event)
       }}
       className={cn(
-        'data-[state=active]:bg-background data-[state=active]:text-foreground dark:data-[state=active]:ring-input inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] disabled:pointer-events-none disabled:opacity-50 data-pointer-focus:focus-visible:outline-none data-[state=active]:shadow-sm data-[state=active]:inset-shadow-[0_-2px_0_var(--primary)] dark:data-[state=active]:shadow-none dark:data-[state=active]:ring-1',
+        'hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground dark:data-[state=active]:ring-input inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] disabled:pointer-events-none disabled:opacity-50 data-pointer-focus:focus-visible:outline-none data-[state=active]:shadow-sm data-[state=active]:inset-shadow-[0_-2px_0_var(--primary)] dark:data-[state=active]:shadow-none dark:data-[state=active]:ring-1',
         className,
       )}
       {...props}

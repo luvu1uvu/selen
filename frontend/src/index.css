@@ -213,6 +213,11 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+  /* Нативные переключатели (шаблон доски, пункты чек-листа в тексте) — цветом акцента, а не синим цветом браузера */
+  input[type='radio'],
+  input[type='checkbox'] {
+    accent-color: var(--primary);
+  }
 }
 
 /* Текст визуального редактора (описание, комментарии): Tiptap — и при правке, и при показе */

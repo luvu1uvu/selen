@@ -27,6 +27,18 @@ test('окно карточки', async ({ page }) => {
   await expect(dialog.getByText('Комментарий в тёмной теме')).toBeVisible()
   await expect(dialog.locator('figure img')).toBeVisible()
   await expectDarkScreen(page, 'окно карточки')
+  // Граница поля комментария — токен input (#77777f, 3,95:1 к фону окна), а не border 1,32:1 (U-1 UX-ревью шага 2)
+  const composer = dialog.getByRole('textbox', { name: 'Новый комментарий' })
+  expect(
+    await composer.evaluate((element) => {
+      for (let e: Element | null = element; e; e = e.parentElement) {
+        const style = getComputedStyle(e)
+        if (style.borderTopStyle === 'solid' && style.borderTopWidth === '1px') return style.borderTopColor
+      }
+      return null
+    }),
+    'граница поля комментария',
+  ).toBe('rgb(119, 119, 127)')
 
   // Заблокированная — плашка блокировки в окне
   await page.goto('/cards/DARK-1')
