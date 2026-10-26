@@ -263,12 +263,18 @@ describe('Админка нескольких компаний', () => {
     )
 
     await userEvent.click(within(tabs).getByRole('link', { name: 'Приглашения' }))
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe(`/admin/c/${TEST_COMPANY_ID}/invitations`),
-    )
+    // Ждём отрисованную вкладку, а не состояние роутера: RouterProvider применяет новый адрес в startTransition —
+    // router.state уже новый, а ссылки вкладок ещё прежние (под нагрузкой CI проверка успевала раньше отрисовки)
+    expect(
+      await screen.findByText('Приглашений пока нет — пригласите сотрудника кнопкой «Пригласить»'),
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/admin/c/${TEST_COMPANY_ID}/invitations`)
     expect(within(tabs).getByRole('link', { name: 'Приглашения' })).toHaveAttribute(
       'aria-current',
       'page',
+    )
+    expect(within(tabs).getByRole('link', { name: 'Пользователи' })).not.toHaveAttribute(
+      'aria-current',
     )
     expect(screen.getByRole('heading', { name: 'Пользователи', level: 1 })).toBeInTheDocument()
   })
