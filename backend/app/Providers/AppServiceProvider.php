@@ -80,10 +80,13 @@ class AppServiceProvider extends ServiceProvider
     /** Сколько ждать до конца лимита — словами: «45 сек.», «12 мин.», «5 ч 20 мин.». */
     private function waitTime(int $seconds): string
     {
+        // Минуты — с округлением вверх, затем часы: 7199 с — «2 ч 0 мин.», а не «1 ч 60 мин.»
+        $minutes = intdiv($seconds + 59, 60);
+
         return match (true) {
             $seconds < 60 => __('selen.invitations.wait.seconds', ['seconds' => max($seconds, 1)]),
-            $seconds < 3600 => __('selen.invitations.wait.minutes', ['minutes' => intdiv($seconds + 59, 60)]),
-            default => __('selen.invitations.wait.hours', ['hours' => intdiv($seconds, 3600), 'minutes' => intdiv($seconds % 3600 + 59, 60)]),
+            $minutes < 60 => __('selen.invitations.wait.minutes', ['minutes' => $minutes]),
+            default => __('selen.invitations.wait.hours', ['hours' => intdiv($minutes, 60), 'minutes' => $minutes % 60]),
         };
     }
 

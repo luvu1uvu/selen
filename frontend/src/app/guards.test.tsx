@@ -14,6 +14,25 @@ describe('Доступ к страницам', () => {
     expect(await screen.findByRole('heading', { name: 'Пространства' })).toBeInTheDocument()
   })
 
+  it('неизвестный адрес админки — «Страница не найдена», без бесконечного перехода (ADR-0024)', async () => {
+    signedInAs(makeUser())
+    for (const path of [
+      '/admin/nope',
+      '/admin/c',
+      '/admin/companies/x',
+      `/admin/c/${TEST_COMPANY_ID}/nope`,
+      `/admin/c/${TEST_COMPANY_ID}/users/u-1/x/y`,
+    ]) {
+      const { router, unmount } = renderApp(path)
+      expect(
+        await screen.findByRole('heading', { name: 'Страница не найдена' }),
+      ).toBeInTheDocument()
+      // Адрес не растёт: остался тем же
+      expect(router.state.location.pathname).toBe(path)
+      unmount()
+    }
+  })
+
   it('участнику не показывает админку ни в меню, ни по прямой ссылке', async () => {
     signedInAs(makeUser({ role: 'member' }))
     const { router } = renderApp('/admin/users')

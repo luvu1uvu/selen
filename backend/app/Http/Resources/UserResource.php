@@ -26,7 +26,8 @@ class UserResource extends JsonResource
     public function toArray(Request $request): array
     {
         $ids = app(AccessResolver::class)->adminCompanyIds($this->resource);
-        $companies = Company::query()->whereKey($ids->all())->get()->sortBy(fn (Company $company) => $ids->search($company->id));
+        $companies = $ids->isEmpty() ? collect() : Company::query()->whereKey($ids->all())->get()
+            ->sortBy(fn (Company $company) => $ids->search($company->id));
         $named = $companies->count() > 1;
 
         return $this->account(match (true) {

@@ -1,8 +1,7 @@
 import { useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Outlet, useParams } from 'react-router'
+import { AdminNotFound } from '@/app/guards'
 import { useCurrentUser } from '@/features/auth/queries'
-import { NotFoundState } from '@/shared/components/NotFoundState'
 import { adminCompanies } from '@/shared/lib/roles'
 import { AdminCompanyContext, rememberAdminCompany } from './company'
 
@@ -12,7 +11,6 @@ import { AdminCompanyContext, rememberAdminCompany } from './company'
  * не найдена», одинаково (API ответил бы 404 так же).
  */
 export function AdminCompanyLayout() {
-  const { t } = useTranslation()
   const { companyId = '' } = useParams()
   const { data: user } = useCurrentUser()
   const known = adminCompanies(user).some((company) => company.id === companyId)
@@ -21,9 +19,7 @@ export function AdminCompanyLayout() {
     if (known && user) rememberAdminCompany(user.id, companyId)
   }, [known, user, companyId])
 
-  if (!known) {
-    return <NotFoundState title={t('errors.notFoundTitle')} text={t('errors.notFoundText')} />
-  }
+  if (!known) return <AdminNotFound />
 
   return (
     <AdminCompanyContext.Provider value={companyId}>

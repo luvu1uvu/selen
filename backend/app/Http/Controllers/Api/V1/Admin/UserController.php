@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\TransferOwnershipRequest;
 use App\Http\Requests\Admin\UpdateUserRoleRequest;
 use App\Http\Resources\AdminUserResource;
 use App\Models\Company;
+use App\Models\Invitation;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use Illuminate\Http\Request;
@@ -26,7 +27,6 @@ class UserController extends Controller
     {
         $users = User::query()
             ->whereIn('id', $resolver->companyPeopleIds($company))
-            ->with('latestInvitation')
             ->when($request->validated('status'), fn ($q, $status) => $q->where('status', $status))
             ->when($request->validated('search'), function ($q, $search) {
                 $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%';
@@ -36,6 +36,7 @@ class UserController extends Controller
             ->paginate(25);
         // Роли в компании и права на каждого — одним запросом
         $resolver->rememberCompanyPermissions($company, [$request->user(), ...$users->items()]);
+        $this->withLatestInvitation($company, $users->items());
 
         return AdminUserResource::collection($users);
     }
@@ -44,21 +45,21 @@ class UserController extends Controller
     {
         $user = $action->handle($request->user(), $user, $company, $request->enum('role', CompanyRole::class));
 
-        return new AdminUserResource($user->load('latestInvitation'));
+        return new AdminUserResource($this->withLatestInvitation($company, [$user])[0]);
     }
 
     public function deactivate(Request $request, Company $company, User $user, DeactivateUserAction $action): AdminUserResource
     {
         Gate::authorize('deactivate', [$user, $company]);
 
-        return new AdminUserResource($action->handle($request->user(), $user, $company)->load('latestInvitation'));
+        return new AdminUserResource($this->withLatestInvitation($company, [$action->handle($request->user(), $user, $company)])[0]);
     }
 
     public function reactivate(Request $request, Company $company, User $user, ReactivateUserAction $action): AdminUserResource
     {
         Gate::authorize('reactivate', [$user, $company]);
 
-        return new AdminUserResource($action->handle($request->user(), $user, $company)->load('latestInvitation'));
+        return new AdminUserResource($this->withLatestInvitation($company, [$action->handle($request->user(), $user, $company)])[0]);
     }
 
     /**
@@ -72,6 +73,28 @@ class UserController extends Controller
         $request->user()->refresh();
         $company->forgetResolvedPermissions();
 
-        return new AdminUserResource($owner->load('latestInvitation'));
+        return new AdminUserResource($this->withLatestInvitation($company, [$owner])[0]);
+    }
+
+    /**
+     * Последнее приглашение человека — в эту компанию (состояние в «Пользователях»): Владелец и человек с «домами»
+     * в нескольких компаниях видны в нескольких компаниях, приглашение другой компании здесь не показывается.
+     *
+     * @param  list<User>  $users
+     * @return list<User>
+     */
+    private function withLatestInvitation(Company $company, array $users): array
+    {
+        $ids = array_map(fn (User $user) => $user->id, $users);
+        $latest = Invitation::query()
+            ->whereIn('id', Invitation::query()->inCompany($company)->whereIn('user_id', $ids)->groupBy('user_id')->selectRaw('max(id)'))
+            ->get()
+            ->keyBy('user_id');
+
+        foreach ($users as $user) {
+            $user->setRelation('latestInvitation', $latest->get($user->id));
+        }
+
+        return $users;
     }
 }

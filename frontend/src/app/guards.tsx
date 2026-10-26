@@ -4,6 +4,7 @@ import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router'
 import { adminUrl, defaultAdminCompany } from '@/features/admin/company'
 import { useCurrentUser } from '@/features/auth/queries'
 import { appReturnPath, fileReturnPath, openServerPage } from '@/shared/lib/browser'
+import { NotFoundState } from '@/shared/components/NotFoundState'
 import { isSystemAdmin } from '@/shared/lib/roles'
 import { Button } from '@/shared/ui/button'
 
@@ -108,9 +109,29 @@ export function RequireAdmin() {
   return <Outlet />
 }
 
+/** Разделы админки компании — прежние адреса /admin/<раздел>/… ведут в них. */
+const ADMIN_SECTIONS = [
+  'users',
+  'groups',
+  'invitations',
+  'spaces',
+  'structure',
+  'card-types',
+  'labels',
+  'trash',
+  'events',
+]
+
+/** Нет такой страницы админки (в том числе чужая компания или неизвестный раздел) — на месте страницы. */
+export function AdminNotFound() {
+  const { t } = useTranslation()
+  return <NotFoundState title={t('errors.notFoundTitle')} text={t('errors.notFoundText')} />
+}
+
 /**
  * «Администрирование» без компании в адресе (/admin и прежние адреса /admin/users, /admin/groups/…) — в админку
- * компании по умолчанию: последней выбранной или первой (ADR-0024). Компаний нет — на главную.
+ * компании по умолчанию: последней выбранной или первой (ADR-0024). Компаний нет — на главную. Остальное под /admin/
+ * (неизвестный раздел, /admin/c без компании) — «Страница не найдена», а не новый переход: иначе адрес рос бы без конца.
  */
 export function AdminRedirect() {
   const { data: user } = useCurrentUser()
@@ -119,5 +140,6 @@ export function AdminRedirect() {
   const company = defaultAdminCompany(user)
 
   if (!company) return <Navigate to="/" replace />
+  if (rest !== '' && !ADMIN_SECTIONS.includes(rest.split('/')[0])) return <AdminNotFound />
   return <Navigate to={adminUrl(company.id, rest || 'users') + search} replace />
 }

@@ -8,7 +8,7 @@ import { ProfilePage } from '@/features/profile/ProfilePage'
 import { FileNotFoundPage } from '@/pages/FileNotFoundPage'
 import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import { AdminRedirect, RequireAdmin, RequireAuth, RequireGuest } from './guards'
+import { AdminNotFound, AdminRedirect, RequireAdmin, RequireAuth, RequireGuest } from './guards'
 import { RouteError } from './RouteError'
 import { RouteLoading } from './RouteLoading'
 import { AppLayout } from './layouts/AppLayout'
@@ -173,6 +173,7 @@ export const routes: RouteObject[] = [
                           Component: (await import('@/features/admin/CardTypesPage')).CardTypesPage,
                         }),
                       },
+                      { path: '*', element: <AdminNotFound /> },
                     ],
                   },
                 ],

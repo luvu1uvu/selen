@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useCurrentUser } from '@/features/auth/queries'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { getErrorMessage } from '@/shared/api/errors'
 import type { DirectoryUser } from '@/shared/types/api'
@@ -30,6 +31,7 @@ export function CompanyAdminsDialog({
 }) {
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
+  const { data: me } = useCurrentUser()
   const company = useCompanies().data?.find((item) => item.id === companyId)
   const setAdmin = useSetCompanyAdmin()
   const [user, setUser] = useState<DirectoryUser | null>(null)
@@ -99,7 +101,11 @@ export function CompanyAdminsDialog({
                 companyId={companyId}
                 value={user}
                 onChange={setUser}
-                excludeIds={company?.admins.map((admin) => admin.id) ?? []}
+                // Владелец — и так администратор всех компаний: назначать его некуда
+                excludeIds={[
+                  ...(company?.admins.map((admin) => admin.id) ?? []),
+                  ...(me ? [me.id] : []),
+                ]}
                 homes
               />
             </div>

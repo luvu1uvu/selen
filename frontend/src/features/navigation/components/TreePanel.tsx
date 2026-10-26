@@ -2,11 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { matchPath, useLocation } from 'react-router'
 import { FolderPlus, PanelLeftClose, Plus, Search, SquarePlus, X } from 'lucide-react'
-import {
-  AdminCompanyContext,
-  defaultAdminCompany,
-  hasCompanyPermission,
-} from '@/features/admin/company'
+import { AdminCompanyContext, hasCompanyPermission } from '@/features/admin/company'
 import { CreateSpaceDialog } from '@/features/admin/components/CreateSpaceDialog'
 import { useCurrentUser } from '@/features/auth/queries'
 import { adminCompanies } from '@/shared/lib/roles'
@@ -194,8 +190,14 @@ export function TreePanel({
   )
   const searching = query.trim() !== ''
   const found = filtered.some((item) => item.nodes.length > 0)
-  // «+» рядом с поиском — когда дерево одно (или его ещё нет): корень компании дерева или админки
-  const rootCompany = named ? undefined : (trees[0]?.id ?? defaultAdminCompany(user)?.id)
+  // «+» рядом с поиском — когда дерево одно: в его компании; деревьев ещё нет — только если пользователь ведёт
+  // структуру ровно одной компании (иначе было бы не видно, в какой компании появится папка)
+  const managed = adminCompanies(user).filter((company) =>
+    hasCompanyPermission(company, 'company.manage_structure'),
+  )
+  const rootCompany = named
+    ? undefined
+    : (trees[0]?.id ?? (managed.length === 1 ? managed[0].id : undefined))
   const canAddAtRoot = !!rootCompany && managesStructure(user, rootCompany)
 
   // Переход по ссылке на пространство или доску раскрывает путь к ней — один раз на адрес,

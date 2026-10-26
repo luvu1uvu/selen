@@ -46,7 +46,8 @@ class InvitationPolicy
 
     /**
      * Повторить или отозвать приглашение человека: право «приглашать»; Владельца — никто, приглашённого администратора
-     * компании — только Владелец (как UserPolicy::manages). Подсказка интерфейсу — AdminUserResource.
+     * компании и человека с «домами» в нескольких компаниях — только Владелец (как UserPolicy::manages: отзыв
+     * деактивирует учётную запись целиком). Подсказка интерфейсу — AdminUserResource.
      */
     public function manages(User $actor, User $invitee, Company $company): bool
     {
@@ -54,6 +55,6 @@ class InvitationPolicy
             return false;
         }
 
-        return ! $company->permissionsOf($invitee)->isAdmin() || $actor->isOwner();
+        return $actor->isOwner() || ! ($company->permissionsOf($invitee)->isAdmin() || $company->permissionsOf($invitee)->hasOtherHomes());
     }
 }

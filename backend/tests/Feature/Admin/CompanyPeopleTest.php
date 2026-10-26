@@ -3,6 +3,7 @@
 use App\Enums\EventType;
 use App\Enums\SpaceRole;
 use App\Enums\UserStatus;
+use App\Models\Invitation;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
 
@@ -112,6 +113,25 @@ describe('человек с «домами» в двух компаниях', fu
         }
         $this->actingAs($this->owner)->postJson(adminPath()."users/{$this->both->id}/reactivate")->assertOk();
         expect($this->both->fresh()->isActive())->toBeTrue();
+    });
+
+    it('его приглашение повторяет и отзывает только Владелец; в «Пользователях» — только приглашение этой компании', function () {
+        $this->both->forceFill(['status' => UserStatus::Invited, 'password' => null])->save();
+        $invitation = Invitation::factory()->create(['company_id' => company()->id, 'user_id' => $this->both->id]);
+
+        $this->actingAs($this->firstAdmin);
+        $row = collect($this->getJson(adminPath().'users')->assertOk()->json('data'))->firstWhere('id', $this->both->id);
+        expect($row['permissions']['manage_invitation'])->toBeFalse()
+            ->and($row['invitation']['id'])->toBe($invitation->id);
+        $this->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertForbidden();
+
+        // Во второй компании приглашения первой не видно
+        $this->actingAs($this->secondAdmin);
+        $row = collect($this->getJson(adminPath($this->second).'users')->assertOk()->json('data'))->firstWhere('id', $this->both->id);
+        expect($row['invitation'])->toBeNull()
+            ->and(json_encode($this->getJson(adminPath($this->second).'users')->json(), JSON_UNESCAPED_UNICODE))->not->toContain($invitation->id);
+
+        $this->actingAs($this->owner)->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertOk();
     });
 
     it('сотрудником одной компании администратор управляет, как раньше', function () {
