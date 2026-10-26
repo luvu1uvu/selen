@@ -1185,7 +1185,7 @@ dl.params dd {
 .checklist li .checkbox {
   margin-top: 2px;
 }
-.checklist li.done span {
+.checklist li.done .txt {
   color: var(--muted-foreground);
   text-decoration: line-through;
 }

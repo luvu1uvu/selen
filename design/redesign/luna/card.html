@@ -93,7 +93,6 @@
   --btn-outline-bg: var(--background);
   --field-bg: var(--background);
   --card-border-color: var(--border);
-  --dialog-bg: var(--popover);
   --popover-border: 1px;
   --r-logo: 10px;
   --r-rail: 10px;
@@ -122,6 +121,7 @@
   --shadow-board: 0 1px 2px rgba(31, 27, 77, 0.04);
   --shadow-control: 0 1px 2px rgba(31, 27, 77, 0.06);
   --shadow-round: 0 4px 12px rgba(76, 68, 223, 0.35);
+  --dialog-bg: var(--popover);
 }
 :root.dark {
   --background: #161625;
@@ -179,6 +179,7 @@
   --shadow-board: none;
   --shadow-control: none;
   --shadow-round: none;
+  --dialog-bg: var(--background);
 }
 /* Прототип Selen: раскладка — как в приложении (README Kaiten, ADR-0019), облик — из токенов направления.
    Токены цветов и формы приходят из build.py в :root (светлая) и :root.dark (тёмная). */
@@ -1367,7 +1368,7 @@ dl.params dd {
 .checklist li .checkbox {
   margin-top: 2px;
 }
-.checklist li.done span {
+.checklist li.done .txt {
   color: var(--muted-foreground);
   text-decoration: line-through;
 }
@@ -1981,7 +1982,7 @@ body.shot .proto-bar {
         <div class="checklist">
           <div class="top"><b>${esc(d.checklist.title)}</b><span class="muted tnum" style="font-size:12px">${done}/${total}</span></div>
           <div class="progress" aria-hidden="true"><i style="width:${(done / total) * 100}%"></i></div>
-          <ul>${d.checklist.items.map(([t, ok]) => `<li class="${ok ? 'done' : ''}"><span class="checkbox ${ok ? 'on' : ''}" role="checkbox" aria-checked="${ok}" tabindex="0">${ok ? icon('check') : ''}</span><span>${esc(t)}</span></li>`).join('')}</ul>
+          <ul>${d.checklist.items.map(([t, ok]) => `<li class="${ok ? 'done' : ''}"><span class="checkbox ${ok ? 'on' : ''}" role="checkbox" aria-checked="${ok}" tabindex="0">${ok ? icon('check') : ''}</span><span class="txt">${esc(t)}</span></li>`).join('')}</ul>
           <button class="btn ghost sm" style="justify-self:start;margin-left:-10px">${icon('plus')}Добавить чек-лист</button>
         </div>`, { count: 1 }))
     }
@@ -2098,7 +2099,14 @@ body.shot .proto-bar {
     const tab = e.target.closest('.tab')
     if (tab) for (const x of tab.parentElement.children) x.setAttribute('aria-selected', String(x === tab))
   })
-  if (page === 'card') openCard(params.get('card') || 'DEV-173', document.querySelector('[data-card="DEV-173"]'))
+  if (page === 'card') {
+    openCard(params.get('card') || 'DEV-173', document.querySelector('[data-card="DEV-173"]'))
+    // ?scroll=end — окно прокручено вниз: чек-лист, файлы и комментарии (для скриншотов)
+    if (params.get('scroll') === 'end') {
+      const body = layer.querySelector('.dialog .body')
+      body.scrollTop = body.scrollHeight
+    }
+  }
 
   // ---------- Сворачивание дорожек и досок ----------
   root.addEventListener('click', (e) => {

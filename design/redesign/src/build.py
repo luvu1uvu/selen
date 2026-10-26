@@ -30,7 +30,7 @@ DERIVED = {
     'graphite': {
         'common': {
             'btn-outline-bg': 'var(--card)', 'field-bg': 'var(--card)', 'card-border-color': 'transparent',
-            'dialog-bg': 'var(--popover)', 'popover-border': '0px', 'r-logo': '10px', 'r-rail': '10px',
+            'popover-border': '0px', 'r-logo': '10px', 'r-rail': '10px',
             'r-row': '8px', 'r-menu-item': '8px', 'r-chip': '8px', 'r-tabs': '0', 'r-tab': '8px',
             'logo-bg': 'var(--primary)', 'logo-fg': 'var(--primary-foreground)',
             'rail-hover': 'var(--accent)', 'rail-hover-foreground': 'var(--foreground)',
@@ -38,13 +38,16 @@ DERIVED = {
             'tab-h': '32px', 'tab-active-fg': 'var(--foreground)', 'tab-active-bg': 'var(--card)',
             'tab-active-shadow': 'var(--shadow-card)', 'head-divider': 'transparent',
         },
-        'light': {'shadow-control': '0 1px 2px rgba(22, 22, 40, 0.06)', 'shadow-round': '0 3px 8px rgba(86, 80, 230, 0.35)'},
-        'dark': {'shadow-control': 'none', 'shadow-round': 'none'},
+        'light': {
+            'shadow-control': '0 1px 2px rgba(22, 22, 40, 0.06)', 'shadow-round': '0 3px 8px rgba(86, 80, 230, 0.35)',
+            'dialog-bg': 'var(--popover)',
+        },
+        'dark': {'shadow-control': 'none', 'shadow-round': 'none', 'dialog-bg': 'var(--background)'},
     },
     'lines': {
         'common': {
             'btn-outline-bg': 'var(--background)', 'field-bg': 'var(--background)',
-            'card-border-color': 'var(--border)', 'dialog-bg': 'var(--popover)', 'popover-border': '1px',
+            'card-border-color': 'var(--border)', 'popover-border': '1px',
             'r-logo': '8px', 'r-rail': '8px', 'r-row': '6px', 'r-menu-item': '4px', 'r-chip': '6px',
             'r-tabs': '8px', 'r-tab': '6px', 'logo-bg': 'var(--primary)', 'logo-fg': 'var(--primary-foreground)',
             'rail-hover': 'var(--accent)', 'rail-hover-foreground': 'var(--foreground)',
@@ -54,14 +57,17 @@ DERIVED = {
         },
         'light': {
             'shadow-control': '0 1px 2px rgba(0, 0, 0, 0.05)', 'shadow-round': '0 4px 10px rgba(0, 0, 0, 0.15)',
-            'tab-active-shadow': '0 1px 2px rgba(0, 0, 0, 0.1)',
+            'tab-active-shadow': '0 1px 2px rgba(0, 0, 0, 0.1)', 'dialog-bg': 'var(--popover)',
         },
-        'dark': {'shadow-control': 'none', 'shadow-round': 'none', 'tab-active-shadow': '0 0 0 1px var(--border)'},
+        'dark': {
+            'shadow-control': 'none', 'shadow-round': 'none', 'tab-active-shadow': '0 0 0 1px var(--border)',
+            'dialog-bg': 'var(--background)',
+        },
     },
     'luna': {
         'common': {
             'btn-outline-bg': 'var(--background)', 'field-bg': 'var(--background)',
-            'card-border-color': 'var(--border)', 'dialog-bg': 'var(--popover)', 'popover-border': '1px',
+            'card-border-color': 'var(--border)', 'popover-border': '1px',
             'r-logo': '10px', 'r-rail': '10px', 'r-row': '8px', 'r-menu-item': '6px', 'r-chip': '999px',
             'r-tabs': '0', 'r-tab': '999px', 'logo-bg': '#e9e7ff', 'logo-fg': '#1f1b4d',
             'rail-hover': 'rgba(255, 255, 255, 0.1)', 'rail-hover-foreground': '#ffffff',
@@ -69,8 +75,11 @@ DERIVED = {
             'tab-h': '32px', 'tab-active-fg': 'var(--primary)', 'tab-active-bg': 'var(--selected)',
             'tab-active-shadow': 'none', 'head-divider': 'var(--divider)',
         },
-        'light': {'shadow-control': '0 1px 2px rgba(31, 27, 77, 0.06)', 'shadow-round': '0 4px 12px rgba(76, 68, 223, 0.35)'},
-        'dark': {'shadow-control': 'none', 'shadow-round': 'none'},
+        'light': {
+            'shadow-control': '0 1px 2px rgba(31, 27, 77, 0.06)', 'shadow-round': '0 4px 12px rgba(76, 68, 223, 0.35)',
+            'dialog-bg': 'var(--popover)',
+        },
+        'dark': {'shadow-control': 'none', 'shadow-round': 'none', 'dialog-bg': 'var(--background)'},
     },
 }
 

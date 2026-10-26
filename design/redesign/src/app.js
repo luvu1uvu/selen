@@ -483,7 +483,7 @@
         <div class="checklist">
           <div class="top"><b>${esc(d.checklist.title)}</b><span class="muted tnum" style="font-size:12px">${done}/${total}</span></div>
           <div class="progress" aria-hidden="true"><i style="width:${(done / total) * 100}%"></i></div>
-          <ul>${d.checklist.items.map(([t, ok]) => `<li class="${ok ? 'done' : ''}"><span class="checkbox ${ok ? 'on' : ''}" role="checkbox" aria-checked="${ok}" tabindex="0">${ok ? icon('check') : ''}</span><span>${esc(t)}</span></li>`).join('')}</ul>
+          <ul>${d.checklist.items.map(([t, ok]) => `<li class="${ok ? 'done' : ''}"><span class="checkbox ${ok ? 'on' : ''}" role="checkbox" aria-checked="${ok}" tabindex="0">${ok ? icon('check') : ''}</span><span class="txt">${esc(t)}</span></li>`).join('')}</ul>
           <button class="btn ghost sm" style="justify-self:start;margin-left:-10px">${icon('plus')}Добавить чек-лист</button>
         </div>`, { count: 1 }))
     }
@@ -600,7 +600,14 @@
     const tab = e.target.closest('.tab')
     if (tab) for (const x of tab.parentElement.children) x.setAttribute('aria-selected', String(x === tab))
   })
-  if (page === 'card') openCard(params.get('card') || 'DEV-173', document.querySelector('[data-card="DEV-173"]'))
+  if (page === 'card') {
+    openCard(params.get('card') || 'DEV-173', document.querySelector('[data-card="DEV-173"]'))
+    // ?scroll=end — окно прокручено вниз: чек-лист, файлы и комментарии (для скриншотов)
+    if (params.get('scroll') === 'end') {
+      const body = layer.querySelector('.dialog .body')
+      body.scrollTop = body.scrollHeight
+    }
+  }
 
   // ---------- Сворачивание дорожек и досок ----------
   root.addEventListener('click', (e) => {
