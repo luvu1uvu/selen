@@ -43,7 +43,7 @@ class UserAccessController extends Controller
                 'group' => $source['group'] === null ? null : ['id' => $source['group']->id, 'name' => $source['group']->name],
                 'role' => $source['source']->legacyRole(),
                 'own_cards_only' => $source['source']->ownCardsOnly(),
-                'inactive_reason' => $source['inactive_reason'],
+                'inactive_reason' => $source['inactive_reason']?->value,
             ], $entry['sources']),
         ]);
 

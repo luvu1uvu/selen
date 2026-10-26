@@ -2,6 +2,7 @@
 
 namespace App\Services\Access;
 
+use App\Enums\AccessInactiveReason;
 use App\Enums\CardScope;
 use App\Enums\Permission;
 use App\Enums\StandardRole;
@@ -400,11 +401,10 @@ class AccessResolver
      * компании, включая недействующие, с причиной. Пространства — по названию. Человек — участник компании
      * (его ищет привязка маршрута среди людей компании).
      *
-     * @return Collection<int, array{space: Space, access: SpaceAccess, sources: list<array{group: Group|null, source: AccessSource, inactive_reason: 'group_archived'|'user_deactivated'|'user_invited'|null}>}>
+     * @return Collection<int, array{space: Space, access: SpaceAccess, sources: list<array{group: Group|null, source: AccessSource, inactive_reason: AccessInactiveReason|null}>}>
      */
     public function explain(User $user, Company $company): Collection
     {
-        $deactivated = $user->status === UserStatus::Deactivated;
         // «Все сотрудники» — только её «дома»: Владелец без «дома» в компании в неё не входит
         $home = $this->isHome($user, $company);
 
@@ -424,7 +424,7 @@ class AccessResolver
             ->orderByRaw('lower(name)')
             ->get();
 
-        return $spaces->map(function (Space $space) use ($grants, $permissions, $deactivated, $user) {
+        return $spaces->map(function (Space $space) use ($grants, $permissions, $user) {
             $spaceGrants = $grants->filter(fn (AccessGrant $grant) => $grant->navNode->space_id === $space->id);
             $sources = [];
 
@@ -441,13 +441,7 @@ class AccessResolver
                 $sources[] = [
                     'group' => $group,
                     'source' => $this->source($grant, $permissions),
-                    'inactive_reason' => match (true) {
-                        $group->isArchived() => 'group_archived',
-                        $deactivated => 'user_deactivated',
-                        // В «Все сотрудники» приглашённый входит после принятия приглашения
-                        $group->system_key === Group::EVERYONE && $user->status === UserStatus::Invited => 'user_invited',
-                        default => null,
-                    },
+                    'inactive_reason' => $this->inactiveReason($group, $user),
                 ];
             }
 
@@ -570,6 +564,22 @@ class AccessResolver
             $permissions[$grant->role_id] ?? [],
             $grant->group_id,
         );
+    }
+
+    /**
+     * Почему выдача группе не действует для пользователя (null — действует). Отдельный метод с объявленным типом:
+     * разные версии phpstan выводят тип `match` внутри коллекции по-разному (точные случаи или общий тип), а шаблон
+     * коллекции инвариантен — сводка `explain()` не сходилась бы с описанием на одной из них.
+     */
+    private function inactiveReason(Group $group, User $user): ?AccessInactiveReason
+    {
+        return match (true) {
+            $group->isArchived() => AccessInactiveReason::GroupArchived,
+            $user->status === UserStatus::Deactivated => AccessInactiveReason::UserDeactivated,
+            // В «Все сотрудники» приглашённый входит после принятия приглашения
+            $group->system_key === Group::EVERYONE && $user->status === UserStatus::Invited => AccessInactiveReason::UserInvited,
+            default => null,
+        };
     }
 
     /** @param  Collection<int, \stdClass>  $rows */
