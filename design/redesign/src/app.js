@@ -20,8 +20,12 @@
   }
   function applyTheme(pref) {
     const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
-    document.documentElement.classList.toggle('dark', dark)
-    document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+    const html = document.documentElement
+    // На время смены темы переходы выключены: иначе кнопки и строки «доплывают» до новых цветов после остальных
+    html.classList.add('no-transitions')
+    html.classList.toggle('dark', dark)
+    html.style.colorScheme = dark ? 'dark' : 'light'
+    requestAnimationFrame(() => requestAnimationFrame(() => html.classList.remove('no-transitions')))
   }
   let theme = readTheme()
   applyTheme(theme)
@@ -125,7 +129,8 @@
         labels: ['sec', 'client'], resp: 'demo', urgent: true, due: ['29 окт.', 'pending'],
       }),
       c('DEV-173', 'Ошибка округления в счёте', 'bug', 'progress', 'main', {
-        labels: ['client'], resp: 'boris', blocked: true, comments: 4, files: 1, check: [3, 5],
+        labels: ['client'], resp: 'boris', blocked: true, urgent: true, due: ['28 окт., 18:00', 'pending'],
+        comments: 2, files: 1, check: [3, 5],
       }),
       c('DEV-240', 'Документация API v1', 'task', 'progress', 'main', {
         labels: ['back'], resp: 'demo', check: [6, 6], comments: 3,
@@ -240,8 +245,10 @@
     const l = LABELS[id]
     return `<span class="label ${compact ? 'compact' : ''}" style="background:${l.color};color:${readableTextOn(l.color)}">${esc(l.name)}</span>`
   }
+  // Значок срока — по состоянию: «в срок» и «просрочено» различаются не только цветом (правила вида, раздел 7)
+  const DUE_ICON = { pending: 'calendar-clock', overdue: 'calendar-x', missed: 'calendar-x', met: 'calendar-check' }
   function dueBadge([date, state]) {
-    return `<span class="due ${state}" ${tip(DUE_TEXT[state](date))} role="img">${icon('calendar-clock', 's3')}<span aria-hidden="true">${esc(date)}</span></span>`
+    return `<span class="due ${state}" ${tip(DUE_TEXT[state](date))} role="img">${icon(DUE_ICON[state], 's3')}<span aria-hidden="true">${esc(date)}</span></span>`
   }
 
   function tile(card) {
@@ -337,8 +344,7 @@
             <div class="col-heads">${board.columns.map((col) => colHead(board, col)).join('')}</div>
             ${lanes(board)}
           </div>
-        </div>
-        <div class="edge-shade" hidden></div>`}
+        </div>`}
       </section>`
   }
 
@@ -398,7 +404,7 @@
         <div class="main-col">
           <header class="topbar">
             <button class="user-btn" id="user-btn" aria-haspopup="menu" aria-expanded="false" aria-label="Меню пользователя">
-              ${avatar(ME, 'sm')}<span>${ME.name}</span></button>
+              <span class="avatar me" aria-hidden="true">${ME.name[0]}</span><span>${ME.name}</span></button>
           </header>
           <main class="main">${content}</main>
         </div>
@@ -473,7 +479,7 @@
     const desc = d.description
       ? `<div class="rich">${d.description.map((p) => `<p>${esc(p)}</p>`).join('')}<ul>${d.list.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
          <p>Проверку на стенде делает <span class="mention">@${esc(d.mention)}</span>.</p></div>`
-      : '<p class="muted" style="margin:0">Описания пока нет</p>'
+      : '<div class="empty-desc">Добавьте описание…</div>'
     sections.push(section('Описание', desc))
 
     if (d.checklist) {
@@ -538,9 +544,9 @@
               <button class="tab" role="tab" aria-selected="true">${icon('message-square')}Комментарии</button>
               <button class="tab" role="tab" aria-selected="false">${icon('history')}История</button>
             </div>
+            <div class="comments">${comments || '<p class="muted" style="margin:0">Комментариев пока нет</p>'}</div>
             <div class="composer"><div class="ph">Напишите комментарий, @ — упомянуть коллегу</div>
               <div class="bar"><button class="btn primary sm">Отправить</button></div></div>
-            <div class="comments">${comments || '<p class="muted" style="margin:0">Комментариев пока нет</p>'}</div>
           </div>
         </div>
       </div>`
@@ -552,13 +558,11 @@
   const layer = document.createElement('div')
   document.body.appendChild(layer)
 
-  // Затенение края у доски, которую можно листать вбок (правила вида, раздел 10)
+  // Край доски, которую можно листать вбок (правила вида, раздел 10): содержимое растворяется в фоне доски — маска,
+  // а не тёмный градиент поверх (в тёмной теме тень на тёмном не видна)
   function updateShades() {
-    for (const block of document.querySelectorAll('.board-block')) {
-      const scroll = block.querySelector('.board-scroll')
-      const shade = block.querySelector('.edge-shade')
-      if (!scroll || !shade) continue
-      shade.hidden = scroll.scrollLeft + scroll.clientWidth >= scroll.scrollWidth - 1
+    for (const scroll of document.querySelectorAll('.board-scroll')) {
+      scroll.classList.toggle('fade-end', scroll.scrollLeft + scroll.clientWidth < scroll.scrollWidth - 1)
     }
   }
   for (const s of document.querySelectorAll('.board-scroll')) s.addEventListener('scroll', updateShades)
@@ -686,6 +690,14 @@
     if (menu && !menu.contains(e.target) && !userBtn.contains(e.target)) closeMenu(false)
   })
   if (params.get('menu') === 'open') openMenu()
+
+  // Ссылки между экранами прототипа несут выбранную тему в адресе: у локальных файлов браузер (Safari) может не делить
+  // хранилище между страницами
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[href]')
+    const href = link?.getAttribute('href') ?? ''
+    if (/^[\w./-]+\.html(\?.*)?$/.test(href)) link.setAttribute('href', `${href.split('?')[0]}?theme=${theme}`)
+  })
 
   document.addEventListener('keydown', (e) => {
     // Фокус не уходит из открытого окна карточки на доску под ним

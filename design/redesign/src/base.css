@@ -182,8 +182,8 @@ svg.i.s5 {
   align-items: center;
   justify-content: center;
   border-radius: var(--r-logo);
-  background: var(--logo-bg);
-  color: var(--logo-fg);
+  background: var(--logo);
+  color: var(--logo-foreground);
   font-weight: 700;
   font-size: 15px;
   letter-spacing: -0.02em;
@@ -203,8 +203,22 @@ svg.i.s5 {
   color: var(--rail-hover-foreground);
 }
 .rail-btn[aria-pressed='true'] {
+  position: relative;
   background: var(--rail-active);
   color: var(--rail-active-foreground);
+}
+.rail-btn[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--rail-indicator);
+}
+.rail :focus-visible {
+  outline-color: var(--rail-ring);
 }
 .tree {
   width: 256px;
@@ -264,7 +278,7 @@ svg.i.s5 {
 .tree nav {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px 16px;
+  padding: 4px 8px 16px;
 }
 .tree ul {
   list-style: none;
@@ -377,6 +391,12 @@ svg.i.s5 {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
+}
+/* Свой аватар в шапке — как в приложении: одна буква на акценте */
+.avatar.me {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 12px;
 }
 .avatar.xs {
   width: 20px;
@@ -641,15 +661,8 @@ svg.i.s5 {
 .cell.empty .add {
   opacity: 1;
 }
-.edge-shade {
-  position: absolute;
-  top: 48px;
-  bottom: 0;
-  right: 0;
-  width: 24px;
-  background: linear-gradient(to left, var(--edge-shade), transparent);
-  pointer-events: none;
-  z-index: 3;
+.board-scroll.fade-end {
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
 }
 
 /* ---------- Карточка на доске ---------- */
@@ -692,7 +705,7 @@ svg.i.s5 {
 .tile .meta .left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 .tile .flag {
   display: inline-flex;
@@ -703,7 +716,7 @@ svg.i.s5 {
   font-size: 12px;
 }
 .tile .labels {
-  margin-top: 6px;
+  margin-top: 4px;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -712,18 +725,25 @@ svg.i.s5 {
   margin-top: 4px;
   font-weight: var(--card-title-weight);
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
+/* Нижняя строка фасада переносится: у карточки со сроком, «Срочно» и счётчиками аватар иначе вылезает за край
+   (в приложении сейчас переноса нет — предложение для шага 2) */
 .tile .foot {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 6px;
   min-height: 20px;
 }
 .tile .counter {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   font-size: 12px;
   color: var(--muted-foreground);
 }
@@ -803,8 +823,7 @@ svg.i.s5 {
   align-items: flex-start;
   gap: 12px;
 }
-.board-block.collapsed .board-scroll,
-.board-block.collapsed .edge-shade {
+.board-block.collapsed .board-scroll {
   display: none;
 }
 .board-block.collapsed .board-head {
@@ -850,10 +869,13 @@ svg.i.s5 {
   border-radius: var(--r-menu-item);
   text-align: left;
 }
-.menu-item:hover,
+.menu-item:hover {
+  background: var(--accent);
+}
 .menu-item:focus-visible {
   background: var(--accent);
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .menu-item .check {
   margin-left: auto;
@@ -891,11 +913,11 @@ svg.i.s5 {
 .dialog {
   position: fixed;
   z-index: 50;
-  top: 16px;
+  top: 32px;
   left: 50%;
   transform: translateX(-50%);
   width: min(768px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 64px);
   display: flex;
   flex-direction: column;
   background: var(--dialog-bg);
@@ -1139,6 +1161,12 @@ dl.params dd {
   padding-left: 20px;
   line-height: 22px;
 }
+.empty-desc {
+  padding: 10px 12px;
+  border: 1px dashed var(--input);
+  border-radius: var(--r-control);
+  color: var(--muted-foreground);
+}
 .mention {
   padding: 0 4px;
   border-radius: 4px;
@@ -1226,6 +1254,10 @@ dl.params dd {
 .file .fname a {
   flex: 1;
 }
+.file .icon-btn {
+  width: 24px;
+  height: 24px;
+}
 .file .fname a:hover {
   text-decoration: underline;
 }
@@ -1296,6 +1328,12 @@ dl.params dd {
 }
 body.shot .proto-bar {
   display: none;
+}
+
+.no-transitions *,
+.no-transitions *::before,
+.no-transitions *::after {
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

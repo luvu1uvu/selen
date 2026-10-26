@@ -31,12 +31,11 @@ DERIVED = {
         'common': {
             'btn-outline-bg': 'var(--card)', 'field-bg': 'var(--card)', 'card-border-color': 'transparent',
             'popover-border': '0px', 'r-logo': '10px', 'r-rail': '10px',
-            'r-row': '8px', 'r-menu-item': '8px', 'r-chip': '8px', 'r-tabs': '0', 'r-tab': '8px',
-            'logo-bg': 'var(--primary)', 'logo-fg': 'var(--primary-foreground)',
-            'rail-hover': 'var(--accent)', 'rail-hover-foreground': 'var(--foreground)',
-            'space-title-weight': '600', 'tabs-bg': 'transparent', 'tabs-pad': '0', 'tabs-gap': '2px',
-            'tab-h': '32px', 'tab-active-fg': 'var(--foreground)', 'tab-active-bg': 'var(--card)',
-            'tab-active-shadow': 'var(--shadow-card)', 'head-divider': 'transparent',
+            'r-row': '8px', 'r-menu-item': '8px', 'r-chip': '8px', 'r-tabs': '0', 'r-tab': '0',
+            'space-title-weight': '600', 'tabs-bg': 'transparent', 'tabs-pad': '0', 'tabs-gap': '4px',
+            # Выбранная вкладка — полоса акцента 2 px снизу (без плашки: направление без рамок и подложек)
+            'tab-h': '36px', 'tab-active-fg': 'var(--foreground)', 'tab-active-bg': 'transparent',
+            'tab-active-shadow': 'inset 0 -2px 0 var(--primary)', 'head-divider': 'transparent',
         },
         'light': {
             'shadow-control': '0 1px 2px rgba(22, 22, 40, 0.06)', 'shadow-round': '0 3px 8px rgba(86, 80, 230, 0.35)',
@@ -49,18 +48,20 @@ DERIVED = {
             'btn-outline-bg': 'var(--background)', 'field-bg': 'var(--background)',
             'card-border-color': 'var(--border)', 'popover-border': '1px',
             'r-logo': '8px', 'r-rail': '8px', 'r-row': '6px', 'r-menu-item': '4px', 'r-chip': '6px',
-            'r-tabs': '8px', 'r-tab': '6px', 'logo-bg': 'var(--primary)', 'logo-fg': 'var(--primary-foreground)',
-            'rail-hover': 'var(--accent)', 'rail-hover-foreground': 'var(--foreground)',
+            'r-tabs': '8px', 'r-tab': '6px',
             'space-title-weight': '600', 'tabs-bg': 'var(--muted)', 'tabs-pad': '3px', 'tabs-gap': '0',
             'tab-h': '30px', 'tab-active-fg': 'var(--foreground)', 'tab-active-bg': 'var(--background)',
             'head-divider': 'var(--divider)',
         },
+        # Выбранная вкладка — белая на сером, как сейчас, и полоса акцента 2 px снизу (заливка — меньше 3:1)
         'light': {
             'shadow-control': '0 1px 2px rgba(0, 0, 0, 0.05)', 'shadow-round': '0 4px 10px rgba(0, 0, 0, 0.15)',
-            'tab-active-shadow': '0 1px 2px rgba(0, 0, 0, 0.1)', 'dialog-bg': 'var(--popover)',
+            'tab-active-shadow': '0 1px 2px rgba(0, 0, 0, 0.1), inset 0 -2px 0 var(--primary)',
+            'dialog-bg': 'var(--popover)',
         },
         'dark': {
-            'shadow-control': 'none', 'shadow-round': 'none', 'tab-active-shadow': '0 0 0 1px var(--border)',
+            'shadow-control': 'none', 'shadow-round': 'none',
+            'tab-active-shadow': '0 0 0 1px var(--input), inset 0 -2px 0 var(--primary)',
             'dialog-bg': 'var(--background)',
         },
     },
@@ -69,11 +70,11 @@ DERIVED = {
             'btn-outline-bg': 'var(--background)', 'field-bg': 'var(--background)',
             'card-border-color': 'var(--border)', 'popover-border': '1px',
             'r-logo': '10px', 'r-rail': '10px', 'r-row': '8px', 'r-menu-item': '6px', 'r-chip': '999px',
-            'r-tabs': '0', 'r-tab': '999px', 'logo-bg': '#e9e7ff', 'logo-fg': '#1f1b4d',
-            'rail-hover': 'rgba(255, 255, 255, 0.1)', 'rail-hover-foreground': '#ffffff',
+            'r-tabs': '0', 'r-tab': '999px',
             'space-title-weight': '650', 'tabs-bg': 'transparent', 'tabs-pad': '0', 'tabs-gap': '4px',
-            'tab-h': '32px', 'tab-active-fg': 'var(--primary)', 'tab-active-bg': 'var(--selected)',
-            'tab-active-shadow': 'none', 'head-divider': 'var(--divider)',
+            # Выбранная вкладка — таблетка selected с контуром акцента (контур — не меньше 3:1, заливка — нет)
+            'tab-h': '36px', 'tab-active-fg': 'var(--primary)', 'tab-active-bg': 'var(--selected)',
+            'tab-active-shadow': 'inset 0 0 0 1.5px var(--primary)', 'head-divider': 'var(--divider)',
         },
         'light': {
             'shadow-control': '0 1px 2px rgba(31, 27, 77, 0.06)', 'shadow-round': '0 4px 12px rgba(76, 68, 223, 0.35)',
