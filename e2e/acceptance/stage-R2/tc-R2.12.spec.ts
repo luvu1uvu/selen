@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
 import { userRow } from '../stage-3/helpers'
-import { COMPANY_1, COMPANY_2, companySelect, openAdminPanel, tree, treeCompany } from './helpers'
+import { chooseCompany, COMPANY_1, COMPANY_2, openAdminPanel, tree, treeCompany } from './helpers'
 
 /**
  * ТК-R2.12: сотрудник двух компаний работает в обеих; администратор одной не может отключить его во второй. oleg@ →
@@ -42,13 +42,13 @@ test('ТК-R2.12. Человек с двумя «домами»: обе комп
   await expect(actions(admin)).toHaveCount(0)
   await userRow(admin, IDLE).getByRole('link', { name: 'Доступ к пространствам' }).hover()
   await expect(admin.getByRole('tooltip')).toContainText(
-    'Деактивировать и вернуть этого сотрудника может только Владелец',
+    'Сотрудник работает в нескольких компаниях — деактивировать и активировать его может только Владелец',
   )
 
   // 3. Владелец: выбор «Компания 1» → «Пользователи» → «⋯» → «Деактивировать» → подтвердить; затем «Активировать»
   const owner = await pageAs(browser, 'e2e-owner@selen.test')
   const panel = await openAdminPanel(owner)
-  await companySelect(owner).selectOption({ label: COMPANY_1 })
+  await chooseCompany(owner, COMPANY_1)
   await panel.getByRole('link', { name: 'Пользователи', exact: true }).click()
   await expect(owner.getByRole('heading', { name: 'Пользователи', level: 1 })).toBeVisible()
   await expect(status(owner)).toHaveText('Активен')

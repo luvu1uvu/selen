@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
-import { companySelect, openAdminPanel, tree, usersTabs } from './helpers'
+import { companyButton, openAdminPanel, tree, usersTabs } from './helpers'
 
 /**
  * ТК-R2.11: у кого компания одна, названий компаний нигде нет; раздел «Пользователи» — с вкладками как в Kaiten.
@@ -28,7 +28,7 @@ test('ТК-R2.11. У кого компания одна — названий к�
   const admin = await pageAs(browser, 'e2e-admin@selen.test')
   const panel = await openAdminPanel(admin)
   await expect(panel.getByRole('link', { name: 'Пользователи', exact: true })).toBeVisible()
-  await expect(companySelect(admin)).toHaveCount(0)
+  await expect(companyButton(admin)).toHaveCount(0)
   await expect(panel.getByRole('link', { name: 'Группы', exact: true })).toHaveCount(0)
   await expect(panel.getByRole('link', { name: 'Компании', exact: true })).toHaveCount(0)
 

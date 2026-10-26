@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
-import { COMPANY_1, COMPANY_2, COMPANY_3, companySelect, openAdminPanel, stamp } from './helpers'
+import { chooseCompany, COMPANY_1, COMPANY_2, COMPANY_3, openAdminPanel, openCompanyMenu, stamp } from './helpers'
 
 /**
  * ТК-R2.9: компании создаёт и ведёт только Владелец; новая компания получает справочники из шаблона. owner@ →
@@ -22,8 +22,8 @@ const companyRow = (page: Page, name: string) =>
 const people = (page: Page, name: string) => companyRow(page, name).getByRole('cell').nth(1)
 const admins = (page: Page, name: string) => companyRow(page, name).getByRole('cell').nth(2)
 
-/** «⋯» у компании → пункт меню. */
-async function companyAction(page: Page, name: string, item: 'Переименовать' | 'Администраторы') {
+/** «⋯» у компании → пункт меню (пункты, открывающие окно, — с «…»). */
+async function companyAction(page: Page, name: string, item: 'Переименовать…' | 'Администраторы…') {
   await page.getByRole('button', { name: `Действия с компанией «${name}»` }).click()
   await page.getByRole('menuitem', { name: item }).click()
 }
@@ -51,7 +51,7 @@ test('ТК-R2.9. «Компании»: создать, переименоват�
   await expect(companyRow(page, created)).toBeVisible()
 
   // 3. «⋯» → «Переименовать» → новое название → «Сохранить»: сотрудников 0, администраторов «Нет»
-  await companyAction(page, created, 'Переименовать')
+  await companyAction(page, created, 'Переименовать…')
   const renameDialog = page.getByRole('dialog', { name: 'Переименовать компанию' })
   await renameDialog.getByLabel('Название').fill(renamed)
   await renameDialog.getByRole('button', { name: 'Сохранить' }).click()
@@ -62,8 +62,8 @@ test('ТК-R2.9. «Компании»: создать, переименоват�
   await expect(admins(page, renamed)).toHaveText('Нет')
 
   // 4. «⋯» у второй компании → «Администраторы»: найти, выбрать, «Назначить», закрыть окно
-  await companyAction(page, COMPANY_2, 'Администраторы')
-  const adminsDialog = page.getByRole('dialog', { name: `Администраторы: ${COMPANY_2}` })
+  await companyAction(page, COMPANY_2, 'Администраторы…')
+  const adminsDialog = page.getByRole('dialog', { name: `Администраторы компании «${COMPANY_2}»` })
   await adminsDialog.getByLabel('Назначить из сотрудников компании').fill('E2E Сотрудник вт')
   await adminsDialog.getByRole('button', { name: new RegExp(`^${PERSON}`) }).click()
   await adminsDialog.getByRole('button', { name: 'Назначить', exact: true }).click()
@@ -76,14 +76,17 @@ test('ТК-R2.9. «Компании»: создать, переименоват�
   await expect(admins(page, COMPANY_2)).toContainText(PERSON)
 
   // 5. Выбор компании над меню: все компании, в том числе новая → она → «Типы карточек» — справочник из шаблона
-  const select = companySelect(page)
+  const items = await openCompanyMenu(page)
   for (const name of [COMPANY_1, COMPANY_2, COMPANY_3, renamed]) {
-    await expect(select.locator('option', { hasText: name }), name).toHaveCount(1)
+    await expect(items.filter({ hasText: new RegExp(`^${name}$`) }), name).toHaveCount(1)
   }
-  await select.selectOption({ label: renamed })
+  await page.keyboard.press('Escape')
+  await chooseCompany(page, renamed)
   await panel.getByRole('link', { name: 'Типы карточек', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Типы карточек', level: 1 })).toBeVisible()
-  await expect(select.locator('option:checked')).toHaveText(renamed)
+  const current = await openCompanyMenu(page)
+  await expect(current.filter({ hasText: renamed })).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('Escape')
   const types = page.getByRole('main').getByRole('row')
   // Заголовок таблицы и четыре типа: «Задача» (по умолчанию), «Баг», «История», «Эпик»
   await expect(types).toHaveCount(5)
@@ -95,7 +98,7 @@ test('ТК-R2.9. «Компании»: создать, переименоват�
 
   // Уборка: «E2E Сотрудник второй» — снова не администратор (тест можно повторить, данные других тестов прежние)
   await panel.getByRole('link', { name: 'Компании', exact: true }).click()
-  await companyAction(page, COMPANY_2, 'Администраторы')
+  await companyAction(page, COMPANY_2, 'Администраторы…')
   await list.getByRole('listitem').filter({ hasText: PERSON }).getByRole('button', { name: 'Снять' }).click()
   await expect(list.getByRole('listitem').filter({ hasText: PERSON })).toHaveCount(0)
   await adminsDialog.getByRole('button', { name: 'Закрыть' }).first().click()

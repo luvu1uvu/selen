@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
-import { COMPANY_2, companySelect, openAdminPanel } from './helpers'
+import { chooseCompany, COMPANY_2, openAdminPanel } from './helpers'
 
 /**
  * ТК-R2.14: по ответу на приглашение нельзя узнать, что человек работает в другой компании, и нельзя перебирать email.
@@ -34,7 +34,7 @@ test('ТК-R2.14. Приглашение на занятый email — один 
   // 1. Администрирование → вторая компания → «Пользователи» → «Пригласить»: email сотрудника другой компании
   await page.goto('/')
   const panel = await openAdminPanel(page)
-  await companySelect(page).selectOption({ label: COMPANY_2 })
+  await chooseCompany(page, COMPANY_2)
   await panel.getByRole('link', { name: 'Пользователи', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Пользователи', level: 1 })).toBeVisible()
   await page.getByRole('button', { name: 'Пригласить' }).click()

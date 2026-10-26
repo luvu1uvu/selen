@@ -94,9 +94,28 @@ export async function openAdminPanel(page: Page) {
   return panel
 }
 
-/** Выбор компании над меню «Администрирования» (только у того, у кого компаний несколько). */
-export const companySelect = (page: Page) =>
-  page.getByRole('navigation', { name: 'Администрирование' }).getByLabel('Компания', { exact: true })
+/**
+ * Выбор компании над меню «Администрирования» (только у того, у кого компаний несколько): кнопка «Компания: <текущая>»,
+ * по ней — меню, пункты — компании (у текущей отметка).
+ */
+export const companyButton = (page: Page) =>
+  page.getByRole('navigation', { name: 'Администрирование' }).getByRole('button', { name: /^Компания: / })
+
+/** Открыть выбор компании; возвращает её пункты меню. */
+export async function openCompanyMenu(page: Page) {
+  await companyButton(page).click()
+  const items = page.getByRole('menu').getByRole('menuitemcheckbox')
+  await expect(items.first()).toBeVisible()
+  return items
+}
+
+/** Выбрать компанию в меню — открывается тот же раздел админки в ней. */
+export async function chooseCompany(page: Page, name: string) {
+  await openCompanyMenu(page)
+  await page.getByRole('menuitemcheckbox', { name, exact: true }).click()
+  await expect(page.getByRole('menu')).toHaveCount(0)
+  await expect(companyButton(page)).toHaveAccessibleName(`Компания: ${name}`)
+}
 
 /** Вкладки раздела «Пользователи»: ссылки «Пользователи», «Группы», «Приглашения». */
 export const usersTabs = (page: Page) => page.getByRole('navigation', { name: 'Разделы «Пользователей»' })

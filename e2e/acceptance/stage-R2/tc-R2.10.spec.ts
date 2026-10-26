@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
 import { roleCell, userRow } from '../stage-3/helpers'
-import { COMPANY_2, COMPANY_3, companySelect, openAdminPanel } from './helpers'
+import { chooseCompany, COMPANY_2, COMPANY_3, companyButton, openAdminPanel, openCompanyMenu } from './helpers'
 
 /**
  * ТК-R2.10: администратор нескольких компаний переключается между ними; чужой компании у него нет. irina@ → e2e-multi-
@@ -18,21 +18,21 @@ test('ТК-R2.10. Выбор компании в админке — только
   // 1. Администрирование: в выборе только две его компании, пункта «Компании» нет
   await page.goto('/')
   const panel = await openAdminPanel(page)
-  const select = companySelect(page)
-  await expect(select.locator('option')).toHaveText([COMPANY_2, COMPANY_3])
+  await expect(await openCompanyMenu(page)).toHaveText([COMPANY_2, COMPANY_3])
+  await page.keyboard.press('Escape')
   await expect(panel.getByRole('link', { name: 'Компании', exact: true })).toHaveCount(0)
 
   // 2. Выбрать вторую компанию → «Пользователи»: её люди и Владелец с ролью «Владелец»
-  await select.selectOption({ label: COMPANY_2 })
+  await chooseCompany(page, COMPANY_2)
   await panel.getByRole('link', { name: 'Пользователи', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Пользователи', level: 1 })).toBeVisible()
-  await expect(select.locator('option:checked')).toHaveText(COMPANY_2)
+  await expect(companyButton(page)).toHaveAccessibleName(`Компания: ${COMPANY_2}`)
   for (const name of SECOND) await expect(userRow(page, name), name).toBeVisible()
   await expect(roleCell(page, 'E2E Владелец')).toHaveText('Владелец')
   const secondUrl = page.url()
 
   // 3. В выборе — третья компания: открылись её «Пользователи» — администратор и Владелец, людей второй нет
-  await select.selectOption({ label: COMPANY_3 })
+  await chooseCompany(page, COMPANY_3)
   await expect(page).not.toHaveURL(secondUrl)
   await expect(page).toHaveURL(/\/admin\/c\/[^/]+\/users$/)
   await expect(page.getByRole('heading', { name: 'Пользователи', level: 1 })).toBeVisible()
