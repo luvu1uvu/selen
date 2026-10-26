@@ -8,13 +8,10 @@ import { useCurrentUser } from '@/features/auth/queries'
 import { adminCompanies } from '@/shared/lib/roles'
 import { usePersistentState } from '@/shared/lib/usePersistentState'
 import type { NavCompanyTree, NavTreeNode, User } from '@/shared/types/api'
+import { ActionsMenu } from '@/shared/components/ActionsMenu'
+import { TruncatedText } from '@/shared/components/TruncatedText'
 import { Button } from '@/shared/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
 import { Input } from '@/shared/ui/input'
 import { useNavigation } from '../queries'
 import { filterTree, pathTo } from '../tree'
@@ -43,38 +40,36 @@ function managesStructure(user: User | null | undefined, companyId: string | und
 }
 
 /**
- * «+» в корне дерева компании: папка или пространство. Диалоги — свои, в компании из `AdminCompanyContext`.
+ * «+» в корне дерева компании: папка или пространство. Диалоги — свои, в компании из `AdminCompanyContext`. Подсказка —
+ * Tooltip (правило 8); у «+» в заголовках нескольких компаний в подписи — название компании (кнопки одинаковые).
  */
-function RootAddMenu() {
+function RootAddMenu({ company }: { company?: string }) {
   const { t } = useTranslation('spaces')
   const structure = useStructureActions()
   const [creatingSpace, setCreatingSpace] = useState(false)
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            aria-label={t('tree.add')}
-            title={t('tree.add')}
-          >
-            <Plus />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => structure.edit({ mode: 'create', parent: null })}>
-            <FolderPlus />
-            {t('tree.addFolder')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setCreatingSpace(true)}>
-            <SquarePlus />
-            {t('tree.addSpace')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ActionsMenu
+        label={company ? t('tree.addIn', { name: company }) : t('tree.add')}
+        icon={<Plus />}
+        className="size-8"
+      >
+        {(dialog) => (
+          <>
+            <DropdownMenuItem
+              onSelect={dialog(() => structure.edit({ mode: 'create', parent: null }))}
+            >
+              <FolderPlus />
+              {t('tree.addFolder')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={dialog(() => setCreatingSpace(true))}>
+              <SquarePlus />
+              {t('tree.addSpace')}
+            </DropdownMenuItem>
+          </>
+        )}
+      </ActionsMenu>
       {structure.dialogs}
       <CreateSpaceDialog open={creatingSpace} onOpenChange={setCreatingSpace} parent={null} />
     </>
@@ -110,11 +105,14 @@ function CompanyTree({
   return (
     <section aria-label={tree.name ?? undefined} className="grid grid-cols-1 gap-0.5">
       {named && (
-        <div className="flex h-8 min-w-0 items-center justify-between gap-1 pt-2 pl-2">
-          <h3 className="text-muted-foreground truncate text-xs font-semibold tracking-wide uppercase">
-            {tree.name}
-          </h3>
-          {manages && <RootAddMenu />}
+        <div className="mt-2 flex h-8 min-w-0 items-center justify-between gap-1 pl-2">
+          {/* Длинное название — «…» и полностью в подсказке (правила вида, раздел 6) */}
+          <TruncatedText
+            as="h3"
+            text={tree.name ?? ''}
+            className="text-muted-foreground text-xs font-semibold tracking-wide uppercase"
+          />
+          {manages && <RootAddMenu company={tree.name ?? undefined} />}
         </div>
       )}
       <NavTree
@@ -263,10 +261,13 @@ export function TreePanel({
             </button>
           )}
         </div>
-        {canAddAtRoot && (
+        {canAddAtRoot ? (
           <AdminCompanyContext.Provider value={rootCompany}>
             <RootAddMenu />
           </AdminCompanyContext.Provider>
+        ) : (
+          // Место «+» держим, пока дерево грузится и если «+» нет из-за нескольких деревьев: поле поиска не «прыгает»
+          managed.length > 0 && <div aria-hidden className="size-8 shrink-0" />
         )}
       </div>
 

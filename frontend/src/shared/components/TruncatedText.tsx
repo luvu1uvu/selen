@@ -13,7 +13,7 @@ export function TruncatedText({
   className,
 }: {
   text: string
-  as?: 'span' | 'h1' | 'h2'
+  as?: 'span' | 'h1' | 'h2' | 'h3'
   className?: string
 }) {
   const ref = useRef<HTMLElement>(null)

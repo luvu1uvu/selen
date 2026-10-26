@@ -57,7 +57,14 @@ export function CompanyAdminsDialog({
         }
       }}
     >
-      <DialogContent closeLabel={tc('actions.close')}>
+      <DialogContent
+        closeLabel={tc('actions.close')}
+        // Фокус — в поиск сотрудника, а не на первую «Снять»: та снимает администратора сразу (U-2 UX-ревью П2b-2)
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          document.getElementById('company-admin-add')?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t('companies.admins.title', { name: company?.name ?? '' })}</DialogTitle>
           <DialogDescription>{t('companies.admins.description')}</DialogDescription>

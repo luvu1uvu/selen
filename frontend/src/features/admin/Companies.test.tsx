@@ -105,7 +105,7 @@ describe('Админка нескольких компаний', () => {
     await userEvent.click(
       within(second).getByRole('button', { name: 'Действия с компанией «Компания 2»' }),
     )
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Переименовать…' }))
     const rename = await screen.findByRole('dialog', { name: 'Переименовать компанию' })
     const name = within(rename).getByLabelText('Название')
     expect(name).toHaveValue('Компания 2')
@@ -143,8 +143,12 @@ describe('Админка нескольких компаний', () => {
     await userEvent.click(
       within(row).getByRole('button', { name: 'Действия с компанией «Компания 2»' }),
     )
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Администраторы' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Администраторы: Компания 2' })
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Администраторы…' }))
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Администраторы компании «Компания 2»',
+    })
+    // Фокус — в поиске, а не на «Снять» (U-2 UX-ревью)
+    await waitFor(() => expect(within(dialog).getByPlaceholderText(/Поиск/)).toHaveFocus())
     await userEvent.click(await within(dialog).findByRole('button', { name: /Вера Нова/ }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Назначить' }))
 
@@ -190,15 +194,12 @@ describe('Админка нескольких компаний', () => {
     expect(await screen.findByText('Группа первой')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Администрирование' }))
     const nav = screen.getByRole('navigation', { name: 'Администрирование' })
-    const select = within(nav).getByLabelText('Компания')
-    expect(select).toHaveValue(TEST_COMPANY_ID)
-    expect(
-      within(select)
-        .getAllByRole('option')
-        .map((option) => option.textContent),
-    ).toEqual(['Компания 1', 'Компания 2'])
+    await userEvent.click(within(nav).getByRole('button', { name: 'Компания: Компания 1' }))
+    const options = await screen.findAllByRole('menuitemcheckbox')
+    expect(options.map((option) => option.textContent)).toEqual(['Компания 1', 'Компания 2'])
+    expect(options[0]).toHaveAttribute('aria-checked', 'true')
 
-    await userEvent.selectOptions(select, SECOND)
+    await userEvent.click(options[1])
     await waitFor(() => expect(router.state.location.pathname).toBe(`/admin/c/${SECOND}/groups`))
     expect(await screen.findByText('Группа второй')).toBeInTheDocument()
     expect(screen.queryByText('Группа первой')).not.toBeInTheDocument()
@@ -217,7 +218,7 @@ describe('Админка нескольких компаний', () => {
     expect(await screen.findByRole('heading', { name: 'Пользователи' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Администрирование' }))
     const nav = screen.getByRole('navigation', { name: 'Администрирование' })
-    expect(within(nav).queryByLabelText('Компания')).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('button', { name: /^Компания:/ })).not.toBeInTheDocument()
     expect(nav).not.toHaveTextContent('Компани')
     expect(screen.getByRole('main')).not.toHaveTextContent('Компани')
   })
@@ -294,7 +295,7 @@ describe('Админка нескольких компаний', () => {
     expect(within(row).queryByRole('button', { name: /Действия с пользователем/ })).toBeNull()
     await userEvent.hover(within(row).getByRole('link', { name: 'Доступ к пространствам' }))
     expect(await screen.findByRole('tooltip')).toHaveTextContent(
-      'Деактивировать и вернуть этого сотрудника может только Владелец',
+      'деактивировать и активировать его может только Владелец',
     )
   })
 })
@@ -322,9 +323,12 @@ describe('Дерево нескольких компаний', () => {
     expect(within(one).getByRole('link', { name: 'Разработка' })).toBeInTheDocument()
     expect(within(two).getByRole('link', { name: 'Продажи' })).toBeInTheDocument()
     // Структуру «Компании 1» он ведёт — «+» у её заголовка; «Компании 2» — нет; «+» у поиска нет
-    expect(within(one).getByRole('button', { name: 'Добавить в дерево' })).toBeInTheDocument()
-    expect(within(two).queryByRole('button', { name: 'Добавить в дерево' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Добавить в дерево' })).toHaveLength(1)
+    // В подписи «+» — название компании (кнопок несколько); «+» у поиска при нескольких деревьях нет
+    expect(within(one).getByRole('button', { name: 'Добавить в «Компания 1»' })).toBeInTheDocument()
+    expect(
+      within(two).queryByRole('button', { name: 'Добавить в «Компания 2»' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Добавить в дерево' })).not.toBeInTheDocument()
   })
 
   it('компания одна — заголовка нет, дерево как раньше', async () => {

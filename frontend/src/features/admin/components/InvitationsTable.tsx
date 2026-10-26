@@ -67,7 +67,7 @@ export function InvitationsTable() {
           {invitationsQuery.data?.data.length === 0 && (
             <TableRow>
               <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-                {tc('states.empty')}
+                {t('invitations.empty')}
               </TableCell>
             </TableRow>
           )}

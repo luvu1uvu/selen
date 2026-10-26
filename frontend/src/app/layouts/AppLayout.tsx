@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useMatch, useMatches, useNavigate }
 import {
   Building,
   Building2,
+  ChevronsUpDown,
   FolderTree,
   LogOut,
   Menu,
@@ -31,13 +32,13 @@ import { useScrollMemory } from '@/shared/lib/useScrollMemory'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
-import { NativeSelect } from '@/shared/ui/select'
 import { Sheet, SheetContent, SheetTitle } from '@/shared/ui/sheet'
 import type { RouteHandle } from '../routeHandle'
 
@@ -176,10 +177,11 @@ function AdminPanel({
   const navigate = useNavigate()
   const companies = adminCompanies(user)
   const match = useMatch('/admin/c/:companyId/*')
-  const company =
-    companies.find((item) => item.id === match?.params.companyId) ?? defaultAdminCompany(user)
-  // Раздел адреса: users, groups, spaces… (на странице человека или группы — её список)
-  const section = match?.params['*']?.split('/')[0] ?? ''
+  const fromAddress = companies.find((item) => item.id === match?.params.companyId)
+  const company = fromAddress ?? defaultAdminCompany(user)
+  // Раздел адреса: users, groups, spaces… (на странице человека или группы — её список); чужая или несуществующая
+  // компания в адресе — «Страница не найдена», пункт меню не подсвечивается (U-9 UX-ревью П2b-2)
+  const section = fromAddress ? (match?.params['*']?.split('/')[0] ?? '') : ''
   const sections = ADMIN_SECTIONS.filter((item) =>
     item.permissions.some((permission) => hasCompanyPermission(company, permission)),
   )
@@ -217,22 +219,40 @@ function AdminPanel({
           </>
         )}
         {companies.length > 1 && company && (
-          <div className="mb-2 px-0.5">
-            <label htmlFor="admin-company" className="sr-only">
+          // Меню, а не список select: стрелки в закрытом select сразу сменили бы компанию (WCAG 3.2.2); длинное
+          // название — «…» на кнопке, полностью — в меню (U-10 UX-ревью П2b-2)
+          <div className="mb-2 grid gap-1">
+            <span aria-hidden className="text-muted-foreground px-2 text-xs">
               {t('nav.company')}
-            </label>
-            <NativeSelect
-              id="admin-company"
-              value={company.id}
-              onChange={(event) => selectCompany(event.target.value)}
-              className="bg-background h-8 font-medium"
-            >
-              {companies.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </NativeSelect>
+            </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full justify-between gap-2"
+                  aria-label={t('nav.companySelect', { name: company.name })}
+                >
+                  <span className="truncate">{company.name}</span>
+                  <ChevronsUpDown className="text-muted-foreground size-4 shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-(--radix-dropdown-menu-trigger-width)"
+              >
+                {companies.map((item) => (
+                  <DropdownMenuCheckboxItem
+                    key={item.id}
+                    checked={item.id === company.id}
+                    onCheckedChange={() => item.id !== company.id && selectCompany(item.id)}
+                    className="break-words"
+                  >
+                    {item.name}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
         {company &&

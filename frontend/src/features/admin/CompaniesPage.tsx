@@ -38,7 +38,9 @@ export function CompaniesPage() {
           <h1 className="text-2xl font-semibold">{t('companies.title')}</h1>
           <p className="text-muted-foreground max-w-2xl text-sm">{t('companies.description')}</p>
         </div>
-        <Button onClick={() => setEditing('new')}>{t('companies.create')}</Button>
+        <Button className="self-start" onClick={() => setEditing('new')}>
+          {t('companies.create')}
+        </Button>
       </div>
 
       {companiesQuery.isError && (
@@ -54,7 +56,9 @@ export function CompaniesPage() {
             <TableRow>
               <TableHead>{t('companies.columns.name')}</TableHead>
               <TableHead className="w-32">{t('companies.columns.people')}</TableHead>
-              <TableHead>{t('companies.columns.admins')}</TableHead>
+              <TableHead className="hidden md:table-cell">
+                {t('companies.columns.admins')}
+              </TableHead>
               <TableHead className="w-12">
                 <span className="sr-only">{t('companies.columns.actions')}</span>
               </TableHead>
@@ -69,7 +73,7 @@ export function CompaniesPage() {
                   </Link>
                 </TableCell>
                 <TableCell>{company.people_count}</TableCell>
-                <TableCell className="text-sm">
+                <TableCell className="hidden text-sm md:table-cell">
                   {company.admins.length === 0 ? (
                     <span className="text-muted-foreground">{t('companies.admins.none')}</span>
                   ) : (

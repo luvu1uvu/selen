@@ -30,7 +30,9 @@ export function GroupsPage() {
     <div className="grid gap-4">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <p className="text-muted-foreground max-w-2xl text-sm">{t('groups.description')}</p>
-        <Button onClick={() => setCreating(true)}>{t('groups.create')}</Button>
+        <Button className="self-start" onClick={() => setCreating(true)}>
+          {t('groups.create')}
+        </Button>
       </div>
 
       <div className="flex items-center gap-2">
