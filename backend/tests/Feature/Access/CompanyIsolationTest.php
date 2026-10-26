@@ -30,8 +30,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 |     scoped binding). Маршрут без объектов компании в адресе — только из списка ROUTES_WITHOUT_COMPANY_OBJECTS,
 |     параметр без значения в isolationParams — тоже ошибка: новый маршрут без записи здесь роняет CI;
 | (б) ответы всех GET-маршрутов людям A (участник и администратор компании) не содержат ни одного маркера B —
-|     названий, email, ключа, id (как проверка названий скрытых папок, ADR-0013); администратору A все они отвечают
-|     без ошибки — иначе проверка маркеров ничего бы не доказывала;
+|     названий, email, ключа, id (как проверка названий скрытых папок, ADR-0013) — и названия своей компании: у кого
+|     компания одна, названий компаний нет нигде (решение PM 23.10, вопрос 5); администратору A все они отвечают
+|     без ошибки (кроме маршрутов только для Владельца) — иначе проверка маркеров ничего бы не доказывала;
 | (б) журнал: события без компании о людях B и системные не видны администратору A; Владельцу — системные;
 | (в) ссылки на объекты B в теле запроса — 422, как на несуществующие; связать карточки A и B нельзя и в обход
 |     приложения (триггер), упомянуть человека B в карточке A — тоже;
@@ -51,9 +52,17 @@ const ROUTES_WITHOUT_COMPANY_OBJECTS = [
     'PATCH profile', 'PUT profile/password',
     // Свои дерево и пространства — только по правам пользователя (проверяет (б))
     'GET navigation', 'GET spaces',
+    // Компании — экран Владельца (CompanyPolicy): ему видны все компании по определению, остальным — 403
+    'GET admin/companies', 'POST admin/companies',
     // Служебные маршруты фреймворка (в том числе выдача файлов локального диска — путь, не объект компании)
     'GET sanctum/csrf-cookie', 'GET up', 'GET storage/{path}', 'PUT storage/{path}',
 ];
+
+/**
+ * GET-маршруты только для Владельца: администратору компании A они отвечают 403 — (б) проверяет и их ответы на маркеры,
+ * но не требует успешного ответа.
+ */
+const OWNER_ONLY_GET_ROUTES = ['admin/companies'];
 
 /**
  * Одинаковое наполнение компании: папка с пространством, доска, карточки со всем содержимым, метки пространства
@@ -189,6 +198,8 @@ function isolationContent(TestResponse $response): string
 
 beforeEach(function () {
     Storage::fake('attachments');
+    // Название своей компании — тоже маркер для людей с одной компанией: его нет ни в одном ответе
+    company()->update(['name' => 'Компания Альфа-имя']);
     $this->a = isolationFixture(company(), 'Альфа-маркер', 'ALFA');
     $this->b = isolationFixture(otherCompany(['name' => 'Компания Бета-маркер']), 'Бета-маркер', 'BETA');
 });
@@ -241,7 +252,7 @@ it('(а) каждый маршрут с объектами другой комп
 it('(б) ответы GET-маршрутов людям компании A не содержат ни одного маркера компании B', function (string $who) {
     $this->actingAs($this->a[$who]);
     $params = isolationParams($this->a);
-    $markers = isolationMarkers($this->b, 'Бета-маркер');
+    $markers = [...isolationMarkers($this->b, 'Бета-маркер'), $this->a['company']->name];
     $leaks = [];
     $checked = 0;
 
@@ -255,7 +266,7 @@ it('(б) ответы GET-маршрутов людям компании A не 
         $content = isolationContent($response);
         $checked++;
         // Администратору A (все права в A) свои списки открыты: ответ с ошибкой маркеров не содержит и ничего не доказывал бы
-        if ($who === 'admin' && $response->getStatusCode() >= 400) {
+        if ($who === 'admin' && $response->getStatusCode() >= 400 && ! in_array($path, OWNER_ONLY_GET_ROUTES, true)) {
             $leaks[] = "{$uri}: ответ {$response->getStatusCode()}";
         }
         foreach ($markers as $marker) {
@@ -363,9 +374,11 @@ it('(в) человек с «домами» в двух компаниях не 
     $this->postJson("{$card}/relations", ['card' => $this->b['card']->key(), 'kind' => 'child'])->assertUnprocessable();
     $this->postJson("{$card}/blocks", ['blocking_card' => $this->b['card']->key()])->assertUnprocessable();
     $this->patchJson($card, ['description' => richText(['mention' => $this->b['editor']->id])])->assertUnprocessable();
-    // Свои пространства обеих компаний он видит
+    // Свои пространства обеих компаний он видит — в дереве под заголовками компаний
     $this->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertOk();
     $this->getJson("/api/v1/spaces/{$this->b['space']->key}")->assertOk();
+    expect(collect($this->getJson('/api/v1/navigation')->assertOk()->json('data'))->pluck('name')->all())
+        ->toBe(['Компания Альфа-имя', 'Компания Бета-маркер']);
 });
 
 it('(г) выдача и группа человеку без «дома» в компании ничего не дают', function () {

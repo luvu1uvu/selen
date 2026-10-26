@@ -25,8 +25,9 @@ class UserAccessController extends Controller
         Gate::authorize('viewAny', [User::class, $company]);
 
         $groups = $user->groups()->inCompany($company)->orderByRaw('lower(name)')->get();
-        // В «Все сотрудники» компании активный пользователь входит автоматически (состав не хранится)
-        if ($user->status === UserStatus::Active) {
+        // В «Все сотрудники» компании активный «дом» входит автоматически (состав не хранится); Владелец без «дома»
+        // в ней — нет
+        if ($user->status === UserStatus::Active && $resolver->isHome($user, $company)) {
             $groups->prepend(Group::everyone($company));
         }
 

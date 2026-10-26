@@ -139,7 +139,7 @@ it('дерево, список пространств и метрики — в �
     ($this->move)($this->b, ['new_row_before_id' => $this->a->row_id])->assertOk();
 
     $this->actingAs($this->owner)->getJson('/api/v1/navigation')
-        ->assertJsonPath('data.0.boards.*.name', ['B', 'C', 'A']);
+        ->assertJsonPath('data.0.items.0.boards.*.name', ['B', 'C', 'A']);
     $this->actingAs($this->owner)->getJson('/api/v1/spaces')
         ->assertJsonPath('data.0.boards.*.name', ['B', 'C', 'A']);
     expect(Board::query()->where('space_id', $this->space->id)->inLayoutOrder()->pluck('name')->all())->toBe(['B', 'C', 'A']);

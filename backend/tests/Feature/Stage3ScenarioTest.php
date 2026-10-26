@@ -77,7 +77,7 @@ it('проходит сквозной сценарий этапа 3', function (
     $ivan = $login('ivan');
     $ivan->get('/api/v1/navigation')->assertOk()->assertExactJson(['data' => []]);
     $s->post(adminPath()."groups/{$management}/members", ['user_id' => $id('ivan')])->assertOk();
-    $treeKeys = fn ($browser) => collect($browser->get('/api/v1/navigation')->assertOk()->json('data'))
+    $treeKeys = fn ($browser) => collect(navItems($browser->get('/api/v1/navigation')))
         ->flatMap(fn ($n) => $n['type'] === 'folder' ? collect($n['children'])->pluck('space.key') : [$n['space']['key']])->all();
     expect($treeKeys($ivan))->toBe(['FRONT', 'BACK', 'MGMT', 'IOS', 'AND']);
     $ivan->get('/api/v1/spaces/MGMT')->assertOk()->assertJsonPath('data.my_role', 'admin');
@@ -116,7 +116,7 @@ it('проходит сквозной сценарий этапа 3', function (
     $s->post('/api/v1/spaces/IOS/members', ['user_id' => $id('yulia'), 'role' => 'commenter'])->assertCreated();
     $s->post('/api/v1/spaces/BACK/members', ['user_id' => $id('boris'), 'role' => 'commenter'])->assertCreated();
     $yulia = $login('yulia');
-    $yuliaTree = $yulia->get('/api/v1/navigation')->assertOk()->json('data');
+    $yuliaTree = navItems($yulia->get('/api/v1/navigation'));
     expect($yuliaTree)->toHaveCount(1)
         ->and($yuliaTree[0])->toMatchArray(['type' => 'folder', 'name' => 'Mobile', 'icon' => '📦'])
         ->and(collect($yuliaTree[0]['children'])->pluck('space.key')->all())->toBe(['IOS']);
@@ -164,7 +164,7 @@ it('проходит сквозной сценарий этапа 3', function (
     $invitation = Invitation::factory()->withToken('stage-3-newcomer')->create();
     $newcomer = browser('10.0.3.251');
     $newcomer->post('/api/v1/invitations/stage-3-newcomer/accept', ['password' => 'newcomer-password', 'password_confirmation' => 'newcomer-password'])->assertOk();
-    $tree = $newcomer->get('/api/v1/navigation')->assertOk()->json('data');
+    $tree = navItems($newcomer->get('/api/v1/navigation'));
     expect($tree)->toHaveCount(1)
         ->and($tree[0])->toMatchArray(['type' => 'space', 'everyone' => true, 'icon' => '📊'])
         ->and($tree[0]['space']['key'])->toBe('MGMT');
@@ -176,14 +176,14 @@ it('проходит сквозной сценарий этапа 3', function (
     expect($mobileNode()['everyone'])->toBeFalse();
     $s->post('/api/v1/spaces/IOS/groups', ['group_id' => $everyone['id'], 'role' => 'commenter'])->assertCreated();
     expect($mobileNode()['everyone'])->toBeTrue();
-    expect($newcomer->get('/api/v1/navigation')->assertOk()->json('data.1'))->toMatchArray(['type' => 'folder', 'name' => 'Mobile', 'everyone' => true]);
+    expect(navItems($newcomer->get('/api/v1/navigation'))[1])->toMatchArray(['type' => 'folder', 'name' => 'Mobile', 'everyone' => true]);
 
     // Деактивированный новичок доступа не имеет (войти не может, а права не вычисляются)
     $s->post(adminPath()."users/{$invitation->user_id}/deactivate")->assertOk();
     $newcomer->get('/api/v1/navigation')->assertUnauthorized();
 
     // --- 10. Данные для поиска по дереву: папки, пространства и доски с названиями ----------------
-    $yuliaTree = $yulia->get('/api/v1/navigation')->assertOk()->json('data');
+    $yuliaTree = navItems($yulia->get('/api/v1/navigation'));
     expect($yuliaTree[0]['space'])->toMatchArray(['key' => 'MGMT', 'name' => 'Management'])
         ->and($yuliaTree[1]['name'])->toBe('Mobile')
         ->and($yuliaTree[1]['children'][0]['boards'])->toBe([['id' => $boards['IOS'], 'name' => 'Доска IOS']]);

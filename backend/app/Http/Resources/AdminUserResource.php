@@ -37,6 +37,8 @@ class AdminUserResource extends UserResource
                 // Повторить или отозвать приглашение пользователя (InvitationPolicy::manages)
                 'manage_invitation' => $actor->can('manages', [Invitation::class, $user, $company]),
                 'transfer_ownership' => $actor->can('transferOwnership', [$user, $company]),
+                // Деактивировать и вернуть может только Владелец: у человека «дома» в нескольких компаниях (до П2c)
+                'owner_only' => $actor->can('onlyOwnerManages', [$user, $company]),
             ],
         ];
     }

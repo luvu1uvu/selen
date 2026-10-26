@@ -19,13 +19,13 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 
-/** Люди компании (её «дома», ADR-0024): роль в компании, деактивация, передача владения. */
+/** Люди компании (её «дома» и Владелец — участник всех компаний, ADR-0024): роль в компании, деактивация, передача владения. */
 class UserController extends Controller
 {
     public function index(ListUsersRequest $request, Company $company, AccessResolver $resolver): AnonymousResourceCollection
     {
         $users = User::query()
-            ->whereIn('id', $resolver->companyMemberIds($company))
+            ->whereIn('id', $resolver->companyPeopleIds($company))
             ->with('latestInvitation')
             ->when($request->validated('status'), fn ($q, $status) => $q->where('status', $status))
             ->when($request->validated('search'), function ($q, $search) {

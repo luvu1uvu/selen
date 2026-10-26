@@ -12,19 +12,22 @@ use Illuminate\Contracts\Validation\ValidationRule;
 /**
  * Ссылка на человека в теле запроса — только на «дом» этой компании (ADR-0024: правило «в этой компании» вместо
  * голого exists). Человек другой компании неотличим от несуществующего: то же сообщение, что у exists.
+ * withOwner — ещё и Владелец (личная выдача доступа: он участник всех компаний); состав групп — только «дома».
  */
 class CompanyMember implements ValidationRule
 {
     public function __construct(
         private readonly Company|string $company,
         private readonly bool $notDeactivated = false,
+        private readonly bool $withOwner = false,
     ) {}
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
+        $resolver = app(AccessResolver::class);
         $exists = is_string($value) && User::query()
             ->whereKey($value)
-            ->whereIn('id', app(AccessResolver::class)->companyMemberIds($this->company))
+            ->whereIn('id', $this->withOwner ? $resolver->companyPeopleIds($this->company) : $resolver->companyMemberIds($this->company))
             ->when($this->notDeactivated, fn ($q) => $q->where('status', '!=', UserStatus::Deactivated))
             ->exists();
 

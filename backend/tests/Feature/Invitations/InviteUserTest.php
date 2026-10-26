@@ -78,14 +78,57 @@ it('отправляет письмо через очередь', function () {
         ->toBeInstanceOf(ShouldBeEncrypted::class);
 });
 
-it('не приглашает существующий email', function () {
+it('не приглашает существующий email: один ответ — и для своей компании, и для другой (решение PM 26.10)', function () {
     member(['email' => 'boris@selen.test']);
+    member(['email' => 'vera@selen.test'], otherCompany(['name' => 'Компания 2']));
+    $this->actingAs(admin());
 
-    $this->actingAs(admin())->postJson(adminPath().'invitations', [
-        'name' => 'Борис', 'email' => 'BORIS@selen.test', 'role' => 'member',
-    ])->assertUnprocessable()->assertJsonPath('errors.email.0', __('selen.invitations.email_taken'));
+    $answers = collect(['BORIS@selen.test', 'vera@selen.test'])->map(fn (string $email) => $this->postJson(adminPath().'invitations', [
+        'name' => 'Кто-то', 'email' => $email, 'role' => 'member',
+    ])->assertUnprocessable()->json());
 
+    expect($answers[0])->toBe($answers[1])
+        ->and($answers[0]['errors']['email'][0])->toBe('Этот email уже используется в Selen.')
+        ->and(json_encode($answers[0], JSON_UNESCAPED_UNICODE))->not->toContain('компан');
     Notification::assertNothingSent();
+});
+
+it('лимит приглашений: 10 в минуту на приглашающего, отказы тоже считаются; другой администратор — свой счётчик', function () {
+    $admin = admin();
+    $this->actingAs($admin);
+    $invite = fn (string $email) => $this->postJson(adminPath().'invitations', ['name' => 'Новый', 'email' => $email, 'role' => 'member']);
+
+    foreach (range(1, 9) as $i) {
+        $invite("new{$i}@selen.test")->assertCreated();
+    }
+    $invite('new1@selen.test')->assertUnprocessable(); // занятый email — тоже попытка
+
+    $invite('new10@selen.test')->assertTooManyRequests()
+        ->assertJsonPath('message', 'Слишком много приглашений: не больше 10 в минуту и 300 в сутки. Продолжить можно через 1 мин.');
+    // «Отправить повторно» — та же отправка письма, тот же лимит
+    $this->postJson(adminPath().'invitations/'.Invitation::query()->firstOrFail()->id.'/resend')->assertTooManyRequests();
+    $this->actingAs(admin())->postJson(adminPath().'invitations', ['name' => 'Новый', 'email' => 'other@selen.test', 'role' => 'member'])->assertCreated();
+
+    $this->travel(61)->seconds();
+    $this->actingAs($admin);
+    $invite('new10@selen.test')->assertCreated();
+    expect(User::query()->where('email', 'like', 'new%')->count())->toBe(10);
+});
+
+it('лимит приглашений: 300 в сутки на приглашающего — дальше ждать до конца суток', function () {
+    $this->actingAs(admin());
+    $attempt = fn () => $this->postJson(adminPath().'invitations', ['name' => 'Новый', 'email' => 'не-email', 'role' => 'member']);
+
+    // Неверный email — отказ, но попытка считается; по 10 в минуту
+    foreach (range(1, 30) as $minute) {
+        foreach (range(1, 10) as $i) {
+            $attempt()->assertUnprocessable();
+        }
+        $this->travel(61)->seconds();
+    }
+
+    $attempt()->assertTooManyRequests()
+        ->assertJsonPath('message', fn (string $message) => preg_match('/Продолжить можно через \d+ ч \d+ мин\.$/u', $message) === 1);
 });
 
 it('валидирует данные приглашения', function () {

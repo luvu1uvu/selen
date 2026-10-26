@@ -161,12 +161,12 @@ it('список пользователей подсказывает интер�
         ->keyBy('id')->map(fn (array $row) => $row['permissions']);
 
     $asOwner = $rows($this->owner);
-    expect($asOwner[$member->id])->toBe(['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true])
-        ->and($asOwner[$this->admin->id])->toBe(['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true])
-        ->and($asOwner[$this->owner->id])->toBe(['update_role' => false, 'deactivate' => false, 'reactivate' => false, 'manage_invitation' => false, 'transfer_ownership' => false]);
+    expect($asOwner[$member->id])->toBe(['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true, 'owner_only' => false])
+        ->and($asOwner[$this->admin->id])->toBe(['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true, 'owner_only' => false])
+        ->and($asOwner[$this->owner->id])->toBe(['update_role' => false, 'deactivate' => false, 'reactivate' => false, 'manage_invitation' => false, 'transfer_ownership' => false, 'owner_only' => false]);
 
     $asAdmin = $rows($this->admin);
-    expect($asAdmin[$member->id])->toBe(['update_role' => false, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => false])
+    expect($asAdmin[$member->id])->toBe(['update_role' => false, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => false, 'owner_only' => false])
         ->and($asAdmin[$this->owner->id])->each->toBeFalse()
         ->and($asAdmin[$this->admin->id])->each->toBeFalse();
 });

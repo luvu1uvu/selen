@@ -15,7 +15,9 @@ use Illuminate\Auth\Access\Response;
  *
  * Кем управляет администратор компании: Владельцем — никто (и он сам, кроме передачи владения); администраторами
  * компании — только Владелец; участниками — тот, у кого право компании «управлять пользователями» (администратор
- * компании и Владелец). Деактивация в П2b-1 — у учётной записи (решение PM 23.10); в компании — П2c.
+ * компании и Владелец). Деактивация пока — у учётной записи (решение PM 23.10); в компании — П2c. До неё учётной
+ * записью человека с «домами» в нескольких компаниях управляет только Владелец: деактивация из админки одной
+ * компании отключила бы его и в другой (решение PM 26.10; план, вопрос 3 и пре-мортем 6.1).
  */
 class UserPolicy
 {
@@ -65,8 +67,19 @@ class UserPolicy
             return false;
         }
 
-        // Администратором компании управляет только Владелец
-        return ! $company->permissionsOf($user)->isAdmin() || $actor->isOwner();
+        // Администратором компании и человеком с «домами» в нескольких компаниях управляет только Владелец
+        return $actor->isOwner() || ! ($company->permissionsOf($user)->isAdmin() || $company->permissionsOf($user)->hasOtherHomes());
+    }
+
+    /**
+     * Подсказка интерфейсу (AdminUserResource): участником с «домами» в нескольких компаниях управляет только Владелец —
+     * у администратора компании действий нет, а почему — объясняет подсказка.
+     */
+    public function onlyOwnerManages(User $actor, User $user, Company $company): bool
+    {
+        return ! $actor->isOwner() && ! $user->isOwner()
+            && $company->permissionsOf($actor)->allows(Permission::CompanyManageUsers)
+            && $company->permissionsOf($user)->hasOtherHomes();
     }
 
     private function managesOther(User $actor, User $user, Company $company): Response

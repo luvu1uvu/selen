@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Enums\CompanyRole;
 use App\Enums\UserRole;
+use App\Models\Company;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use Illuminate\Http\Request;
@@ -11,8 +12,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * Текущий пользователь (/auth/me, вход, профиль). role — для интерфейса (ADR-0024): owner; admin — администратор хотя
- * бы одной компании; иначе member. admin_companies — компании, которыми он управляет (Владелец — всеми): адреса
- * админки admin/companies/{id} (frontend — adminCompanies; одна компания — интерфейс как раньше).
+ * бы одной компании; иначе member. admin_companies — компании, которыми он управляет (Владелец — всеми), по дате
+ * создания: адреса админки /admin/c/{id}, права компании — пункты меню (frontend — adminCompanies). Название — только
+ * если их несколько (выбор компании): у кого компания одна, названий компаний нигде нет (решение PM 23.10, вопрос 5).
  *
  * @mixin User
  */
@@ -23,14 +25,23 @@ class UserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $adminCompanies = app(AccessResolver::class)->adminCompanyIds($this->resource);
+        $ids = app(AccessResolver::class)->adminCompanyIds($this->resource);
+        $companies = Company::query()->whereKey($ids->all())->get()->sortBy(fn (Company $company) => $ids->search($company->id));
+        $named = $companies->count() > 1;
 
         return $this->account(match (true) {
             $this->resource->isOwner() => UserRole::Owner->value,
-            $adminCompanies->isNotEmpty() => CompanyRole::Admin->value,
+            $companies->isNotEmpty() => CompanyRole::Admin->value,
             default => CompanyRole::Member->value,
         }) + [
-            'admin_companies' => $adminCompanies->map(fn (string $id) => ['id' => $id])->values()->all(),
+            'admin_companies' => $companies
+                ->map(fn (Company $company) => [
+                    'id' => $company->id,
+                    'name' => $named ? $company->name : null,
+                    'permissions' => $company->permissionsOf($this->resource)->permissions(),
+                ])
+                ->values()
+                ->all(),
         ];
     }
 

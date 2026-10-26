@@ -9,6 +9,8 @@ export const EVENT_TYPES = [
   'auth.password_changed',
   'auth.password_reset_requested',
   'auth.password_reset_completed',
+  'company.created',
+  'company.renamed',
   'user.created',
   'user.invited',
   'user.profile_updated',

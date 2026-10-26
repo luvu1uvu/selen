@@ -46,7 +46,7 @@ function structureOrder(array $nodes): array
 function expectSameOrder(): array
 {
     $admin = test()->actingAs(test()->admin)->getJson(adminPath().'navigation')->assertOk()->json('data');
-    $user = test()->actingAs(test()->user)->getJson('/api/v1/navigation')->assertOk()->json('data');
+    $user = navItems(test()->actingAs(test()->user)->getJson('/api/v1/navigation'));
 
     expect(flatTree($user))->toBe(structureOrder($admin));
 

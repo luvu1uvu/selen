@@ -20,6 +20,11 @@ enum EventType: string
     case PasswordResetRequested = 'auth.password_reset_requested';
     case PasswordResetCompleted = 'auth.password_reset_completed';
 
+    // Компании (subject — компания; события системные, без компании — видит только Владелец, ADR-0024; название
+    // в журнал не пишется)
+    case CompanyCreated = 'company.created';
+    case CompanyRenamed = 'company.renamed';
+
     // Пользователи
     case UserCreated = 'user.created';
     case UserInvited = 'user.invited';
