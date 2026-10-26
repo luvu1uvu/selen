@@ -174,8 +174,9 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
       controls
       preload="metadata"
       aria-label={attachment.name}
+      // Рамка фокуса — внутри: снаружи её срезал бы overflow-hidden у figure
       // eslint-disable-next-line no-restricted-syntax -- поля вокруг видео чёрные в любой теме, как у плееров
-      className="aspect-video w-full bg-black"
+      className="aspect-video w-full bg-black focus-visible:-outline-offset-2"
       onError={() => setFailed(true)}
       onLoadedMetadata={(event) => event.currentTarget.videoWidth === 0 && setFailed(true)}
     />

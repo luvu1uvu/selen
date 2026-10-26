@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { currentUserKey } from '@/features/auth/queries'
 import { stubSystemTheme } from '@/test/systemTheme'
+import type { User } from '@/shared/types/api'
 import { makeUser } from '@/test/server'
 import { installTheme } from './theme'
 import initScript from '../../public/theme-init.js?raw'
@@ -50,10 +51,13 @@ describe('Тема вкладки (installTheme, ADR-0025)', () => {
     expect(root).not.toHaveClass('dark')
   })
 
-  it('выбор в соседней вкладке сразу виден в этой', () => {
-    uninstall = installTheme(new QueryClient())
+  it('выбор в соседней вкладке сразу виден в этой — и на экране, и в данных пользователя', () => {
+    const queryClient = new QueryClient()
+    uninstall = installTheme(queryClient)
+    queryClient.setQueryData(currentUserKey, makeUser({ theme: 'light' }))
     window.dispatchEvent(new StorageEvent('storage', { key: 'selen.theme', newValue: 'dark' }))
     expect(root).toHaveClass('dark')
+    expect(queryClient.getQueryData<User>(currentUserKey)?.theme).toBe('dark')
     window.dispatchEvent(new StorageEvent('storage', { key: 'other', newValue: 'light' }))
     expect(root).toHaveClass('dark')
   })

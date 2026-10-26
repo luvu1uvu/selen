@@ -183,9 +183,10 @@ export const SortableCardTile = memo(function SortableCardTile({
         'rounded-md',
         draggable && 'cursor-grab active:cursor-grabbing',
         // Место, куда упадёт карточка, — пунктирная рамка её размера (на белой доске без серых ячеек полупрозрачная
-        // карточка терялась); outline, а не border, — размер не меняется
+        // карточка терялась); outline, а не border, — размер не меняется. Пунктир занимает outline, поэтому фокус при
+        // переносе с клавиатуры — кольцом цвета ring
         isDragging &&
-          'bg-muted-foreground/10 outline-muted-foreground/50 outline-2 -outline-offset-2 outline-dashed [&>*]:invisible',
+          'bg-muted-foreground/10 outline-muted-foreground/50 focus-visible:ring-ring outline-2 -outline-offset-2 outline-dashed focus-visible:ring-2 [&>*]:invisible',
       )}
       onClick={() => onOpen(card.key)}
       onKeyDown={(event) => {

@@ -1,7 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
+import { toast } from 'sonner'
 import userEvent from '@testing-library/user-event'
 import { makeUser, server, signedInAs } from '@/test/server'
+import type { Theme } from '@/shared/types/api'
 import { renderApp } from '@/test/render'
 
 const admin = makeUser({ id: 'admin-1', name: 'Сергей' })
@@ -153,16 +155,27 @@ describe('Тема в меню пользователя', () => {
     )
   })
 
-  it('«Тёмная» — тема меняется сразу, выбор уходит на сервер и в браузер, меню остаётся открытым', async () => {
-    signedInAs(admin)
-    const sent: unknown[] = []
+  /** Сервер темы: PUT сохраняет, /auth/me отдаёт сохранённую; ответы PUT по очереди — из `statuses` (по умолчанию 200). */
+  function themeServer(statuses: number[] = []) {
+    const saved = { theme: admin.theme, sent: [] as unknown[] }
     server.use(
+      http.get('*/api/v1/auth/me', () =>
+        HttpResponse.json({ data: { ...admin, theme: saved.theme } }),
+      ),
       http.put('*/api/v1/profile/theme', async ({ request }) => {
-        const body = (await request.json()) as { theme: string }
-        sent.push(body)
+        const body = (await request.json()) as { theme: Theme }
+        saved.sent.push(body)
+        const status = statuses.shift() ?? 200
+        if (status !== 200) return HttpResponse.json({ message: 'Ошибка' }, { status })
+        saved.theme = body.theme
         return HttpResponse.json({ data: { ...admin, theme: body.theme } })
       }),
     )
+    return saved
+  }
+
+  it('«Тёмная» — тема меняется сразу, выбор уходит на сервер и в браузер, меню остаётся открытым', async () => {
+    const saved = themeServer()
     renderApp('/')
     expect(root).not.toHaveClass('dark')
     const user = await openUserMenu()
@@ -171,20 +184,18 @@ describe('Тема в меню пользователя', () => {
 
     expect(root).toHaveClass('dark')
     expect(window.localStorage.getItem('selen.theme')).toBe('dark')
-    await waitFor(() => expect(sent).toEqual([{ theme: 'dark' }]))
+    await waitFor(() => expect(saved.sent).toEqual([{ theme: 'dark' }]))
     expect(screen.getByRole('menuitemradio', { name: 'Тёмная' })).toHaveAttribute(
       'aria-checked',
       'true',
     )
+    // После сверки с сервером тема та же
+    await waitFor(() => expect(saved.theme).toBe('dark'))
+    expect(root).toHaveClass('dark')
   })
 
   it('сервер не сохранил — прежняя тема и уведомление', async () => {
-    signedInAs(admin)
-    server.use(
-      http.put('*/api/v1/profile/theme', () =>
-        HttpResponse.json({ message: 'Ошибка' }, { status: 500 }),
-      ),
-    )
+    themeServer([500])
     renderApp('/')
     const user = await openUserMenu()
 
@@ -193,5 +204,43 @@ describe('Тема в меню пользователя', () => {
     expect(await screen.findByText('Тема не сохранилась. Выберите её ещё раз.')).toBeInTheDocument()
     expect(root).not.toHaveClass('dark')
     expect(window.localStorage.getItem('selen.theme')).toBe('light')
+  })
+
+  it('два выбора подряд, первый не сохранился — остаётся второй, без отката к прежней', async () => {
+    const saved = themeServer([500, 200])
+    renderApp('/')
+    const user = await openUserMenu()
+
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Тёмная' }))
+    await user.click(screen.getByRole('menuitemradio', { name: 'Как в системе' }))
+
+    await waitFor(() => expect(saved.theme).toBe('system'))
+    await waitFor(() => expect(window.localStorage.getItem('selen.theme')).toBe('system'))
+    expect(screen.getByRole('menuitemradio', { name: 'Как в системе' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+  })
+
+  it('сменился пользователь вкладки (409) — без уведомления «Тема не сохранилась»', async () => {
+    signedInAs(admin)
+    server.use(
+      http.put('*/api/v1/profile/theme', () =>
+        HttpResponse.json(
+          { message: 'Сменился пользователь', code: 'session_changed' },
+          { status: 409 },
+        ),
+      ),
+    )
+    // Уведомления прошлых тестов живут в общем хранилище sonner — проверяем сам вызов
+    const error = vi.spyOn(toast, 'error')
+    renderApp('/')
+    const user = await openUserMenu()
+
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Тёмная' }))
+
+    await waitFor(() => expect(root).not.toHaveClass('dark'))
+    expect(error).not.toHaveBeenCalled()
+    error.mockRestore()
   })
 })

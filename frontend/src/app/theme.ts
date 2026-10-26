@@ -43,6 +43,11 @@ export function installTheme(queryClient: QueryClient) {
     if (event.key !== THEME_KEY || !isTheme(event.newValue)) return
     theme = event.newValue
     applyTheme(theme)
+    // И в данных пользователя вкладки — галочка в меню у той же темы (follow выйдет на равенстве)
+    const next = theme
+    queryClient.setQueryData<User | null>(currentUserKey, (user) =>
+      user ? { ...user, theme: next } : user,
+    )
   }
   window.addEventListener('storage', onStorage)
 
