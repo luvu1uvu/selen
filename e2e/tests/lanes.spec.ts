@@ -125,8 +125,8 @@ test('выбор дорожки в форме новой карточки — с
   await page.keyboard.press('Shift+Tab')
   await expect(form.getByRole('combobox', { name: 'Дорожка' })).toBeFocused()
   const row = form.locator('[data-slot="lane-value"]').locator('..')
-  // Цвет — ring (#737373, oklch 0.556), рамка 2 px внутри строки
-  await expect(row).toHaveCSS('box-shadow', /(oklch\(0\.556 0 0\)|rgb\(115, 115, 115\)) 0px 0px 0px 2px inset/)
+  // Цвет — ring (= акцент #4f46e5, «Редизайн», шаг 2; было #737373), рамка 2 px внутри строки
+  await expect(row).toHaveCSS('box-shadow', /rgb\(79, 70, 229\) 0px 0px 0px 2px inset/)
   await page.keyboard.press('Escape')
 })
 
@@ -266,6 +266,8 @@ test('щелчок мышью по стрелке дорожки — без ра
   const collapsed = toggle(page, 'Срочные', 'Развернуть')
   await expect(collapsed).toBeVisible()
   expect(await collapsed.evaluate((el) => el.matches(':focus-visible'))).toBe(false)
+  // Рамка фокуса — общая, outline («Редизайн», шаг 2; было кольцо box-shadow): от щелчка её нет
+  await expect(collapsed).toHaveCSS('outline-style', 'none')
   await expect(collapsed).toHaveCSS('box-shadow', 'none')
   expect(await body.evaluate((b) => b.scrollLeft)).toBe(0)
 
@@ -275,5 +277,6 @@ test('щелчок мышью по стрелке дорожки — без ра
   const expanded = toggle(page, 'Срочные', 'Свернуть')
   await expect(expanded).toBeFocused()
   expect(await expanded.evaluate((el) => el.matches(':focus-visible'))).toBe(true)
-  await expect(expanded).not.toHaveCSS('box-shadow', 'none')
+  await expect(expanded).toHaveCSS('outline-style', 'solid')
+  await expect(expanded).toHaveCSS('outline-width', '2px')
 })

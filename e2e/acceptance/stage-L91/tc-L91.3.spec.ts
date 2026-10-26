@@ -7,7 +7,6 @@ import {
   contrast,
   expectColor,
   face,
-  isGrey,
   openThemeBoard,
   over,
   ringOf,
@@ -20,7 +19,8 @@ import {
  * вместо red-400, решение LATER-91: 3:1 к фону доски), срочная — светло-красная обводка (red-500 / 50 % ≈ прежний
  * red-300) и «Срочно»; сроки — розовые (red-100 / red-800) и мятные (emerald-100 / emerald-800) плашки; точки категорий —
  * slate-500, blue-600, emerald-600; полоса дорожки — прежний color-mix; затемнение под окном — чёрное 50 %; вторичный
- * текст — серый, темнее прежнего (#636363). Доска «Продукт» → «Вид» пространства THEME (E2eSeeder::themePrep),
+ * текст — серый, темнее прежнего. С «Редизайна» (шаг 2) нейтральные цвета — «Линии»: вторичный текст #62626b (серый с
+ * холодным оттенком), полоса дорожки #fafafb — состояния, точки и затемнение те же. Доска «Продукт» → «Вид» пространства THEME (E2eSeeder::themePrep),
  * Анна → e2e-admin. Сравнение «на глаз» со стендом PM — только вручную.
  */
 test.use({ storageState: authFile('e2e-admin@selen.test') })
@@ -84,9 +84,9 @@ test('ТК-L91.3. Вид доски почти не изменился @tc-L91.3
   // Полоса дорожки — светло-серая, как прежний color-mix
   expectColor((await colorsOf(page.locator('[data-lane-row]').first())).background, COLORS.lane, 'полоса дорожки')
 
-  // Вторичный текст (номер карточки, счётчик колонки) — серый, чуть темнее прежнего #737373, не меньше 4,5:1
+  // Вторичный текст (номер карточки, счётчик колонки) — токен muted-foreground, не меньше 4,5:1. «Линия»: #62626b —
+  // серый с холодным оттенком, поэтому вместо «строго нейтральный серый» — точный цвет токена
   const number = await colorsOf(face(page, 'Срочная').getByText(/^THEME-\d+$/))
-  expect(isGrey(number.text)).toBe(true)
   expectColor(number.text, COLORS.muted, 'номер карточки')
   expect(contrast(number.text, number.under)).toBeGreaterThanOrEqual(4.5)
   expectColor(await token(page, 'muted-foreground'), COLORS.muted, 'токен muted-foreground')

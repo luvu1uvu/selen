@@ -179,7 +179,11 @@ test('превью картинки с фокусом с клавиатуры �
   await page.keyboard.press('Shift+Tab')
   await page.keyboard.press('Tab')
   await expect(preview).toBeFocused()
+  // Рамка — у figure: outline 2 px цветом акцента с отступом 2 px («Редизайн», шаг 2; было кольцо box-shadow 3 px)
   const figure = preview.locator('xpath=ancestor::figure[1]')
-  const ring = await figure.evaluate((element) => getComputedStyle(element).boxShadow)
-  expect(ring).toMatch(/3px/)
+  const ring = await figure.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return [style.outlineStyle, style.outlineWidth, style.outlineColor, style.outlineOffset].join(' ')
+  })
+  expect(ring).toBe('solid 2px rgb(79, 70, 229) 2px')
 })
