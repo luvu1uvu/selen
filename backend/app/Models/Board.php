@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -31,7 +32,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Card> $cards
  */
 #[Fillable(['space_id', 'row_id', 'name', 'description', 'position', 'auto_assign_on_move'])]
-class Board extends Model
+class Board extends Model implements HasCompany
 {
     use HasUlids;
 
@@ -94,5 +95,13 @@ class Board extends Model
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
+    }
+
+    /** Компания доски — компания её пространства (HasCompany: журнал событий). */
+    public function companyId(): string
+    {
+        return $this->relationLoaded('space')
+            ? $this->space->company_id
+            : (string) Space::query()->whereKey($this->space_id)->value('company_id');
     }
 }

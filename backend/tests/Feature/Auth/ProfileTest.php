@@ -42,7 +42,7 @@ it('не позволяет менять email и роль через профи
         'name' => 'X', 'timezone' => 'Europe/Moscow', 'email' => 'hacker@selen.test', 'role' => 'admin',
     ])->assertOk();
 
-    expect($user->fresh())->email->toBe('user@selen.test')->isAdmin()->toBeFalse();
+    expect($user->fresh())->email->toBe('user@selen.test')->administers(company())->toBeFalse();
 });
 
 it('меняет пароль с проверкой текущего и завершает остальные сессии', function () {

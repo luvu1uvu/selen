@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\InvitationState;
+use App\Models\Concerns\BelongsToCompany;
+use App\Models\Contracts\HasCompany;
 use Database\Factories\InvitationFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,6 +16,7 @@ use Illuminate\Support\Carbon;
  * Приглашение в систему. Записи не удаляются.
  *
  * @property string $id
+ * @property string $company_id
  * @property string $user_id
  * @property string $email
  * @property string $token_hash
@@ -26,10 +29,10 @@ use Illuminate\Support\Carbon;
  * @property-read User $user
  * @property-read User|null $invitedBy
  */
-class Invitation extends Model
+class Invitation extends Model implements HasCompany
 {
     /** @use HasFactory<InvitationFactory> */
-    use HasFactory, HasUlids;
+    use BelongsToCompany, HasFactory, HasUlids;
 
     protected $guarded = [];
 

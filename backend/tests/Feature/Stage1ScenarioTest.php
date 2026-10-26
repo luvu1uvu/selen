@@ -19,10 +19,10 @@ it('проходит сквозной сценарий этапа 1', function (
 
     $users = [];
     foreach (['S' => 'admin', 'A' => 'member', 'B' => 'member', 'C' => 'member', 'D' => 'member'] as $name => $role) {
-        $users[$name] = User::factory()->create([
+        // Системный администратор этапа 1 — теперь администратор компании (ADR-0024)
+        $users[$name] = ($role === 'admin' ? User::factory()->admin() : User::factory())->create([
             'name' => "Сотрудник {$name}",
             'email' => mb_strtolower($name).'@selen.test',
-            'role' => $role,
         ]);
     }
 
@@ -36,7 +36,7 @@ it('проходит сквозной сценарий этапа 1', function (
     [$s, $a, $b, $c, $d] = array_map($login, ['S', 'A', 'B', 'C', 'D']);
 
     // --- 1. S создаёт DEV и назначает администратором A ------------------
-    $spaceId = $s->post('/api/v1/admin/spaces', ['name' => 'Разработка', 'key' => 'DEV', 'admin_ids' => [$users['A']->id]])
+    $spaceId = $s->post(adminPath().'spaces', ['name' => 'Разработка', 'key' => 'DEV', 'admin_ids' => [$users['A']->id]])
         ->assertCreated()
         ->assertJsonPath('data.admins.0.id', $users['A']->id)
         ->json('data.id');
@@ -48,7 +48,7 @@ it('проходит сквозной сценарий этапа 1', function (
     $a->post('/api/v1/spaces/DEV/members', ['user_id' => $users['C']->id, 'role' => 'commenter'])->assertCreated();
 
     // B не может создать пространство (кнопки у B нет: в интерфейсе она только для role=admin)
-    $b->post('/api/v1/admin/spaces', ['name' => 'Своё', 'key' => 'MINE'])->assertForbidden();
+    $b->post(adminPath().'spaces', ['name' => 'Своё', 'key' => 'MINE'])->assertForbidden();
     $b->get('/api/v1/auth/me')->assertJsonPath('data.role', 'member');
 
     // --- 2. B создаёт DEV-1 и проводит её по доске ---------------------
@@ -97,12 +97,12 @@ it('проходит сквозной сценарий этапа 1', function (
     $d->post('/api/v1/cards/DEV-1/move', ['column_id' => $column('To Do'), 'lane_id' => $lane])->assertNotFound();
 
     // --- 5. S видит DEV в админке, но не доски — пока не назначит себе роль
-    $s->get('/api/v1/admin/spaces')->assertOk()->assertJsonPath('data.0.key', 'DEV');
+    $s->get(adminPath().'spaces')->assertOk()->assertJsonPath('data.0.key', 'DEV');
     $s->get("/api/v1/boards/{$boardId}")->assertNotFound();
-    $s->put("/api/v1/admin/spaces/{$spaceId}/members/{$users['S']->id}", ['role' => 'commenter'])
+    $s->put(adminPath()."spaces/{$spaceId}/members/{$users['S']->id}", ['role' => 'commenter'])
         ->assertOk()->assertJsonPath('data.my_role', 'commenter');
     $s->get("/api/v1/boards/{$boardId}")->assertOk();
-    $assignment = $s->get('/api/v1/admin/events?event_type=space.member_added')
+    $assignment = $s->get(adminPath().'events?event_type=space.member_added')
         ->assertOk()
         ->assertJsonPath('data.0.actor.id', $users['S']->id)
         ->json('data.0.payload');

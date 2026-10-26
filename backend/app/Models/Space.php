@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\SpaceRole;
+use App\Models\Concerns\BelongsToCompany;
+use App\Models\Contracts\HasCompany;
 use App\Services\Access\AccessResolver;
 use App\Services\Access\SpaceAccess;
 use Database\Factories\SpaceFactory;
@@ -17,11 +19,14 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
+use LogicException;
 
 /**
- * Пространство — команда со своими досками и участниками. Не удаляется, только архивируется.
+ * Пространство — команда со своими досками и участниками. Не удаляется, только архивируется. Принадлежит компании
+ * (ADR-0024); ключ уникален во всём Selen (адреса DEV-123, В6).
  *
  * @property string $id
+ * @property string $company_id
  * @property string $name
  * @property string $key
  * @property string|null $description
@@ -36,10 +41,10 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read NavNode|null $navNode
  */
 #[Fillable(['name', 'key', 'description'])]
-class Space extends Model
+class Space extends Model implements HasCompany
 {
     /** @use HasFactory<SpaceFactory> */
-    use HasFactory, HasUlids;
+    use BelongsToCompany, HasFactory, HasUlids;
 
     /**
      * Итоговые права пользователей в этом пространстве, уже вычисленные в рамках запроса.
@@ -174,5 +179,23 @@ class Space extends Model
     public function forgetResolvedAccess(): void
     {
         $this->resolvedAccess = [];
+    }
+
+    /**
+     * Вложенный объект адреса (spaces/{space}/members/{user}, groups/{group}) ищется среди объектов компании
+     * пространства — как у Company (scoped binding): человек и группа другой компании — 404.
+     *
+     * @param  string  $childType
+     * @param  mixed  $value
+     * @param  string|null  $field
+     */
+    public function resolveChildRouteBinding($childType, $value, $field): ?Model
+    {
+        // Только известные вложенные объекты (members/{user}, groups/{group}): новый вложенный маршрут — сюда осознанно
+        if (! in_array($childType, ['user', 'group'], true)) {
+            throw new LogicException("Вложенный объект {$childType} у Space не ограничен компанией");
+        }
+
+        return $this->company->resolveChildRouteBinding($childType, $value, $field);
     }
 }

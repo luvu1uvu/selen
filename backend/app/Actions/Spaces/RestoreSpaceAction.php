@@ -49,7 +49,7 @@ class RestoreSpaceAction
         }
 
         $fromParentId = $node->parent_id;
-        $node->forceFill(['parent_id' => null, 'position' => $this->positions->atEnd(NavNode::siblingsOf(null))])->save();
+        $node->forceFill(['parent_id' => null, 'position' => $this->positions->atEnd(NavNode::siblingsOf($node->company_id, null))])->save();
         $this->events->record(EventType::NavNodeMoved, $actor, $node, [
             'node_id' => $node->id,
             'space_id' => $space->id,

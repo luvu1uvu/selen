@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAdminCompanyId } from '@/features/admin/company'
 import type { AdminNavigation } from '@/shared/types/api'
 import {
   createFolder,
@@ -25,7 +26,12 @@ export function useNavigation() {
 
 /** Полное дерево «Структуры»; в дереве сайдбара — только для системного администратора (enabled). */
 export function useAdminNavigation(enabled = true) {
-  return useQuery({ queryKey: navigationKeys.admin(), queryFn: fetchAdminNavigation, enabled })
+  const company = useAdminCompanyId()
+  return useQuery({
+    queryKey: navigationKeys.admin(),
+    queryFn: () => fetchAdminNavigation(company),
+    enabled,
+  })
 }
 
 /**
@@ -33,11 +39,13 @@ export function useAdminNavigation(enabled = true) {
  * (восстановление папки может вернуть и пространства).
  */
 function useStructureMutation<TVariables>(
-  mutationFn: (variables: TVariables) => Promise<AdminNavigation>,
+  mutationFn: (company: string, variables: TVariables) => Promise<AdminNavigation>,
 ) {
   const queryClient = useQueryClient()
+  // Дерево компании админки (ADR-0024; пока компания одна)
+  const company = useAdminCompanyId()
   return useMutation({
-    mutationFn,
+    mutationFn: (variables: TVariables) => mutationFn(company, variables),
     onSuccess: (tree) => {
       queryClient.setQueryData(navigationKeys.admin(), tree)
       return Promise.all([
@@ -54,32 +62,37 @@ export function useCreateFolder() {
 
 export function useUpdateNavNode() {
   return useStructureMutation(
-    ({ id, ...payload }: { id: string; name?: string; icon?: string | null }) =>
-      updateNavNode(id, payload),
+    (company, { id, ...payload }: { id: string; name?: string; icon?: string | null }) =>
+      updateNavNode(company, id, payload),
   )
 }
 
 export function useMoveNavNode() {
   return useStructureMutation(
-    ({
-      id,
-      ...payload
-    }: {
-      id: string
-      parent_id: string | null
-      after_id?: string | null
-      before_id?: string | null
-    }) => moveNavNode(id, payload),
+    (
+      company,
+      {
+        id,
+        ...payload
+      }: {
+        id: string
+        parent_id: string | null
+        after_id?: string | null
+        before_id?: string | null
+      },
+    ) => moveNavNode(company, id, payload),
   )
 }
 
 export function useDeleteFolder() {
-  return useStructureMutation((id: string) => deleteFolder(id))
+  return useStructureMutation((company, id: string) => deleteFolder(company, id))
 }
 
 export function useSetFolderArchived() {
   return useStructureMutation(
-    ({ id, archived, restoreSpaces }: { id: string; archived: boolean; restoreSpaces?: boolean }) =>
-      setFolderArchived(id, archived, restoreSpaces),
+    (
+      company,
+      { id, archived, restoreSpaces }: { id: string; archived: boolean; restoreSpaces?: boolean },
+    ) => setFolderArchived(company, id, archived, restoreSpaces),
   )
 }

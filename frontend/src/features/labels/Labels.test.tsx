@@ -26,8 +26,10 @@ describe('Метки', () => {
     let body: unknown
     const archived: string[] = []
     server.use(
-      http.get('*/api/v1/admin/labels', () => HttpResponse.json({ data: [company] })),
-      http.post('*/api/v1/admin/labels', async ({ request }) => {
+      http.get('*/api/v1/admin/companies/:company/labels', () =>
+        HttpResponse.json({ data: [company] }),
+      ),
+      http.post('*/api/v1/admin/companies/:company/labels', async ({ request }) => {
         body = await request.json()
         return HttpResponse.json({ data: company }, { status: 201 })
       }),
@@ -53,7 +55,11 @@ describe('Метки', () => {
 
   it('у «⋯» метки — подсказка с названием в «ёлочках» (LATER-80)', async () => {
     signedInAs(makeUser())
-    server.use(http.get('*/api/v1/admin/labels', () => HttpResponse.json({ data: [company] })))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/labels', () =>
+        HttpResponse.json({ data: [company] }),
+      ),
+    )
     renderApp('/admin/labels')
 
     const menu = await screen.findByRole('button', { name: 'Действия с меткой «Безопасность»' })
@@ -67,8 +73,8 @@ describe('Метки', () => {
   it('ошибки сервера раскладываются в поля формы', async () => {
     signedInAs(makeUser())
     server.use(
-      http.get('*/api/v1/admin/labels', () => HttpResponse.json({ data: [] })),
-      http.post('*/api/v1/admin/labels', () =>
+      http.get('*/api/v1/admin/companies/:company/labels', () => HttpResponse.json({ data: [] })),
+      http.post('*/api/v1/admin/companies/:company/labels', () =>
         HttpResponse.json(
           { message: 'Ошибка', errors: { name: ['Метка с таким названием уже есть.'] } },
           { status: 422 },

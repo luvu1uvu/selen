@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Labels;
 
+use App\Models\Company;
 use App\Models\Label;
 use App\Models\Space;
 use Closure;
@@ -25,7 +26,7 @@ class SaveLabelRequest extends FormRequest
         return match (true) {
             $label !== null => Gate::inspect('manage', $label),
             $space !== null => Gate::inspect('createLabel', $space),
-            default => Gate::inspect('manageCompanyLabels', Label::class),
+            default => Gate::inspect('manageCompanyLabels', [Label::class, $this->route('company')]),
         };
     }
 
@@ -39,12 +40,17 @@ class SaveLabelRequest extends FormRequest
         /** @var Space|null $space */
         $space = $this->route('space');
         $spaceId = $label !== null ? $label->space_id : $space?->id;
+        /** @var Company|null $company */
+        $company = $this->route('company');
+        // Набор меток — в компании: метки пространства или общие метки компании (ADR-0024)
+        $companyId = $label->company_id ?? $space->company_id ?? $company?->id;
         $required = $label === null ? 'required' : 'sometimes';
 
         return [
-            'name' => [$required, 'string', 'max:50', function (string $attribute, mixed $value, Closure $fail) use ($label, $spaceId) {
+            'name' => [$required, 'string', 'max:50', function (string $attribute, mixed $value, Closure $fail) use ($label, $spaceId, $companyId) {
                 $taken = Label::query()
                     ->active()
+                    ->when($companyId !== null, fn ($q) => $q->inCompany($companyId))
                     ->when($label, fn ($q) => $q->whereKeyNot($label->id))
                     ->where(fn ($q) => $spaceId === null ? $q->whereNull('space_id') : $q->where('space_id', $spaceId))
                     ->whereRaw('lower(name) = lower(?)', [(string) $value])

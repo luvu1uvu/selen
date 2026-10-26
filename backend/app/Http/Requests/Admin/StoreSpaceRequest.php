@@ -2,18 +2,19 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Enums\UserStatus;
 use App\Models\Space;
+use App\Rules\CompanyMember;
 use App\Rules\Emoji;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class StoreSpaceRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return Gate::allows('create', Space::class);
+        return Gate::inspect('create', [Space::class, $this->route('company')]);
     }
 
     protected function prepareForValidation(): void
@@ -36,12 +37,9 @@ class StoreSpaceRequest extends FormRequest
             'icon' => ['nullable', 'string', 'max:32', new Emoji],
             // Папка в дереве навигации (null — корень); активность проверяет CreateSpaceAction
             'parent_id' => ['nullable', 'ulid'],
-            // Администраторы пространства; по умолчанию — сам системный администратор
+            // Администраторы пространства — люди этой компании; по умолчанию — сам администратор компании
             'admin_ids' => ['nullable', 'array', 'min:1', 'max:20'],
-            'admin_ids.*' => [
-                'required', 'ulid', 'distinct',
-                Rule::exists('users', 'id')->whereNot('status', UserStatus::Deactivated->value),
-            ],
+            'admin_ids.*' => ['required', 'ulid', 'distinct', new CompanyMember($this->route('company'), notDeactivated: true)],
         ];
     }
 

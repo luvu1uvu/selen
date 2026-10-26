@@ -58,13 +58,15 @@ class BoardPolicy
     }
 
     /**
-     * Удалять карточки доски в корзину — как CardPolicy::delete: до П2d — системный администратор с любой ролью
+     * Удалять карточки доски в корзину — как CardPolicy::delete: до П2d — право компании «корзина» с любой ролью
      * в пространстве (чтение есть в любой роли), доска и пространство не в архиве.
      */
     public function deleteCards(User $actor, Board $board): Response
     {
         $response = $this->allowOnBoard($actor, $board, Permission::SpaceRead);
 
-        return $response->allowed() && ! $actor->isAdmin() ? Response::deny() : $response;
+        return $response->allowed() && ! $board->space->company->permissionsOf($actor)->allows(Permission::CompanyManageTrash)
+            ? Response::deny()
+            : $response;
     }
 }

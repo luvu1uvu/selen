@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
@@ -33,7 +34,7 @@ use Illuminate\Support\Facades\Storage;
  * @property-read Card $card
  * @property-read User $uploader
  */
-class Attachment extends Model
+class Attachment extends Model implements HasCompany
 {
     use HasUlids, Prunable;
 
@@ -91,5 +92,13 @@ class Attachment extends Model
         Storage::disk($this->disk)->delete($this->path);
 
         return $this->forceFill(['path' => ''])->save();
+    }
+
+    /** Компания вложения — компания пространства карточки (HasCompany: журнал событий). */
+    public function companyId(): string
+    {
+        return $this->relationLoaded('card')
+            ? $this->card->companyId()
+            : (string) Space::query()->whereIn('id', Card::withTrashed()->select('space_id')->whereKey($this->card_id))->value('company_id');
     }
 }

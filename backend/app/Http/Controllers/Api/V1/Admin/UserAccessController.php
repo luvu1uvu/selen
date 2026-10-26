@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Actions\Spaces\SpaceAdminGuard;
 use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
@@ -13,22 +14,23 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Админка → пользователь: к каким пространствам у него доступ и почему (по источникам, ADR-0012),
- * и что будет при деактивации (пространства, где он последний личный администратор).
+ * Админка компании → человек: к каким пространствам компании у него доступ и почему (по источникам, ADR-0012),
+ * и что будет при деактивации (пространства компании, где он последний личный администратор). Пространства и группы
+ * других компаний не показываются (ADR-0024).
  */
 class UserAccessController extends Controller
 {
-    public function access(User $user, AccessResolver $resolver): JsonResponse
+    public function access(Company $company, User $user, AccessResolver $resolver): JsonResponse
     {
-        Gate::authorize('viewAny', User::class);
+        Gate::authorize('viewAny', [User::class, $company]);
 
-        $groups = $user->groups()->orderByRaw('lower(name)')->get();
-        // В «Все сотрудники» активный пользователь входит автоматически (состав не хранится)
+        $groups = $user->groups()->inCompany($company)->orderByRaw('lower(name)')->get();
+        // В «Все сотрудники» компании активный пользователь входит автоматически (состав не хранится)
         if ($user->status === UserStatus::Active) {
-            $groups->prepend(Group::everyone());
+            $groups->prepend(Group::everyone($company));
         }
 
-        $spaces = $resolver->explain($user)->map(fn (array $entry) => [
+        $spaces = $resolver->explain($user, $company)->map(fn (array $entry) => [
             'space' => $this->space($entry['space']),
             'has_access' => $entry['access']->isMember(),
             // Итог по всем действующим источникам (ADR-0012)
@@ -49,7 +51,7 @@ class UserAccessController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $user->role,
+                'role' => $company->roleOf($user),
                 'status' => $user->status,
             ],
             'groups' => $groups->map(fn (Group $group) => [
@@ -62,12 +64,12 @@ class UserAccessController extends Controller
     }
 
     /** Пространства, которые после деактивации останутся без действующего администратора. */
-    public function deactivationImpact(User $user, SpaceAdminGuard $guard): JsonResponse
+    public function deactivationImpact(Company $company, User $user, SpaceAdminGuard $guard): JsonResponse
     {
-        Gate::authorize('deactivate', $user);
+        Gate::authorize('deactivate', [$user, $company]);
 
         return response()->json(['data' => [
-            'last_admin_spaces' => $guard->lastAdminSpaces($user)->map(fn (Space $space) => $this->space($space)),
+            'last_admin_spaces' => $guard->lastAdminSpaces($user, $company)->map(fn (Space $space) => $this->space($space)),
         ]]);
     }
 

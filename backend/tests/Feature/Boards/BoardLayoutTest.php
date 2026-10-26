@@ -219,7 +219,7 @@ it('«только свои» через группу: счётчик — тол
 });
 
 it('удаление пустого пространства уносит ряды его досок', function () {
-    $this->actingAs(admin())->deleteJson("/api/v1/admin/spaces/{$this->space->id}")->assertSuccessful();
+    $this->actingAs(admin())->deleteJson(adminPath()."spaces/{$this->space->id}")->assertSuccessful();
 
     expect(BoardRow::query()->count())->toBe(0);
 });

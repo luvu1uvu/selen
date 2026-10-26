@@ -23,9 +23,12 @@ import { RoleSelectOptions } from './RoleSelectOptions'
 /** Выдать доступ группе: группа из справочника активных, роль и режим «только свои карточки». */
 export function AddSpaceGroupDialog({
   spaceKey,
+  companyId,
   grantedIds,
 }: {
   spaceKey: string
+  /** Компания пространства: предлагаются только её группы (ADR-0024). */
+  companyId: string
   grantedIds: string[]
 }) {
   const { t } = useTranslation('spaces')
@@ -35,7 +38,7 @@ export function AddSpaceGroupDialog({
   const [role, setRole] = useState<SpaceRole>('commenter')
   const [ownCardsOnly, setOwnCardsOnly] = useState(false)
   const [error, setError] = useState<string>()
-  const directory = useGroupDirectory(open)
+  const directory = useGroupDirectory(companyId, open)
   const add = useAddSpaceGroup(spaceKey)
   const options = (directory.data ?? []).filter((group) => !grantedIds.includes(group.id))
   const isSystem = options.find((group) => group.id === groupId)?.system != null

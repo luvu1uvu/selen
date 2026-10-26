@@ -22,8 +22,8 @@ export const spaceKeys = {
   detail: (key: string) => ['spaces', 'detail', key] as const,
   members: (key: string) => ['spaces', 'members', key] as const,
   groups: (key: string) => ['spaces', 'groups', key] as const,
-  groupDirectory: () => ['groups', 'directory'] as const,
-  directory: (search: string) => ['users', 'directory', search] as const,
+  groupDirectory: (company: string) => ['groups', 'directory', company] as const,
+  directory: (company: string, search: string) => ['users', 'directory', company, search] as const,
 }
 
 /** Пространства текущего пользователя (сайдбар, главная). */
@@ -43,10 +43,11 @@ export function useMembers(key: string, enabled = true) {
   })
 }
 
-export function useDirectory(search: string, enabled = true) {
+/** Справочник людей компании (ADR-0024): в пространстве — его компании, в админке — компании админки. */
+export function useDirectory(company: string, search: string, enabled = true) {
   return useQuery({
-    queryKey: spaceKeys.directory(search),
-    queryFn: () => searchDirectory(search),
+    queryKey: spaceKeys.directory(company, search),
+    queryFn: () => searchDirectory(company, search),
     placeholderData: keepPreviousData,
     enabled,
   })
@@ -107,8 +108,12 @@ export function useSpaceGroups(key: string, enabled = true) {
   })
 }
 
-export function useGroupDirectory(enabled = true) {
-  return useQuery({ queryKey: spaceKeys.groupDirectory(), queryFn: fetchGroupDirectory, enabled })
+export function useGroupDirectory(company: string, enabled = true) {
+  return useQuery({
+    queryKey: spaceKeys.groupDirectory(company),
+    queryFn: () => fetchGroupDirectory(company),
+    enabled,
+  })
 }
 
 /** Доступ группы меняет и список людей (их источники) — обновляем всё пространство. */

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 
@@ -10,9 +11,9 @@ use Illuminate\Support\Facades\Gate;
  */
 class TransferOwnershipRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return Gate::allows('transferOwnership', $this->route('user'));
+        return Gate::inspect('transferOwnership', [$this->route('user'), $this->route('company')]);
     }
 
     /**

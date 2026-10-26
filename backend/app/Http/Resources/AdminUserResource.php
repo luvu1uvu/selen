@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Company;
+use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -14,20 +16,27 @@ use Illuminate\Http\Request;
 class AdminUserResource extends UserResource
 {
     /**
+     * Человек компании из адреса админки: role — его роль в этой компании (owner | admin | member, ADR-0024),
+     * permissions — что текущий администратор может с ним сделать в этой компании (UserPolicy).
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
+        /** @var User $actor */
         $actor = $request->user();
+        /** @var Company $company */
+        $company = $request->route('company');
+        $user = $this->resource;
 
-        return parent::toArray($request) + [
+        return $this->account($company->roleOf($user)) + [
             'permissions' => [
-                'update_role' => $actor->can('updateRole', $this->resource),
-                'deactivate' => $actor->can('deactivate', $this->resource),
-                'reactivate' => $actor->can('reactivate', $this->resource),
-                // Повторить или отозвать приглашение пользователя (InvitationPolicy — по нему же)
-                'manage_invitation' => $actor->can('manages', $this->resource),
-                'transfer_ownership' => $actor->can('transferOwnership', $this->resource),
+                'update_role' => $actor->can('updateRole', [$user, $company]),
+                'deactivate' => $actor->can('deactivate', [$user, $company]),
+                'reactivate' => $actor->can('reactivate', [$user, $company]),
+                // Повторить или отозвать приглашение пользователя (InvitationPolicy::manages)
+                'manage_invitation' => $actor->can('manages', [Invitation::class, $user, $company]),
+                'transfer_ownership' => $actor->can('transferOwnership', [$user, $company]),
             ],
         ];
     }

@@ -5,10 +5,10 @@ use App\Models\EventLogEntry;
 use App\Models\Space;
 use App\Models\User;
 
-it('системный администратор создаёт пространство и по умолчанию становится его администратором', function () {
+it('администратор компании создаёт пространство и по умолчанию становится его администратором', function () {
     $admin = admin();
 
-    $this->actingAs($admin)->postJson('/api/v1/admin/spaces', [
+    $this->actingAs($admin)->postJson(adminPath().'spaces', [
         'name' => 'Разработка',
         'key' => ' dev ',
         'description' => 'Команда разработки',
@@ -32,7 +32,7 @@ it('назначает администраторами пространства
     $admin = admin();
     [$anna, $boris] = [member(), member()];
 
-    $this->actingAs($admin)->postJson('/api/v1/admin/spaces', [
+    $this->actingAs($admin)->postJson(adminPath().'spaces', [
         'name' => 'Маркетинг', 'key' => 'MKT', 'admin_ids' => [$anna->id, $boris->id],
     ])
         ->assertCreated()
@@ -50,7 +50,7 @@ it('назначает администраторами пространства
 it('проверяет название, ключ и администраторов пространства', function (array $data, string $field) {
     space(['key' => 'OPS']);
 
-    $this->actingAs(admin())->postJson('/api/v1/admin/spaces', $data + ['name' => 'Пространство', 'key' => 'NEW'])
+    $this->actingAs(admin())->postJson(adminPath().'spaces', $data + ['name' => 'Пространство', 'key' => 'NEW'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors($field);
 })->with([
@@ -67,7 +67,7 @@ it('проверяет название, ключ и администратор�
 it('не назначает администратором деактивированного пользователя', function () {
     $gone = User::factory()->deactivated()->create();
 
-    $this->actingAs(admin())->postJson('/api/v1/admin/spaces', ['name' => 'X', 'key' => 'XX', 'admin_ids' => [$gone->id]])
+    $this->actingAs(admin())->postJson(adminPath().'spaces', ['name' => 'X', 'key' => 'XX', 'admin_ids' => [$gone->id]])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('admin_ids.0');
 });
@@ -75,8 +75,8 @@ it('не назначает администратором деактивиро�
 it('обычный сотрудник не может создавать пространства и видеть админку', function () {
     $user = member();
 
-    $this->actingAs($user)->postJson('/api/v1/admin/spaces', ['name' => 'X', 'key' => 'XX'])->assertForbidden();
-    $this->actingAs($user)->getJson('/api/v1/admin/spaces')->assertForbidden();
+    $this->actingAs($user)->postJson(adminPath().'spaces', ['name' => 'X', 'key' => 'XX'])->assertForbidden();
+    $this->actingAs($user)->getJson(adminPath().'spaces')->assertForbidden();
     expect(Space::query()->count())->toBe(0);
 });
 
@@ -88,7 +88,7 @@ it('админка показывает все пространства с ад�
     addToSpace($dev, member(), SpaceRole::Editor);
     space(['name' => 'Архив', 'key' => 'OLD', 'archived_at' => now()]);
 
-    $this->actingAs($admin)->getJson('/api/v1/admin/spaces')
+    $this->actingAs($admin)->getJson(adminPath().'spaces')
         ->assertOk()
         ->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.key', 'OLD')
@@ -98,7 +98,7 @@ it('админка показывает все пространства с ад�
         ->assertJsonPath('data.1.my_role', null);
 });
 
-it('системный администратор не видит содержимое пространства, пока не назначит себе роль', function () {
+it('администратор компании не видит содержимое пространства, пока не назначит себе роль', function () {
     $admin = admin();
     $space = space(['key' => 'DEV']);
     addToSpace($space, member(), SpaceRole::Admin);
@@ -107,7 +107,7 @@ it('системный администратор не видит содержи
     $this->actingAs($admin)->getJson('/api/v1/spaces/DEV/members')->assertNotFound();
     $this->actingAs($admin)->getJson('/api/v1/spaces')->assertJsonCount(0, 'data');
 
-    $this->actingAs($admin)->putJson("/api/v1/admin/spaces/{$space->id}/members/{$admin->id}", ['role' => 'commenter'])
+    $this->actingAs($admin)->putJson(adminPath()."spaces/{$space->id}/members/{$admin->id}", ['role' => 'commenter'])
         ->assertOk()
         ->assertJsonPath('data.my_role', 'commenter');
 
@@ -124,12 +124,12 @@ it('из админки можно сменить роль участника, �
     $space = space();
     addToSpace($space, $anna, SpaceRole::Admin);
 
-    $this->actingAs($admin)->putJson("/api/v1/admin/spaces/{$space->id}/members/{$anna->id}", ['role' => 'editor'])
+    $this->actingAs($admin)->putJson(adminPath()."spaces/{$space->id}/members/{$anna->id}", ['role' => 'editor'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('role');
 
-    $this->actingAs($admin)->putJson("/api/v1/admin/spaces/{$space->id}/members/{$admin->id}", ['role' => 'admin'])->assertOk();
-    $this->actingAs($admin)->putJson("/api/v1/admin/spaces/{$space->id}/members/{$anna->id}", ['role' => 'editor'])
+    $this->actingAs($admin)->putJson(adminPath()."spaces/{$space->id}/members/{$admin->id}", ['role' => 'admin'])->assertOk();
+    $this->actingAs($admin)->putJson(adminPath()."spaces/{$space->id}/members/{$anna->id}", ['role' => 'editor'])
         ->assertOk()
         ->assertJsonPath('data.admins.0.id', $admin->id);
 
@@ -143,10 +143,10 @@ it('архивирует и восстанавливает пространст�
     $space = space(['key' => 'DEV']);
     addToSpace($space, $anna, SpaceRole::Admin);
 
-    $this->actingAs($admin)->postJson("/api/v1/admin/spaces/{$space->id}/archive")
+    $this->actingAs($admin)->postJson(adminPath()."spaces/{$space->id}/archive")
         ->assertOk()
         ->assertJsonPath('data.archived_at', fn ($value) => $value !== null);
-    $this->actingAs($admin)->postJson("/api/v1/admin/spaces/{$space->id}/archive")->assertUnprocessable();
+    $this->actingAs($admin)->postJson(adminPath()."spaces/{$space->id}/archive")->assertUnprocessable();
 
     // Архивное пространство пропадает из навигации, но доступно участникам по ссылке — только для чтения
     $this->actingAs($anna)->getJson('/api/v1/spaces')->assertJsonCount(0, 'data');
@@ -157,22 +157,22 @@ it('архивирует и восстанавливает пространст�
         ->assertForbidden()
         ->assertJsonPath('message', __('selen.spaces.archived'));
 
-    $this->actingAs($admin)->postJson("/api/v1/admin/spaces/{$space->id}/restore")
+    $this->actingAs($admin)->postJson(adminPath()."spaces/{$space->id}/restore")
         ->assertOk()
         ->assertJsonPath('data.archived_at', null);
-    $this->actingAs($admin)->postJson("/api/v1/admin/spaces/{$space->id}/restore")->assertUnprocessable();
+    $this->actingAs($admin)->postJson(adminPath()."spaces/{$space->id}/restore")->assertUnprocessable();
     $this->actingAs($anna)->getJson('/api/v1/spaces')->assertJsonCount(1, 'data');
 
     expect(loggedEventTypes())->toBe(['space.archived', 'space.restored']);
 });
 
-it('архивировать, восстанавливать и назначать роли может только системный администратор', function () {
+it('архивировать, восстанавливать и назначать роли может только администратор компании', function () {
     $user = member();
     $space = space();
     addToSpace($space, $user, SpaceRole::Admin);
 
-    $this->actingAs($user)->postJson("/api/v1/admin/spaces/{$space->id}/archive")->assertForbidden();
-    $this->actingAs($user)->postJson("/api/v1/admin/spaces/{$space->id}/restore")->assertForbidden();
-    $this->actingAs($user)->putJson("/api/v1/admin/spaces/{$space->id}/members/{$user->id}", ['role' => 'admin'])
+    $this->actingAs($user)->postJson(adminPath()."spaces/{$space->id}/archive")->assertForbidden();
+    $this->actingAs($user)->postJson(adminPath()."spaces/{$space->id}/restore")->assertForbidden();
+    $this->actingAs($user)->putJson(adminPath()."spaces/{$space->id}/members/{$user->id}", ['role' => 'admin'])
         ->assertForbidden();
 });

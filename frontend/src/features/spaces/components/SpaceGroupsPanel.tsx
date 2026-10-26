@@ -43,6 +43,7 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
         <div className="flex justify-end">
           <AddSpaceGroupDialog
             spaceKey={space.key}
+            companyId={space.company_id}
             grantedIds={grants.map((grant) => grant.group.id)}
           />
         </div>

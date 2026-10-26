@@ -12,7 +12,7 @@ it('повторная отправка выпускает новую ссылк
     $old = Invitation::factory()->withToken('old-token')->create();
 
     // 201: выпущено новое приглашение
-    $response = $this->actingAs($admin)->postJson("/api/v1/admin/invitations/{$old->id}/resend")->assertCreated()
+    $response = $this->actingAs($admin)->postJson(adminPath()."invitations/{$old->id}/resend")->assertCreated()
         ->assertJsonPath('data.state', 'pending')
         ->assertJsonPath('data.can_resend', true);
 
@@ -30,14 +30,14 @@ it('повторная отправка выпускает новую ссылк
 it('повторно отправляет истёкшее приглашение', function () {
     $old = Invitation::factory()->expired()->create();
 
-    $this->actingAs(admin())->postJson("/api/v1/admin/invitations/{$old->id}/resend")->assertCreated()
+    $this->actingAs(admin())->postJson(adminPath()."invitations/{$old->id}/resend")->assertCreated()
         ->assertJsonPath('data.state', 'pending');
 });
 
 it('отзыв закрывает ссылку и переводит пользователя в деактивированные', function () {
     $invitation = Invitation::factory()->withToken('token')->create();
 
-    $this->actingAs(admin())->postJson("/api/v1/admin/invitations/{$invitation->id}/revoke")
+    $this->actingAs(admin())->postJson(adminPath()."invitations/{$invitation->id}/revoke")
         ->assertOk()
         ->assertJsonPath('data.state', 'revoked')
         ->assertJsonPath('data.can_revoke', false)
@@ -51,9 +51,9 @@ it('отзыв закрывает ссылку и переводит польз�
 it('отозванное приглашение можно отправить заново — пользователь снова приглашён', function () {
     $invitation = Invitation::factory()->create();
     $admin = admin();
-    $this->actingAs($admin)->postJson("/api/v1/admin/invitations/{$invitation->id}/revoke")->assertOk();
+    $this->actingAs($admin)->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertOk();
 
-    $this->actingAs($admin)->postJson("/api/v1/admin/invitations/{$invitation->id}/resend")->assertCreated();
+    $this->actingAs($admin)->postJson(adminPath()."invitations/{$invitation->id}/resend")->assertCreated();
 
     expect($invitation->user->fresh())->status->toBe(UserStatus::Invited)->deactivated_at->toBeNull();
 });
@@ -61,10 +61,10 @@ it('отозванное приглашение можно отправить з
 it('в списке пользователей отозванное приглашение отличается от деактивации', function () {
     $admin = admin();
     $invitation = Invitation::factory()->create();
-    $this->actingAs($admin)->postJson("/api/v1/admin/invitations/{$invitation->id}/revoke")->assertOk();
+    $this->actingAs($admin)->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertOk();
     $gone = member(['status' => UserStatus::Deactivated]);
 
-    $users = collect($this->actingAs($admin)->getJson('/api/v1/admin/users?status=deactivated')->assertOk()->json('data'))
+    $users = collect($this->actingAs($admin)->getJson(adminPath().'users?status=deactivated')->assertOk()->json('data'))
         ->keyBy('id');
 
     expect($users[$invitation->user_id]['invitation']['state'])->toBe('revoked')
@@ -76,23 +76,23 @@ it('не отзывает принятое приглашение и не отп
     $invitation->user->forceFill(['status' => UserStatus::Active, 'password' => 'some-password-1'])->save();
     $admin = admin();
 
-    $this->actingAs($admin)->postJson("/api/v1/admin/invitations/{$invitation->id}/revoke")->assertUnprocessable();
-    $this->actingAs($admin)->postJson("/api/v1/admin/invitations/{$invitation->id}/resend")->assertUnprocessable();
+    $this->actingAs($admin)->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertUnprocessable();
+    $this->actingAs($admin)->postJson(adminPath()."invitations/{$invitation->id}/resend")->assertUnprocessable();
 });
 
 it('не отправляет повторно устаревшее (не последнее) приглашение', function () {
     $old = Invitation::factory()->create();
     $admin = admin();
-    $this->actingAs($admin)->postJson("/api/v1/admin/invitations/{$old->id}/resend")->assertCreated();
+    $this->actingAs($admin)->postJson(adminPath()."invitations/{$old->id}/resend")->assertCreated();
 
-    $this->actingAs($admin)->postJson("/api/v1/admin/invitations/{$old->id}/resend")->assertUnprocessable();
+    $this->actingAs($admin)->postJson(adminPath()."invitations/{$old->id}/resend")->assertUnprocessable();
 });
 
 it('показывает список приглашений с состояниями, включая истёкшие', function () {
     Invitation::factory()->create();
     Invitation::factory()->expired()->create();
 
-    $this->actingAs(admin())->getJson('/api/v1/admin/invitations')
+    $this->actingAs(admin())->getJson(adminPath().'invitations')
         ->assertOk()
         ->assertJsonCount(2, 'data')
         ->assertJsonPath('meta.total', 2)
@@ -104,7 +104,7 @@ it('закрывает управление приглашениями от уч
     $invitation = Invitation::factory()->create();
     $this->actingAs(member());
 
-    $this->getJson('/api/v1/admin/invitations')->assertForbidden();
-    $this->postJson("/api/v1/admin/invitations/{$invitation->id}/resend")->assertForbidden();
-    $this->postJson("/api/v1/admin/invitations/{$invitation->id}/revoke")->assertForbidden();
+    $this->getJson(adminPath().'invitations')->assertForbidden();
+    $this->postJson(adminPath()."invitations/{$invitation->id}/resend")->assertForbidden();
+    $this->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertForbidden();
 });

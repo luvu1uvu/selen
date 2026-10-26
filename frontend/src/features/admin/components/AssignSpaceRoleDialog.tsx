@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useCurrentUser } from '@/features/auth/queries'
 import { RoleSelectOptions } from '@/features/spaces/components/RoleSelectOptions'
+import { useAdminCompanyId } from '@/features/admin/company'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { getErrorBody, getErrorMessage } from '@/shared/api/errors'
 import type { AdminSpace, DirectoryUser, SpaceRole } from '@/shared/types/api'
@@ -27,6 +28,7 @@ export function AssignSpaceRoleDialog({
   space: Pick<AdminSpace, 'id' | 'name'> | null
   onClose: () => void
 }) {
+  const company = useAdminCompanyId()
   const { t } = useTranslation('admin')
   const { t: ts } = useTranslation('spaces')
   const { t: tc } = useTranslation()
@@ -76,6 +78,7 @@ export function AssignSpaceRoleDialog({
           <FormField id="assign-user" label={t('spaces.assign.user')} error={error}>
             <div className="grid gap-2">
               <UserPicker
+                companyId={company}
                 id="assign-user"
                 value={user}
                 invalid={!!error}

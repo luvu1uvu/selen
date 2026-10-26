@@ -4,6 +4,7 @@ namespace App\Actions\Users;
 
 use App\Enums\EventType;
 use App\Enums\UserStatus;
+use App\Models\Company;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
 use Illuminate\Support\Facades\DB;
@@ -20,10 +21,10 @@ class ReactivateUserAction
         private readonly UserLock $lock,
     ) {}
 
-    public function handle(User $actor, User $user): User
+    public function handle(User $actor, User $user, Company $company): User
     {
-        return DB::transaction(function () use ($actor, $user) {
-            $user = $this->lock->lock($actor, $user);
+        return DB::transaction(function () use ($actor, $user, $company) {
+            $user = $this->lock->lock($actor, $user, $company);
 
             if ($user->status !== UserStatus::Deactivated) {
                 throw ValidationException::withMessages(['user' => __('selen.users.not_deactivated')]);
@@ -35,7 +36,7 @@ class ReactivateUserAction
 
             $user->forceFill(['status' => UserStatus::Active, 'deactivated_at' => null])->save();
 
-            $this->events->record(EventType::UserReactivated, $actor, $user);
+            $this->events->record(EventType::UserReactivated, $actor, $user, company: $company);
 
             return $user;
         });

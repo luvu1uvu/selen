@@ -2,16 +2,23 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Group;
+use App\Rules\CompanyMember;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 
 class StoreGroupMemberRequest extends FormRequest
 {
     public function authorize(): Response
     {
-        return Gate::inspect('update', $this->route('group'));
+        return Gate::inspect('update', $this->group());
+    }
+
+    private function group(): Group
+    {
+        /** @var Group */
+        return $this->route('group');
     }
 
     /**
@@ -20,7 +27,8 @@ class StoreGroupMemberRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id' => ['required', 'ulid', Rule::exists('users', 'id')],
+            // Состав группы — только «дома» её компании (ADR-0024)
+            'user_id' => ['required', 'ulid', new CompanyMember($this->group()->company_id)],
         ];
     }
 }

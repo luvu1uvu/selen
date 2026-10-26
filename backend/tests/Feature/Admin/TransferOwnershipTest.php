@@ -15,7 +15,7 @@ beforeEach(function () {
     $this->owner = owner(['email' => 'owner@selen.test']);
     $this->target = member(['email' => 'next@selen.test']);
     $this->transfer = fn (User $to, string $password = UserFactory::PASSWORD) => $this->actingAs($this->owner)
-        ->postJson("/api/v1/admin/users/{$to->id}/transfer-ownership", ['password' => $password]);
+        ->postJson(adminPath()."users/{$to->id}/transfer-ownership", ['password' => $password]);
 });
 
 it('передаёт владение: получатель — Владелец, бывший — администратор, событие без ПДн', function () {
@@ -28,7 +28,7 @@ it('передаёт владение: получатель — Владелец
         ->assertJsonPath('data.permissions.update_role', false);
 
     expect($this->target->fresh()->role)->toBe(UserRole::Owner)
-        ->and($this->owner->fresh()->role)->toBe(UserRole::Admin)
+        ->and(company()->roleOf($this->owner->fresh()))->toBe('admin')
         ->and(User::query()->where('role', UserRole::Owner)->count())->toBe(1);
 
     $event = EventLogEntry::query()->sole();
@@ -50,7 +50,7 @@ it('администратору тоже можно передать владе
     ($this->transfer)($admin)->assertOk()->assertJsonPath('data.role', 'owner');
 
     expect($admin->fresh()->role)->toBe(UserRole::Owner)
-        ->and($this->owner->fresh()->role)->toBe(UserRole::Admin);
+        ->and(company()->roleOf($this->owner->fresh()))->toBe('admin');
 });
 
 it('неверный пароль — 422 в поле password, владение не передано', function () {
@@ -64,7 +64,7 @@ it('неверный пароль — 422 в поле password, владение
 });
 
 it('без пароля — 422', function () {
-    $this->actingAs($this->owner)->postJson("/api/v1/admin/users/{$this->target->id}/transfer-ownership")
+    $this->actingAs($this->owner)->postJson(adminPath()."users/{$this->target->id}/transfer-ownership")
         ->assertUnprocessable()
         ->assertJsonValidationErrors('password');
 });
@@ -86,7 +86,7 @@ it('неактивному сотруднику передать нельзя �
 it('передать может только Владелец', function () {
     foreach ([admin(), member()] as $actor) {
         $this->actingAs($actor)
-            ->postJson("/api/v1/admin/users/{$this->target->id}/transfer-ownership", ['password' => UserFactory::PASSWORD])
+            ->postJson(adminPath()."users/{$this->target->id}/transfer-ownership", ['password' => UserFactory::PASSWORD])
             ->assertForbidden();
     }
 
@@ -98,19 +98,19 @@ it('права бывшего Владельца понижаются сразу
     $session = browser();
     $session->post('/api/v1/auth/login', ['email' => 'owner@selen.test', 'password' => UserFactory::PASSWORD])->assertOk();
 
-    $session->post("/api/v1/admin/users/{$this->target->id}/transfer-ownership", ['password' => UserFactory::PASSWORD])
+    $session->post(adminPath()."users/{$this->target->id}/transfer-ownership", ['password' => UserFactory::PASSWORD])
         ->assertOk();
 
     // Следующие запросы той же сессии — уже как администратор, без перезахода
     $session->get('/api/v1/auth/me')->assertOk()->assertJsonPath('data.role', 'admin');
-    $session->post("/api/v1/admin/users/{$admin->id}/transfer-ownership", ['password' => UserFactory::PASSWORD])
+    $session->post(adminPath()."users/{$admin->id}/transfer-ownership", ['password' => UserFactory::PASSWORD])
         ->assertForbidden();
-    $session->patch("/api/v1/admin/users/{$admin->id}/role", ['role' => 'member'])->assertForbidden();
-    $session->post("/api/v1/admin/users/{$this->target->id}/deactivate")->assertForbidden();
+    $session->patch(adminPath()."users/{$admin->id}/role", ['role' => 'member'])->assertForbidden();
+    $session->post(adminPath()."users/{$this->target->id}/deactivate")->assertForbidden();
     // Права обычного администратора остаются
-    $session->get('/api/v1/admin/users')->assertOk();
+    $session->get(adminPath().'users')->assertOk();
 
-    expect($admin->fresh()->role)->toBe(UserRole::Admin)
+    expect(company()->roleOf($admin->fresh()))->toBe('admin')
         ->and($this->target->fresh())->role->toBe(UserRole::Owner)->status->toBe(UserStatus::Active);
 });
 
@@ -119,9 +119,9 @@ it('новый Владелец сразу получает исключител
     $admin = admin();
 
     $this->actingAs($this->target->fresh())
-        ->patchJson("/api/v1/admin/users/{$admin->id}/role", ['role' => 'member'])
+        ->patchJson(adminPath()."users/{$admin->id}/role", ['role' => 'member'])
         ->assertOk();
     $this->actingAs($this->target->fresh())
-        ->patchJson("/api/v1/admin/users/{$this->owner->id}/role", ['role' => 'member'])
+        ->patchJson(adminPath()."users/{$this->owner->id}/role", ['role' => 'member'])
         ->assertOk();
 });

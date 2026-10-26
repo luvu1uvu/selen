@@ -5,6 +5,7 @@ namespace App\Services\Navigation;
 use App\Enums\NavNodeType;
 use App\Enums\Permission;
 use App\Models\Board;
+use App\Models\Company;
 use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
@@ -22,6 +23,8 @@ use Illuminate\Support\Collection;
  * дополнение — Владельцу (ADR-0017) видны ещё и по-настоящему пустые папки (на любой глубине нет ни одного
  * пространства — ни активного, ни архивного), с пометкой `empty`; пустая папка внутри скрытой не видна и ему.
  * Число запросов не зависит от размера дерева: права — одним запросом резолвера, узлы — одним, доски — одним.
+ * У каждой компании своё дерево (ADR-0024): в ответ попадают только узлы компаний пользователя — названия папок
+ * других компаний не приходят (одна компания — дерево как раньше; заголовки компаний — П2b-2).
  *
  * Значок «доступно всем» (группа «Все сотрудники», ADR-0012): у пространства — у него есть доступ этой группы;
  * у папки — в ней есть активное пространство и все её активные пространства на любой глубине открыты всем
@@ -39,8 +42,16 @@ class NavigationTree
     public function forUser(User $user): array
     {
         $accesses = Space::accessesOf($user);
-        // Все узлы, включая архивные папки: пространство в архивной папке тоже делает папки над ней непустыми
-        $nodes = NavNode::query()->with('space')->orderBy('position')->get();
+        // Узлы компаний пользователя (ADR-0024): тех, где он «дом», и тех, где у него есть доступ к пространствам;
+        // Владельцу — всех (пустые папки, ADR-0017). Все узлы, включая архивные папки: пространство в архивной папке
+        // тоже делает папки над ней непустыми
+        $nodes = NavNode::query()
+            ->with('space')
+            ->when(! $user->isOwner(), fn ($q) => $q->where(fn ($q) => $q
+                ->whereIn('company_id', $this->resolver->memberCompanyIds($user))
+                ->orWhereIn('company_id', Space::query()->select('company_id')->whereIn('id', $accesses->keys()))))
+            ->orderBy('position')
+            ->get();
 
         $visible = $nodes
             ->filter(fn (NavNode $node) => $node->space !== null && ! $node->space->isArchived()
@@ -92,14 +103,14 @@ class NavigationTree
     }
 
     /**
-     * Полное дерево для админки «Структура»: плоский список узлов в порядке обхода (родитель, затем дети),
+     * Полное дерево компании для админки «Структура»: плоский список узлов в порядке обхода (родитель, затем дети),
      * включая архивные папки и пространства.
      *
      * @return list<array<string, mixed>>
      */
-    public function forAdmin(): array
+    public function forAdmin(Company $company): array
     {
-        $nodes = NavNode::query()->with('space')->orderBy('position')->get();
+        $nodes = NavNode::query()->inCompany($company)->with('space')->orderBy('position')->get();
         $children = $nodes->groupBy(fn (NavNode $node) => $node->parent_id ?? '');
         $open = $this->resolver->spacesOpenToEveryone()->flip();
         $list = [];

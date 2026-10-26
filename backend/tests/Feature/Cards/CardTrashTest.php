@@ -41,7 +41,7 @@ it('в «Корзине» название — только тому, кто в�
     ($this->delete)('DEV-1')->assertNoContent();
     ($this->delete)('DEV-2')->assertNoContent();
 
-    $rows = collect($this->actingAs($restricted)->getJson('/api/v1/admin/trash/cards')->assertOk()->json('data'))->keyBy('key');
+    $rows = collect($this->actingAs($restricted)->getJson(adminPath().'trash/cards')->assertOk()->json('data'))->keyBy('key');
 
     expect($rows['DEV-1'])->toMatchArray(['title' => null, 'title_hidden' => true])
         ->and($rows['DEV-2'])->toMatchArray(['title' => 'Соседняя', 'title_hidden' => false])
@@ -91,7 +91,7 @@ describe('удаление', function () {
         expect(Card::query()->whereKey($this->card->id)->exists())->toBeTrue();
     });
 
-    it('системному администратору не из пространства — 404', function () {
+    it('администратору компании не из пространства — 404', function () {
         $this->actingAs(admin())->deleteJson('/api/v1/cards/DEV-1')->assertNotFound();
         expect(Card::query()->whereKey($this->card->id)->exists())->toBeTrue();
     });
@@ -107,7 +107,7 @@ describe('удаление', function () {
 });
 
 describe('карточка в корзине пропадает отовсюду', function () {
-    it('по ссылке и по всем вложенным маршрутам — 404 как для чужой, в том числе системному администратору', function () {
+    it('по ссылке и по всем вложенным маршрутам — 404 как для чужой, в том числе администратору компании', function () {
         $comment = makeComment($this->card, $this->editor);
         $checklist = makeChecklist($this->card);
         $item = makeChecklistItem($checklist);
@@ -243,13 +243,13 @@ describe('карточка в корзине пропадает отовсюду
 });
 
 describe('«Администрирование → Корзина»', function () {
-    it('список — только системному администратору: номер, название, где лежала, кто и когда удалил', function () {
+    it('список — только администратору компании: номер, название, где лежала, кто и когда удалил', function () {
         $this->actingAs($this->editor)->postJson('/api/v1/cards/DEV-2/archive')->assertOk();
         ($this->delete)('DEV-1')->assertNoContent();
         $this->travel(1)->minutes();
         ($this->delete)('DEV-2')->assertNoContent();
 
-        $this->actingAs($this->sysadmin)->getJson('/api/v1/admin/trash/cards')
+        $this->actingAs($this->sysadmin)->getJson(adminPath().'trash/cards')
             ->assertOk()
             ->assertJsonPath('meta.total', 2)
             ->assertJsonPath('data.0.key', 'DEV-2')
@@ -263,15 +263,15 @@ describe('«Администрирование → Корзина»', function (
 
         $spaceAdmin = member();
         addToSpace($this->space, $spaceAdmin, SpaceRole::Admin);
-        $this->actingAs($spaceAdmin)->getJson('/api/v1/admin/trash/cards')->assertForbidden();
-        $this->actingAs($spaceAdmin)->postJson('/api/v1/admin/trash/cards/DEV-1/restore')->assertForbidden();
+        $this->actingAs($spaceAdmin)->getJson(adminPath().'trash/cards')->assertForbidden();
+        $this->actingAs($spaceAdmin)->postJson(adminPath().'trash/cards/DEV-1/restore')->assertForbidden();
     });
 
     it('администратору без доступа к пространству название не отдаётся — ни в списке, ни при восстановлении', function () {
         ($this->delete)()->assertNoContent();
         $stranger = admin();   // системный администратор, не участник «DEV»
 
-        $list = $this->actingAs($stranger)->getJson('/api/v1/admin/trash/cards')
+        $list = $this->actingAs($stranger)->getJson(adminPath().'trash/cards')
             ->assertOk()
             ->assertJsonPath('data.0.key', 'DEV-1')
             ->assertJsonPath('data.0.title', null)
@@ -282,12 +282,12 @@ describe('«Администрирование → Корзина»', function (
         expect($list->getContent())->not->toContain('Секретный');
 
         // Участник пространства (тот, кто удалял) название видит
-        $this->actingAs($this->sysadmin)->getJson('/api/v1/admin/trash/cards')
+        $this->actingAs($this->sysadmin)->getJson(adminPath().'trash/cards')
             ->assertJsonPath('data.0.title', 'Секретный проект')
             ->assertJsonPath('data.0.title_hidden', false);
 
         // «Восстановить» доступно и без доступа к пространству; название в ответ не уходит
-        $restore = $this->actingAs($stranger)->postJson('/api/v1/admin/trash/cards/DEV-1/restore')
+        $restore = $this->actingAs($stranger)->postJson(adminPath().'trash/cards/DEV-1/restore')
             ->assertOk()
             ->assertJsonPath('data.title_hidden', true);
         expect($restore->getContent())->not->toContain('Секретный')
@@ -300,7 +300,7 @@ describe('«Администрирование → Корзина»', function (
         ($this->delete)()->assertNoContent();
         $neighbour = makeCard($this->board, 'In Progress', $this->editor, 'Пока лежала в корзине');
 
-        $this->actingAs(admin())->postJson('/api/v1/admin/trash/cards/DEV-1/restore')
+        $this->actingAs(admin())->postJson(adminPath().'trash/cards/DEV-1/restore')
             ->assertOk()
             ->assertJsonPath('data.key', 'DEV-1')
             ->assertJsonPath('data.deleted_at', null);
@@ -323,7 +323,7 @@ describe('«Администрирование → Корзина»', function (
         $review = columnNamed($this->board, 'Review');
         $review->forceFill(['archived_at' => now()])->save();   // карточек на доске в колонке нет — архивируется
 
-        $this->actingAs(admin())->postJson('/api/v1/admin/trash/cards/DEV-1/restore')->assertOk();
+        $this->actingAs(admin())->postJson(adminPath().'trash/cards/DEV-1/restore')->assertOk();
 
         expect(Card::query()->findOrFail($card->id)->column_id)->toBe(columnNamed($this->board, 'To Do')->id)
             ->and(CardTransition::query()->where('card_id', $card->id)->orderByDesc('id')->first())
@@ -335,17 +335,17 @@ describe('«Администрирование → Корзина»', function (
         $this->actingAs($this->editor)->postJson('/api/v1/cards/DEV-1/archive')->assertOk();
         ($this->delete)()->assertNoContent();
 
-        $this->actingAs(admin())->postJson('/api/v1/admin/trash/cards/DEV-1/restore')
+        $this->actingAs(admin())->postJson(adminPath().'trash/cards/DEV-1/restore')
             ->assertOk()->assertJsonPath('data.archived', true);
         expect(Card::query()->findOrFail($this->card->id)->isArchived())->toBeTrue();
 
-        $this->postJson('/api/v1/admin/trash/cards/DEV-2/restore')->assertNotFound();
-        $this->postJson('/api/v1/admin/trash/cards/DEV-99/restore')->assertNotFound();
+        $this->postJson(adminPath().'trash/cards/DEV-2/restore')->assertNotFound();
+        $this->postJson(adminPath().'trash/cards/DEV-99/restore')->assertNotFound();
     });
 
     it('из архивных доски и пространства не возвращается — 422 с понятным текстом, карточка в корзине', function () {
         ($this->delete)()->assertNoContent();
-        $restore = fn () => $this->actingAs(admin())->postJson('/api/v1/admin/trash/cards/DEV-1/restore');
+        $restore = fn () => $this->actingAs(admin())->postJson(adminPath().'trash/cards/DEV-1/restore');
 
         $this->board->forceFill(['archived_at' => now()])->save();
         $restore()->assertUnprocessable()
@@ -366,7 +366,7 @@ describe('«Администрирование → Корзина»', function (
         ($this->delete)()->assertNoContent();
         $this->actingAs($spaceAdmin)->putJson('/api/v1/columns/'.columnNamed($this->board, 'In Progress')->id.'/category', ['category' => 'done'])->assertOk();
 
-        $this->actingAs(admin())->postJson('/api/v1/admin/trash/cards/DEV-1/restore')->assertOk();
+        $this->actingAs(admin())->postJson(adminPath().'trash/cards/DEV-1/restore')->assertOk();
 
         $restored = Card::query()->findOrFail($card->id);
         expect($restored->completed_at)->not->toBeNull()
@@ -376,11 +376,11 @@ describe('«Администрирование → Корзина»', function (
             ->and(app(CardFlowMetrics::class)->forCard($restored)->leadTimeSeconds())->not->toBeNull();
     });
 
-    it('восстановить может только системный администратор: остальным 403 — и для существующего номера, и для несуществующего', function () {
+    it('восстановить может только администратор компании: остальным 403 — и для существующего номера, и для несуществующего', function () {
         ($this->delete)()->assertNoContent();
 
         foreach (['DEV-1', 'DEV-2', 'DEV-99', 'NOPE-1'] as $key) {
-            $this->actingAs($this->editor)->postJson("/api/v1/admin/trash/cards/{$key}/restore")
+            $this->actingAs($this->editor)->postJson(adminPath()."trash/cards/{$key}/restore")
                 ->assertForbidden();
         }
         expect(Card::onlyTrashed()->whereKey($this->card->id)->exists())->toBeTrue();

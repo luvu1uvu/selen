@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCompany;
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -9,9 +11,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * Тип карточки (Задача, Баг, ...). Глобальный справочник, управляет системный администратор.
+ * Тип карточки (Задача, Баг, ...). Справочник компании (ADR-0024): название уникально в компании, один тип
+ * «по умолчанию» на компанию; ведёт администратор компании (право «справочники»).
  *
  * @property string $id
+ * @property string $company_id
  * @property string $name
  * @property string $color
  * @property bool $is_default
@@ -20,9 +24,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon $updated_at
  */
 #[Fillable(['name', 'color'])]
-class CardType extends Model
+class CardType extends Model implements HasCompany
 {
-    use HasUlids;
+    use BelongsToCompany, HasUlids;
 
     /**
      * @return array<string, string>
@@ -47,9 +51,10 @@ class CardType extends Model
         $query->orderBy('created_at')->orderBy('id');
     }
 
-    public static function default(): self
+    /** Тип новых карточек по умолчанию в компании (один на компанию). */
+    public static function default(Company|string $company): self
     {
-        return static::query()->where('is_default', true)->firstOrFail();
+        return static::query()->inCompany($company)->where('is_default', true)->firstOrFail();
     }
 
     public function isArchived(): bool

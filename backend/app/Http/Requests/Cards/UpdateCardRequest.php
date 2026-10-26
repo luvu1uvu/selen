@@ -41,7 +41,8 @@ class UpdateCardRequest extends FormRequest
             'title' => ['sometimes', 'required', 'string', 'max:500'],
             // Документ визуального редактора (ADR-0009); упомянуть можно только видящих карточку
             'description' => ['sometimes', 'nullable', 'array', new RichText($card, $card->description)],
-            'card_type_id' => ['sometimes', 'required', 'ulid', Rule::exists('card_types', 'id')->whereNull('archived_at')],
+            // Тип — справочник компании пространства (ADR-0024)
+            'card_type_id' => ['sometimes', 'required', 'ulid', Rule::exists('card_types', 'id')->where('company_id', $card->space->company_id)->whereNull('archived_at')],
             'customer_id' => ['sometimes', 'required', 'ulid', new AssignableMember($card->space, $card->customer_id)],
             'responsible_id' => ['sometimes', 'nullable', 'ulid', new AssignableMember($card->space, $card->responsible_id)],
             'due_date' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'prohibits:due_at'],

@@ -65,9 +65,9 @@ describe('вкладка «Группы»', function () {
         $this->actingAs($viaGroup)->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $other->id, 'role' => 'commenter'])->assertCreated();
         $this->actingAs($viaGroup)->postJson('/api/v1/spaces/FRONT/members', ['user_id' => member()->id, 'role' => 'editor'])->assertCreated();
         // Справочники для выбора — тоже доступны администратору через группу
-        $this->actingAs($viaGroup)->getJson('/api/v1/groups/directory')->assertOk();
-        $this->actingAs($viaGroup)->getJson('/api/v1/users/directory')->assertOk();
-        $this->actingAs($editor)->getJson('/api/v1/groups/directory')->assertForbidden();
+        $this->actingAs($viaGroup)->getJson('/api/v1/companies/'.company()->id.'/groups/directory')->assertOk();
+        $this->actingAs($viaGroup)->getJson('/api/v1/companies/'.company()->id.'/users/directory')->assertOk();
+        $this->actingAs($editor)->getJson('/api/v1/companies/'.company()->id.'/groups/directory')->assertForbidden();
     });
 });
 

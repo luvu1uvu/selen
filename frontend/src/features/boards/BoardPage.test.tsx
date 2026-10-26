@@ -316,7 +316,7 @@ describe('Карточка по ссылке', () => {
           }),
         ),
       ),
-      http.get('*/api/v1/card-types', () =>
+      http.get('*/api/v1/spaces/:key/card-types', () =>
         HttpResponse.json({ data: makeBoardDetail().card_types }),
       ),
       http.patch('*/api/v1/cards/DEV-1', async ({ request }) => {

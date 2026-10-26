@@ -20,7 +20,7 @@ it('передаёт владение с подтверждением: бывш�
         ->assertSuccessful();
 
     expect($next->fresh()->role)->toBe(UserRole::Owner)
-        ->and($owner->fresh()->role)->toBe(UserRole::Admin);
+        ->and(company()->roleOf($owner->fresh()))->toBe('admin');
 
     $event = EventLogEntry::query()->sole();
     expect($event)

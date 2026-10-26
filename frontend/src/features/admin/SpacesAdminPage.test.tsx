@@ -30,7 +30,7 @@ describe('Админка: пространства', () => {
 
   it('показывает пространства с администраторами; архивные — по флажку', async () => {
     server.use(
-      http.get('*/api/v1/admin/spaces', () =>
+      http.get('*/api/v1/admin/companies/:company/spaces', () =>
         HttpResponse.json({
           data: [
             adminSpace(),
@@ -58,13 +58,13 @@ describe('Админка: пространства', () => {
   it('создаёт пространство: ключ в верхнем регистре, выбранные администраторы', async () => {
     let body: unknown
     server.use(
-      http.get('*/api/v1/admin/spaces', () => HttpResponse.json({ data: [] })),
-      http.get('*/api/v1/users/directory', () =>
+      http.get('*/api/v1/admin/companies/:company/spaces', () => HttpResponse.json({ data: [] })),
+      http.get('*/api/v1/companies/:company/users/directory', () =>
         HttpResponse.json({
           data: [{ id: 'u-a', name: 'Анна', email: 'anna@selen.test', status: 'active' }],
         }),
       ),
-      http.post('*/api/v1/admin/spaces', async ({ request }) => {
+      http.post('*/api/v1/admin/companies/:company/spaces', async ({ request }) => {
         body = await request.json()
         return HttpResponse.json({ data: adminSpace() }, { status: 201 })
       }),
@@ -90,8 +90,8 @@ describe('Админка: пространства', () => {
   it('без выбранных администраторов admin_ids не отправляется; ошибка вне полей формы — сообщением', async () => {
     const bodies: unknown[] = []
     server.use(
-      http.get('*/api/v1/admin/spaces', () => HttpResponse.json({ data: [] })),
-      http.post('*/api/v1/admin/spaces', async ({ request }) => {
+      http.get('*/api/v1/admin/companies/:company/spaces', () => HttpResponse.json({ data: [] })),
+      http.post('*/api/v1/admin/companies/:company/spaces', async ({ request }) => {
         bodies.push(await request.json())
         return bodies.length === 1
           ? HttpResponse.json(
@@ -117,7 +117,9 @@ describe('Админка: пространства', () => {
   })
 
   it('проверяет формат ключа до отправки', async () => {
-    server.use(http.get('*/api/v1/admin/spaces', () => HttpResponse.json({ data: [] })))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/spaces', () => HttpResponse.json({ data: [] })),
+    )
     renderApp('/admin/spaces')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Создать пространство' }))
@@ -133,11 +135,16 @@ describe('Админка: пространства', () => {
   it('назначает роль себе', async () => {
     let request: { url: string; body: unknown } | undefined
     server.use(
-      http.get('*/api/v1/admin/spaces', () => HttpResponse.json({ data: [adminSpace()] })),
-      http.put('*/api/v1/admin/spaces/space-1/members/:userId', async ({ request: req }) => {
-        request = { url: req.url, body: await req.json() }
-        return HttpResponse.json({ data: adminSpace({ my_role: 'commenter' }) })
-      }),
+      http.get('*/api/v1/admin/companies/:company/spaces', () =>
+        HttpResponse.json({ data: [adminSpace()] }),
+      ),
+      http.put(
+        '*/api/v1/admin/companies/:company/spaces/space-1/members/:userId',
+        async ({ request: req }) => {
+          request = { url: req.url, body: await req.json() }
+          return HttpResponse.json({ data: adminSpace({ my_role: 'commenter' }) })
+        },
+      ),
     )
     renderApp('/admin/spaces')
 

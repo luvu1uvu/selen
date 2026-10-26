@@ -28,207 +28,298 @@ export interface EventFilters {
   page?: number
 }
 
-export async function fetchUsers(filters: UserFilters): Promise<Paginated<AdminUser>> {
-  const { data } = await api.get<Paginated<AdminUser>>('/admin/users', { params: filters })
+export async function fetchUsers(
+  company: string,
+  filters: UserFilters,
+): Promise<Paginated<AdminUser>> {
+  const { data } = await api.get<Paginated<AdminUser>>(`/admin/companies/${company}/users`, {
+    params: filters,
+  })
   return data
 }
 
-export async function changeUserRole(userId: string, role: AssignableRole): Promise<AdminUser> {
-  const { data } = await api.patch<Resource<AdminUser>>(`/admin/users/${userId}/role`, { role })
-  return data.data
-}
-
-export async function deactivateUser(userId: string): Promise<AdminUser> {
-  const { data } = await api.post<Resource<AdminUser>>(`/admin/users/${userId}/deactivate`)
-  return data.data
-}
-
-export async function reactivateUser(userId: string): Promise<AdminUser> {
-  const { data } = await api.post<Resource<AdminUser>>(`/admin/users/${userId}/reactivate`)
-  return data.data
-}
-
-/** Передача владения (только Владелец, с паролем). Ответ — новый Владелец. */
-export async function transferOwnership(userId: string, password: string): Promise<AdminUser> {
-  const { data } = await api.post<Resource<AdminUser>>(
-    `/admin/users/${userId}/transfer-ownership`,
-    { password },
-  )
-  return data.data
-}
-
-export async function fetchInvitations(page: number): Promise<Paginated<Invitation>> {
-  const { data } = await api.get<Paginated<Invitation>>('/admin/invitations', { params: { page } })
-  return data
-}
-
-export async function inviteUser(payload: {
-  name: string
-  email: string
-  role: AssignableRole
-}): Promise<Invitation> {
-  const { data } = await api.post<Resource<Invitation>>('/admin/invitations', payload)
-  return data.data
-}
-
-export async function resendInvitation(invitationId: string): Promise<Invitation> {
-  const { data } = await api.post<Resource<Invitation>>(`/admin/invitations/${invitationId}/resend`)
-  return data.data
-}
-
-export async function revokeInvitation(invitationId: string): Promise<Invitation> {
-  const { data } = await api.post<Resource<Invitation>>(`/admin/invitations/${invitationId}/revoke`)
-  return data.data
-}
-
-export async function fetchEvents(filters: EventFilters): Promise<Paginated<EventLogEntry>> {
-  const { data } = await api.get<Paginated<EventLogEntry>>('/admin/events', { params: filters })
-  return data
-}
-
-/** Корзина карточек (ADR-0015): новые удалённые сверху. */
-export async function fetchTrash(page: number): Promise<Paginated<TrashedCard>> {
-  const { data } = await api.get<Paginated<TrashedCard>>('/admin/trash/cards', { params: { page } })
-  return data
-}
-
-/** Вернуть карточку из корзины туда, откуда её удалили. */
-export async function restoreFromTrash(key: string): Promise<TrashedCard> {
-  const { data } = await api.post<Resource<TrashedCard>>(`/admin/trash/cards/${key}/restore`)
-  return data.data
-}
-
-export async function fetchAdminSpaces(): Promise<AdminSpace[]> {
-  const { data } = await api.get<Collection<AdminSpace>>('/admin/spaces')
-  return data.data
-}
-
-export async function createSpace(payload: {
-  name: string
-  key: string
-  description: string | null
-  icon: string | null
-  /** Не передан — администратором станет сам системный администратор. */
-  admin_ids?: string[]
-  /** Папка в дереве навигации (null или нет — корень). */
-  parent_id?: string | null
-}): Promise<AdminSpace> {
-  const { data } = await api.post<Resource<AdminSpace>>('/admin/spaces', payload)
-  return data.data
-}
-
-export async function archiveSpace(spaceId: string): Promise<AdminSpace> {
-  const { data } = await api.post<Resource<AdminSpace>>(`/admin/spaces/${spaceId}/archive`)
-  return data.data
-}
-
-/** Удалить пространство навсегда (LATER-43): только если в нём никогда не было карточек — ни архивных, ни в корзине. */
-export async function deleteSpace(spaceId: string): Promise<void> {
-  await api.delete(`/admin/spaces/${spaceId}`)
-}
-
-export async function restoreSpace(spaceId: string): Promise<AdminSpace> {
-  const { data } = await api.post<Resource<AdminSpace>>(`/admin/spaces/${spaceId}/restore`)
-  return data.data
-}
-
-export async function assignSpaceRole(
-  spaceId: string,
+export async function changeUserRole(
+  company: string,
   userId: string,
-  role: SpaceRole,
-): Promise<AdminSpace> {
-  const { data } = await api.put<Resource<AdminSpace>>(
-    `/admin/spaces/${spaceId}/members/${userId}`,
+  role: AssignableRole,
+): Promise<AdminUser> {
+  const { data } = await api.patch<Resource<AdminUser>>(
+    `/admin/companies/${company}/users/${userId}/role`,
     { role },
   )
   return data.data
 }
 
-export async function fetchAdminCardTypes(): Promise<CardType[]> {
-  const { data } = await api.get<Collection<CardType>>('/admin/card-types')
-  return data.data
-}
-
-export async function saveCardType(
-  payload: { name: string; color: string },
-  id?: string,
-): Promise<CardType> {
-  const { data } = id
-    ? await api.patch<Resource<CardType>>(`/admin/card-types/${id}`, payload)
-    : await api.post<Resource<CardType>>('/admin/card-types', payload)
-  return data.data
-}
-
-export async function setCardTypeArchived(id: string, archived: boolean): Promise<CardType> {
-  const action = archived ? 'archive' : 'restore'
-  const { data } = await api.post<Resource<CardType>>(`/admin/card-types/${id}/${action}`)
-  return data.data
-}
-
-/** К каким пространствам у пользователя доступ и почему (по источникам). */
-export async function fetchUserAccess(userId: string): Promise<UserAccess> {
-  const { data } = await api.get<Resource<UserAccess>>(`/admin/users/${userId}/access`)
-  return data.data
-}
-
-/** Пространства, которые после деактивации останутся без личного администратора. */
-export async function fetchDeactivationImpact(userId: string): Promise<DeactivationImpact> {
-  const { data } = await api.get<Resource<DeactivationImpact>>(
-    `/admin/users/${userId}/deactivation-impact`,
+export async function deactivateUser(company: string, userId: string): Promise<AdminUser> {
+  const { data } = await api.post<Resource<AdminUser>>(
+    `/admin/companies/${company}/users/${userId}/deactivate`,
   )
   return data.data
 }
 
-export async function fetchGroups(): Promise<Group[]> {
-  const { data } = await api.get<Collection<Group>>('/admin/groups')
+export async function reactivateUser(company: string, userId: string): Promise<AdminUser> {
+  const { data } = await api.post<Resource<AdminUser>>(
+    `/admin/companies/${company}/users/${userId}/reactivate`,
+  )
   return data.data
 }
 
-export async function fetchGroup(id: string): Promise<Group> {
-  const { data } = await api.get<Resource<Group>>(`/admin/groups/${id}`)
+/** Передача владения (только Владелец, с паролем). Ответ — новый Владелец. */
+export async function transferOwnership(
+  company: string,
+  userId: string,
+  password: string,
+): Promise<AdminUser> {
+  const { data } = await api.post<Resource<AdminUser>>(
+    `/admin/companies/${company}/users/${userId}/transfer-ownership`,
+    { password },
+  )
   return data.data
 }
 
-export async function saveGroup(
-  payload: { name: string; description: string | null },
-  id?: string,
-): Promise<Group> {
-  const { data } = id
-    ? await api.patch<Resource<Group>>(`/admin/groups/${id}`, payload)
-    : await api.post<Resource<Group>>('/admin/groups', payload)
-  return data.data
-}
-
-export async function setGroupArchived(id: string, archived: boolean): Promise<Group> {
-  const action = archived ? 'archive' : 'restore'
-  const { data } = await api.post<Resource<Group>>(`/admin/groups/${id}/${action}`)
-  return data.data
-}
-
-export async function addGroupMember(groupId: string, userId: string): Promise<Group> {
-  const { data } = await api.post<Resource<Group>>(`/admin/groups/${groupId}/members`, {
-    user_id: userId,
+export async function fetchInvitations(
+  company: string,
+  page: number,
+): Promise<Paginated<Invitation>> {
+  const { data } = await api.get<Paginated<Invitation>>(`/admin/companies/${company}/invitations`, {
+    params: { page },
   })
-  return data.data
+  return data
 }
 
-export async function removeGroupMember(groupId: string, userId: string): Promise<void> {
-  await api.delete(`/admin/groups/${groupId}/members/${userId}`)
-}
-
-/** Выдать или изменить доступ группы к пространству. */
-export async function assignGroupSpace(
-  groupId: string,
-  spaceId: string,
-  payload: { role: SpaceRole; own_cards_only: boolean },
-): Promise<Group> {
-  const { data } = await api.put<Resource<Group>>(
-    `/admin/groups/${groupId}/spaces/${spaceId}`,
+export async function inviteUser(
+  company: string,
+  payload: {
+    name: string
+    email: string
+    role: AssignableRole
+  },
+): Promise<Invitation> {
+  const { data } = await api.post<Resource<Invitation>>(
+    `/admin/companies/${company}/invitations`,
     payload,
   )
   return data.data
 }
 
-export async function revokeGroupSpace(groupId: string, spaceId: string): Promise<void> {
-  await api.delete(`/admin/groups/${groupId}/spaces/${spaceId}`)
+export async function resendInvitation(company: string, invitationId: string): Promise<Invitation> {
+  const { data } = await api.post<Resource<Invitation>>(
+    `/admin/companies/${company}/invitations/${invitationId}/resend`,
+  )
+  return data.data
+}
+
+export async function revokeInvitation(company: string, invitationId: string): Promise<Invitation> {
+  const { data } = await api.post<Resource<Invitation>>(
+    `/admin/companies/${company}/invitations/${invitationId}/revoke`,
+  )
+  return data.data
+}
+
+export async function fetchEvents(
+  company: string,
+  filters: EventFilters,
+): Promise<Paginated<EventLogEntry>> {
+  const { data } = await api.get<Paginated<EventLogEntry>>(`/admin/companies/${company}/events`, {
+    params: filters,
+  })
+  return data
+}
+
+/** Корзина карточек (ADR-0015): новые удалённые сверху. */
+export async function fetchTrash(company: string, page: number): Promise<Paginated<TrashedCard>> {
+  const { data } = await api.get<Paginated<TrashedCard>>(
+    `/admin/companies/${company}/trash/cards`,
+    { params: { page } },
+  )
+  return data
+}
+
+/** Вернуть карточку из корзины туда, откуда её удалили. */
+export async function restoreFromTrash(company: string, key: string): Promise<TrashedCard> {
+  const { data } = await api.post<Resource<TrashedCard>>(
+    `/admin/companies/${company}/trash/cards/${key}/restore`,
+  )
+  return data.data
+}
+
+export async function fetchAdminSpaces(company: string): Promise<AdminSpace[]> {
+  const { data } = await api.get<Collection<AdminSpace>>(`/admin/companies/${company}/spaces`)
+  return data.data
+}
+
+export async function createSpace(
+  company: string,
+  payload: {
+    name: string
+    key: string
+    description: string | null
+    icon: string | null
+    /** Не передан — администратором станет сам системный администратор. */
+    admin_ids?: string[]
+    /** Папка в дереве навигации (null или нет — корень). */
+    parent_id?: string | null
+  },
+): Promise<AdminSpace> {
+  const { data } = await api.post<Resource<AdminSpace>>(
+    `/admin/companies/${company}/spaces`,
+    payload,
+  )
+  return data.data
+}
+
+export async function archiveSpace(company: string, spaceId: string): Promise<AdminSpace> {
+  const { data } = await api.post<Resource<AdminSpace>>(
+    `/admin/companies/${company}/spaces/${spaceId}/archive`,
+  )
+  return data.data
+}
+
+/** Удалить пространство навсегда (LATER-43): только если в нём никогда не было карточек — ни архивных, ни в корзине. */
+export async function deleteSpace(company: string, spaceId: string): Promise<void> {
+  await api.delete(`/admin/companies/${company}/spaces/${spaceId}`)
+}
+
+export async function restoreSpace(company: string, spaceId: string): Promise<AdminSpace> {
+  const { data } = await api.post<Resource<AdminSpace>>(
+    `/admin/companies/${company}/spaces/${spaceId}/restore`,
+  )
+  return data.data
+}
+
+export async function assignSpaceRole(
+  company: string,
+  spaceId: string,
+  userId: string,
+  role: SpaceRole,
+): Promise<AdminSpace> {
+  const { data } = await api.put<Resource<AdminSpace>>(
+    `/admin/companies/${company}/spaces/${spaceId}/members/${userId}`,
+    { role },
+  )
+  return data.data
+}
+
+export async function fetchAdminCardTypes(company: string): Promise<CardType[]> {
+  const { data } = await api.get<Collection<CardType>>(`/admin/companies/${company}/card-types`)
+  return data.data
+}
+
+export async function saveCardType(
+  company: string,
+  payload: { name: string; color: string },
+  id?: string,
+): Promise<CardType> {
+  const { data } = id
+    ? await api.patch<Resource<CardType>>(`/admin/companies/${company}/card-types/${id}`, payload)
+    : await api.post<Resource<CardType>>(`/admin/companies/${company}/card-types`, payload)
+  return data.data
+}
+
+export async function setCardTypeArchived(
+  company: string,
+  id: string,
+  archived: boolean,
+): Promise<CardType> {
+  const action = archived ? 'archive' : 'restore'
+  const { data } = await api.post<Resource<CardType>>(
+    `/admin/companies/${company}/card-types/${id}/${action}`,
+  )
+  return data.data
+}
+
+/** К каким пространствам у пользователя доступ и почему (по источникам). */
+export async function fetchUserAccess(company: string, userId: string): Promise<UserAccess> {
+  const { data } = await api.get<Resource<UserAccess>>(
+    `/admin/companies/${company}/users/${userId}/access`,
+  )
+  return data.data
+}
+
+/** Пространства, которые после деактивации останутся без личного администратора. */
+export async function fetchDeactivationImpact(
+  company: string,
+  userId: string,
+): Promise<DeactivationImpact> {
+  const { data } = await api.get<Resource<DeactivationImpact>>(
+    `/admin/companies/${company}/users/${userId}/deactivation-impact`,
+  )
+  return data.data
+}
+
+export async function fetchGroups(company: string): Promise<Group[]> {
+  const { data } = await api.get<Collection<Group>>(`/admin/companies/${company}/groups`)
+  return data.data
+}
+
+export async function fetchGroup(company: string, id: string): Promise<Group> {
+  const { data } = await api.get<Resource<Group>>(`/admin/companies/${company}/groups/${id}`)
+  return data.data
+}
+
+export async function saveGroup(
+  company: string,
+  payload: { name: string; description: string | null },
+  id?: string,
+): Promise<Group> {
+  const { data } = id
+    ? await api.patch<Resource<Group>>(`/admin/companies/${company}/groups/${id}`, payload)
+    : await api.post<Resource<Group>>(`/admin/companies/${company}/groups`, payload)
+  return data.data
+}
+
+export async function setGroupArchived(
+  company: string,
+  id: string,
+  archived: boolean,
+): Promise<Group> {
+  const action = archived ? 'archive' : 'restore'
+  const { data } = await api.post<Resource<Group>>(
+    `/admin/companies/${company}/groups/${id}/${action}`,
+  )
+  return data.data
+}
+
+export async function addGroupMember(
+  company: string,
+  groupId: string,
+  userId: string,
+): Promise<Group> {
+  const { data } = await api.post<Resource<Group>>(
+    `/admin/companies/${company}/groups/${groupId}/members`,
+    {
+      user_id: userId,
+    },
+  )
+  return data.data
+}
+
+export async function removeGroupMember(
+  company: string,
+  groupId: string,
+  userId: string,
+): Promise<void> {
+  await api.delete(`/admin/companies/${company}/groups/${groupId}/members/${userId}`)
+}
+
+/** Выдать или изменить доступ группы к пространству. */
+export async function assignGroupSpace(
+  company: string,
+  groupId: string,
+  spaceId: string,
+  payload: { role: SpaceRole; own_cards_only: boolean },
+): Promise<Group> {
+  const { data } = await api.put<Resource<Group>>(
+    `/admin/companies/${company}/groups/${groupId}/spaces/${spaceId}`,
+    payload,
+  )
+  return data.data
+}
+
+export async function revokeGroupSpace(
+  company: string,
+  groupId: string,
+  spaceId: string,
+): Promise<void> {
+  await api.delete(`/admin/companies/${company}/groups/${groupId}/spaces/${spaceId}`)
 }

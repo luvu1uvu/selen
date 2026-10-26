@@ -27,14 +27,15 @@ class MoveNavNodeAction
     {
         return DB::transaction(function () use ($actor, $node, $parentId, $afterId, $beforeId) {
             NavNode::lockTree();
-            $node = NavNode::query()->with('space')->findOrFail($node->id);
+            $node = NavNode::query()->with(['space', 'company'])->findOrFail($node->id);
             $this->guard->ensureEditable($node);
 
             if ($node->space?->isArchived()) {
                 throw ValidationException::withMessages(['node' => __('selen.navigation.space_archived')]);
             }
 
-            $this->guard->ensureParent($parentId);
+            // Только в дереве своей компании (составной FK — страховка)
+            $this->guard->ensureParent($node->company, $parentId);
 
             if ($node->isFolder()) {
                 $subtree = $node->folderSubtree();
@@ -53,7 +54,7 @@ class MoveNavNodeAction
             $fromParentId = $node->parent_id;
             $node->forceFill([
                 'parent_id' => $parentId,
-                'position' => $this->positions->place(NavNode::siblingsOf($parentId, $node->id), $afterId, $beforeId),
+                'position' => $this->positions->place(NavNode::siblingsOf($node->company_id, $parentId, $node->id), $afterId, $beforeId),
             ])->save();
 
             $payload = ['node_id' => $node->id, 'from_parent_id' => $fromParentId, 'to_parent_id' => $parentId];

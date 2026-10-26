@@ -61,7 +61,7 @@ it('стандартные роли повторяют прежние: роль 
         ->and(StandardRole::CommenterOwnCards->permissions())->toBe(StandardRole::Commenter->permissions());
 });
 
-it('права, которые до П2d проверяет системный администратор, у «Администратора» ещё не появились (решение PM 23.10)', function () {
+it('права, которые до П2d проверяют права компании, у «Администратора» ещё не появились (решение PM 23.10)', function () {
     // Чтение папок входит в любую роль уже сейчас (В14), хотя папки доступ дают только с П2d
     $later = collect(Permission::cases())
         ->filter(fn (Permission $p) => $p->since() === 'П2d')
@@ -74,7 +74,7 @@ it('права, которые до П2d проверяет системный �
 });
 
 it('база не даёт роли с областью «свои карточки» управлять доступом', function () {
-    $own = Role::query()->forceCreate(['name' => 'Своё', 'card_scope' => CardScope::Own, 'position' => 'a9']);
+    $own = Role::query()->forceCreate(['company_id' => company()->id, 'name' => 'Своё', 'card_scope' => CardScope::Own, 'position' => 'a9']);
 
     expect(fn () => DB::transaction(fn () => DB::table('role_permissions')->insert(['role_id' => $own->id, 'permission' => 'space.manage_access'])))
         ->toThrow(QueryException::class, 'a role limited to own cards cannot manage access');
@@ -127,7 +127,7 @@ it('выдача — ровно одному субъекту, у субъект
     $editor = standardRole(StandardRole::Editor);
 
     expect(fn () => DB::transaction(fn () => DB::table('access_grants')->insert([
-        'nav_node_id' => $node->id, 'user_id' => $user->id, 'group_id' => makeGroup()->id, 'role_id' => $editor->id,
+        'company_id' => $space->company_id, 'nav_node_id' => $node->id, 'user_id' => $user->id, 'group_id' => makeGroup()->id, 'role_id' => $editor->id,
     ])))->toThrow(QueryException::class, 'access_grants_one_subject');
 
     grantAccess($space, $user, StandardRole::Editor);

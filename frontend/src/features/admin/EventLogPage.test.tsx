@@ -7,7 +7,7 @@ describe('Журнал событий', () => {
   it('показывает события с человекочитаемыми названиями', async () => {
     signedInAs(makeUser())
     server.use(
-      http.get('*/api/v1/admin/events', () =>
+      http.get('*/api/v1/admin/companies/:company/events', () =>
         HttpResponse.json({
           data: [
             {

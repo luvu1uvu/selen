@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Http\Requests\Boards\NeighbourRules;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 
@@ -11,9 +12,9 @@ class MoveNavNodeRequest extends FormRequest
 {
     use NeighbourRules;
 
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return Gate::allows('update', $this->route('node'));
+        return Gate::inspect('update', $this->route('node'));
     }
 
     /**

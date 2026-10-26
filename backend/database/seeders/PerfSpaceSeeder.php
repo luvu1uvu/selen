@@ -12,6 +12,7 @@ use App\Enums\BoardTemplate;
 use App\Enums\ColumnCategory;
 use App\Models\Board;
 use App\Models\BoardColumn;
+use App\Models\Company;
 use App\Models\Lane;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -33,7 +34,7 @@ class PerfSpaceSeeder extends Seeder
     {
         $admin = User::query()->where('email', 'admin@selen.test')->sole();
         $anna = User::query()->where('email', 'anna@selen.test')->sole();
-        $space = app(CreateSpaceAction::class)->handle($admin, ['name' => 'Производительность', 'key' => 'PERF'], [$anna]);
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Производительность', 'key' => 'PERF'], [$anna]);
         $create = app(CreateBoardAction::class);
         $move = app(MoveBoardAction::class);
 

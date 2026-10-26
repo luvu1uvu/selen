@@ -50,7 +50,7 @@ function serve(space: Space, data: SpacePerson[] = people) {
     http.get('*/api/v1/spaces/DEV', () => HttpResponse.json({ data: space })),
     http.get('*/api/v1/spaces/DEV/members', () => HttpResponse.json({ data })),
     http.get('*/api/v1/spaces/DEV/groups', () => HttpResponse.json({ data: grants })),
-    http.get('*/api/v1/groups/directory', () =>
+    http.get('*/api/v1/companies/:company/groups/directory', () =>
       HttpResponse.json({
         data: [
           { id: 'g-an', name: 'Analysts', description: null, members_count: 3 },

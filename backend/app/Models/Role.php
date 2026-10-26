@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\CardScope;
 use App\Enums\StandardRole;
+use App\Models\Concerns\BelongsToCompany;
+use App\Models\Contracts\HasCompany;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -11,10 +13,12 @@ use Illuminate\Support\Carbon;
 /**
  * Роль — набор прав каталога (App\Enums\Permission) и область карточек (docs/adr/0024-rights-2.md).
  * Стандартные роли (key не пуст) создают и меняют только миграции; права ролей для вычисления доступа читает
- * только App\Services\Access\AccessResolver.
+ * только App\Services\Access\AccessResolver. Стандартные роли общие для всех компаний (company_id пуст),
+ * пользовательская роль — справочник своей компании (П2e; CHECK roles_company_check).
  *
  * @property string $id
  * @property StandardRole|null $key
+ * @property string|null $company_id
  * @property string $name
  * @property CardScope $card_scope
  * @property bool $grants_new_permissions
@@ -22,9 +26,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
-class Role extends Model
+class Role extends Model implements HasCompany
 {
-    use HasUlids;
+    use BelongsToCompany, HasUlids;
 
     /**
      * @return array<string, string>

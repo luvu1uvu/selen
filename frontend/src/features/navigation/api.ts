@@ -8,52 +8,64 @@ export async function fetchNavigation(): Promise<NavTreeNode[]> {
 }
 
 /** Полное дерево для «Структуры» — плоский список в порядке обхода. Изменения отвечают тем же деревом. */
-export async function fetchAdminNavigation(): Promise<AdminNavigation> {
-  const { data } = await api.get<AdminNavigation>('/admin/navigation')
+export async function fetchAdminNavigation(company: string): Promise<AdminNavigation> {
+  const { data } = await api.get<AdminNavigation>(`/admin/companies/${company}/navigation`)
   return data
 }
 
-export async function createFolder(payload: {
-  name: string
-  icon: string | null
-  parent_id: string | null
-}): Promise<AdminNavigation> {
-  const { data } = await api.post<AdminNavigation>('/admin/folders', payload)
+export async function createFolder(
+  company: string,
+  payload: {
+    name: string
+    icon: string | null
+    parent_id: string | null
+  },
+): Promise<AdminNavigation> {
+  const { data } = await api.post<AdminNavigation>(`/admin/companies/${company}/folders`, payload)
   return data
 }
 
 /** Название (только у папки) и/или иконка узла. */
 export async function updateNavNode(
+  company: string,
   id: string,
   payload: { name?: string; icon?: string | null },
 ): Promise<AdminNavigation> {
-  const { data } = await api.patch<AdminNavigation>(`/admin/nav-nodes/${id}`, payload)
+  const { data } = await api.patch<AdminNavigation>(
+    `/admin/companies/${company}/nav-nodes/${id}`,
+    payload,
+  )
   return data
 }
 
 /** Перемещение: новый родитель (null — корень) и соседи, которых видел клиент (ADR-0007). */
 export async function moveNavNode(
+  company: string,
   id: string,
   payload: { parent_id: string | null; after_id?: string | null; before_id?: string | null },
 ): Promise<AdminNavigation> {
-  const { data } = await api.post<AdminNavigation>(`/admin/nav-nodes/${id}/move`, payload)
+  const { data } = await api.post<AdminNavigation>(
+    `/admin/companies/${company}/nav-nodes/${id}/move`,
+    payload,
+  )
   return data
 }
 
 /** Удалить пустую папку навсегда (LATER-43): без вложенных папок и пространств, в том числе архивных. */
-export async function deleteFolder(id: string): Promise<AdminNavigation> {
-  const { data } = await api.delete<AdminNavigation>(`/admin/folders/${id}`)
+export async function deleteFolder(company: string, id: string): Promise<AdminNavigation> {
+  const { data } = await api.delete<AdminNavigation>(`/admin/companies/${company}/folders/${id}`)
   return data
 }
 
 /** Архив или восстановление папки; при восстановлении — по желанию и архивных пространств прямо в ней. */
 export async function setFolderArchived(
+  company: string,
   id: string,
   archived: boolean,
   restoreSpaces = false,
 ): Promise<AdminNavigation> {
   const { data } = await api.post<AdminNavigation>(
-    `/admin/folders/${id}/${archived ? 'archive' : 'restore'}`,
+    `/admin/companies/${company}/folders/${id}/${archived ? 'archive' : 'restore'}`,
     archived ? undefined : { restore_spaces: restoreSpaces },
   )
   return data

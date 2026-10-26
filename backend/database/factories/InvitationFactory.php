@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Company;
 use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -18,6 +19,7 @@ class InvitationFactory extends Factory
     public function definition(): array
     {
         return [
+            'company_id' => fn () => Company::primary()->id,
             'user_id' => User::factory()->invited(),
             'email' => fn (array $attributes) => User::query()->findOrFail($attributes['user_id'])->email,
             'token_hash' => Invitation::hashToken(Str::random(64)),

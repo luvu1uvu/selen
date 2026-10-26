@@ -2,16 +2,18 @@
 
 namespace App\Actions\Users;
 
+use App\Enums\CompanyRole;
 use App\Enums\EventType;
-use App\Enums\UserRole;
+use App\Models\Company;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Смена системной роли: участник ↔ администратор. Роль Владельца так не назначается и не снимается —
- * только передачей владения (TransferOwnershipAction, ADR-0017). Кто может — UserPolicy::updateRole.
+ * Смена роли в компании: участник ↔ администратор компании (company_members.is_admin, ADR-0024). Роль Владельца
+ * так не назначается и не снимается — только передачей владения (TransferOwnershipAction, ADR-0017).
+ * Кто может — UserPolicy::updateRole (только Владелец).
  */
 class ChangeUserRoleAction
 {
@@ -21,31 +23,32 @@ class ChangeUserRoleAction
         private readonly UserLock $lock,
     ) {}
 
-    public function handle(User $actor, User $user, UserRole $role): User
+    public function handle(User $actor, User $user, Company $company, CompanyRole $role): User
     {
-        return DB::transaction(function () use ($actor, $user, $role) {
-            $user = $this->lock->lock($actor, $user);
-            $from = $user->role;
+        return DB::transaction(function () use ($actor, $user, $company, $role) {
+            $user = $this->lock->lock($actor, $user, $company);
 
-            if ($from === UserRole::Owner || $role === UserRole::Owner) {
+            if ($user->isOwner()) {
                 throw ValidationException::withMessages(['role' => __('selen.users.owner_role_by_transfer')]);
             }
 
+            $from = CompanyRole::of($company->permissionsOf($user)->isAdmin());
             if ($from === $role) {
                 return $user;
             }
 
-            // Снятие администратора (Владелец сюда не доходит — выше)
-            if ($from === UserRole::Admin) {
-                $this->adminGuard->ensureAnotherActiveAdminExists($user);
+            // Снятие администратора компании (Владелец сюда не доходит — выше)
+            if ($from === CompanyRole::Admin) {
+                $this->adminGuard->ensureAnotherActiveAdminExists($user, $company);
             }
 
-            $user->forceFill(['role' => $role])->save();
+            $company->users()->updateExistingPivot($user->id, ['is_admin' => $role === CompanyRole::Admin]);
+            $company->forgetResolvedPermissions();
 
             $this->events->record(EventType::UserRoleChanged, $actor, $user, [
                 'from' => $from->value,
                 'to' => $role->value,
-            ]);
+            ], company: $company);
 
             return $user;
         });

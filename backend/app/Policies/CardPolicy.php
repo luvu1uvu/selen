@@ -4,7 +4,9 @@ namespace App\Policies;
 
 use App\Enums\Permission;
 use App\Models\Card;
+use App\Models\Company;
 use App\Models\User;
+use App\Policies\Concerns\ChecksCompanyPermission;
 use App\Policies\Concerns\ChecksSpaceRole;
 use Illuminate\Auth\Access\Response;
 
@@ -15,7 +17,7 @@ use Illuminate\Auth\Access\Response;
  */
 class CardPolicy
 {
-    use ChecksSpaceRole;
+    use ChecksCompanyPermission, ChecksSpaceRole;
 
     public function view(User $actor, Card $card): Response
     {
@@ -47,25 +49,27 @@ class CardPolicy
     }
 
     /**
-     * Удалить в корзину — до П2d только системный администратор (решение PM; с П2d — право «удаление в корзину»
-     * роли), и только там, где он видит карточку и может что-то менять: невидимая — 404, архивное пространство
-     * или доска — 403. Роль в пространстве — любая (чтение есть в любой роли).
+     * Удалить в корзину — до П2d право компании «корзина» (администратор компании и Владелец; с П2d — право
+     * «удаление в корзину» роли, решение PM), и только там, где он видит карточку и может что-то менять: невидимая —
+     * 404, архивное пространство или доска — 403. Роль в пространстве — любая (чтение есть в любой роли).
      */
     public function delete(User $actor, Card $card): Response
     {
         $response = $this->allowCard($actor, $card, Permission::SpaceRead);
 
-        return $response->allowed() && ! $actor->isAdmin() ? Response::deny() : $response;
+        return $response->allowed() && ! $card->space->company->permissionsOf($actor)->allows(Permission::CompanyManageTrash)
+            ? Response::deny()
+            : $response;
     }
 
-    /** «Администрирование → Корзина»: список удалённых карточек всех пространств. */
-    public function viewTrash(User $actor): bool
+    /** «Администрирование → Корзина»: список удалённых карточек пространств компании. */
+    public function viewTrash(User $actor, Company $company): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $company, Permission::CompanyManageTrash);
     }
 
-    public function restoreFromTrash(User $actor): bool
+    public function restoreFromTrash(User $actor, Company $company): Response
     {
-        return $actor->isAdmin();
+        return $this->allowCompany($actor, $company, Permission::CompanyManageTrash);
     }
 }
