@@ -18,7 +18,7 @@ test('пользователь с ограничением видит тольк
   await expect(page.getByTitle(/^1 карт/)).toBeVisible()
 
   await page.goto('/cards/QA-1')
-  await expect(page.getByText('Карточка не найдена')).toBeVisible()
+  await expect(page.getByText('Нет доступа к карточке или она не существует')).toBeVisible()
   await expect(page.getByText('Существующая задача')).toHaveCount(0)
 
   // Своя карточка открывается, в ней видно, что он ответственный

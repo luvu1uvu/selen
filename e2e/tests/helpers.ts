@@ -12,6 +12,9 @@ export const USERS = [
   'e2e-outsider@selen.test',
   'e2e-restricted@selen.test',
   'e2e-analyst@selen.test',
+  // «Права 2.0», П2b-2: администратор двух компаний и человек с «домами» в двух компаниях (E2eSeeder::moreCompanies)
+  'e2e-multi-admin@selen.test',
+  'e2e-two-homes@selen.test',
 ] as const
 
 export type User = (typeof USERS)[number]

@@ -3,15 +3,20 @@ import { authFile, openHome } from './helpers'
 
 test.use({ storageState: authFile('e2e-outsider@selen.test') })
 
-test('без доступа к пространству прямая ссылка на карточку — «не найдено»', async ({ page }) => {
+test('без доступа к пространству прямая ссылка на карточку — главная и уведомление (ADR-0024)', async ({ page }) => {
   await openHome(page)
 
   // Пространства нет в навигации
   await expect(page.getByText('У вас пока нет доступа ни к одному пространству')).toBeVisible()
 
   await page.goto('/cards/QA-1')
-  await expect(page.getByText('Карточка не найдена')).toBeVisible()
+  await expect(page.getByText('Нет доступа к карточке или она не существует')).toBeVisible()
+  await expect(page).toHaveURL(/\/$/)
   await expect(page.getByText('Существующая задача')).toHaveCount(0)
+  // Несуществующая карточка — то же самое
+  await page.goto('/cards/QA-999')
+  await expect(page.getByText('Нет доступа к карточке или она не существует')).toBeVisible()
+  await expect(page).toHaveURL(/\/$/)
 
   // API отвечает так же, как на несуществующую карточку.
   // Referer — как у SPA: по нему Sanctum понимает, что запрос идёт с cookie-сессией.

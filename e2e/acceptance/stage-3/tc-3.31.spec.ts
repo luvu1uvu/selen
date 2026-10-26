@@ -75,7 +75,8 @@ async function api<T>(page: Page, path: string): Promise<T> {
  */
 async function expectMarksMatchTree(page: Page) {
   const [tree, all] = await Promise.all([
-    api<TreeNode[]>(page, '/api/v1/navigation'),
+    // Ответ дерева — деревья по компаниям (ADR-0024, П2b-2)
+    api<{ items: TreeNode[] }[]>(page, '/api/v1/navigation'),
     api<AdminNode[]>(page, '/api/v1/admin/navigation'),
   ])
   const inTree = new Set<string>()
@@ -84,7 +85,7 @@ async function expectMarksMatchTree(page: Page) {
       inTree.add(node.id)
       walk(node.children ?? [])
     })
-  walk(tree)
+  tree.forEach((company) => walk(company.items))
 
   const byId = new Map(all.map((node) => [node.id, node]))
   const insideArchived = (node: AdminNode): boolean => {
