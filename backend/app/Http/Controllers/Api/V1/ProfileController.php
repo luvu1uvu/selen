@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\Auth\ChangePasswordAction;
 use App\Actions\Users\UpdateProfileAction;
+use App\Actions\Users\UpdateThemeAction;
+use App\Enums\Theme;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\UpdatePasswordRequest;
 use App\Http\Requests\Profile\UpdateProfileRequest;
+use App\Http\Requests\Profile\UpdateThemeRequest;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +23,12 @@ class ProfileController extends Controller
         $data = $request->validated();
 
         return new UserResource($action->handle($request->user(), $data));
+    }
+
+    /** Тема оформления: «Светлая / Тёмная / Как в системе» (меню пользователя, ADR-0025). */
+    public function updateTheme(UpdateThemeRequest $request, UpdateThemeAction $action): UserResource
+    {
+        return new UserResource($action->handle($request->user(), $request->enum('theme', Theme::class)));
     }
 
     /** Смена пароля с вводом текущего. */

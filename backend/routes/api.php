@@ -76,6 +76,7 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
     Route::post('auth/logout', [AuthenticatedSessionController::class, 'destroy'])->withoutMiddleware('tab-user')->name('auth.logout');
 
     Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('profile/theme', [ProfileController::class, 'updateTheme'])->name('profile.theme');
     Route::put('profile/password', [ProfileController::class, 'updatePassword'])
         ->middleware('throttle:password-change')
         ->name('profile.password');

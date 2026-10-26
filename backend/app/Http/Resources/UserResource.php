@@ -35,6 +35,8 @@ class UserResource extends JsonResource
             $companies->isNotEmpty() => CompanyRole::Admin->value,
             default => CompanyRole::Member->value,
         }) + [
+            // Только у текущего пользователя: тема — его личная настройка вида, в админских списках её нет (ADR-0025)
+            'theme' => $this->theme,
             'admin_companies' => $companies
                 ->map(fn (Company $company) => [
                     'id' => $company->id,

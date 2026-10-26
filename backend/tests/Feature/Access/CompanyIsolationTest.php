@@ -49,7 +49,7 @@ const ROUTES_WITHOUT_COMPANY_OBJECTS = [
     // Приглашение по токену из письма — до входа, без компании в адресе
     'GET invitations/{token}', 'POST invitations/{token}/accept',
     // Свой профиль
-    'PATCH profile', 'PUT profile/password',
+    'PATCH profile', 'PUT profile/password', 'PUT profile/theme',
     // Свои дерево и пространства — только по правам пользователя (проверяет (б))
     'GET navigation', 'GET spaces',
     // Компании — экран Владельца (CompanyPolicy): ему видны все компании по определению, остальным — 403
