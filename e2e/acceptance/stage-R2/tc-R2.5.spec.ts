@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
 import { openUsers, roleCell, userRow } from '../stage-3/helpers'
-import { stamp } from './helpers'
+import { stamp, usersTabs } from './helpers'
 
 /**
  * ТК-R2.5: системные администраторы стали администраторами «Компании 1» — список людей, смена роли и приглашения
  * работают как прежде. owner@ → e2e-owner, admin@ → e2e-admin, «Демо Участник» → «E2E Роль компании» (участник,
  * в систему не входит), деактивированный — «E2E Деактивированный» (E2eSeeder::companies). Приглашение — с одноразовыми
- * именем и email (тест можно повторить).
+ * именем и email (тест можно повторить). С П2b-2 «Приглашения» — не переключатель на странице, а вкладка-ссылка
+ * раздела «Пользователи» со своим адресом (…/invitations).
  */
 
 const MEMBER = 'E2E Роль компании'
@@ -72,7 +73,8 @@ test('ТК-R2.5. Пользователи, роли и приглашения в
   await dialog.getByRole('button', { name: 'Отправить приглашение' }).click()
   await expect(owner.getByText(`Приглашение отправлено на ${inviteEmail}`)).toBeVisible()
   await expect(dialog).toBeHidden()
-  await owner.getByRole('tab', { name: 'Приглашения' }).click()
+  await usersTabs(owner).getByRole('link', { name: 'Приглашения' }).click()
+  await expect(owner).toHaveURL(/\/invitations$/)
   const invitation = owner.getByRole('row').filter({ hasText: inviteEmail })
   await expect(invitation).toContainText(inviteName)
   await expect(invitation).toContainText('Участник')

@@ -7,6 +7,8 @@ import { BOARD, copiedText, openCard, SPACE, stubClipboard, tile } from './helpe
  * названия, ни содержимого; своя открывается как обычно. Анна → e2e-editor, Жанна → e2e-restricted (во втором
  * браузерном контексте — как окно инкогнито); пространство WIN: чужая для Жанны — WIN-17 «Чужая для подрядчика», своя
  * (она ответственная) — WIN-16 «Своя карточка подрядчика» (E2eSeeder).
+ * С «Прав 2.0», П2b-2 ссылка на недоступную карточку ведёт на главную с уведомлением «Нет доступа к карточке или она
+ * не существует» (вместо «Карточка не найдена») — проверка та же: ни названия, ни содержимого, окна нет.
  */
 test.use({ storageState: authFile('e2e-editor@selen.test') })
 
@@ -23,12 +25,13 @@ test('ТК-UI1.20. «Только свои карточки» — чужая п�
   const link = (await copiedText(page))!
   expect(link).toMatch(/\/cards\/WIN-\d+$/)
 
-  // 2. Жанна: вставить ссылку — «Карточка не найдена», ни названия, ни содержимого
+  // 2. Жанна: вставить ссылку — главная и «нет доступа», ни названия, ни содержимого
   const zhanna = await (
     await browser.newContext({ storageState: authFile('e2e-restricted@selen.test') })
   ).newPage()
   await zhanna.goto(link)
-  await expect(zhanna.getByText('Карточка не найдена')).toBeVisible()
+  await expect(zhanna.getByText('Нет доступа к карточке или она не существует')).toBeVisible()
+  await expect(zhanna).toHaveURL(/\/$/)
   await expect(zhanna.getByText('Чужая для подрядчика')).toHaveCount(0)
   await expect(zhanna.getByRole('dialog')).toHaveCount(0)
 
