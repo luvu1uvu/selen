@@ -21,6 +21,8 @@ class ListUserDirectoryRequest extends FormRequest
     {
         return [
             'search' => ['nullable', 'string', 'max:100'],
+            // Только «дома» компании — выбор в состав группы (Владельца без «дома» в группу не добавить, ADR-0024)
+            'homes' => ['nullable', 'boolean'],
         ];
     }
 }

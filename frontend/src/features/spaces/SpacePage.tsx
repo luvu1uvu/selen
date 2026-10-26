@@ -13,8 +13,8 @@ import { useCard } from '@/features/cards/queries'
 import { SpaceLabelsPanel } from '@/features/labels/components/SpaceLabelsPanel'
 import { getErrorStatus } from '@/shared/api/errors'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
-import { NotFoundState } from '@/shared/components/NotFoundState'
 import { TruncatedText } from '@/shared/components/TruncatedText'
+import { useLeaveInaccessible } from '@/shared/lib/useLeaveInaccessible'
 import type { Space } from '@/shared/types/api'
 import { Alert } from '@/shared/ui/alert'
 import { Badge } from '@/shared/ui/badge'
@@ -31,7 +31,7 @@ import { useSpace } from './queries'
  * Страница пространства (/spaces/KEY, ADR-0019; docs/ui-reference/kaiten/README.md, раздел 03): сверху панель
  * (SpacePanel), под ней на вкладке «Доски» — холст со всеми активными досками рядами (своя вертикальная прокрутка,
  * верхняя панель приложения на месте). Карточка (/spaces/KEY/cards/DEV-12) открывается окном поверх страницы, закрытие —
- * на то же место. Чужое или несуществующее пространство — «не найдено».
+ * на то же место. Нет доступа к пространству или его нет — на главную с уведомлением (ADR-0024, вопрос 9 плана).
  */
 export function SpacePage() {
   const { t } = useTranslation('spaces')
@@ -39,6 +39,8 @@ export function SpacePage() {
   const { spaceKey = '', cardKey } = useParams()
   const navigate = useNavigate()
   const spaceQuery = useSpace(spaceKey)
+  const spaceNotFound = spaceQuery.isError && getErrorStatus(spaceQuery.error) === 404
+  useLeaveInaccessible(spaceNotFound, tc('errors.noSpaceAccess'))
   // Список досок — вместе с пространством, а не после него: холст ждал бы два запроса подряд
   useSpaceBoards(spaceKey)
   const openCard = useCallback(
@@ -70,13 +72,10 @@ export function SpacePage() {
   }
 
   if (spaceQuery.isError) {
-    return (
+    // Нет доступа или нет такого — на главную с уведомлением (useLeaveInaccessible выше)
+    return spaceNotFound ? null : (
       <PageMessage>
-        {getErrorStatus(spaceQuery.error) === 404 ? (
-          <NotFoundState title={t('page.notFound')} text={t('page.notFoundText')} />
-        ) : (
-          <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
-        )}
+        <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>
       </PageMessage>
     )
   }
@@ -277,18 +276,18 @@ function SpaceCard({
   spaceKey: string
   onClose: () => void
 }) {
-  const { t } = useTranslation('boards')
   const { t: tc } = useTranslation()
   const cardQuery = useCard(cardKey)
   const failed = cardQuery.isError
 
   useEffect(() => {
     if (!failed) return
+    // Пространство открыто, карточка — нет: окно закрывается, пространство остаётся (решение PM 26.10)
     toast.error(
-      getErrorStatus(cardQuery.error) === 404 ? t('card.notFound') : tc('errors.loadFailed'),
+      getErrorStatus(cardQuery.error) === 404 ? tc('errors.noCardAccess') : tc('errors.loadFailed'),
     )
     onClose()
-  }, [failed, cardQuery.error, onClose, t, tc])
+  }, [failed, cardQuery.error, onClose, tc])
 
   return failed ? null : <CardWindow cardKey={cardKey} backTo={`/spaces/${spaceKey}`} />
 }

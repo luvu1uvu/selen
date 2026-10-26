@@ -49,7 +49,10 @@ it('демо-данные: четыре пространства в дереве
     // и в «Компании», открытой группе «Все сотрудники»
     $demo = User::query()->where('email', 'member@selen.test')->sole();
     expect(Space::query()->visibleTo($demo)->orderBy('key')->pluck('key')->all())->toBe(['COMP', 'DEV']);
-    $tree = app(NavigationTree::class)->forUser($demo);
+    // У него одна компания — одно дерево без названия (ADR-0024)
+    [$only] = app(NavigationTree::class)->forUser($demo);
+    expect($only['name'])->toBeNull();
+    $tree = $only['items'];
     expect(collect($tree)->map(fn (array $node) => $node['name'] ?? $node['space']['key'])->all())->toBe(['COMP', 'Продуктовые команды'])
         ->and($tree[0]['everyone'])->toBeTrue()
         ->and($tree[1]['children'][0]['space']['key'])->toBe('DEV');

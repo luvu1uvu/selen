@@ -39,7 +39,7 @@ class StoreSpaceRequest extends FormRequest
             'parent_id' => ['nullable', 'ulid'],
             // Администраторы пространства — люди этой компании; по умолчанию — сам администратор компании
             'admin_ids' => ['nullable', 'array', 'min:1', 'max:20'],
-            'admin_ids.*' => ['required', 'ulid', 'distinct', new CompanyMember($this->route('company'), notDeactivated: true)],
+            'admin_ids.*' => ['required', 'ulid', 'distinct', new CompanyMember($this->route('company'), notDeactivated: true, withOwner: true)],
         ];
     }
 

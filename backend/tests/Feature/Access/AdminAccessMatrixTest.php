@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\Route;
 | её участника, администратора и участника другой компании. Маршруты над пользователем — с разными целями:
 | участник, другой администратор компании, сам Владелец, сам проверяемый администратор. Разрешено — ответ
 | не 401/403/404 и не 5xx (может быть 200, 201, 204 или 422 — до бизнес-проверок дошло); запрещено — ровно 403;
-| другая компания — 404 с единым телом (её для него нет, как несуществующей).
+| другая компания — 404 с единым телом (её для него нет, как несуществующей). Маршруты без компании в адресе (список
+| и создание компаний — только Владелец) другой компании не касаются: людям другой компании — так же, как этой.
 | Права компании выдаются лично и группам с П2c — тогда строки «с правом / без права» и гость.
 | Новый админский маршрут без строки здесь роняет тест «все админские маршруты есть в матрице».
 */
@@ -30,6 +31,11 @@ function adminEndpoints(): array
 {
     [$allow, $deny] = [true, false];
     $rows = [
+        // Компании ведёт только Владелец (П2b-2): администраторов назначает в «Пользователях» компании
+        ['GET', 'admin/companies', $allow, $deny, $deny],
+        ['POST', 'admin/companies', $allow, $deny, $deny, ['name' => 'Новая компания']],
+        ['PATCH', 'admin/companies/{company}', $allow, $deny, $deny, ['name' => 'Переименованная компания']],
+
         // Пользователи компании: администраторами компании управляет только Владелец, Владельцем — никто
         ['GET', 'admin/companies/{company}/users', $allow, $allow, $deny],
         ['PATCH', 'admin/companies/{company}/users/{member}/role', $allow, $deny, $deny, ['role' => 'admin']],
@@ -160,7 +166,9 @@ beforeEach(function () {
 });
 
 it('админский маршрут: Владелец, администратор компании, участник; другая компания — 404', function (string $method, string $path, bool $owner, bool $admin, bool $member, array $body, string $role) {
-    $expected = ['owner' => $owner, 'admin' => $admin, 'member' => $member][$role] ?? null;
+    // Другая компания: компания в адресе для него не существует (404); без компании в адресе — как люди этой компании
+    $expected = ['owner' => $owner, 'admin' => $admin, 'member' => $member][$role]
+        ?? (str_contains($path, '{company}') ? null : ['other-admin' => $admin, 'other-member' => $member][$role]);
     $uri = '/api/v1/'.strtr($path, $this->objects);
     $body = array_map(fn (mixed $value) => is_string($value) ? strtr($value, $this->objects) : $value, $body);
 
@@ -204,11 +212,13 @@ it('справочники людей и групп компании откры�
     $this->actingAs($spaceAdmin)->getJson(adminPath().'users')->assertForbidden();
 });
 
-it('все маршруты админки — в контексте компании (admin/companies/{company}/…)', function () {
+it('все маршруты админки — в контексте компании (admin/companies/{company}/…), кроме самих компаний у Владельца', function () {
     $admin = collect(Route::getRoutes()->getRoutes())
         ->map(fn ($route) => $route->uri())
         ->filter(fn (string $uri) => str_starts_with($uri, 'api/v1/admin'));
+    // Экран Владельца «Компании»: список, создание, переименование (CompanyPolicy — только Владелец)
+    $companies = ['api/v1/admin/companies', 'api/v1/admin/companies/{company}'];
 
     expect($admin)->not->toBeEmpty()
-        ->and($admin->reject(fn (string $uri) => str_starts_with($uri, 'api/v1/admin/companies/{company}/'))->all())->toBe([]);
+        ->and($admin->reject(fn (string $uri) => str_starts_with($uri, 'api/v1/admin/companies/{company}/') || in_array($uri, $companies, true))->all())->toBe([]);
 });

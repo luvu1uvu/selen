@@ -1,40 +1,43 @@
 import { useTranslation } from 'react-i18next'
 import { useCurrentUser } from '@/features/auth/queries'
 import { isOwner } from '@/shared/lib/roles'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { InvitationsTable } from './components/InvitationsTable'
 import { InviteUserDialog } from './components/InviteUserDialog'
 import { TransferOwnershipDialog } from './components/TransferOwnershipDialog'
 import { UsersTable } from './components/UsersTable'
+import { hasCompanyPermission, useAdminCompany } from './company'
 
+/** Вкладка «Пользователи» раздела «Пользователи»: люди компании, приглашение, передача владения (Владелец). */
 export function UsersPage() {
   const { t } = useTranslation('admin')
   const { data: me } = useCurrentUser()
+  const company = useAdminCompany()
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('users.title')}</h1>
-          <p className="text-muted-foreground text-sm">{t('users.description')}</p>
-        </div>
+        <p className="text-muted-foreground text-sm">{t('users.description')}</p>
         <div className="flex flex-wrap gap-2">
           {isOwner(me) && <TransferOwnershipDialog />}
-          <InviteUserDialog />
+          {hasCompanyPermission(company, 'company.invite_users') && <InviteUserDialog />}
         </div>
       </div>
-      <Tabs defaultValue="users">
-        <TabsList>
-          <TabsTrigger value="users">{t('users.tabs.users')}</TabsTrigger>
-          <TabsTrigger value="invitations">{t('users.tabs.invitations')}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="users">
-          <UsersTable />
-        </TabsContent>
-        <TabsContent value="invitations">
-          <InvitationsTable />
-        </TabsContent>
-      </Tabs>
+      <UsersTable />
+    </div>
+  )
+}
+
+/** Вкладка «Приглашения» раздела «Пользователи»: кого пригласили, повтор и отзыв. */
+export function InvitationsPage() {
+  const { t } = useTranslation('admin')
+
+  return (
+    <div className="grid gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <p className="text-muted-foreground text-sm">{t('invitations.description')}</p>
+        <InviteUserDialog />
+      </div>
+      <InvitationsTable />
     </div>
   )
 }

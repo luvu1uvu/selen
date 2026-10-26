@@ -100,9 +100,11 @@ class AccessResolver
         $membership = $user->isOwner() ? null : $this->homes()
             ->where('company_id', $company->getKey())
             ->where('user_id', $user->getKey())
-            ->first(['is_admin']);
+            ->select('is_admin')
+            ->selectSub($this->homes()->selectRaw('count(*)')->where('user_id', $user->getKey()), 'homes')
+            ->first();
 
-        return $this->companyAccess($user, $membership === null ? null : (bool) $membership->is_admin);
+        return $this->companyAccess($user, $membership === null ? null : (bool) $membership->is_admin, (int) ($membership->homes ?? 0));
     }
 
     /**
@@ -114,19 +116,25 @@ class AccessResolver
     public function rememberCompanyPermissions(Company $company, iterable $users): void
     {
         $users = collect($users);
+        $ids = $users->map(fn (User $user) => $user->getKey())->all();
         $admins = $this->homes()
             ->where('company_id', $company->getKey())
-            ->whereIn('user_id', $users->map(fn (User $user) => $user->getKey())->all())
+            ->whereIn('user_id', $ids)
             ->pluck('is_admin', 'user_id');
+        $homes = $this->homes()->whereIn('user_id', $ids)->groupBy('user_id')->selectRaw('user_id, count(*) AS homes')
+            ->pluck('homes', 'user_id');
 
         foreach ($users as $user) {
             $flag = $admins->get($user->getKey());
-            $company->rememberPermissions($user, $this->companyAccess($user, $flag === null ? null : (bool) $flag));
+            $company->rememberPermissions($user, $this->companyAccess($user, $flag === null ? null : (bool) $flag, (int) $homes->get($user->getKey(), 0)));
         }
     }
 
-    /** @param  bool|null  $isAdmin  членство: администратор компании или нет; null — не участник */
-    private function companyAccess(User $user, ?bool $isAdmin): CompanyAccess
+    /**
+     * @param  bool|null  $isAdmin  членство: администратор компании или нет; null — не участник
+     * @param  int  $homes  во скольких компаниях он «дом» (больше одной — учётной записью управляет только Владелец)
+     */
+    private function companyAccess(User $user, ?bool $isAdmin, int $homes = 0): CompanyAccess
     {
         if ($user->isOwner()) {
             $all = array_filter(Permission::cases(), fn (Permission $p) => $p->scope() === 'company');
@@ -136,8 +144,8 @@ class AccessResolver
 
         return match ($isAdmin) {
             null => CompanyAccess::none(),
-            true => new CompanyAccess(member: true, admin: true, permissions: $this->permissionSet(Permission::companyAdminDefaults())),
-            false => new CompanyAccess(member: true),
+            true => new CompanyAccess(member: true, admin: true, permissions: $this->permissionSet(Permission::companyAdminDefaults()), otherHomes: $homes > 1),
+            false => new CompanyAccess(member: true, otherHomes: $homes > 1),
         };
     }
 
@@ -157,6 +165,30 @@ class AccessResolver
             ->orderBy('created_at')
             ->orderBy('id')
             ->pluck('id');
+    }
+
+    /**
+     * Для экрана Владельца «Компании»: сколько в каждой компании людей («дома» без деактивированных) и кто её
+     * администраторы (по имени, с деактивированными — у них пометка).
+     *
+     * @return array{people: Collection<string, int>, admins: Collection<string, EloquentCollection<int, User>>}
+     */
+    public function companiesSummary(): array
+    {
+        $people = $this->homes()
+            ->join('users', 'users.id', '=', 'company_members.user_id')
+            ->where('users.status', '!=', UserStatus::Deactivated->value)
+            ->groupBy('company_members.company_id')
+            ->selectRaw('company_members.company_id, count(*) AS people')
+            ->pluck('people', 'company_id')
+            ->map(fn (mixed $count) => (int) $count);
+        $admins = User::query()
+            ->joinSub($this->homes()->where('is_admin', true)->select(['company_id', 'user_id']), 'admins', 'admins.user_id', '=', 'users.id')
+            ->orderBy('users.name')
+            ->get(['users.*', 'admins.company_id AS admin_company_id'])
+            ->groupBy(fn (User $user) => (string) $user->getAttribute('admin_company_id'));
+
+        return ['people' => $people, 'admins' => $admins];
     }
 
     /**
@@ -194,14 +226,31 @@ class AccessResolver
     }
 
     /**
-     * Подзапрос id людей компании — её «домов» (список «Пользователи», справочник для выдачи доступа, число людей
-     * в «Все сотрудники»).
+     * Подзапрос id людей компании — её «домов» (состав групп, число людей в «Все сотрудники», события «о человеке»;
+     * «Пользователи» и выбор людей для выдачи доступа — companyPeopleIds, с Владельцем).
      */
     public function companyMemberIds(Company|string $company): Builder
     {
         return $this->homes()
             ->select('user_id')
             ->where('company_id', $company instanceof Company ? $company->getKey() : $company);
+    }
+
+    /**
+     * Подзапрос id людей компании для админки и выдачи доступа: её «дома» и Владелец — он участник всех компаний
+     * (ADR-0024: админка компании, личная выдача ему). Привязка {user} в адресах, список «Пользователи», справочник для
+     * выдачи доступа. Состав групп и «Все сотрудники» — только «дома» (companyMemberIds), события «о человеке» — тоже.
+     */
+    public function companyPeopleIds(Company|string $company): Builder
+    {
+        return $this->companyMemberIds($company)
+            ->union(DB::table('users')->select('id AS user_id')->where('role', UserRole::Owner->value));
+    }
+
+    /** Пользователь — «дом» компании (Владелец — участник всех компаний, но «дом» — только где он сотрудник). */
+    public function isHome(User $user, Company $company): bool
+    {
+        return $this->homes()->where('company_id', $company->getKey())->where('user_id', $user->getKey())->exists();
     }
 
     /**
@@ -356,13 +405,15 @@ class AccessResolver
     public function explain(User $user, Company $company): Collection
     {
         $deactivated = $user->status === UserStatus::Deactivated;
+        // «Все сотрудники» — только её «дома»: Владелец без «дома» в компании в неё не входит
+        $home = $this->isHome($user, $company);
 
         $grants = AccessGrant::query()
             ->inCompany($company)
             ->where(fn ($q) => $q
                 ->where('user_id', $user->getKey())
                 ->orWhereIn('group_id', DB::table('group_members')->select('group_id')->where('user_id', $user->getKey()))
-                ->orWhereIn('group_id', DB::table('groups')->select('id')->where('system_key', Group::EVERYONE)))
+                ->when($home, fn ($q) => $q->orWhereIn('group_id', DB::table('groups')->select('id')->where('system_key', Group::EVERYONE))))
             ->whereHas('navNode', fn ($q) => $q->whereNotNull('space_id'))
             ->with(['group', 'navNode', 'role'])
             ->orderBy('id')

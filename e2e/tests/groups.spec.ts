@@ -33,9 +33,9 @@ test('доступ через группу появляется и исчеза�
   await removeFromGroup(adminPage)
 
   await analystPage.goto('/spaces/QA')
-  await expect(analystPage.getByText('Пространство не найдено')).toBeVisible()
+  await expect(analystPage.getByText('Нет доступа к пространству или оно не существует')).toBeVisible()
   await analystPage.goto('/cards/QA-1')
-  await expect(analystPage.getByText('Карточка не найдена')).toBeVisible()
+  await expect(analystPage.getByText('Нет доступа к карточке или она не существует')).toBeVisible()
   await expect(analystPage.getByText('Существующая задача')).toHaveCount(0)
 })
 

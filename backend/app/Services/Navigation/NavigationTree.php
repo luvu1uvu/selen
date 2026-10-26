@@ -24,7 +24,8 @@ use Illuminate\Support\Collection;
  * пространства — ни активного, ни архивного), с пометкой `empty`; пустая папка внутри скрытой не видна и ему.
  * Число запросов не зависит от размера дерева: права — одним запросом резолвера, узлы — одним, доски — одним.
  * У каждой компании своё дерево (ADR-0024): в ответ попадают только узлы компаний пользователя — названия папок
- * других компаний не приходят (одна компания — дерево как раньше; заголовки компаний — П2b-2).
+ * других компаний не приходят. Ответ — деревья компаний, где пользователю есть что показать; название компании —
+ * только если таких компаний несколько (заголовки в дереве): у кого компания одна, её названия нет нигде.
  *
  * Значок «доступно всем» (группа «Все сотрудники», ADR-0012): у пространства — у него есть доступ этой группы;
  * у папки — в ней есть активное пространство и все её активные пространства на любой глубине открыты всем
@@ -35,9 +36,10 @@ class NavigationTree
     public function __construct(private readonly AccessResolver $resolver) {}
 
     /**
-     * Дерево пользователя: вложенные узлы.
+     * Дерево пользователя по компаниям (по дате создания компании): id, название (null, если компания одна)
+     * и вложенные узлы.
      *
-     * @return list<array<string, mixed>>
+     * @return list<array{id: string, name: string|null, items: list<array<string, mixed>>}>
      */
     public function forUser(User $user): array
     {
@@ -66,7 +68,8 @@ class NavigationTree
             ->groupBy('space_id');
 
         $context = [
-            'children' => $nodes->groupBy(fn (NavNode $node) => $node->parent_id ?? ''),
+            // Корень у каждой компании свой: узлы верхнего уровня — под ключом компании
+            'children' => $nodes->groupBy(fn (NavNode $node) => $node->parent_id ?? self::root($node->company_id)),
             'open' => $this->resolver->spacesOpenToEveryone()->flip(),
             'visible' => $visible->flip(),
             'boards' => $boards,
@@ -75,7 +78,27 @@ class NavigationTree
             'showEmpty' => $user->isOwner(),
         ];
 
-        return $this->branch('', $context)['items'];
+        $trees = Company::query()
+            ->whereKey($nodes->pluck('company_id')->unique()->values()->all())
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['id', 'name'])
+            ->map(fn (Company $company) => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'items' => $this->branch(self::root($company->id), $context)['items'],
+            ])
+            ->filter(fn (array $tree) => $tree['items'] !== [])
+            ->values();
+        $named = $trees->count() > 1;
+
+        return $trees->map(fn (array $tree) => ['id' => $tree['id'], 'name' => $named ? $tree['name'] : null, 'items' => $tree['items']])->all();
+    }
+
+    /** Ключ узлов верхнего уровня компании в группировке по родителю. */
+    private static function root(string $companyId): string
+    {
+        return 'root:'.$companyId;
     }
 
     /**

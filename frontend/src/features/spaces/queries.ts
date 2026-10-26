@@ -23,7 +23,8 @@ export const spaceKeys = {
   members: (key: string) => ['spaces', 'members', key] as const,
   groups: (key: string) => ['spaces', 'groups', key] as const,
   groupDirectory: (company: string) => ['groups', 'directory', company] as const,
-  directory: (company: string, search: string) => ['users', 'directory', company, search] as const,
+  directory: (company: string, search: string, homes = false) =>
+    ['users', 'directory', company, search, homes] as const,
 }
 
 /** Пространства текущего пользователя (сайдбар, главная). */
@@ -43,11 +44,14 @@ export function useMembers(key: string, enabled = true) {
   })
 }
 
-/** Справочник людей компании (ADR-0024): в пространстве — его компании, в админке — компании админки. */
-export function useDirectory(company: string, search: string, enabled = true) {
+/**
+ * Справочник людей компании (ADR-0024): в пространстве — его компании, в админке — компании админки; homes — только
+ * её «дома» (состав группы).
+ */
+export function useDirectory(company: string, search: string, enabled = true, homes = false) {
   return useQuery({
-    queryKey: spaceKeys.directory(company, search),
-    queryFn: () => searchDirectory(company, search),
+    queryKey: spaceKeys.directory(company, search, homes),
+    queryFn: () => searchDirectory(company, search, homes),
     placeholderData: keepPreviousData,
     enabled,
   })

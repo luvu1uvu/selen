@@ -417,9 +417,11 @@ describe('Страница пространства: доски рядами', (
     // Окно открылось поверх пространства и ждёт карточку
     expect(await screen.findByRole('dialog', { name: 'DEV-12' })).toHaveTextContent('Загрузка…')
 
-    // Карточки нет — окна нет: сообщение и обратно на пространство, доски на месте
+    // Карточки нет — окна нет: сообщение и обратно на пространство, доски на месте (решение PM 26.10)
     respond()
-    expect(await screen.findByText('Карточка не найдена')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Нет доступа к карточке или она не существует'),
+    ).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await waitFor(() => expect(router.state.location.pathname).toBe('/spaces/DEV'))
     expect(await region('Продукт')).toBeInTheDocument()

@@ -1,9 +1,12 @@
 import { api } from '@/shared/api/client'
-import type { AdminNavigation, Collection, NavTreeNode } from '@/shared/types/api'
+import type { AdminNavigation, Collection, NavCompanyTree } from '@/shared/types/api'
 
-/** Дерево пользователя: только папки с доступными ему пространствами (ADR-0013). */
-export async function fetchNavigation(): Promise<NavTreeNode[]> {
-  const { data } = await api.get<Collection<NavTreeNode>>('/navigation')
+/**
+ * Дерево пользователя по компаниям: только папки с доступными ему пространствами (ADR-0013, ADR-0024); название
+ * компании — только если их несколько.
+ */
+export async function fetchNavigation(): Promise<NavCompanyTree[]> {
+  const { data } = await api.get<Collection<NavCompanyTree>>('/navigation')
   return data.data
 }
 

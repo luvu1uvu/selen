@@ -35,6 +35,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\Support\Browser;
 use Tests\Support\RefreshDatabaseAsOwner;
 use Tests\TestCase;
@@ -226,6 +227,24 @@ function makeFolder(string $name, ?NavNode $parent = null, ?string $icon = null,
 function nodeOf(Space $space): NavNode
 {
     return NavNode::query()->where('space_id', $space->id)->firstOrFail();
+}
+
+/**
+ * Узлы дерева GET /navigation, когда пользователю видна одна компания (ответ — деревья по компаниям, ADR-0024; у кого
+ * компания одна — одно дерево без названия). Пусто — нет ни одного дерева.
+ *
+ * @return list<array<string, mixed>>
+ */
+function navItems(TestResponse $response): array
+{
+    $trees = $response->assertOk()->json('data');
+    expect(count($trees))->toBeLessThanOrEqual(1);
+    if ($trees !== []) {
+        // Компания одна — её названия в ответе нет (решение PM 23.10, вопрос 5)
+        expect($trees[0]['name'])->toBeNull();
+    }
+
+    return $trees[0]['items'] ?? [];
 }
 
 /** Дерево GET /navigation без вложенности: «[папка]» или ключ пространства с отступом по глубине. */

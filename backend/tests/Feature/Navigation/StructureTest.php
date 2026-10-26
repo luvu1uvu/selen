@@ -208,7 +208,7 @@ it('перемещение не меняет ключ, номера карточ
     expect($snapshot())->toEqual($before)
         ->and($group->fresh()->archived_at)->toBeNull();
     $this->actingAs($viewer)->getJson('/api/v1/cards/AND-1')->assertOk()->assertJsonPath('data.key', 'AND-1');
-    $this->getJson('/api/v1/navigation')->assertOk()->assertJsonPath('data.0.space.key', 'AND');
+    $this->getJson('/api/v1/navigation')->assertOk()->assertJsonPath('data.0.items.0.space.key', 'AND');
 });
 
 it('архивирует только папку без активного содержимого', function () {

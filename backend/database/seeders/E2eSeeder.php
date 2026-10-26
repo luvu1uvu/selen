@@ -16,6 +16,7 @@ use App\Actions\Checklists\AddChecklistAction;
 use App\Actions\Checklists\AddChecklistItemAction;
 use App\Actions\Columns\CreateColumnAction;
 use App\Actions\Comments\AddCommentAction;
+use App\Actions\Companies\CreateCompanyAction;
 use App\Actions\Groups\AddGroupMemberAction;
 use App\Actions\Groups\SaveGroupAction;
 use App\Actions\Groups\SetGroupArchivedAction;
@@ -89,7 +90,8 @@ use Illuminate\Http\UploadedFile;
  * Приёмка «Права 2.0», П2a (acceptance/stage-R2, ТК-R2.1–R2.4): пространства RROLES, RREAD, RGROUPS, RALL, RINTERN,
  * группы «E2E Руководители», «E2E Подрядчики», архивная «E2E Стажёры» — см. rights2().
  * Приёмка «Права 2.0», П2b-1 — компании (acceptance/stage-R2, ТК-R2.5–R2.8): пространство RCOMP «Права: компания»
- * и четыре человека, которые не входят в систему, — см. companies().
+ * и четыре человека, которые не входят в систему, — см. companies(). П2b-2 — «E2E Компания 2» и «E2E Компания 3»,
+ * администратор двух компаний и человек с двумя «домами» — см. moreCompanies().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  */
 class E2eSeeder extends Seeder
@@ -111,7 +113,7 @@ class E2eSeeder extends Seeder
 
     public function run(): void
     {
-        User::factory()->owner()->create(['name' => 'E2E Владелец', 'email' => 'e2e-owner@selen.test']);
+        $owner = User::factory()->owner()->create(['name' => 'E2E Владелец', 'email' => 'e2e-owner@selen.test']);
         $admin = User::factory()->admin()->create(['name' => 'E2E Администратор', 'email' => 'e2e-admin@selen.test']);
         $editor = User::factory()->create(['name' => 'E2E Редактор', 'email' => 'e2e-editor@selen.test']);
         $outsider = User::factory()->create(['name' => 'E2E Посторонний', 'email' => 'e2e-outsider@selen.test']);
@@ -288,6 +290,9 @@ class E2eSeeder extends Seeder
         // Приёмка «Права 2.0», П2b-1 — компании (acceptance/stage-R2, ТК-R2.5–R2.8)
         $this->companies($admin);
 
+        // Приёмка «Права 2.0», П2b-2 — несколько компаний (acceptance/stage-R2)
+        $this->moreCompanies($owner, $admin);
+
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
     }
@@ -364,6 +369,56 @@ class E2eSeeder extends Seeder
         $archive = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Права: стажёры', 'key' => 'RINTERN'], [$admin]);
         $grant->handle($admin, $archive, $interns, SpaceRole::Commenter);
         app(SetGroupArchivedAction::class)->handle($admin, $interns, true);
+    }
+
+    /**
+     * «Права 2.0», П2b-2 — несколько компаний (e2e/acceptance/stage-R2): «E2E Компания 2» и маленькая «E2E Компания 3»
+     * (их создаёт Владелец — справочники из шаблона), администратор двух компаний и человек с двумя «домами». У Владельца
+     * в дереве по-прежнему одна компания (выдач у него нет, пустых папок во второй и третьей нет) — тесты его дерева
+     * не меняются.
+     *
+     * - e2e-multi-admin@selen.test «E2E Админ двух компаний» — администратор «E2E Компании 2» и «E2E Компании 3»: выбор
+     *   компании в админке; администратор пространств RSECOND, RTHIRD.
+     * - e2e-two-homes@selen.test «E2E Два дома» — «дом» в «Компании 1» и «E2E Компании 2»: в дереве заголовки обеих
+     *   компаний; editor в RHOME «Дом: первая компания» (Компания 1, администратор e2e-admin) и в RSECOND;
+     *   деактивировать его может только Владелец.
+     * - «E2E Сотрудник второй» (e2e-second@selen.test, не входит) — участник «E2E Компании 2», editor в RSECOND.
+     * - «E2E Два дома без входа» (e2e-two-homes-idle@selen.test, не входит) — тоже «дом» в «Компании 1» и «E2E
+     *   Компании 2»: ТК-R2.12 (шаги 2–3) — у администратора «Компании 1» в его строке нет действий, Владелец
+     *   деактивирует его и возвращает. Деактивация завершает сессии — у e2e-two-homes она сбросила бы сохранённый вход.
+     * - RSECOND «Вторая компания: продажи» в папке «E2E Клиенты» (E2E Компания 2), доска «Сделки», RSECOND-1 «Сделка
+     *   второй компании»; RTHIRD «Третья компания: склад» (E2E Компания 3), доска «Поставки», RTHIRD-1 «Поставка».
+     */
+    private function moreCompanies(User $owner, User $admin): void
+    {
+        $create = app(CreateCompanyAction::class);
+        $second = $create->handle($owner, 'E2E Компания 2');
+        $third = $create->handle($owner, 'E2E Компания 3');
+
+        $multiAdmin = User::factory()->inCompany($second, admin: true)->create(['name' => 'E2E Админ двух компаний', 'email' => 'e2e-multi-admin@selen.test']);
+        $multiAdmin->companies()->attach($third->id, ['kind' => 'home', 'is_admin' => true]);
+        $twoHomes = User::factory()->create(['name' => 'E2E Два дома', 'email' => 'e2e-two-homes@selen.test']);
+        $twoHomes->companies()->attach($second->id, ['kind' => 'home']);
+        $member = User::factory()->inCompany($second)->create(['name' => 'E2E Сотрудник второй', 'email' => 'e2e-second@selen.test']);
+        // ТК-R2.12: человек с двумя «домами», которого деактивирует и возвращает Владелец (в систему не входит)
+        $idle = User::factory()->create(['name' => 'E2E Два дома без входа', 'email' => 'e2e-two-homes-idle@selen.test']);
+        $idle->companies()->attach($second->id, ['kind' => 'home']);
+
+        $home = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Дом: первая компания', 'key' => 'RHOME'], [$admin]);
+        app(AddSpaceMemberAction::class)->handle($admin, $home, $twoHomes, SpaceRole::Editor);
+
+        $folder = app(CreateFolderAction::class)->handle($multiAdmin, $second, 'E2E Клиенты', null, null);
+        $sales = app(CreateSpaceAction::class)->handle($multiAdmin, $second, ['name' => 'Вторая компания: продажи', 'key' => 'RSECOND'], [$multiAdmin], null, $folder->id);
+        app(AddSpaceMemberAction::class)->handle($multiAdmin, $sales, $twoHomes, SpaceRole::Editor);
+        app(AddSpaceMemberAction::class)->handle($multiAdmin, $sales, $member, SpaceRole::Editor);
+        $stock = app(CreateSpaceAction::class)->handle($multiAdmin, $third, ['name' => 'Третья компания: склад', 'key' => 'RTHIRD'], [$multiAdmin]);
+
+        foreach ([[$sales, 'Сделки', 'Сделка второй компании'], [$stock, 'Поставки', 'Поставка']] as [$space, $boardName, $title]) {
+            $board = app(CreateBoardAction::class)->handle($multiAdmin, $space, ['name' => $boardName], BoardTemplate::Simple);
+            $lane = Lane::query()->where('board_id', $board->id)->sole();
+            $todo = BoardColumn::query()->where('board_id', $board->id)->where('name', 'To Do')->sole();
+            app(CreateCardAction::class)->handle($multiAdmin, $board, ['title' => $title], $todo, $lane);
+        }
     }
 
     /**

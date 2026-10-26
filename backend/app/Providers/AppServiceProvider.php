@@ -8,6 +8,7 @@ use App\Models\BoardColumn;
 use App\Models\Card;
 use App\Models\CardType;
 use App\Models\Comment;
+use App\Models\Company;
 use App\Models\EventLogEntry;
 use App\Models\Group;
 use App\Models\Invitation;
@@ -62,6 +63,7 @@ class AppServiceProvider extends ServiceProvider
             'attachment' => Attachment::class,
             'group' => Group::class,
             'nav_node' => NavNode::class,
+            'company' => Company::class,
         ]);
 
         // Политика паролей: одинакова для приглашения, сброса и смены пароля.
@@ -73,6 +75,19 @@ class AppServiceProvider extends ServiceProvider
         // Аналитика трудозатрат (этап 9) — только Владельцу (ADR-0017). Маршруты этапа 9 закрываются этой
         // проверкой: Gate::authorize(AppServiceProvider::VIEW_WORK_TIME_ANALYTICS)
         Gate::define(self::VIEW_WORK_TIME_ANALYTICS, fn (User $user) => $user->isOwner());
+    }
+
+    /** Сколько ждать до конца лимита — словами: «45 сек.», «12 мин.», «5 ч 20 мин.». */
+    private function waitTime(int $seconds): string
+    {
+        // Минуты — с округлением вверх, затем часы: 7199 с — «2 ч 0 мин.», а не «1 ч 60 мин.»
+        $minutes = intdiv($seconds + 59, 60);
+
+        return match (true) {
+            $seconds < 60 => __('selen.invitations.wait.seconds', ['seconds' => max($seconds, 1)]),
+            $minutes < 60 => __('selen.invitations.wait.minutes', ['minutes' => $minutes]),
+            default => __('selen.invitations.wait.hours', ['hours' => intdiv($minutes, 60), 'minutes' => $minutes % 60]),
+        };
     }
 
     private function configureRateLimiting(): void
@@ -111,6 +126,19 @@ class AppServiceProvider extends ServiceProvider
         // Ссылки на файлы (/files/{id}, UI-1b): картинки окна карточки грузятся по ним же — запас на десятки за раз
         RateLimiter::for('files', fn (Request $request) => Limit::perMinute(600)
             ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
+
+        // Отправка приглашений (новое и «Отправить повторно»): 10 в минуту и 300 в сутки на приглашающего (решение PM
+        // 26.10) — перебор email по ответу «email уже используется» медленный; отказы тоже считаются. Ключи у пределов
+        // разные: с одинаковым ключом они делили бы один счётчик
+        $tooManyInvitations = fn (Request $request, array $headers): JsonResponse => response()->json(
+            ['message' => __('selen.invitations.throttle', ['time' => $this->waitTime((int) ($headers['Retry-After'] ?? 60))])],
+            429,
+            $headers,
+        );
+        RateLimiter::for('invitations-send', fn (Request $request) => [
+            Limit::perMinute(10)->by('minute:'.$request->user()?->getAuthIdentifier())->response($tooManyInvitations),
+            Limit::perDay(300)->by('day:'.$request->user()?->getAuthIdentifier())->response($tooManyInvitations),
+        ]);
 
         // Страница приглашения: защита от перебора токенов
         RateLimiter::for('invitations', fn (Request $request) => Limit::perMinute(20)

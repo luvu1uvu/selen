@@ -5,6 +5,7 @@ import type {
   AssignableRole,
   CardType,
   Collection,
+  Company,
   DeactivationImpact,
   EventLogEntry,
   Group,
@@ -26,6 +27,20 @@ export interface UserFilters {
 export interface EventFilters {
   event_type?: string
   page?: number
+}
+
+/** Компании — экран Владельца (ADR-0024). */
+export async function fetchCompanies(): Promise<Company[]> {
+  const { data } = await api.get<Collection<Company>>('/admin/companies')
+  return data.data
+}
+
+/** Новая компания (справочники — из шаблона) или новое название. */
+export async function saveCompany(payload: { name: string }, id?: string): Promise<Company> {
+  const { data } = id
+    ? await api.patch<Resource<Company>>(`/admin/companies/${id}`, payload)
+    : await api.post<Resource<Company>>('/admin/companies', payload)
+  return data.data
 }
 
 export async function fetchUsers(

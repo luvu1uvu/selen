@@ -1,8 +1,8 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { Space, SpacePerson, SpaceRole } from '@/shared/types/api'
-import { makeNavSpace, makeSpace, makeUser, server, signedInAs } from '@/test/server'
+import { makeNavSpace, makeSpace, makeUser, navTree, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 const me = makeUser({ id: 'me', name: 'Анна', role: 'member' })
@@ -31,7 +31,7 @@ const members: SpacePerson[] = [
 function serve(space: Space) {
   server.use(
     http.get('*/api/v1/spaces', () => HttpResponse.json({ data: [space] })),
-    http.get('*/api/v1/navigation', () => HttpResponse.json({ data: [makeNavSpace(space)] })),
+    http.get('*/api/v1/navigation', () => HttpResponse.json(navTree([makeNavSpace(space)]))),
     http.get('*/api/v1/spaces/DEV', () => HttpResponse.json({ data: space })),
     http.get('*/api/v1/spaces/DEV/members', () => HttpResponse.json({ data: members })),
   )
@@ -121,15 +121,18 @@ describe('Страница пространства', () => {
     expect(screen.queryByLabelText('Роль Борис')).not.toBeInTheDocument()
   })
 
-  it('чужое или несуществующее пространство — «не найдено»', async () => {
+  it('чужое или несуществующее пространство — на главную с уведомлением (ADR-0024)', async () => {
     server.use(
       http.get('*/api/v1/spaces/NOPE', () =>
         HttpResponse.json({ message: 'Не найдено.' }, { status: 404 }),
       ),
     )
-    renderApp('/spaces/NOPE')
+    const { router } = renderApp('/spaces/NOPE')
 
-    expect(await screen.findByText('Пространство не найдено')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Нет доступа к пространству или оно не существует'),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 
   it('архивное пространство помечено и доступно только для чтения', async () => {

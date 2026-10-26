@@ -1,5 +1,5 @@
 import { screen } from '@testing-library/react'
-import { makeUser, signedInAs } from '@/test/server'
+import { makeUser, signedInAs, TEST_COMPANY_ID } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 describe('Доступ к страницам', () => {
@@ -12,6 +12,25 @@ describe('Доступ к страницам', () => {
     signedInAs(makeUser({ role: 'member' }))
     renderApp('/login')
     expect(await screen.findByRole('heading', { name: 'Пространства' })).toBeInTheDocument()
+  })
+
+  it('неизвестный адрес админки — «Страница не найдена», без бесконечного перехода (ADR-0024)', async () => {
+    signedInAs(makeUser())
+    for (const path of [
+      '/admin/nope',
+      '/admin/c',
+      '/admin/companies/x',
+      `/admin/c/${TEST_COMPANY_ID}/nope`,
+      `/admin/c/${TEST_COMPANY_ID}/users/u-1/x/y`,
+    ]) {
+      const { router, unmount } = renderApp(path)
+      expect(
+        await screen.findByRole('heading', { name: 'Страница не найдена' }),
+      ).toBeInTheDocument()
+      // Адрес не растёт: остался тем же
+      expect(router.state.location.pathname).toBe(path)
+      unmount()
+    }
   })
 
   it('участнику не показывает админку ни в меню, ни по прямой ссылке', async () => {
@@ -33,7 +52,8 @@ describe('Доступ к страницам', () => {
     signedInAs(makeUser({ role: 'owner' }))
     const { router } = renderApp('/admin/users')
     expect(await screen.findByRole('heading', { name: 'Пользователи' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/admin/users')
+    // Прежний адрес — в админку компании (ADR-0024)
+    expect(router.state.location.pathname).toBe(`/admin/c/${TEST_COMPANY_ID}/users`)
     expect(screen.getByRole('button', { name: 'Администрирование' })).toBeInTheDocument()
   })
 })

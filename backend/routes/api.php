@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\CardTypeController as AdminCardTypeController;
+use App\Http\Controllers\Api\V1\Admin\CompanyController;
 use App\Http\Controllers\Api\V1\Admin\EventLogController;
 use App\Http\Controllers\Api\V1\Admin\GroupController as AdminGroupController;
 use App\Http\Controllers\Api\V1\Admin\InvitationController;
@@ -184,6 +185,11 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
     Route::get('companies/{company}/groups/directory', GroupDirectoryController::class)->name('groups.directory');
     Route::get('spaces/{space:key}/card-types', [CardTypeController::class, 'index'])->name('card-types.index');
 
+    // --- Компании: список, создание из шаблона, переименование — только Владелец (ADR-0024) ----
+    Route::get('admin/companies', [CompanyController::class, 'index'])->name('admin.companies.index');
+    Route::post('admin/companies', [CompanyController::class, 'store'])->name('admin.companies.store');
+    Route::patch('admin/companies/{company}', [CompanyController::class, 'update'])->name('admin.companies.update');
+
     // --- Администрирование компании (доступ проверяют Policies, ADR-0024) ----
     // Вложенные объекты ищутся только среди объектов компании из адреса (scoped binding: Company, Group, Space —
     // resolveChildRouteBinding): объект другой компании — 404, как несуществующий
@@ -211,8 +217,9 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
         Route::delete('groups/{group}/spaces/{space}', [AdminGroupController::class, 'revokeSpace'])->name('groups.spaces.revoke');
 
         Route::get('invitations', [InvitationController::class, 'index'])->name('invitations.index');
-        Route::post('invitations', [InvitationController::class, 'store'])->name('invitations.store');
-        Route::post('invitations/{invitation}/resend', [InvitationController::class, 'resend'])->name('invitations.resend');
+        // Отправка приглашений — с лимитом на приглашающего (решение PM 26.10)
+        Route::post('invitations', [InvitationController::class, 'store'])->middleware('throttle:invitations-send')->name('invitations.store');
+        Route::post('invitations/{invitation}/resend', [InvitationController::class, 'resend'])->middleware('throttle:invitations-send')->name('invitations.resend');
         Route::post('invitations/{invitation}/revoke', [InvitationController::class, 'revoke'])->name('invitations.revoke');
 
         Route::get('events', [EventLogController::class, 'index'])->name('events.index');

@@ -1,9 +1,31 @@
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
-import type { AdminUser, AdminUserPermissions, NavTreeSpace, Space, User } from '@/shared/types/api'
+import type {
+  AdminUser,
+  AdminUserPermissions,
+  CompanyPermission,
+  NavCompanyTree,
+  NavTreeNode,
+  NavTreeSpace,
+  Space,
+  User,
+} from '@/shared/types/api'
 
 /** Компания тестов («Компания 1», ADR-0024): адреса админки — admin/companies/{id}/…. */
 export const TEST_COMPANY_ID = '01JTESTCOMPANY0000000000000'
+
+/** Права администратора компании по умолчанию (Permission::companyAdminDefaults, ADR-0024). */
+export const COMPANY_ADMIN_PERMISSIONS: CompanyPermission[] = [
+  'company.invite_users',
+  'company.manage_users',
+  'company.manage_groups',
+  'company.manage_dictionaries',
+  'company.manage_roles',
+  'company.manage_structure',
+  'company.manage_access',
+  'company.view_event_log',
+  'company.manage_trash',
+]
 
 /** Фабрика пользователя для тестов: администратор (и Владелец) управляет компанией тестов. */
 export function makeUser(overrides: Partial<User> = {}): User {
@@ -18,7 +40,10 @@ export function makeUser(overrides: Partial<User> = {}): User {
     last_login_at: null,
     deactivated_at: null,
     created_at: '2026-01-01T00:00:00Z',
-    admin_companies: role === 'member' ? [] : [{ id: TEST_COMPANY_ID }],
+    admin_companies:
+      role === 'member'
+        ? []
+        : [{ id: TEST_COMPANY_ID, name: null, permissions: COMPANY_ADMIN_PERMISSIONS }],
     ...overrides,
   }
 }
@@ -30,6 +55,7 @@ export const ALL_USER_PERMISSIONS: AdminUserPermissions = {
   reactivate: true,
   manage_invitation: true,
   transfer_ownership: true,
+  owner_only: false,
 }
 
 export const NO_USER_PERMISSIONS: AdminUserPermissions = {
@@ -38,6 +64,7 @@ export const NO_USER_PERMISSIONS: AdminUserPermissions = {
   reactivate: false,
   manage_invitation: false,
   transfer_ownership: false,
+  owner_only: false,
 }
 
 /** Пользователь в админском списке (AdminUserResource): по умолчанию — со всеми действиями. */
@@ -58,6 +85,14 @@ export function makeSpace(overrides: Partial<Space> = {}): Space {
     permissions: { manage: true, edit_cards: true, view_access_sources: true },
     ...overrides,
   }
+}
+
+/**
+ * Ответ GET /navigation: деревья по компаниям (ADR-0024); у пользователя тестов компания одна — одно дерево без
+ * названия; пусто — без деревьев.
+ */
+export function navTree(items: NavTreeNode[]): { data: NavCompanyTree[] } {
+  return { data: items.length === 0 ? [] : [{ id: TEST_COMPANY_ID, name: null, items }] }
 }
 
 /** Узел пространства в дереве навигации (GET /navigation) для тестов. */

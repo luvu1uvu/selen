@@ -1,4 +1,4 @@
-import type { User } from '@/shared/types/api'
+import type { AdminCompany, User } from '@/shared/types/api'
 
 type WithRole = Pick<User, 'role'> | null | undefined
 
@@ -16,9 +16,11 @@ export function isOwner(user: WithRole): boolean {
 }
 
 /**
- * Компании, которыми текущий пользователь управляет (Владелец — всеми), — адреса админки admin/companies/{id}/…
- * (ADR-0024). Пока компания одна, админка работает с первой; выбор компании — П2b-2.
+ * Компании, которыми текущий пользователь управляет (Владелец — всеми), по дате создания — адреса админки
+ * /admin/c/{id}/… и API admin/companies/{id}/… (ADR-0024). Названия — только если их несколько.
  */
-export function adminCompanies(user: Pick<User, 'admin_companies'> | null | undefined): string[] {
-  return user?.admin_companies?.map((company) => company.id) ?? []
+export function adminCompanies(
+  user: Pick<User, 'admin_companies'> | null | undefined,
+): AdminCompany[] {
+  return user?.admin_companies ?? []
 }

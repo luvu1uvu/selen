@@ -134,6 +134,22 @@ class Company extends Model
         return $user->isOwner() ? UserRole::Owner->value : CompanyRole::of($this->permissionsOf($user)->isAdmin())->value;
     }
 
+    /**
+     * Вложенный объект адреса admin/companies/{company}/… (scoped binding): человек — её «дом» или Владелец (участник
+     * всех компаний, ADR-0024: его доступ в компании видно и выдать можно); остальное — среди объектов компании (связи).
+     */
+    public function resolveChildRouteBinding($childType, $value, $field): ?Model
+    {
+        if ($childType === 'user') {
+            return User::query()
+                ->whereIn('id', app(AccessResolver::class)->companyPeopleIds($this))
+                ->where($field ?? 'id', $value)
+                ->first();
+        }
+
+        return parent::resolveChildRouteBinding($childType, $value, $field);
+    }
+
     /** Сбросить кеш прав (после смены администратора в этом же запросе). */
     public function forgetResolvedPermissions(): void
     {

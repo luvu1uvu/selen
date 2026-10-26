@@ -9,8 +9,10 @@ import {
   makeNavSpace,
   makeSpace,
   makeUser,
+  navTree,
   NO_USER_PERMISSIONS,
   server,
+  TEST_COMPANY_ID,
 } from '@/test/server'
 import { renderApp } from '@/test/render'
 import { installSession } from './queryClient'
@@ -81,7 +83,7 @@ function serveSession() {
     ),
     http.get(
       '*/api/v1/navigation',
-      reply(() => ({ data: trees[session.user!.id] })),
+      reply(() => navTree(trees[session.user!.id])),
     ),
     http.get(
       '*/api/v1/admin/companies/:company/navigation',
@@ -235,7 +237,9 @@ describe('Сессия вкладки', () => {
     const { queryClient, router } = renderApp('/admin/structure')
     await waitFor(() => expect(newFolderMark()).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Администрирование' }))
-    expect(queryClient.getQueryData(['spaces', 'navigation'])).toEqual(trees[admin.id])
+    expect(queryClient.getQueryData(['spaces', 'navigation'])).toEqual(
+      navTree(trees[admin.id]).data,
+    )
 
     // Сессия истекла: следующий запрос — 401, вкладка уходит на вход и забывает данные администратора
     session.user = null
@@ -251,7 +255,9 @@ describe('Сессия вкладки', () => {
     // На страницу, где была вкладка, возвращается только тот же пользователь; другой — на главную (аудит LATER-104, S-2)
     expect(router.state.location.pathname).toBe('/')
     await waitFor(() =>
-      expect(queryClient.getQueryData(['spaces', 'navigation'])).toEqual(trees[owner.id]),
+      expect(queryClient.getQueryData(['spaces', 'navigation'])).toEqual(
+        navTree(trees[owner.id]).data,
+      ),
     )
   })
 
@@ -275,7 +281,9 @@ describe('Сессия вкладки', () => {
     await user.type(screen.getByLabelText('Email'), 'admin@selen.test')
     await user.type(screen.getByLabelText('Пароль'), 'password-123')
     await user.click(screen.getByRole('button', { name: 'Войти' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/admin/users'))
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/admin/c/${TEST_COMPANY_ID}/users`),
+    )
   })
 
   it('запрос ушёл без пользователя вкладки (409 session_unverified) — данные перезагружаются', async () => {
@@ -292,13 +300,15 @@ describe('Сессия вкладки', () => {
               },
               { status: 409 },
             )
-          : HttpResponse.json({ data: trees[admin.id] })
+          : HttpResponse.json(navTree(trees[admin.id]))
       }),
     )
     const { queryClient } = renderApp('/admin/structure')
 
     await waitFor(() =>
-      expect(queryClient.getQueryData(['spaces', 'navigation'])).toEqual(trees[admin.id]),
+      expect(queryClient.getQueryData(['spaces', 'navigation'])).toEqual(
+        navTree(trees[admin.id]).data,
+      ),
     )
     expect(attempts).toBe(2)
     expect(await userMenu()).toHaveTextContent('Анна Админова')

@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
 import { structureRow } from '../stage-3/helpers'
 import { openCardByKey } from '../stage-ux2/helpers'
-import { COMPANY_SPACE, stamp, tree } from './helpers'
+import { COMPANY_SPACE, stamp, tree, usersTabs } from './helpers'
 
 /**
  * ТК-R2.6: группы, справочники и дерево принадлежат «Компании 1» — администратор работает с ними как прежде.
@@ -56,8 +56,10 @@ test('ТК-R2.6. Группы, метки, типы карточек и «Стр
   const type = `Улучшение ${id}`
   const folder = `ТК-R2.6 ${id}`
 
-  // 1. Группы → создать группу (открывается её страница), добавить человека
-  await openAdmin(page, '/admin/groups', 'Группы')
+  // 1. Группы → создать группу (открывается её страница), добавить человека. С П2b-2 группы — вкладка «Группы»
+  // раздела «Пользователи» (заголовок страницы — «Пользователи»), прежний адрес /admin/groups ведёт на неё
+  await openAdmin(page, '/admin/groups', 'Пользователи')
+  await expect(usersTabs(page).getByRole('link', { name: 'Группы' })).toHaveAttribute('aria-current', 'page')
   await page.getByRole('button', { name: 'Создать группу' }).click()
   const groupDialog = page.getByRole('dialog', { name: 'Новая группа' })
   await groupDialog.getByLabel('Название').fill(group)

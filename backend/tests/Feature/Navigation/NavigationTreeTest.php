@@ -33,7 +33,7 @@ it('показывает только папки с доступными про�
 
     $response = $this->actingAs($this->user)->getJson('/api/v1/navigation')->assertOk();
 
-    expect(flatTree($response->json('data')))->toBe(['[Mobile]', '  [Apple]', '    IOS', 'FRONT']);
+    expect(flatTree(navItems($response)))->toBe(['[Mobile]', '  [Apple]', '    IOS', 'FRONT']);
 
     // Названий недоступных папок и пространств нет в ответе
     $body = $response->getContent();
@@ -51,7 +51,7 @@ it('у пространства — можно ли им управлять (с�
     addToSpace($read, $this->user, SpaceRole::Editor);
     addToSpaceViaGroup($group, $this->user, SpaceRole::Admin);
 
-    $tree = $this->actingAs($this->user)->getJson('/api/v1/navigation')->assertOk()->json('data');
+    $tree = navItems($this->actingAs($this->user)->getJson('/api/v1/navigation'));
 
     expect(collect($tree)->pluck('can_manage', 'space.key')->all())
         ->toBe(['OWN' => true, 'READ' => false, 'GRP' => true]);
@@ -70,7 +70,7 @@ it('пустая папка не видна в дереве ни админис�
 
     foreach ([$this->admin, $this->user] as $viewer) {
         $response = $this->actingAs($viewer)->getJson('/api/v1/navigation')->assertOk();
-        expect(flatTree($response->json('data')))->toBe(['[Смешанная]', '  OWN'])
+        expect(flatTree(navItems($response)))->toBe(['[Смешанная]', '  OWN'])
             ->and($response->getContent())->not->toContain('Пустая')->not->toContain('"empty":true');
     }
 
@@ -83,15 +83,15 @@ it('показывает пространство без досок, под пр
     addToSpace($space, $this->user, SpaceRole::Admin);
 
     $this->actingAs($this->user)->getJson('/api/v1/navigation')->assertOk()
-        ->assertJsonPath('data.0.space.key', 'NEW')
-        ->assertJsonPath('data.0.boards', []);
+        ->assertJsonPath('data.0.items.0.space.key', 'NEW')
+        ->assertJsonPath('data.0.items.0.boards', []);
 
     $first = makeBoard($space, $this->user, name: 'Первая');
     $second = makeBoard($space, $this->user, name: 'Вторая');
     makeBoard($space, $this->user, name: 'Архивная')->forceFill(['archived_at' => now()])->save();
 
     $this->getJson('/api/v1/navigation')->assertOk()
-        ->assertJsonPath('data.0.boards', [['id' => $first->id, 'name' => 'Первая'], ['id' => $second->id, 'name' => 'Вторая']]);
+        ->assertJsonPath('data.0.items.0.boards', [['id' => $first->id, 'name' => 'Первая'], ['id' => $second->id, 'name' => 'Вторая']]);
 });
 
 it('скрывает архивные пространства и архивные папки', function () {
@@ -114,11 +114,11 @@ it('порядок узлов — по позициям, иконки отдаю
     addToSpace($b, $this->user, SpaceRole::Commenter);
 
     $this->actingAs($this->user)->getJson('/api/v1/navigation')->assertOk()
-        ->assertJsonPath('data.0.space.key', 'BBB')
-        ->assertJsonPath('data.0.icon', null)
-        ->assertJsonPath('data.1.name', 'Папка')
-        ->assertJsonPath('data.1.icon', '💡')
-        ->assertJsonPath('data.1.children.0.icon', '📦');
+        ->assertJsonPath('data.0.items.0.space.key', 'BBB')
+        ->assertJsonPath('data.0.items.0.icon', null)
+        ->assertJsonPath('data.0.items.1.name', 'Папка')
+        ->assertJsonPath('data.0.items.1.icon', '💡')
+        ->assertJsonPath('data.0.items.1.children.0.icon', '📦');
 });
 
 it('администратору компании — те же правила: только папки с доступными ему пространствами', function () {
@@ -131,7 +131,7 @@ it('администратору компании — те же правила: 
 
     $response = $this->actingAs($this->admin)->getJson('/api/v1/navigation')->assertOk();
 
-    expect(flatTree($response->json('data')))->toBe(['OWN']);
+    expect(flatTree(navItems($response)))->toBe(['OWN']);
     foreach (['Операции', 'Маркетинг', 'MKT', 'Пустая папка', $operations->id, $empty->id] as $text) {
         expect($response->getContent())->not->toContain($text);
     }
@@ -151,7 +151,7 @@ it('Владельцу видны по-настоящему пустые пап�
     placeIn(nodeOf($own), $mixed);
     addToSpace($own, $owner, SpaceRole::Admin);
 
-    $tree = $this->actingAs($owner)->getJson('/api/v1/navigation')->assertOk()->json('data');
+    $tree = navItems($this->actingAs($owner)->getJson('/api/v1/navigation'));
 
     expect(flatTree($tree))->toBe(['[Пустая]', '  [Вложенная пустая]', '[Смешанная]', '  [Пустая внутри]', '  OWN'])
         ->and($tree[0])->toMatchArray(['id' => $empty->id, 'empty' => true])
@@ -210,7 +210,7 @@ it('значок «доступно всем»: у пространства — 
     grantGroup($open1, $everyone, SpaceRole::Commenter);
     grantGroup($open2, $everyone, SpaceRole::Editor, ownCardsOnly: true);
 
-    $tree = fn () => $this->actingAs($this->user)->getJson('/api/v1/navigation')->assertOk()->json('data');
+    $tree = fn () => navItems($this->actingAs($this->user)->getJson('/api/v1/navigation'));
 
     // Все активные пространства папок открыты всем (архивное не считается)
     $data = $tree();
@@ -293,4 +293,56 @@ it('у Владельца число запросов дерева тоже не
     }
 
     expect($count())->toBe($small);
+});
+
+it('дерево по компаниям: одна — без названия, несколько — заголовки с названиями по дате создания компании', function () {
+    $second = otherCompany(['name' => 'Компания 2']);
+    $own = space(['key' => 'OWN', 'name' => 'Своё']);
+    $far = space(['key' => 'FAR', 'name' => 'Дальнее', 'company_id' => $second->id]);
+    addToSpace($own, $this->user, SpaceRole::Editor);
+
+    // Одна компания: одно дерево, названия нет нигде в ответе
+    $response = $this->actingAs($this->user)->getJson('/api/v1/navigation')->assertOk();
+    expect($response->json('data'))->toBe([['id' => company()->id, 'name' => null, 'items' => navItems($response)]])
+        ->and($response->getContent())->not->toContain(company()->name);
+
+    // «Дом» и во второй компании, с доступом к её пространству: заголовки обеих компаний
+    $this->user->companies()->attach($second->id, ['kind' => 'home']);
+    addToSpace($far, $this->user, SpaceRole::Commenter);
+    $trees = $this->actingAs($this->user)->getJson('/api/v1/navigation')->assertOk()->json('data');
+    expect(collect($trees)->map(fn (array $tree) => [$tree['id'], $tree['name'], flatTree($tree['items'])])->all())
+        ->toBe([[company()->id, company()->name, ['OWN']], [$second->id, 'Компания 2', ['FAR']]]);
+
+    // Компания без видимых узлов заголовка не получает
+    otherCompany(['name' => 'Компания 3']);
+    expect(collect($this->getJson('/api/v1/navigation')->json('data'))->pluck('name')->all())->toBe([company()->name, 'Компания 2']);
+});
+
+it('число запросов дерева не зависит от числа компаний', function () {
+    $owner = owner();
+    $count = function () use ($owner) {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($owner)->getJson('/api/v1/navigation')->assertOk();
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $queries;
+    };
+    $add = function () use ($owner) {
+        $company = otherCompany();
+        $space = space(['company_id' => $company->id]);
+        addToSpace($space, $owner, SpaceRole::Commenter);
+        makeFolder('Пустая '.uniqid(), company: $company);
+    };
+
+    $add();
+    $count();
+    $small = $count();
+    foreach (range(1, 4) as $i) {
+        $add();
+    }
+
+    expect($count())->toBe($small)
+        ->and($this->getJson('/api/v1/navigation')->json('data'))->toHaveCount(5);
 });

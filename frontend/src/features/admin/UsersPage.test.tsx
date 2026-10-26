@@ -118,7 +118,7 @@ describe('Админка пользователей', () => {
       ),
       http.post('*/api/v1/admin/companies/:company/invitations', () =>
         HttpResponse.json(
-          { message: 'x', errors: { email: ['Пользователь с таким email уже существует.'] } },
+          { message: 'x', errors: { email: ['Этот email уже используется в Selen.'] } },
           { status: 422 },
         ),
       ),
@@ -130,9 +130,7 @@ describe('Админка пользователей', () => {
     await userEvent.type(screen.getByLabelText('Рабочий email'), 'admin@selen.test')
     await userEvent.click(screen.getByRole('button', { name: 'Отправить приглашение' }))
 
-    expect(
-      await screen.findByText('Пользователь с таким email уже существует.'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Этот email уже используется в Selen.')).toBeInTheDocument()
   })
 
   it('деактивирует пользователя после подтверждения', async () => {

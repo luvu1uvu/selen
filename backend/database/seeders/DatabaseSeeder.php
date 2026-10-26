@@ -13,7 +13,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         if (app()->environment('local')) {
-            $this->call([DemoSeeder::class, BoardsDemoSeeder::class]);
+            $this->call([DemoSeeder::class, BoardsDemoSeeder::class, CompaniesDemoSeeder::class]);
         }
     }
 }

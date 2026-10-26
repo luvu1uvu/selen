@@ -2,7 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { NavTreeNode } from '@/shared/types/api'
-import { makeNavSpace, makeSpace, makeUser, server, signedInAs } from '@/test/server'
+import { makeNavSpace, makeSpace, makeUser, navTree, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 const admin = makeUser({ id: 'admin-1', name: 'Сергей' })
@@ -27,7 +27,7 @@ const tree: NavTreeNode[] = [
 ]
 
 function withTree(nodes: NavTreeNode[] = tree) {
-  server.use(http.get('*/api/v1/navigation', () => HttpResponse.json({ data: nodes })))
+  server.use(http.get('*/api/v1/navigation', () => HttpResponse.json(navTree(nodes))))
 }
 
 async function treeNav() {

@@ -6,6 +6,7 @@ import { isOwner, isSystemAdmin } from '@/shared/lib/roles'
 import type { UserAccess } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { useAdminUrl } from './company'
 import { UserStatusBadge } from './components/UserStatusBadge'
 import { useUserAccess } from './queries'
 
@@ -15,6 +16,7 @@ import { useUserAccess } from './queries'
  */
 export function UserAccessPage() {
   const { t } = useTranslation('admin')
+  const url = useAdminUrl()
   const { t: tc } = useTranslation()
   const { userId = '' } = useParams()
   const accessQuery = useUserAccess(userId)
@@ -33,7 +35,7 @@ export function UserAccessPage() {
     <div className="grid gap-6">
       <div className="grid gap-2">
         <Link
-          to="/admin/users"
+          to={url('users')}
           className="text-muted-foreground flex items-center gap-1 text-sm hover:underline"
         >
           <ArrowLeft className="size-4" />
@@ -64,7 +66,7 @@ export function UserAccessPage() {
           <ul className="flex flex-wrap gap-2">
             {access.groups.map((group) => (
               <li key={group.id}>
-                <Link to={`/admin/groups/${group.id}`}>
+                <Link to={url(`groups/${group.id}`)}>
                   <Badge variant={group.archived_at ? 'warning' : 'secondary'}>
                     {group.archived_at
                       ? t('access.archivedGroup', { name: group.name })

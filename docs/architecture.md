@@ -42,7 +42,7 @@
 
 ### Поток запроса (пример: деактивация пользователя)
 
-1. `POST /api/v1/admin/users/{id}/deactivate` → nginx → php-fpm.
+1. `POST /api/v1/admin/companies/{company}/users/{id}/deactivate` → nginx → php-fpm.
 2. Middleware: Sanctum поднимает сессию из cookie → `auth:sanctum` → `active` (пользователь активен?).
 3. `UserController::deactivate` → `Gate::authorize('deactivate', $user)` (`UserPolicy`).
 4. `DeactivateUserAction::handle()` в транзакции: блокирует строку, проверяет «не последний админ»,
@@ -195,9 +195,12 @@ IP и user agent входов — в `auth_audit` с автоочисткой ч
 - `src/shared/` — HTTP-клиент (axios с XSRF), i18n (все строки), UI-kit (shadcn/ui), типы API.
 
 Маршруты SPA: `/login`, `/forgot-password`, `/reset-password/:token`, `/invitations/:token`, `/` (пространства),
-`/spaces/:key`, `/boards/:id`, `/cards/:key` (доска + панель карточки), `/profile`, `/admin/users`,
-`/admin/users/:id` (доступ пользователя по источникам), `/admin/groups`, `/admin/groups/:id`, `/admin/spaces`,
-`/admin/structure` (дерево навигации), `/admin/card-types`, `/admin/labels`, `/admin/events`. Ссылки в письмах строит backend по `config/selen.php → frontend_paths`.
+`/spaces/:key`, `/boards/:id`, `/cards/:key` (доска + панель карточки), `/profile`; админка — `/admin/companies`
+(«Компании», только Владелец) и админка компании `/admin/c/:companyId/…` (ADR-0024): `users`, `groups`, `invitations`
+(вкладки раздела «Пользователи»), `users/:id` (доступ пользователя по источникам), `groups/:id`, `spaces`,
+`structure` (дерево навигации), `card-types`, `labels`, `trash`, `events`; прежние адреса `/admin/<раздел>` ведут
+в компанию по умолчанию (последняя выбранная или первая). Ссылки в письмах строит backend по
+`config/selen.php → frontend_paths`.
 
 Проверки прав на клиенте — только для удобства (скрыть меню); реальный доступ проверяет API.
 

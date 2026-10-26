@@ -1,4 +1,5 @@
-import type { RouteObject } from 'react-router'
+import { Navigate, type RouteObject } from 'react-router'
+import { AdminCompanyLayout } from '@/features/admin/AdminCompanyLayout'
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage'
@@ -7,7 +8,7 @@ import { ProfilePage } from '@/features/profile/ProfilePage'
 import { FileNotFoundPage } from '@/pages/FileNotFoundPage'
 import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import { RequireAdmin, RequireAuth, RequireGuest } from './guards'
+import { AdminNotFound, AdminRedirect, RequireAdmin, RequireAuth, RequireGuest } from './guards'
 import { RouteError } from './RouteError'
 import { RouteLoading } from './RouteLoading'
 import { AppLayout } from './layouts/AppLayout'
@@ -79,66 +80,101 @@ export const routes: RouteObject[] = [
               {
                 element: <RequireAdmin />,
                 children: [
+                  // Без компании в адресе (и прежние адреса /admin/users…) — админка компании по умолчанию
+                  { path: '/admin', element: <AdminRedirect /> },
+                  { path: '/admin/*', element: <AdminRedirect /> },
                   {
-                    path: '/admin/users',
+                    path: '/admin/companies',
                     lazy: async () => ({
-                      Component: (await import('@/features/admin/UsersPage')).UsersPage,
+                      Component: (await import('@/features/admin/CompaniesPage')).CompaniesPage,
                     }),
                   },
+                  // Админка компании (ADR-0024): /admin/c/<компания>/…; чужая компания — «не найдена»
                   {
-                    path: '/admin/users/:userId',
-                    lazy: async () => ({
-                      Component: (await import('@/features/admin/UserAccessPage')).UserAccessPage,
-                    }),
-                  },
-                  {
-                    path: '/admin/groups',
-                    lazy: async () => ({
-                      Component: (await import('@/features/admin/GroupsPage')).GroupsPage,
-                    }),
-                  },
-                  {
-                    path: '/admin/groups/:groupId',
-                    lazy: async () => ({
-                      Component: (await import('@/features/admin/GroupPage')).GroupPage,
-                    }),
-                  },
-                  {
-                    path: '/admin/trash',
-                    lazy: async () => ({
-                      Component: (await import('@/features/admin/TrashPage')).TrashPage,
-                    }),
-                  },
-                  {
-                    path: '/admin/events',
-                    lazy: async () => ({
-                      Component: (await import('@/features/admin/EventLogPage')).EventLogPage,
-                    }),
-                  },
-                  {
-                    path: '/admin/spaces',
-                    lazy: async () => ({
-                      Component: (await import('@/features/admin/SpacesAdminPage')).SpacesAdminPage,
-                    }),
-                  },
-                  {
-                    path: '/admin/structure',
-                    lazy: async () => ({
-                      Component: (await import('@/features/navigation/StructurePage'))
-                        .StructurePage,
-                    }),
-                  },
-                  {
-                    path: '/admin/labels',
-                    lazy: async () => ({
-                      Component: (await import('@/features/admin/LabelsPage')).LabelsPage,
-                    }),
-                  },
-                  {
-                    path: '/admin/card-types',
-                    lazy: async () => ({
-                      Component: (await import('@/features/admin/CardTypesPage')).CardTypesPage,
-                    }),
+                    path: '/admin/c/:companyId',
+                    element: <AdminCompanyLayout />,
+                    children: [
+                      { index: true, element: <Navigate to="users" replace /> },
+                      {
+                        // «Пользователи» — вкладки как в Kaiten: пользователи, группы, приглашения
+                        lazy: async () => ({
+                          Component: (await import('@/features/admin/UsersSection')).UsersSection,
+                        }),
+                        children: [
+                          {
+                            path: 'users',
+                            lazy: async () => ({
+                              Component: (await import('@/features/admin/UsersPage')).UsersPage,
+                            }),
+                          },
+                          {
+                            path: 'groups',
+                            lazy: async () => ({
+                              Component: (await import('@/features/admin/GroupsPage')).GroupsPage,
+                            }),
+                          },
+                          {
+                            path: 'invitations',
+                            lazy: async () => ({
+                              Component: (await import('@/features/admin/UsersPage'))
+                                .InvitationsPage,
+                            }),
+                          },
+                        ],
+                      },
+                      {
+                        path: 'users/:userId',
+                        lazy: async () => ({
+                          Component: (await import('@/features/admin/UserAccessPage'))
+                            .UserAccessPage,
+                        }),
+                      },
+                      {
+                        path: 'groups/:groupId',
+                        lazy: async () => ({
+                          Component: (await import('@/features/admin/GroupPage')).GroupPage,
+                        }),
+                      },
+                      {
+                        path: 'trash',
+                        lazy: async () => ({
+                          Component: (await import('@/features/admin/TrashPage')).TrashPage,
+                        }),
+                      },
+                      {
+                        path: 'events',
+                        lazy: async () => ({
+                          Component: (await import('@/features/admin/EventLogPage')).EventLogPage,
+                        }),
+                      },
+                      {
+                        path: 'spaces',
+                        lazy: async () => ({
+                          Component: (await import('@/features/admin/SpacesAdminPage'))
+                            .SpacesAdminPage,
+                        }),
+                      },
+                      {
+                        path: 'structure',
+                        lazy: async () => ({
+                          Component: (await import('@/features/navigation/StructurePage'))
+                            .StructurePage,
+                        }),
+                      },
+                      {
+                        path: 'labels',
+                        lazy: async () => ({
+                          Component: (await import('@/features/admin/LabelsPage')).LabelsPage,
+                        }),
+                      },
+                      {
+                        path: 'card-types',
+                        lazy: async () => ({
+                          Component: (await import('@/features/admin/CardTypesPage')).CardTypesPage,
+                        }),
+                      },
+                      { path: '*', element: <AdminNotFound /> },
+                    ],
                   },
                 ],
               },

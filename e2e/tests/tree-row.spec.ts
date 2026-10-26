@@ -21,14 +21,15 @@ type Node = { type: string; name?: string; space?: { name: string }; everyone: b
 async function markEveryone(page: Page) {
   await page.route('**/api/v1/navigation', async (route) => {
     const response = await route.fetch()
-    const body = (await response.json()) as { data: Node[] }
+    // Ответ — деревья по компаниям (ADR-0024, П2b-2)
+    const body = (await response.json()) as { data: { items: Node[] }[] }
     const mark = (nodes: Node[]) => {
       for (const node of nodes) {
         if (node.name === SUBFOLDER || node.space?.name === SPACE) node.everyone = true
         mark(node.children ?? [])
       }
     }
-    mark(body.data)
+    body.data.forEach((company) => mark(company.items))
     await route.fulfill({ response, json: body })
   })
 }

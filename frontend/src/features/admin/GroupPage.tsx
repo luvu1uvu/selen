@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { RoleSelectOptions } from '@/features/spaces/components/RoleSelectOptions'
-import { useAdminCompanyId } from '@/features/admin/company'
+import { useAdminCompanyId, useAdminUrl } from '@/features/admin/company'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { getErrorMessage, getErrorStatus } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
@@ -35,6 +35,7 @@ type Confirm =
 /** Страница группы: состав и доступы к пространствам. Архивная группа — только для чтения. */
 export function GroupPage() {
   const { t } = useTranslation('admin')
+  const url = useAdminUrl()
   const { t: tc } = useTranslation()
   const { groupId = '' } = useParams()
   const groupQuery = useGroup(groupId)
@@ -71,7 +72,7 @@ export function GroupPage() {
     <div className="grid gap-8">
       <div className="grid gap-2">
         <Link
-          to="/admin/groups"
+          to={url('groups')}
           className="text-muted-foreground flex items-center gap-1 text-sm hover:underline"
         >
           <ArrowLeft className="size-4" />
@@ -148,7 +149,7 @@ export function GroupPage() {
                 <TableRow key={member.id}>
                   <TableCell>
                     <div className="flex flex-wrap items-center gap-2 font-medium">
-                      <Link to={`/admin/users/${member.id}`} className="hover:underline">
+                      <Link to={url(`users/${member.id}`)} className="hover:underline">
                         {member.name}
                       </Link>
                       {member.status !== 'active' && <UserStatusBadge user={member} />}
@@ -261,6 +262,7 @@ function AddMemberForm({ group }: { group: Group }) {
             value={user}
             onChange={setUser}
             excludeIds={(group.members ?? []).map((member) => member.id)}
+            homes
           />
         </div>
         <Button disabled={!user || add.isPending} onClick={submit}>

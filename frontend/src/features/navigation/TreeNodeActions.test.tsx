@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { AdminNavNode, NavTreeNode, User } from '@/shared/types/api'
 import { makeBoardDetail } from '@/test/boards'
-import { makeNavSpace, makeSpace, makeUser, server, signedInAs } from '@/test/server'
+import { makeNavSpace, makeSpace, makeUser, navTree, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 const sysAdmin = makeUser({ id: 'admin-1', name: 'Сергей' })
@@ -61,7 +61,7 @@ const structure: AdminNavNode[] = [
 function serve(user: User, canManageIos: boolean) {
   signedInAs(user)
   server.use(
-    http.get('*/api/v1/navigation', () => HttpResponse.json({ data: treeFor(canManageIos) })),
+    http.get('*/api/v1/navigation', () => HttpResponse.json(navTree(treeFor(canManageIos)))),
     http.get('*/api/v1/admin/companies/:company/navigation', () =>
       HttpResponse.json({ data: structure, meta: { max_depth: 4 } }),
     ),
@@ -287,7 +287,7 @@ describe('Дерево: кнопки «+» и «⋯» у строки', () => {
     expect(requests).toEqual(['archive s-IOS', 'delete s-IOS'])
   })
 
-  it('удаление пространства, на доске которого стоишь: доска перечитывается — «Доска не найдена» (LATER-43)', async () => {
+  it('удаление пространства, на доске которого стоишь: доска перечитывается — на главную с уведомлением (LATER-43)', async () => {
     serve(sysAdmin, true)
     let deleted = false
     server.use(
@@ -311,7 +311,7 @@ describe('Дерево: кнопки «+» и «⋯» у строки', () => {
     const remove = await screen.findByRole('dialog', { name: 'Удалить пространство навсегда?' })
     await user.click(within(remove).getByRole('button', { name: 'Удалить навсегда' }))
 
-    expect(await screen.findByText('Доска не найдена')).toBeInTheDocument()
+    expect(await screen.findByText('Нет доступа к доске или она не существует')).toBeInTheDocument()
   })
 
   it('«⋯» папки: «Удалить навсегда…» недоступно — в дереве видны только непустые папки (LATER-43)', async () => {
@@ -353,7 +353,7 @@ describe('Дерево: кнопки «+» и «⋯» у строки', () => {
       ),
     }
     signedInAs(sysAdmin)
-    server.use(http.get('*/api/v1/navigation', () => HttpResponse.json({ data: [deep] })))
+    server.use(http.get('*/api/v1/navigation', () => HttpResponse.json(navTree([deep]))))
     window.localStorage.setItem('selen.nav.expanded.admin-1', JSON.stringify(['f-1', 'f-2', 'f-3']))
     const user = userEvent.setup()
     renderApp('/')
