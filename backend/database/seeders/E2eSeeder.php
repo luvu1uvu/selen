@@ -14,6 +14,7 @@ use App\Actions\Cards\SyncCardLabelsAction;
 use App\Actions\Cards\UpdateCardAction;
 use App\Actions\Checklists\AddChecklistAction;
 use App\Actions\Checklists\AddChecklistItemAction;
+use App\Actions\Checklists\UpdateChecklistItemAction;
 use App\Actions\Columns\CreateColumnAction;
 use App\Actions\Comments\AddCommentAction;
 use App\Actions\Companies\CreateCompanyAction;
@@ -31,6 +32,7 @@ use App\Actions\Spaces\SetSpaceMemberRestrictionAction;
 use App\Enums\BoardTemplate;
 use App\Enums\ColumnCategory;
 use App\Enums\SpaceRole;
+use App\Enums\Theme;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Company;
@@ -53,6 +55,8 @@ use Illuminate\Http\UploadedFile;
  * - e2e-analyst@selen.test — без доступа; группа «E2E Аналитики» (commenter в QA) пуста — тест groups.spec
  *   добавляет его в группу и исключает
  * - e2e-candidate@selen.test — участник без доступа, не входит; ТК-3.26 меняет его системную роль туда и обратно
+ * - e2e-dark@selen.test    — системный администратор с сохранённой темой «Тёмная» (ADR-0025): проект Playwright «dark»
+ *   и приёмка шага 2 «Редизайна» (e2e/dark, acceptance/stage-RD2); администратор пространства DARK — см. darkTheme()
  * Пространство QA, доска «Процесс» (шаблон «Разработка»), карточки в To Do: QA-1, QA-2 (подрядчика),
  * QA-3 «Блокирующая задача» и QA-4 «Устаревшая задача» (в архиве). Доска шире окна; QA-5 «Релиз со сроком»
  * в предпоследней колонке Ready for Merge — со сроком, т. е. со скрытой подписью для скринридеров (board.spec).
@@ -295,6 +299,77 @@ class E2eSeeder extends Seeder
 
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
+
+        // Тёмная тема — «Редизайн», шаг 2 (проект Playwright «dark», acceptance/stage-RD2)
+        $this->darkTheme($editor);
+    }
+
+    /**
+     * Тёмная тема («Редизайн», шаг 2; ADR-0025): e2e-dark — системный администратор с темой «Тёмная» на сервере (его вход в
+     * auth.setup сохраняет и копию темы в браузере), администратор пространства DARK «Тёмная проверка»; e2e-editor —
+     * редактор (ответственный). Свой пользователь и своё пространство: тёмные тесты и переключатель темы не задевают
+     * данные и тему остальных тестов. Доска «Вид» (шаблон «Разработка» — точки трёх категорий; дорожки «Основная» и
+     * «Срочные» — полосы дорожек); метки пространства — цвета демо-данных. В To Do дорожки «Основная»: DARK-1
+     * «Заблокированная», DARK-2 «Срочная», DARK-3 «Просроченная», DARK-4 «Полная карточка» (срок через неделю, описание,
+     * чек-лист 1/2, картинка, комментарий — окно карточки со всеми секциями); в Done — DARK-5 «Готова в срок», DARK-6
+     * «Готова после срока». Тесты только смотрят; переключатель меняет тему e2e-dark и возвращает «Тёмную».
+     */
+    private function darkTheme(User $editor): void
+    {
+        $dark = User::factory()->admin()->create([
+            'name' => 'E2E Тёмная тема', 'email' => 'e2e-dark@selen.test', 'theme' => Theme::Dark,
+        ]);
+        $space = app(CreateSpaceAction::class)->handle($dark, Company::primary(), ['name' => 'Тёмная проверка', 'key' => 'DARK'], [$dark]);
+        app(AddSpaceMemberAction::class)->handle($dark, $space, $editor, SpaceRole::Editor);
+        $labels = [];
+        foreach (['Бэкенд' => '#22c55e', 'Клиент' => '#f59e0b', 'Техдолг' => '#64748b', 'Фронтенд' => '#3b82f6', 'Безопасность' => '#ef4444'] as $name => $color) {
+            $labels[$name] = app(SaveLabelAction::class)->handle($dark, ['name' => $name, 'color' => $color], space: $space)->id;
+        }
+
+        $board = app(CreateBoardAction::class)->handle($dark, $space, ['name' => 'Вид'], BoardTemplate::Development);
+        $lane = Lane::query()->where('board_id', $board->id)->sole();
+        app(CreateLaneAction::class)->handle($dark, $board, 'Срочные', null, null);
+        $column = fn (string $name) => BoardColumn::query()->where('board_id', $board->id)->where('name', $name)->sole();
+        $update = app(UpdateCardAction::class);
+        /**
+         * @param  list<string>  $cardLabels
+         * @param  array<string, mixed>  $fields
+         */
+        $card = function (string $title, User $responsible, array $cardLabels, array $fields = [], ?string $done = null) use ($dark, $board, $lane, $column, $labels, $update) {
+            $card = app(CreateCardAction::class)->handle($dark, $board, ['title' => $title], $column('To Do'), $lane);
+            $update->handle($dark, $card, $fields + ['responsible_id' => $responsible->id]);
+            if ($done !== null) {
+                app(MoveCardAction::class)->handle($dark, $card, $column($done), $lane, null, null);
+            }
+            app(SyncCardLabelsAction::class)->handle($dark, $card, array_map(fn (string $name) => $labels[$name], $cardLabels));
+
+            return $card;
+        };
+
+        $blocked = $card('Заблокированная', $dark, ['Бэкенд']);
+        app(BlockCardAction::class)->handle($dark, $blocked, 'Ждём доступ к стенду', false, null);
+        $card('Срочная', $editor, ['Клиент'], ['is_urgent' => true]);
+        $card('Просроченная', $editor, ['Техдолг'], ['due_date' => now()->subDays(3)->toDateString()]);
+        $full = $card('Полная карточка', $dark, ['Фронтенд', 'Безопасность'], [
+            'due_date' => now()->addWeek()->toDateString(),
+            'description' => ['type' => 'doc', 'content' => [
+                ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Описание карточки в тёмной теме']]],
+            ]],
+        ]);
+        $checklist = app(AddChecklistAction::class)->handle($dark, $full, 'Перед релизом');
+        $first = app(AddChecklistItemAction::class)->handle($dark, $checklist, 'Проверить контраст');
+        app(AddChecklistItemAction::class)->handle($dark, $checklist, 'Проверить светлую тему', $first->id);
+        app(UpdateChecklistItemAction::class)->handle($dark, $first, ['is_done' => true]);
+        $png = tempnam(sys_get_temp_dir(), 'e2e');
+        file_put_contents($png, base64_decode(self::PNG));
+        app(UploadAttachmentAction::class)->handle($dark, $full, new UploadedFile($png, 'скриншот-тёмной.png', 'image/png', null, true));
+        @unlink($png);
+        app(AddCommentAction::class)->handle($editor, $full, [
+            'type' => 'doc',
+            'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Комментарий в тёмной теме']]]],
+        ]);
+        $card('Готова в срок', $dark, ['Бэкенд'], ['due_date' => now()->addWeek()->toDateString()], 'Done');
+        $card('Готова после срока', $editor, ['Клиент'], ['due_date' => now()->subDays(3)->toDateString()], 'Done');
     }
 
     /**

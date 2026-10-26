@@ -15,6 +15,8 @@ export const USERS = [
   // «Права 2.0», П2b-2: администратор двух компаний и человек с «домами» в двух компаниях (E2eSeeder::moreCompanies)
   'e2e-multi-admin@selen.test',
   'e2e-two-homes@selen.test',
+  // «Редизайн», шаг 2: сохранённая тема «Тёмная» (E2eSeeder::darkTheme) — проект «dark», acceptance/stage-RD2
+  'e2e-dark@selen.test',
 ] as const
 
 export type User = (typeof USERS)[number]
