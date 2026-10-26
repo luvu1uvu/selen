@@ -75,3 +75,12 @@ it('база не принимает тему вне списка', function () 
     expect(fn () => DB::table('users')->where('id', $user->id)->update(['theme' => 'blue']))
         ->toThrow(QueryException::class);
 });
+
+it('темы нет в админском списке пользователей — это личная настройка, не данные о человеке', function () {
+    member(['theme' => 'dark']);
+
+    $this->actingAs(admin())->getJson(adminPath().'users')
+        ->assertOk()
+        ->assertJsonMissingPath('data.0.theme')
+        ->assertJsonMissingPath('data.1.theme');
+});
