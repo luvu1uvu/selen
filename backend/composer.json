@@ -25,6 +25,9 @@
         "pestphp/pest": "^5.3",
         "pestphp/pest-plugin-laravel": "^5.0"
     },
+    "conflict": {
+        "phpunit/phpunit": ">=13.4.0 <13.4.4"
+    },
     "autoload": {
         "psr-4": {
             "App\\": "app/",
