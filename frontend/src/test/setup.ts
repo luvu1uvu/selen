@@ -12,6 +12,10 @@ beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 afterEach(() => {
   cleanup()
   server.resetHandlers()
+  // Тема — на <html> и в localStorage (ADR-0025): следующий тест начинает со светлой
+  document.documentElement.classList.remove('dark', 'theme-switching')
+  document.documentElement.style.colorScheme = ''
+  window.localStorage.removeItem('selen.theme')
 })
 afterAll(() => server.close())
 

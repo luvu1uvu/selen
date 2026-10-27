@@ -509,8 +509,9 @@ function useScrollEdges(
 }
 
 /**
- * Затенение у края тела доски, за которым ещё есть колонки: тень от края внутрь (токен foreground), пропадает, когда тело
- * докручено до этого края. Поверх карточек и закреплённой полосы дорожки, под закреплёнными шапкой и заголовками.
+ * Край тела доски, за которым ещё есть колонки: содержимое растворяется в фоне доски (градиент цветом `board` от края
+ * внутрь — видно в обеих темах, тёмная тень на тёмной доске терялась; «Редизайн», шаг 2), пропадает, когда тело докручено
+ * до этого края. Поверх карточек и закреплённой полосы дорожки, под закреплёнными шапкой и заголовками.
  */
 function EdgeShade({
   side,
@@ -527,7 +528,7 @@ function EdgeShade({
     <div
       aria-hidden
       className={cn(
-        'from-edge-shade pointer-events-none absolute z-[6] w-6 to-transparent transition-opacity',
+        'from-board pointer-events-none absolute z-[6] w-6 to-transparent transition-opacity',
         side === 'start' ? 'left-0 bg-linear-to-r' : 'right-0 bg-linear-to-l',
         visible ? 'opacity-100' : 'opacity-0',
         className,

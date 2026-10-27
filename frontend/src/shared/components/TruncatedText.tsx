@@ -25,10 +25,7 @@ export function TruncatedText({
       <TooltipTrigger asChild>
         <Tag
           ref={ref as RefObject<HTMLHeadingElement>}
-          className={cn(
-            'focus-visible:ring-ring truncate outline-none focus-visible:ring-[3px]',
-            className,
-          )}
+          className={cn('truncate', className)}
           tabIndex={truncated ? 0 : undefined}
           data-truncated={truncated || undefined}
         >

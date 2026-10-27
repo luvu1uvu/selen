@@ -65,8 +65,9 @@ export function CardAttachmentsSection({
             <figure
               key={attachment.id}
               // Рамка фокуса превью — у figure: кнопка целиком под картинкой, её рамка была бы не видна, а снаружи кнопки
-              // её срезал бы overflow-hidden (U-3 UX-ревью UI-1a)
-              className="group has-[>button:focus-visible]:ring-ring relative overflow-hidden rounded-md border has-[>button:focus-visible]:ring-[3px]"
+              // её срезал бы overflow-hidden (U-3 UX-ревью UI-1a). Подложка muted — прозрачные картинки и скриншоты на
+              // белом видны в обеих темах («Редизайн»)
+              className="group bg-muted has-[>button:focus-visible]:outline-ring relative overflow-hidden rounded-md border has-[>button:focus-visible]:outline-2 has-[>button:focus-visible]:outline-offset-2"
             >
               {attachment.kind === 'image' ? (
                 <button
@@ -173,8 +174,9 @@ function VideoPlayer({ attachment }: { attachment: Attachment }) {
       controls
       preload="metadata"
       aria-label={attachment.name}
+      // Рамка фокуса — внутри: снаружи её срезал бы overflow-hidden у figure
       // eslint-disable-next-line no-restricted-syntax -- поля вокруг видео чёрные в любой теме, как у плееров
-      className="aspect-video w-full bg-black"
+      className="aspect-video w-full bg-black focus-visible:-outline-offset-2"
       onError={() => setFailed(true)}
       onLoadedMetadata={(event) => event.currentTarget.videoWidth === 0 && setFailed(true)}
     />

@@ -91,7 +91,7 @@ export function CardAddMenu({
       label={t('card.add')}
       align="start"
       icon={<Plus />}
-      className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground relative rounded-full shadow-md"
+      className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground relative rounded-full shadow-md dark:shadow-none"
       contentClassName="flex max-w-[calc(100vw-2rem)] flex-wrap p-0"
     >
       {(opensDialog) => (

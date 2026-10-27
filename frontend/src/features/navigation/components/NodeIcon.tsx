@@ -30,7 +30,7 @@ export function NodeIcon({
   return <Icon aria-hidden className={cn('text-muted-foreground size-4 shrink-0', className)} />
 }
 
-const markFocus = 'focus-visible:ring-ring rounded-sm outline-none focus-visible:ring-[3px]'
+const markShape = 'rounded-sm'
 
 /**
  * Пометка «пустая» пустой папки — в дереве её видит только Владелец (ADR-0017). Почему пустая — в подсказке Tooltip по
@@ -52,7 +52,7 @@ export function EmptyFolderMark({
       <TooltipTrigger asChild>
         <span
           tabIndex={0}
-          className={cn('text-muted-foreground text-xs whitespace-nowrap', markFocus, className)}
+          className={cn('text-muted-foreground text-xs whitespace-nowrap', markShape, className)}
           style={style}
           onClick={onClick}
         >
@@ -89,7 +89,7 @@ export function EveryoneMark({
           role="img"
           aria-label={label}
           tabIndex={0}
-          className={cn('flex shrink-0', markFocus, className)}
+          className={cn('flex shrink-0', markShape, className)}
           style={style}
           onClick={onClick}
         >
@@ -113,7 +113,7 @@ export function HiddenFromTreeMark() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span role="img" aria-label={label} tabIndex={0} className={cn('flex shrink-0', markFocus)}>
+        <span role="img" aria-label={label} tabIndex={0} className={cn('flex shrink-0', markShape)}>
           <EyeOff aria-hidden className="text-muted-foreground/70 size-3.5" />
         </span>
       </TooltipTrigger>

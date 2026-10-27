@@ -201,7 +201,7 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
       {blocker ? (
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground text-xs">{t('blocks.byCard')}</span>
-          <span className="font-mono text-xs">{blocker.key}</span>
+          <span className="text-xs tabular-nums">{blocker.key}</span>
           <span className="truncate">{blocker.title}</span>
           <Hint label={t('blocks.clearCard')}>
             <Button

@@ -179,7 +179,8 @@ export default function RichTextEditor({
 
   return (
     <div className="grid gap-2">
-      <div className="focus-within:ring-ring rounded-md border focus-within:ring-2">
+      {/* Граница — как у поля ввода: input, не меньше 3:1 (решение PM 26.10, шаг 1, п. 6) */}
+      <div className="border-input focus-within:border-ring focus-within:ring-ring rounded-md border shadow-xs focus-within:ring-2 dark:shadow-none">
         {editor && <Toolbar editor={editor} onLink={() => setLinkOpen((open) => !open)} />}
         {linkOpen && (
           <div className="flex items-center gap-2 border-b px-2 py-1.5">

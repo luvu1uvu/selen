@@ -149,10 +149,10 @@ function SpacePanel({ space, tab }: { space: Space; tab: string }) {
     <div className="bg-background @container border-b">
       <div className="flex items-center gap-x-1.5 px-3 py-2 md:px-4 @4xl:gap-x-4">
         <div className="flex min-w-0 items-center gap-1 @4xl:gap-2">
-          <TruncatedText as="h1" text={space.name} className="text-lg font-semibold" />
+          <TruncatedText as="h1" text={space.name} className="text-xl font-semibold" />
           <Badge
             variant="secondary"
-            className="shrink-0 font-mono max-[30rem]:hidden @max-4xl:px-1.5"
+            className="shrink-0 tabular-nums max-[30rem]:hidden @max-4xl:px-1.5"
           >
             {space.key}
           </Badge>

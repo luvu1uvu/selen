@@ -8,7 +8,6 @@ import {
   expectColor,
   focusedRing,
   hex,
-  isGrey,
   openThemeBoard,
   ringOf,
   SPACE,
@@ -18,8 +17,9 @@ import {
 } from './helpers'
 
 /**
- * ТК-L91.5 (LATER-91): рамка фокуса заметна — у элемента в фокусе с клавиатуры сплошная серая рамка (токен ring
- * #737373 без прозрачности, было #a1a1a1 / 50 % — 1,5:1), не меньше 3:1 и к белому, и к серому холсту; от щелчка по
+ * ТК-L91.5 (LATER-91): рамка фокуса заметна — у элемента в фокусе с клавиатуры сплошная рамка (токен ring без
+ * прозрачности, было #a1a1a1 / 50 % — 1,5:1), не меньше 3:1 и к белому, и к серому холсту. С «Редизайна» (шаг 2,
+ * решение PM 26.10, п. 5) рамка — цветом акцента #4f46e5 (ring = primary), 2 px с отступом 2 px, а не серая #737373; от щелчка по
  * кнопке или карточке рамки нет, у полей ввода (название, описание, комментарий, форма новой карточки) она видна и от
  * щелчка. Доска «Продукт» → «Вид» пространства THEME (E2eSeeder::themePrep), Анна → e2e-admin (администратор
  * пространства: у редактора нет «⋯» колонок и дорожек); окно карточки — «Срочная» (тест его только открывает:
@@ -27,15 +27,14 @@ import {
  */
 test.use({ storageState: authFile('e2e-admin@selen.test') })
 
-/** Рамка у элемента в фокусе появилась (переход box-shadow — 150 мс) и она сплошная, серая, заметная. */
+/** Рамка у элемента в фокусе появилась (переход — 150 мс) и она сплошная, цветом акцента, заметная. */
 async function expectFocusRing(page: Page, what: string, surfaces: Rgba[]) {
   await expect
     .poll(async () => (await focusedRing(page))?.ring?.color.a ?? 0, { message: `${what}: рамка фокуса` })
     .toBe(1)
   const focused = (await focusedRing(page))!
   const ring = focused.ring!
-  expect(isGrey(ring.color), `${what}: рамка серая (${hex(ring.color)})`).toBe(true)
-  expectColor(ring.color, COLORS.ring, `${what}: цвет рамки`)
+  expectColor(ring.color, COLORS.ring, `${what}: цвет рамки — акцент (${hex(ring.color)})`)
   expect(ring.width, `${what}: толщина рамки`).toBeGreaterThanOrEqual(2)
   for (const surface of [ring.under, ...surfaces]) {
     expect(contrast(ring.color, surface), `${what}: рамка к ${hex(surface)}`).toBeGreaterThanOrEqual(3)
@@ -52,6 +51,7 @@ test('ТК-L91.5. Рамка фокуса заметна @tc-L91.5', async ({ pa
   await openThemeBoard(page)
   const surfaces = [await token(page, 'board'), await token(page, 'canvas'), await token(page, 'background')]
   expectColor(await token(page, 'ring'), COLORS.ring, 'токен ring')
+  expectColor(await token(page, 'ring'), hex(await token(page, 'primary')), 'ring = primary')
   expect((await token(page, 'ring')).a, 'ring без прозрачности').toBe(1)
 
   // 1. Tab по доске: кнопки шапки, точка и «+», «⋯» колонок, «⋯» дорожки, карточки

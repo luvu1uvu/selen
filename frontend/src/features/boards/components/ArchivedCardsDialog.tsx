@@ -94,7 +94,7 @@ export function ArchivedCardsDialog({
                 <span className="flex min-w-0 items-baseline gap-2">
                   <Link
                     {...cardLink(card.key)}
-                    className="shrink-0 font-mono text-xs hover:underline"
+                    className="shrink-0 text-xs tabular-nums hover:underline"
                     onClick={onClose}
                   >
                     {card.key}

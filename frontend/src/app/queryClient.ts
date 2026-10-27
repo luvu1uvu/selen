@@ -18,7 +18,7 @@ export function createQueryClient() {
   })
 }
 
-function isCurrentUserKey(queryKey: QueryKey) {
+export function isCurrentUserKey(queryKey: QueryKey) {
   return (
     queryKey.length === currentUserKey.length &&
     currentUserKey.every((part, i) => queryKey[i] === part)

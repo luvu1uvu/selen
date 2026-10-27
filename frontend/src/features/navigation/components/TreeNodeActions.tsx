@@ -109,7 +109,7 @@ export function TreeNodeActions({
     // Видны при наведении, при фокусе с клавиатуры (:focus-visible, а не любой фокус: после закрытия меню
     // мышью фокус возвращается на «+», и кнопки не должны оставаться) и пока открыто меню — по aria-expanded:
     // data-state у кнопки — состояние подсказки, оно перекрывает состояние меню
-    <div className="bg-accent absolute top-1 right-1 flex items-center gap-0.5 rounded opacity-0 group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 has-[[aria-expanded=true]]:opacity-100 pointer-coarse:opacity-100">
+    <div className="bg-accent group-has-[[aria-current=page]]/row:bg-selected absolute top-1 right-1 flex items-center gap-0.5 rounded opacity-0 group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 has-[[aria-expanded=true]]:opacity-100 pointer-coarse:opacity-100">
       {(canAddInFolder || canAddBoard) && (
         <RowMenu label={t('tree.node.add', { name })} icon={<Plus className="size-4" />}>
           {node.type === 'folder' ? (

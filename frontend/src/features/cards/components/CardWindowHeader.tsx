@@ -59,7 +59,7 @@ export function CardWindowHeader({ card, canEdit }: { card: CardDetail; canEdit:
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="focus-visible:ring-ring inline-flex min-h-6 items-center rounded-sm font-mono text-xs outline-none hover:underline focus-visible:ring-[3px]"
+              className="inline-flex min-h-6 items-center rounded-sm text-xs tabular-nums hover:underline"
               aria-label={`${card.key}. ${t('card.copyKeyLink')}`}
               onClick={copyLink}
             >

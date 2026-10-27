@@ -1,4 +1,4 @@
-import { CalendarClock } from 'lucide-react'
+import { CalendarCheck, CalendarClock, CalendarX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { dueState, formatDue, type DueFields } from '@/shared/lib/due'
 import { cn } from '@/shared/lib/utils'
@@ -9,6 +9,14 @@ const STYLES = {
   overdue: 'bg-danger-muted text-danger-foreground',
   missed: 'bg-danger-muted text-danger-foreground',
   met: 'bg-success-muted text-success-foreground',
+} as const
+
+/** Значок по состоянию — состояние видно не только цветом: в срок — с галочкой, просрочено и после срока — с крестиком. */
+const ICONS = {
+  pending: CalendarClock,
+  overdue: CalendarX,
+  missed: CalendarX,
+  met: CalendarCheck,
 } as const
 
 /**
@@ -29,6 +37,7 @@ export function DueBadge({
   const state = dueState(card, now, timeZone)
   if (state === 'none') return null
   const label = formatDue(card, now, timeZone)
+  const Icon = ICONS[state]
 
   return (
     <span
@@ -39,7 +48,7 @@ export function DueBadge({
         className,
       )}
     >
-      <CalendarClock className="size-3" aria-hidden />
+      <Icon className="size-3" aria-hidden />
       <span aria-hidden>{label}</span>
       <span className="sr-only">{t(`due.states.${state}`, { date: label })}</span>
     </span>

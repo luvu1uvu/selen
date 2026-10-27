@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Theme;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Notifications\ResetPasswordNotification;
@@ -28,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property UserRole $role
  * @property UserStatus $status
  * @property string $timezone
+ * @property Theme $theme
  * @property Carbon|null $last_login_at
  * @property Carbon|null $deactivated_at
  * @property Carbon $created_at
@@ -50,6 +52,7 @@ class User extends Authenticatable
         'role' => 'member',
         'status' => 'invited',
         'timezone' => 'Europe/Moscow',
+        'theme' => 'light',
     ];
 
     /**
@@ -61,6 +64,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => UserRole::class,
             'status' => UserStatus::class,
+            'theme' => Theme::class,
             'last_login_at' => 'datetime',
             'deactivated_at' => 'datetime',
         ];

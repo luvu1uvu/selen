@@ -26,6 +26,9 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
 }
 
 /**
+ * Выбранная вкладка — светлая на сером списке и полоса акцента 2 px снизу (признак формы: одна заливка — меньше 3:1); в
+ * тёмной теме вместо тени — рамка `input` («Линия», «Редизайн»).
+ *
  * Рамка фокуса у вкладки — только при работе с клавиатуры (решение PM 22.10, U-1 UX-ревью LATER-91). Radix сам ставит
  * фокус на вкладку при нажатии мыши, и браузер может счесть его фокусом «с клавиатуры» (`:focus-visible` — например,
  * сразу после загрузки страницы). Поэтому фокус от указателя помечается `data-pointer-focus` до первой клавиши или ухода
@@ -56,7 +59,7 @@ function TabsTrigger({
         onBlur?.(event)
       }}
       className={cn(
-        'focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 data-pointer-focus:focus-visible:ring-0 data-[state=active]:shadow-sm',
+        'hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground dark:data-[state=active]:ring-input inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] disabled:pointer-events-none disabled:opacity-50 data-pointer-focus:focus-visible:outline-none data-[state=active]:shadow-sm data-[state=active]:inset-shadow-[0_-2px_0_var(--primary)] dark:data-[state=active]:shadow-none dark:data-[state=active]:ring-1',
         className,
       )}
       {...props}

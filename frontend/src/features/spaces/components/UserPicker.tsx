@@ -86,7 +86,7 @@ export function UserPicker({
           <li key={user.id}>
             <button
               type="button"
-              className="hover:bg-accent w-full px-3 py-2 text-left text-sm"
+              className="hover:bg-accent w-full px-3 py-2 text-left text-sm focus-visible:-outline-offset-2"
               onClick={() => {
                 setSearch('')
                 onChange(user)

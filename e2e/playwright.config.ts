@@ -28,5 +28,8 @@ export default defineConfig({
     { name: 'chromium', dependencies: ['setup'], use: desktop },
     // Приёмочные автотесты тест-кейсов: acceptance/stage-<N>/tc-<этап>.<номер>.spec.ts, тег @tc-… (acceptance/README.md)
     { name: 'acceptance', testDir: './acceptance', dependencies: ['setup'], use: desktop },
+    // Тёмная тема (ADR-0025): экраны без светлых пятен и с контрастом, тема до первой отрисовки, переключатель. Система —
+    // тёмная, у пользователя e2e-dark сохранена «Тёмная» (E2eSeeder::darkTheme)
+    { name: 'dark', testDir: './dark', dependencies: ['setup'], use: { ...desktop, colorScheme: 'dark' } },
   ],
 })

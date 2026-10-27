@@ -100,7 +100,7 @@ export function StructurePage() {
                 >
                   <NodeIcon kind="space" icon={node.icon} className="opacity-50" />
                   <span className="truncate">{name}</span>
-                  <Badge variant="outline" className="font-mono">
+                  <Badge variant="outline" className="tabular-nums">
                     {node.space.key}
                   </Badge>
                   <Badge variant="secondary">{t('structure.archivedSpace')}</Badge>
@@ -126,7 +126,7 @@ export function StructurePage() {
                 {node.space && (
                   <Badge
                     variant="secondary"
-                    className="font-mono"
+                    className="tabular-nums"
                     title={t('structure.spaceKey', { key: node.space.key })}
                   >
                     {node.space.key}

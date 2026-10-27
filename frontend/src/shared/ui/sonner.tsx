@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
+import { useShownTheme } from '@/shared/lib/theme'
 
 /**
  * Цвета уведомлений — токены index.css (правила вида, раздел 7, «Уведомление»): обычное — `popover`, успех и ошибка —
@@ -25,13 +26,16 @@ const colors = {
 /**
  * Уведомления справа сверху. Поверх модального окна они нажимаются (LATER-102): Radix выключает указатель у всего вне
  * окна (`pointer-events: none` у body), а щелчок по уведомлению окно само не считает щелчком мимо (`CardWindow`).
- * Текст — `text-sm`; подписи области и «×» для экранного диктора — по-русски.
+ * Текст — `text-sm`; подписи области и «×» для экранного диктора — по-русски. Тема — та, что на экране (ADR-0025): цвета
+ * уже из токенов, а свои мелочи (кнопка «×», рамка) sonner берёт по `theme`.
  */
 function Toaster(props: ToasterProps) {
   const { t } = useTranslation()
+  const theme = useShownTheme()
   return (
     <Sonner
       position="top-right"
+      theme={theme}
       richColors
       closeButton
       className="pointer-events-auto"
