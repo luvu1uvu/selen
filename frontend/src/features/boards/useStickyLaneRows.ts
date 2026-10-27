@@ -3,7 +3,7 @@ import { wheelPixels } from '@/shared/lib/useSyncedScrollLeft'
 
 type BandStyle = Partial<
   Record<
-    'position' | 'top' | 'left' | 'width' | 'zIndex' | 'transform' | 'boxShadow' | 'borderTopColor',
+    'position' | 'top' | 'left' | 'width' | 'transform' | 'boxShadow' | 'borderTopColor',
     string
   >
 >
@@ -18,7 +18,6 @@ function apply(band: HTMLElement, key: string, style: BandStyle = {}) {
   band.style.top = style.top ?? ''
   band.style.left = style.left ?? ''
   band.style.width = style.width ?? ''
-  band.style.zIndex = style.zIndex ?? ''
   band.style.transform = style.transform ?? ''
   band.style.boxShadow = style.boxShadow ?? ''
   band.style.borderTopColor = style.borderTopColor ?? ''
@@ -36,6 +35,7 @@ function apply(band: HTMLElement, key: string, style: BandStyle = {}) {
  *   не отстаёт от прокрутки (стили пересчитываются только при смене состояния);
  * - вытесняется — стоит у низа своей дорожки (сдвиг постоянный) и уезжает вместе с ней под заголовки, освобождая место
  *   полосе следующей дорожки.
+ * Слой полосы (над растворением края тела, под заголовками колонок) задан классом LaneRow — во всех трёх состояниях.
  * Свёрнутая дорожка — одна полоса, закрепляться ей некуда. Закреплённая полоса (fixed) — вне цепочки прокрутки холста
  * и тела: колесо и тачпад над ней браузер отдал бы окну, которое не прокручивается, — поэтому они пробрасываются холсту
  * (вниз-вверх) и телу доски (вбок). Возвращает пересчёт — для изменений раскладки без прокрутки.
@@ -64,7 +64,6 @@ export function useStickyLaneRows(
           top: `${line}px`,
           left: `${left}px`,
           width: `${body.clientWidth}px`,
-          zIndex: '5',
           // Под заголовками колонок уже есть линия; своя — снизу, над уезжающими под полосу карточками
           borderTopColor: 'transparent',
           boxShadow: '0 1px 0 0 var(--color-border)',
@@ -73,7 +72,6 @@ export function useStickyLaneRows(
         const offset = rect.height - height
         apply(band, `pushed:${offset}`, {
           position: 'relative',
-          zIndex: '5',
           transform: `translateY(${offset}px)`,
         })
       }

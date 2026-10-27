@@ -125,3 +125,54 @@ test('колесо и тачпад над закреплённой полосо�
   await page.mouse.wheel(400, 0)
   await expect.poll(() => body.evaluate((b) => b.scrollLeft)).toBeGreaterThan(300)
 })
+
+/**
+ * Снимки краёв полосы дорожки в видимой части тела: 48 px слева (название) и справа (шеврон). Указатель — вне доски:
+ * наведение не меняет вид.
+ */
+async function bandEdges(page: Page, name: string) {
+  await page.mouse.move(0, 0)
+  const row = await box(page, name)
+  const body = (await page.locator('[data-board-body]').boundingBox())!
+  const clip = (x: number) => ({ x: Math.round(x), y: Math.round(row.y) + 2, width: 48, height: 36 })
+  return {
+    left: await page.screenshot({ clip: clip(body.x) }),
+    right: await page.screenshot({ clip: clip(body.x + body.width - 48) }),
+  }
+}
+
+/** Прокрутить тело вбок и дождаться, пока растворение края над телом примет нужный вид (у него переход прозрачности). */
+async function scrollBodyTo(page: Page, where: 'start' | 'middle' | 'end', shades: { start: boolean; end: boolean }) {
+  await page.locator('[data-board-body]').evaluate((body, where) => {
+    const max = body.scrollWidth - body.clientWidth
+    body.scrollLeft = where === 'start' ? 0 : where === 'end' ? max : Math.round(max / 2)
+  }, where)
+  for (const side of ['start', 'end'] as const) {
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (side) => getComputedStyle([...document.querySelectorAll(`[data-board-shade="${side}"]`)].at(-1)!).opacity,
+          side,
+        ),
+      )
+      .toBe(shades[side] ? '1' : '0')
+  }
+}
+
+test('растворение края тела не ложится на полосу дорожки — название и шеврон не блёкнут (U-4 «Редизайна»)', async ({
+  page,
+}) => {
+  for (const state of ['в потоке', 'закреплена'] as const) {
+    if (state === 'закреплена') await scrollLaneTo(page, 'Основная', -400)
+    // Без растворения у этого края: слева — в начале прокрутки, справа — в конце
+    await scrollBodyTo(page, 'start', { start: false, end: true })
+    const { left } = await bandEdges(page, 'Основная')
+    await scrollBodyTo(page, 'end', { start: true, end: false })
+    const { right } = await bandEdges(page, 'Основная')
+    // Посередине растворение у обоих краёв — полоса выглядит так же
+    await scrollBodyTo(page, 'middle', { start: true, end: true })
+    const middle = await bandEdges(page, 'Основная')
+    expect(middle.left.equals(left), `${state}: левый край полосы (название)`).toBe(true)
+    expect(middle.right.equals(right), `${state}: правый край полосы (шеврон)`).toBe(true)
+  }
+})
