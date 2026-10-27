@@ -390,7 +390,12 @@ export function BoardView({
       {board.lanes.slice(tail).map((lane, index) => renderLane(lane, tail + index, true))}
       <DragOverlay>
         {activeCard && (
-          <CardTileView card={activeCard} lookups={lookups} className="w-64 rotate-2 shadow-lg" />
+          // hover: — тень при наведении у фасада (sm) перебивала бы shadow-lg: перетаскиваемая карточка всегда под указателем
+          <CardTileView
+            card={activeCard}
+            lookups={lookups}
+            className="w-64 rotate-2 shadow-lg hover:shadow-lg"
+          />
         )}
       </DragOverlay>
     </DndContext>
@@ -511,7 +516,8 @@ function useScrollEdges(
 /**
  * Край тела доски, за которым ещё есть колонки: содержимое растворяется в фоне доски (градиент цветом `board` от края
  * внутрь — видно в обеих темах, тёмная тень на тёмной доске терялась; «Редизайн», шаг 2), пропадает, когда тело докручено
- * до этого края. Поверх карточек и закреплённой полосы дорожки, под закреплёнными шапкой и заголовками.
+ * до этого края. Поверх карточек; под полосой дорожки (её название и шеврон стоят у краёв и блёкли — U-4 «Редизайна»),
+ * закреплёнными шапкой и заголовками.
  */
 function EdgeShade({
   side,

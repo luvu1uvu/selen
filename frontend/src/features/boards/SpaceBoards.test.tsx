@@ -5,6 +5,7 @@ import type { SpaceBoard } from '@/shared/types/api'
 import { makeBoardCard, makeBoardDetail } from '@/test/boards'
 import { makeSpace, makeUser, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
+import { PIN_MS } from './canvasAnchor'
 
 function board(id: string, name: string, row: string, overrides: Partial<SpaceBoard> = {}) {
   return {
@@ -267,6 +268,28 @@ describe('Страница пространства: доски рядами', (
     expect(
       screen.getByRole('region', { name: 'Продукт' }).querySelector('[data-board-body]'),
     ).not.toBeNull()
+  })
+
+  it('ушли со страницы раньше кадра, который ставит доску из ?board на место, — доску не держат (LATER-120)', async () => {
+    serve()
+    const { router, unmount } = renderApp('/spaces/DEV')
+    await loaded('Продукт')
+    // Кадры откладываем, чтобы уйти со страницы раньше них. Переход — новой записью истории: ?board в начальном адресе
+    // занял бы ключ «default», общий для начальных адресов всех тестов файла (takeFocus)
+    const frames: FrameRequestCallback[] = []
+    const raf = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((frame) => frames.push(frame))
+    onTestFinished(() => raf.mockRestore())
+    await act(() => router.navigate('/spaces/DEV?board=b-narrow'))
+    await waitFor(() => expect(frames.length).toBeGreaterThan(0))
+
+    unmount()
+    // Удержание — таймер на 2 с: после ухода его уже никто не снял бы, и он сработал бы после конца теста
+    const timers = vi.spyOn(window, 'setTimeout')
+    onTestFinished(() => timers.mockRestore())
+    for (const frame of frames.splice(0)) frame(performance.now())
+    expect(timers).not.toHaveBeenCalledWith(expect.any(Function), PIN_MS)
   })
 
   it('?board=ID из дерева разворачивает свёрнутую доску насовсем', async () => {

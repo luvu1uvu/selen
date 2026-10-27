@@ -102,9 +102,12 @@ function BlockCause({ block }: { block: CardBlock }) {
   const { t } = useTranslation('boards')
   return (
     <div className="grid grid-cols-1 gap-0.5">
+      {/* Те же слова, что на плашке: «Блокирует: DEV-…» читалось двояко (LATER-112, решение PM 27.10) */}
       {block.blocking_card && (
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="text-muted-foreground shrink-0 text-xs">{t('blocks.byCard')}</span>
+          <span className="text-muted-foreground shrink-0 text-xs">
+            {t('blocks.blockedByCard')}
+          </span>
           <RelatedCardView card={block.blocking_card} />
         </span>
       )}
@@ -200,7 +203,7 @@ function BlockForm({ card, onDone }: { card: CardDetail; onDone: () => void }) {
       />
       {blocker ? (
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground text-xs">{t('blocks.byCard')}</span>
+          <span className="text-muted-foreground text-xs">{t('blocks.blockedByCard')}</span>
           <span className="text-xs tabular-nums">{blocker.key}</span>
           <span className="truncate">{blocker.title}</span>
           <Hint label={t('blocks.clearCard')}>

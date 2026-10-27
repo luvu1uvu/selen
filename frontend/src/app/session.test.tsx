@@ -131,7 +131,7 @@ function serveSession() {
 }
 
 async function userMenu() {
-  return screen.findByRole('button', { name: 'Меню пользователя' })
+  return screen.findByRole('button', { name: /, меню пользователя$/ })
 }
 
 function newFolderMark() {

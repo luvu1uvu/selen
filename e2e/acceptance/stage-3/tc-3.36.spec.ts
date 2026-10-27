@@ -70,9 +70,18 @@ test('ТК-3.36. Действие во вкладке, где вошли под 
   // 1. Вкладка с текущим кодом: комментарий не создан, понятное сообщение, вкладка перешла к новому пользователю
   {
     const { context, page } = await adminTabWithCard(browser)
+    const adminWindow = await page.getByRole('dialog').elementHandle()
     await anotherTabLogsIn(page, context, 'e2e-editor@selen.test')
     await sendComment(page, 'ТК-3.36: вкладка с текущим кодом')
     await expect(page.getByText(SESSION_CHANGED)).toBeVisible()
+    // Данные перечитаны под новым пользователем: доска перезагрузилась — окно администратора убрано, открыто новое.
+    // Пока окно открыто, шапка под ним скрыта от экранного диктора (aria-hidden, модальное окно); раньше тест ждал кнопку
+    // меню сразу и ловил ~100 мс, пока окна нет на время перезагрузки доски, — под нагрузкой промахивался (LATER-110)
+    await expect.poll(() => adminWindow!.evaluate((element) => element.isConnected)).toBe(false)
+    await expect(page.getByRole('dialog').getByRole('textbox', { name: 'Название', exact: true })).toHaveValue(/./)
+    // Окно закрыто — в шапке, видной диктору, новый пользователь
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Меню пользователя' })).toContainText('E2E Редактор')
     await context.close()
   }

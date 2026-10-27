@@ -187,3 +187,33 @@ test('превью картинки с фокусом с клавиатуры �
   })
   expect(ring).toBe('solid 2px rgb(79, 70, 229) 2px')
 })
+
+test('Esc в выборе срока — фокус на кнопке срока без подсказки, второй Esc закрывает окно (LATER-117)', async ({
+  page,
+}) => {
+  // Карточка со сроком (E2eSeeder): строка «Срок» видна, кнопка — бейдж срока с подсказкой «Изменить срок»
+  await page.goto('/cards/QA-5')
+  const window = page.getByRole('dialog', { name: 'Релиз со сроком' })
+  const due = window.locator('dt', { hasText: 'Срок' }).locator('xpath=following-sibling::dd[1]').getByRole('button')
+  await expect(due).toBeVisible()
+
+  // С клавиатуры: Shift+Tab и обратно Tab — фокус на кнопке срока, Enter открывает выбор даты
+  await due.focus()
+  await page.keyboard.press('Shift+Tab')
+  await page.keyboard.press('Tab')
+  await expect(due).toBeFocused()
+  await page.keyboard.press('Enter')
+  const date = page.getByRole('textbox', { name: 'Дата срока' })
+  await expect(date).toBeFocused()
+
+  // Esc закрывает выбор (с анимацией), фокус — снова на кнопке срока, а не на окне; подсказка не открылась
+  await page.keyboard.press('Escape')
+  await expect(date).toHaveCount(0)
+  await expect(due).toBeFocused()
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
+  await expect(window).toBeVisible()
+
+  // Второй Esc закрывает окно
+  await page.keyboard.press('Escape')
+  await expect(window).toBeHidden()
+})

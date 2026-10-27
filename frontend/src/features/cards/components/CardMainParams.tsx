@@ -23,7 +23,7 @@ import {
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
-import { useReturnFocusOnClose } from '@/shared/ui/restore-focus'
+import { restoreFocusQuietly, useReturnFocusOnClose } from '@/shared/ui/restore-focus'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import type { CardUpdate } from '../api'
 import type { CustomFieldOption } from '../customFields'
@@ -403,6 +403,8 @@ function DueField({
   const { save, pending } = useSave(card.key)
   const [due, setDue] = useState(() => dueInputs(card, timeZone))
   const [open, setOpen] = useState(autoOpen)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const interactedOutside = useRef(false)
   // «+» → «Срок» при уже видной строке — снова открыть (подстройка состояния при рендере)
   const [requested, setRequested] = useState(autoOpen)
   if (requested !== autoOpen) {
@@ -441,7 +443,7 @@ function DueField({
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="-ml-2 px-2">
+              <Button ref={trigger} variant="ghost" size="sm" className="-ml-2 px-2">
                 {badge}
               </Button>
             </PopoverTrigger>
@@ -450,12 +452,30 @@ function DueField({
         </Tooltip>
       ) : (
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 px-2">
+          <Button
+            ref={trigger}
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground -ml-2 px-2"
+          >
             {t('params.setDue')}
           </Button>
         </PopoverTrigger>
       )}
-      <PopoverContent align="start" className="grid w-auto gap-2">
+      <PopoverContent
+        align="start"
+        className="grid w-auto gap-2"
+        onInteractOutside={() => {
+          interactedOutside.current = true
+        }}
+        onCloseAutoFocus={(event) => {
+          // Esc — фокус на кнопку срока и без её подсказки «Изменить срок»: иначе следующий Esc закрыл бы подсказку,
+          // а не окно (LATER-117, LATER-94). Щёлкнули мимо — фокус там, куда щёлкнули, как у Radix
+          event.preventDefault()
+          if (!interactedOutside.current) restoreFocusQuietly(trigger.current)
+          interactedOutside.current = false
+        }}
+      >
         <div className="flex flex-wrap items-center gap-2">
           <Input
             type="date"

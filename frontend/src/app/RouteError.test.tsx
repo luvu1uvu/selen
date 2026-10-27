@@ -26,7 +26,7 @@ describe('Непойманная ошибка на странице', () => {
     expect(screen.getByRole('link', { name: 'На главную' })).toHaveAttribute('href', '/')
     // Каркас приложения на месте
     expect(screen.getByRole('navigation', { name: 'Дерево' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Меню пользователя' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /, меню пользователя$/ })).toBeInTheDocument()
     // Ни белого экрана React Router, ни трассировки — ошибка только в консоли
     expect(screen.queryByText(/Unexpected Application Error/)).not.toBeInTheDocument()
     expect(screen.queryByText(/секретная трассировка/)).not.toBeInTheDocument()
@@ -43,7 +43,7 @@ describe('Непойманная ошибка на странице', () => {
 
     const heading = await screen.findByRole('heading', { name: 'Что-то пошло не так' })
     expect(heading.closest('.overflow-y-auto')).toHaveClass('p-4')
-    expect(screen.getByRole('button', { name: 'Меню пользователя' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /, меню пользователя$/ })).toBeInTheDocument()
     consoleError.mockRestore()
   })
 })

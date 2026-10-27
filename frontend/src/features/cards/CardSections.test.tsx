@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { toast } from 'sonner'
@@ -86,6 +86,74 @@ describe('Карточка: люди, поля, метки', () => {
     expect(options[0]).toHaveTextContent('Снять ответственного')
     await userEvent.click(options[0])
     await vi.waitFor(() => expect(calls.at(-1)?.body).toEqual({ responsible_id: null }))
+  })
+
+  it('в открытом списке подсвечен текущий ответственный — Enter ничего не меняет (LATER-112)', async () => {
+    const calls = serveCard(
+      makeCardDetail({
+        responsible: { id: 'u1', name: 'Борис', status: 'active', in_space: true },
+      }),
+    )
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Борис — ответственный' }))
+    const list = await screen.findByRole('listbox')
+    await within(list).findByRole('option', { name: 'Вера' })
+    expect(within(list).getByRole('option', { selected: true })).toHaveAccessibleName(
+      'Борис — выбран',
+    )
+    await userEvent.keyboard('{Enter}')
+    await vi.waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument())
+    expect(calls).toEqual([])
+  })
+
+  it('участники догрузились при открытом списке — подсвеченный ответственный прокручен в видимую часть (U-1 UX-ревью пачки UX-3)', async () => {
+    serveCard(
+      makeCardDetail({
+        responsible: { id: 'u1', name: 'Борис', status: 'active', in_space: true },
+      }),
+    )
+    // Участники придержаны: при первом открытии в списке пока только текущий ответственный
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.get('*/api/v1/spaces/DEV/members', async () => {
+        await held
+        return HttpResponse.json({ data: members })
+      }),
+    )
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Борис — ответственный' }))
+    const list = await screen.findByRole('listbox')
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
+    onTestFinished(() => scrolled.mockRestore())
+    release()
+    await within(list).findByRole('option', { name: 'Вера' })
+    await waitFor(() =>
+      expect(scrolled.mock.contexts).toContain(
+        within(list).getByRole('option', { name: 'Борис — выбран' }),
+      ),
+    )
+  })
+
+  it('Esc в выборе срока возвращает фокус на кнопку срока, без подсказки (LATER-117)', async () => {
+    serveCard(makeCardDetail({ due_date: '2026-11-05' }))
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    const row = within(panel).getByText('Срок', { selector: 'dt' }).parentElement!
+    const due = within(row).getByRole('button')
+    due.focus()
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(screen.getByLabelText('Дата срока')).toHaveFocus())
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByLabelText('Дата срока')).not.toBeInTheDocument())
+    expect(due).toHaveFocus()
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it('назначает ответственного и участников из участников пространства, кроме деактивированных', async () => {

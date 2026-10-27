@@ -97,6 +97,7 @@ use Illuminate\Http\UploadedFile;
  * и четыре человека, которые не входят в систему, — см. companies(). П2b-2 — «E2E Компания 2» и «E2E Компания 3»,
  * администратор двух компаний и человек с двумя «домами» — см. moreCompanies().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
+ * Приёмка пачки UX-3 (acceptance/stage-ux3): пространство UXC «Пачка UX-3» — см. uxBatch3().
  */
 class E2eSeeder extends Seeder
 {
@@ -299,6 +300,9 @@ class E2eSeeder extends Seeder
 
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
+
+        // Приёмка пачки UX-3 (acceptance/stage-ux3, ТК-L112.1–L121.2)
+        $this->uxBatch3($admin, $editor);
 
         // Тёмная тема — «Редизайн», шаг 2 (проект Playwright «dark», acceptance/stage-RD2)
         $this->darkTheme($editor);
@@ -569,6 +573,41 @@ class E2eSeeder extends Seeder
         $create('Блокирующая');
         $create('Блокируется карточкой');
         $create('Для ссылки');
+    }
+
+    /**
+     * Пачка UX-3 (LATER-121, приёмочные тесты e2e/acceptance/stage-ux3): пространство UXC «Пачка UX-3» вместо
+     * «Разработки» демо-данных — e2e-admin администратор (Борис тест-кейсов: создал карточки, ответственный), e2e-editor —
+     * редактор (Анна). Доска «Продукт» (шаблон «Разработка» — шире окна), дорожки «Основная» и «Срочные» (полосы
+     * дорожек). Номера — по порядку создания, все в To Do дорожки «Основная»: UXC-1 «Как DEV-41» — ответственный
+     * e2e-admin (ТК-L112.1 снимает его); UXC-2 «Блокирующая» и UXC-3 «Как DEV-231» (ТК-L112.2 блокирует UXC-3 карточкой
+     * UXC-2); UXC-4 «Со сроком» — срок через неделю (ТК-L117.1, только смотрит); UXC-5 «Заблокированная» (блокировка
+     * причиной) и UXC-6 «Обычная» (ТК-L121.2, только наводит указатель). Ниже — ещё 20 карточек: «Основная» выше окна, её
+     * полоса закрепляется под заголовками колонок при прокрутке вниз (ТК-L121.1); в «Срочных» — 2 карточки.
+     */
+    private function uxBatch3(User $admin, User $editor): void
+    {
+        $space = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Пачка UX-3', 'key' => 'UXC'], [$admin]);
+        app(AddSpaceMemberAction::class)->handle($admin, $space, $editor, SpaceRole::Editor);
+        $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => 'Продукт'], BoardTemplate::Development);
+        $main = Lane::query()->where('board_id', $board->id)->sole();
+        $urgent = app(CreateLaneAction::class)->handle($admin, $board, 'Срочные', null, null);
+        $todo = BoardColumn::query()->where('board_id', $board->id)->where('name', 'To Do')->sole();
+        $create = fn (string $title, Lane $lane) => app(CreateCardAction::class)->handle($admin, $board, ['title' => $title], $todo, $lane);
+        $update = app(UpdateCardAction::class);
+
+        $update->handle($admin, $create('Как DEV-41', $main), ['responsible_id' => $admin->id]);
+        $create('Блокирующая', $main);
+        $create('Как DEV-231', $main);
+        $update->handle($admin, $create('Со сроком', $main), ['due_date' => now()->addWeek()->toDateString()]);
+        app(BlockCardAction::class)->handle($admin, $create('Заблокированная', $main), 'Ждём доступ к стенду', false, null);
+        $create('Обычная', $main);
+        foreach (range(1, 20) as $i) {
+            $create("Карточка дорожки {$i}", $main);
+        }
+        foreach (range(1, 2) as $i) {
+            $create("Срочная {$i}", $urgent);
+        }
     }
 
     /**

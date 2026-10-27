@@ -40,10 +40,14 @@ test('блокировка карточкой снимается автомат�
   // Активной блокировки нет, снятая — в секции «Блокировки»; лента — вкладка «История»
   await expect(panel.getByRole('button', { name: 'Снять' })).toHaveCount(0)
   await expect(panel.getByRole('region', { name: 'Блокировки' }).getByText(/снята автоматически/)).toBeVisible()
+  // Снятый эпизод — те же слова, что на плашке (LATER-112, решение PM 27.10)
+  await expect(panel.getByRole('region', { name: 'Блокировки' })).toContainText(/Заблокирована карточкой\s*QA-3/)
+  await expect(panel.getByRole('region', { name: 'Блокировки' })).not.toContainText('Блокирует')
   await panel.getByRole('tab', { name: 'История' }).click()
   const history = panel.getByRole('tabpanel', { name: 'История' })
   await expect(history.getByText('Блокировка снята автоматически: QA-3 «Блокирующая задача» готова')).toBeVisible()
-  await expect(history.getByText('Блокирует: QA-3 «Блокирующая задача»')).toBeVisible()
+  // Те же слова, что на плашке (LATER-112)
+  await expect(history.getByText('Заблокирована карточкой QA-3 «Блокирующая задача»')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: /^Открыть QA-1:/ })).not.toContainText('Заблокирована')
 
