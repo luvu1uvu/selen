@@ -222,7 +222,7 @@
     "relation_removed_parent": "Убрана родительская карточка: {{card}}",
     "relation_removed_child": "Убрана дочерняя карточка: {{card}}",
     "blocked": "Карточка заблокирована",
-    "blockedBy": "Блокирует: {{card}}",
+    "blockedBy": "Заблокирована карточкой {{card}}",
     "unblocked": "Блокировка снята",
     "unblockedAuto": "Блокировка снята автоматически: {{card}} готова",
     "unblockedDeleted": "Блокировка снята: блокирующая карточка удалена"

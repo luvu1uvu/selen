@@ -43,7 +43,8 @@ test('блокировка карточкой снимается автомат�
   await panel.getByRole('tab', { name: 'История' }).click()
   const history = panel.getByRole('tabpanel', { name: 'История' })
   await expect(history.getByText('Блокировка снята автоматически: QA-3 «Блокирующая задача» готова')).toBeVisible()
-  await expect(history.getByText('Блокирует: QA-3 «Блокирующая задача»')).toBeVisible()
+  // Те же слова, что на плашке (LATER-112)
+  await expect(history.getByText('Заблокирована карточкой QA-3 «Блокирующая задача»')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: /^Открыть QA-1:/ })).not.toContainText('Заблокирована')
 

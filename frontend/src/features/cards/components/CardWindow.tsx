@@ -332,10 +332,12 @@ function CardWindowBody({ card, onDeleted }: { card: CardDetail; onDeleted: () =
               adding={adding}
               onAddDone={(kind) => {
                 addDone(kind)
-                // Срок, метки или план так и не задали — строка пропала вместе с кнопкой, куда вернулся бы фокус: на окно
+                // Срок, метки или план так и не задали — строка пропала вместе с кнопкой, куда вернулся бы фокус: на окно.
+                // Только если фокус потерян: пока он в закрывающемся списке, тот вернёт его на кнопку сам, а перевод на
+                // окно список счёл бы уходом из него — и на кнопку не вернул бы (LATER-117)
                 requestAnimationFrame(() => {
                   const dialog = document.querySelector<HTMLElement>('[data-card-window]')
-                  if (dialog && !dialog.contains(document.activeElement)) dialog.focus()
+                  if (dialog && document.activeElement === document.body) dialog.focus()
                 })
               }}
             />

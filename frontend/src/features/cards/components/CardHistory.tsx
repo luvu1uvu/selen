@@ -116,10 +116,10 @@ function describeEvent(
     case 'card.blocked': {
       const reason = refs.blocks[String(p.block_id)]
       return [
-        t('history.blocked'),
-        ...(p.blocking_card_id
-          ? [t('history.blockedBy', { card: cardRef(p.blocking_card_id, refs, t) })]
-          : []),
+        // Те же слова, что на плашке блокировки: «Блокирует: DEV-…» читалось двояко (LATER-112)
+        p.blocking_card_id
+          ? t('history.blockedBy', { card: cardRef(p.blocking_card_id, refs, t) })
+          : t('history.blocked'),
         ...(reason ? [reason] : []),
       ]
     }
