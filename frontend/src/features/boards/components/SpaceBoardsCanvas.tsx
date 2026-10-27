@@ -436,10 +436,11 @@ function useCanvasPlacement(
   const release = useRef<(() => void) | null>(null)
   const loaded = boards !== undefined
 
-  // Новое удержание отменяет прежнее (два перехода подряд); уход со страницы — тоже
+  // Новое удержание отменяет прежнее (два перехода подряд); уход со страницы — тоже. Удержание ставится кадром позже:
+  // если страницу за этот кадр покинули (холста уже нет в документе), не ставим — его таймер никто бы не снял (LATER-120)
   const hold = useCallback((canvas: HTMLElement, boardId: string, offset: number) => {
     release.current?.()
-    release.current = pinBoard(canvas, boardId, offset)
+    release.current = canvas.isConnected ? pinBoard(canvas, boardId, offset) : null
   }, [])
   useEffect(() => () => release.current?.(), [])
 
