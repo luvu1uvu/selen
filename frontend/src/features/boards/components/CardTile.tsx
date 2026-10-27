@@ -36,9 +36,12 @@ export const CardTileView = memo(function CardTileView({
   return (
     <div
       className={cn(
-        // Тень — только в светлой теме: на тёмной её не видно, карточку отделяют тон и рамка (наведение — рамка светлее)
+        // Тень — только в светлой теме: на тёмной её не видно, карточку отделяют тон и рамка (наведение — рамка светлее).
+        // Тень при наведении — и у заблокированной (решение PM 27.10, U-7 «Редизайна»); рамку наведения в тёмной теме
+        // ей не даём — у неё своя, красная
         'bg-card rounded-md border border-l-4 px-3 py-2 text-left text-sm shadow-xs dark:shadow-none',
-        !card.is_blocked && 'dark:hover:border-input/50 hover:shadow-sm dark:hover:shadow-none',
+        'hover:shadow-sm dark:hover:shadow-none',
+        !card.is_blocked && 'dark:hover:border-input/50',
         card.is_urgent && 'ring-danger-outline/50 ring-1',
         card.is_blocked && 'border-danger-outline bg-danger-surface ring-danger-outline ring-1',
         className,
