@@ -116,7 +116,8 @@ function describeEvent(
     case 'card.blocked': {
       const reason = refs.blocks[String(p.block_id)]
       return [
-        // Те же слова, что на плашке блокировки: «Блокирует: DEV-…» читалось двояко (LATER-112)
+        // Те же слова, что на плашке блокировки: «Заблокирована карточкой DEV-…» или «Заблокирована»; «Блокирует: DEV-…»
+        // читалось двояко (LATER-112, решение PM 27.10)
         p.blocking_card_id
           ? t('history.blockedBy', { card: cardRef(p.blocking_card_id, refs, t) })
           : t('history.blocked'),

@@ -199,6 +199,9 @@ describe('Карточка: связи и блокировки', () => {
     expect(
       within(history).getByText(/снята автоматически .*: блокирующая карточка готова/),
     ).toBeInTheDocument()
+    // Снятая блокировка карточкой — те же слова, что на плашке (LATER-112, решение PM 27.10)
+    expect(history).toHaveTextContent(/Заблокирована карточкой\s*DEV-2\s*Миграция/)
+    expect(history).not.toHaveTextContent('Блокирует')
 
     await userEvent.click(within(section).getByRole('button', { name: 'Снять блокировку' }))
     expect(await screen.findByText('Блокировка снята')).toBeInTheDocument()
@@ -217,6 +220,10 @@ describe('Карточка: связи и блокировки', () => {
     )
     await userEvent.click(await within(section).findByRole('button', { name: /DEV-6/ }))
     expect(within(section).getByText('Макет')).toBeInTheDocument()
+    // В форме — те же слова, что на плашке (решение PM 27.10)
+    const form = within(section).getByRole('form', { name: 'Новая блокировка' })
+    expect(form).toHaveTextContent(/Заблокирована карточкой\s*DEV-6\s*Макет/)
+    expect(form).not.toHaveTextContent('Блокирует')
     await userEvent.click(within(section).getByRole('button', { name: 'Заблокировать' }))
 
     await vi.waitFor(() =>
@@ -368,6 +375,43 @@ describe('Карточка: лента истории', () => {
     expect(lines[5]).toContain('Название: изменено')
     expect(lines[6]).toContain('Создана в «To Do»')
     expect(lines[6]).toContain('Борис')
+  })
+
+  it('блокировка только причиной — в ленте «Заблокирована» и причина, как на плашке (решение PM 27.10)', async () => {
+    server.use(
+      http.get('*/api/v1/cards/DEV-1/history', () =>
+        HttpResponse.json(
+          makeCardHistory({
+            data: [
+              {
+                id: 'e1',
+                kind: 'event',
+                at: '2026-10-02T09:00:00.000000Z',
+                actor: { id: 'u1', name: 'Борис' },
+                event_type: 'card.blocked',
+                payload: { block_id: 'b2', blocking_card_id: null, has_reason: true },
+              },
+            ],
+            refs: {
+              users: {},
+              card_types: {},
+              labels: {},
+              blocks: { b2: 'Нет макета' },
+              cards: {},
+            },
+          }),
+        ),
+      ),
+    )
+    renderApp('/cards/DEV-1')
+    const window = await screen.findByRole('dialog')
+    await userEvent.click(within(window).getByRole('tab', { name: 'История' }))
+    const history = within(window).getByRole('tabpanel', { name: 'История' })
+
+    const [item] = await within(history).findAllByRole('listitem')
+    expect(item.firstElementChild).toHaveTextContent(/^Заблокирована$/)
+    expect(item).toHaveTextContent('Нет макета')
+    expect(item).not.toHaveTextContent('Карточка заблокирована')
   })
 
   it('карточка в корзине — «Удалённая карточка»; снятая из-за удаления блокировка подписана', async () => {
