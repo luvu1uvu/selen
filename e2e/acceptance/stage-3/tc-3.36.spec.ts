@@ -73,7 +73,13 @@ test('ТК-3.36. Действие во вкладке, где вошли под 
     await anotherTabLogsIn(page, context, 'e2e-editor@selen.test')
     await sendComment(page, 'ТК-3.36: вкладка с текущим кодом')
     await expect(page.getByText(SESSION_CHANGED)).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Меню пользователя' })).toContainText('E2E Редактор')
+    // Данные перечитаны под новым пользователем: доска перезагрузилась, окно карточки снова открыто. Окно модальное —
+    // шапка под ним скрыта от экранного диктора (aria-hidden), поэтому кнопку меню ищем и среди скрытых. Раньше тест
+    // ждал кнопку сразу и ловил ~100 мс, пока окна нет на время перезагрузки доски; под нагрузкой промахивался (LATER-110)
+    await expect(page.getByRole('dialog').getByRole('textbox', { name: 'Название', exact: true })).toHaveValue(/./)
+    await expect(page.getByRole('button', { name: 'Меню пользователя', includeHidden: true })).toContainText(
+      'E2E Редактор',
+    )
     await context.close()
   }
 
