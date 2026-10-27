@@ -108,6 +108,37 @@ describe('Карточка: люди, поля, метки', () => {
     expect(calls).toEqual([])
   })
 
+  it('участники догрузились при открытом списке — подсвеченный ответственный прокручен в видимую часть (U-1 UX-ревью пачки UX-3)', async () => {
+    serveCard(
+      makeCardDetail({
+        responsible: { id: 'u1', name: 'Борис', status: 'active', in_space: true },
+      }),
+    )
+    // Участники придержаны: при первом открытии в списке пока только текущий ответственный
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.get('*/api/v1/spaces/DEV/members', async () => {
+        await held
+        return HttpResponse.json({ data: members })
+      }),
+    )
+    renderApp('/cards/DEV-1')
+    const panel = await screen.findByRole('dialog')
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Борис — ответственный' }))
+    const list = await screen.findByRole('listbox')
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
+    onTestFinished(() => scrolled.mockRestore())
+    release()
+    await within(list).findByRole('option', { name: 'Вера' })
+    await waitFor(() =>
+      expect(scrolled.mock.contexts).toContain(
+        within(list).getByRole('option', { name: 'Борис — выбран' }),
+      ),
+    )
+  })
+
   it('Esc в выборе срока возвращает фокус на кнопку срока, без подсказки (LATER-117)', async () => {
     serveCard(makeCardDetail({ due_date: '2026-11-05' }))
     renderApp('/cards/DEV-1')

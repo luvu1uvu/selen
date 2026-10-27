@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check } from 'lucide-react'
 import { useMembers } from '@/features/spaces/queries'
@@ -84,6 +84,16 @@ export function PersonPicker({
   const { t: tc } = useTranslation()
   const [open, setOpen] = useState(false)
   const members = useMembers(spaceKey, open)
+  const list = useRef<HTMLDivElement>(null)
+  // cmdk прокручивает к подсвеченному пункту только при открытии, а при первом открытии люди ещё грузятся: дозагрузились —
+  // подсвеченный (текущий) снова в видимой части списка (U-1 UX-ревью пачки UX-3)
+  const loaded = members.isSuccess
+  useEffect(() => {
+    if (open && loaded)
+      list.current
+        ?.querySelector('[cmdk-item][data-selected="true"]')
+        ?.scrollIntoView({ block: 'nearest' })
+  }, [open, loaded])
 
   const assignable = (members.data ?? [])
     .filter((member) => member.user.status !== 'deactivated')
@@ -104,7 +114,7 @@ export function PersonPicker({
             не жмёт первый пункт «Снять ответственного» (LATER-112) */}
         <Command filter={byName} label={label} defaultValue={multiple ? undefined : selected[0]}>
           <CommandInput placeholder={t('params.searchPeople')} aria-label={label} />
-          <CommandList label={label}>
+          <CommandList ref={list} label={label}>
             {members.isPending ? (
               <CommandGroup>
                 <CommandItem disabled>{tc('states.loading')}</CommandItem>
