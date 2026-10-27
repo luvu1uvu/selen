@@ -463,7 +463,12 @@ export function AppLayout() {
           <div className="flex-1" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="gap-2" aria-label={t('nav.userMenu')}>
+              {/* Видимое имя — в начале доступного: «нажми Анна Смирнова» находит кнопку (WCAG 2.5.3, LATER-118) */}
+              <Button
+                variant="ghost"
+                className="gap-2"
+                aria-label={user ? t('nav.userMenu', { name: user.name }) : undefined}
+              >
                 <span className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-full text-xs">
                   {user?.name.charAt(0).toUpperCase()}
                 </span>

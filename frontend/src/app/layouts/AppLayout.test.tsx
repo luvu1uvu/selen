@@ -124,6 +124,16 @@ describe('Меню на узком экране (LATER-108)', () => {
   })
 })
 
+describe('Кнопка меню пользователя', () => {
+  it('видимое имя входит в доступное имя и стоит в начале (WCAG 2.5.3, LATER-118)', async () => {
+    signedInAs(makeUser({ name: 'Анна Смирнова' }))
+    renderApp('/')
+
+    const button = await screen.findByRole('button', { name: 'Анна Смирнова, меню пользователя' })
+    expect(within(button).getByText('Анна Смирнова')).toBeInTheDocument()
+  })
+})
+
 /**
  * Тема — только в меню пользователя (решения PM 21.10, LATER-89, пп. 6–8): «Светлая / Тёмная / Как в системе», по
  * умолчанию светлая; выбор меняет тему сразу и сохраняется на сервере, меню не закрывается (ADR-0025).
@@ -133,7 +143,7 @@ describe('Тема в меню пользователя', () => {
 
   async function openUserMenu() {
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: 'Меню пользователя' }))
+    await user.click(await screen.findByRole('button', { name: /, меню пользователя$/ }))
     return user
   }
 
