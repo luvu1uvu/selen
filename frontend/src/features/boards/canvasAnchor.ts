@@ -64,6 +64,9 @@ export function currentAnchor(canvas: HTMLElement, page: string): CanvasAnchor |
   return undefined
 }
 
+/** Сколько холст держит доску на месте, пока доски выше догружаются, мс. */
+export const PIN_MS = 2000
+
 /** Пользователь сам взялся за прокрутку — холст больше не держит доску на месте. */
 const STOP_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
 
@@ -89,7 +92,7 @@ export function pinBoard(canvas: HTMLElement, boardId: string, offset: number): 
     window.clearTimeout(timer)
     for (const type of STOP_EVENTS) canvas.removeEventListener(type, stop)
   }
-  const timer = window.setTimeout(stop, 2000)
+  const timer = window.setTimeout(stop, PIN_MS)
   for (const type of STOP_EVENTS) canvas.addEventListener(type, stop, { passive: true })
   return stop
 }

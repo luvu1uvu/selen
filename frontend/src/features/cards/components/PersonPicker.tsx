@@ -100,8 +100,8 @@ export function PersonPicker({
         {children}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
-        {/* Один человек (ответственный) — подсвечен текущий: Enter сразу после открытия ничего не меняет, а не жмёт
-            первый пункт «Снять ответственного» (LATER-112) */}
+        {/* Один человек (ответственный, заказчик) — подсвечен текущий: Enter сразу после открытия ничего не меняет, а
+            не жмёт первый пункт «Снять ответственного» (LATER-112) */}
         <Command filter={byName} label={label} defaultValue={multiple ? undefined : selected[0]}>
           <CommandInput placeholder={t('params.searchPeople')} aria-label={label} />
           <CommandList label={label}>

@@ -5,6 +5,7 @@ import type { SpaceBoard } from '@/shared/types/api'
 import { makeBoardCard, makeBoardDetail } from '@/test/boards'
 import { makeSpace, makeUser, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
+import { PIN_MS } from './canvasAnchor'
 
 function board(id: string, name: string, row: string, overrides: Partial<SpaceBoard> = {}) {
   return {
@@ -287,8 +288,8 @@ describe('Страница пространства: доски рядами', (
     // Удержание — таймер на 2 с: после ухода его уже никто не снял бы, и он сработал бы после конца теста
     const timers = vi.spyOn(window, 'setTimeout')
     onTestFinished(() => timers.mockRestore())
-    for (const frame of frames) frame(performance.now())
-    expect(timers).not.toHaveBeenCalledWith(expect.any(Function), 2000)
+    for (const frame of frames.splice(0)) frame(performance.now())
+    expect(timers).not.toHaveBeenCalledWith(expect.any(Function), PIN_MS)
   })
 
   it('?board=ID из дерева разворачивает свёрнутую доску насовсем', async () => {

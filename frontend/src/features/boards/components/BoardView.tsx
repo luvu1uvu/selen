@@ -390,7 +390,12 @@ export function BoardView({
       {board.lanes.slice(tail).map((lane, index) => renderLane(lane, tail + index, true))}
       <DragOverlay>
         {activeCard && (
-          <CardTileView card={activeCard} lookups={lookups} className="w-64 rotate-2 shadow-lg" />
+          // hover: — тень при наведении у фасада (sm) перебивала бы shadow-lg: перетаскиваемая карточка всегда под указателем
+          <CardTileView
+            card={activeCard}
+            lookups={lookups}
+            className="w-64 rotate-2 shadow-lg hover:shadow-lg"
+          />
         )}
       </DragOverlay>
     </DndContext>
