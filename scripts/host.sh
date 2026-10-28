@@ -68,10 +68,11 @@ funnel_on() {
 }
 
 # Режим «одна компания», а в базе стенда компаний несколько (ADR-0026): текст предупреждения или пусто. Стенд не
-# запущен — проверки нет (об этом скажет make host-status)
+# запущен — проверки нет (об этом скажет make host-status). Только строка предупреждения: текст исключения artisan (база
+# недоступна — адрес, роль, SQL) в «ВНИМАНИЕ» и уведомления не попадает (аудит, S-1)
 company_mode_warning() {
-  with_timeout 30 docker compose --project-directory "$ROOT_DIR" -f "$ROOT_DIR/docker-compose.pm.yml" \
-    exec -T php php artisan app:company-mode --warning 2> /dev/null || true
+  { with_timeout 30 docker compose --project-directory "$ROOT_DIR" -f "$ROOT_DIR/docker-compose.pm.yml" \
+    exec -T php php artisan app:company-mode --warning 2> /dev/null || true; } | { grep '^Режим «одна компания»' || true; }
 }
 
 # Предупреждения (ВНИМАНИЕ) — общие для уведомлений задания (каждый час) и make host-status
