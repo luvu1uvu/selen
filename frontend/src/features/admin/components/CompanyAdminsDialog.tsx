@@ -38,6 +38,8 @@ export function CompanyAdminsDialog({
   const [user, setUser] = useState<DirectoryUser | null>(null)
   // «Снять» — с подтверждением (решение PM 26.10, п. 2)
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null)
+  // Имя в окне подтверждения остаётся, пока окно закрывается
+  const [removingOpen, setRemovingOpen] = useState(false)
 
   const run = async (userId: string, admin: boolean, success: string) => {
     if (!companyId) return
@@ -93,7 +95,10 @@ export function CompanyAdminsDialog({
                     variant="outline"
                     size="sm"
                     disabled={setAdmin.isPending}
-                    onClick={() => setRemoving({ id: admin.id, name: admin.name })}
+                    onClick={() => {
+                      setRemoving({ id: admin.id, name: admin.name })
+                      setRemovingOpen(true)
+                    }}
                   >
                     {t('companies.admins.removeEllipsis')}
                   </Button>
@@ -134,14 +139,14 @@ export function CompanyAdminsDialog({
         </DialogFooter>
       </DialogContent>
       <ConfirmDialog
-        open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
+        open={removingOpen}
+        onOpenChange={setRemovingOpen}
         pending={setAdmin.isPending}
         onConfirm={async () => {
           if (removing) {
             await run(removing.id, false, t('companies.admins.removed', { name: removing.name }))
           }
-          setRemoving(null)
+          setRemovingOpen(false)
         }}
         title={t('companies.admins.removeTitle')}
         description={t('companies.admins.removeText', {

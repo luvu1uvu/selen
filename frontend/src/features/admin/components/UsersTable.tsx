@@ -46,7 +46,9 @@ export function UsersTable() {
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [toDeactivate, setToDeactivate] = useState<AdminUser | null>(null)
   const [toBlock, setToBlock] = useState<AdminUser | null>(null)
+  // Гость окна остаётся, пока окно закрывается (иначе на время анимации заголовок стал бы «Добавить гостя»)
   const [guest, setGuest] = useState<AdminUser | null>(null)
+  const [guestOpen, setGuestOpen] = useState(false)
 
   const usersQuery = useUsers({ status: status || undefined, search: search || undefined, page })
   const changeRole = useChangeRole()
@@ -221,7 +223,13 @@ export function UsersTable() {
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
                         <p>{t('users.actions.access')}</p>
-                        {!isMe && <p>{t('users.actionsUnavailable')}</p>}
+                        {!isMe && (
+                          <p>
+                            {user.blocked
+                              ? t('users.blockedOnlyOwner')
+                              : t('users.actionsUnavailable')}
+                          </p>
+                        )}
                       </TooltipContent>
                     </Tooltip>
                   ) : (
@@ -263,7 +271,12 @@ export function UsersTable() {
                             </DropdownMenuItem>
                           )}
                           {canManageGuest && (
-                            <DropdownMenuItem onSelect={dialog(() => setGuest(user))}>
+                            <DropdownMenuItem
+                              onSelect={dialog(() => {
+                                setGuest(user)
+                                setGuestOpen(true)
+                              })}
+                            >
                               {t('guests.edit')}
                             </DropdownMenuItem>
                           )}
@@ -359,7 +372,7 @@ export function UsersTable() {
       />
       <DeactivateUserDialog user={toDeactivate} onClose={() => setToDeactivate(null)} />
       <DeactivateUserDialog user={toBlock} account onClose={() => setToBlock(null)} />
-      <GuestDialog open={guest !== null} guest={guest} onClose={() => setGuest(null)} />
+      <GuestDialog open={guestOpen} guest={guest} onClose={() => setGuestOpen(false)} />
     </div>
   )
 }

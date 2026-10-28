@@ -141,7 +141,9 @@ export function CompanyPermissionsSection(
               )}
               <div className="grid gap-0.5 text-sm">
                 {/* Точка — разделитель ключей i18next: в ключе перевода — «_», как у типов событий */}
-                <label htmlFor={id}>{t(`permissions.names.${permissionKey(row.permission)}`)}</label>
+                <label htmlFor={id}>
+                  {t(`permissions.names.${permissionKey(row.permission)}`)}
+                </label>
                 {/* Что открывает право — выдают осознанно (решение PM 28.10 по аудиту П2c-1); описание галочки */}
                 <span id={`${id}-hint`} className="text-muted-foreground text-xs">
                   {t(`permissions.hints.${permissionKey(row.permission)}`)}

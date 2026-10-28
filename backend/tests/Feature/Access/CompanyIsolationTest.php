@@ -498,8 +498,11 @@ it('(д) у гостя нет ничего, кроме выданных прос
     expect($people[$host->id]['user'])->toMatchArray(['name' => 'Хозяин гостевого', 'email' => null])
         ->and($people[$host->id]['groups'][0]['name'])->toBeNull()
         ->and($people[$guest->id]['user']['email'])->toBe('guest@selen.test');
-    $this->getJson('/api/v1/spaces/GUEST/groups')->assertOk()
-        ->assertJsonPath('data.0.group.name', null)->assertJsonPath('data.0.group.description', null);
+    // И «Все сотрудники» хозяина — просто «группа»: без пометки встроенной и численности компании (LATER-139)
+    grantGroup($space, Group::everyone(company()), SpaceRole::Commenter);
+    foreach ($this->getJson('/api/v1/spaces/GUEST/groups')->assertOk()->json('data') as $grant) {
+        expect($grant['group'])->toMatchArray(['name' => null, 'description' => null, 'system' => null, 'members_count' => null]);
+    }
 
     // Его пространство работает; в дереве — его «дом» и гостевое пространство под названием A; админки A нет
     $this->getJson('/api/v1/spaces/GUEST')->assertOk()->assertJsonPath('data.my_role', 'editor');

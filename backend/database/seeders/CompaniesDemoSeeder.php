@@ -94,7 +94,7 @@ class CompaniesDemoSeeder extends Seeder
         // Гости (П2c): сотрудники «Компании 1» с личным доступом к пространству чужой компании
         $guests = app(AddGuestAction::class);
         $guests->handle($irina, $second, 'boris@selen.test', null, [['space' => $support, 'role' => SpaceRole::Commenter, 'own_cards_only' => false]]);
-        $guests->handle($irina, $third, 'vera@selen.test', now()->addDays(30)->endOfDay(), [['space' => $stock, 'role' => SpaceRole::Editor, 'own_cards_only' => false]]);
+        $guests->handle($irina, $third, 'vera@selen.test', now('Europe/Moscow')->addDays(30)->endOfDay()->utc(), [['space' => $stock, 'role' => SpaceRole::Editor, 'own_cards_only' => false]]);
 
         $this->command->info('Компании: «Компания 2» (SALES, SUP; администратор irina@selen.test), «Компания 3» (STOCK; администратор — тоже Ирина).');
         $this->command->info('Гости: boris@selen.test — в «Поддержке» «Компании 2» без срока, vera@selen.test — в «Складе» «Компании 3» на 30 дней.');

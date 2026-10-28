@@ -92,10 +92,13 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
                       </Badge>
                     )}
                   </div>
-                  <div className="text-muted-foreground text-xs">
-                    {t('groups.membersCount', { count: group.members_count })}
-                    {group.description && ` · ${group.description}`}
-                  </div>
+                  {/* Гостю численности и описания нет (LATER-139) — строки нет */}
+                  {group.members_count !== null && (
+                    <div className="text-muted-foreground text-xs">
+                      {t('groups.membersCount', { count: group.members_count })}
+                      {group.description && ` · ${group.description}`}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>
                   {editable ? (

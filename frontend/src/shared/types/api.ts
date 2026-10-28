@@ -570,7 +570,8 @@ export interface SpaceGroupGrant {
     description: string | null
     system: SystemGroup | null
     archived_at: string | null
-    members_count: number
+    /** null — смотрит гость (численность компании-хозяина ему не показываем, LATER-139). */
+    members_count: number | null
   }
   role: SpaceRole
   own_cards_only: boolean
