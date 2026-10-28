@@ -6,6 +6,7 @@ use App\Enums\CompanyRole;
 use App\Enums\EventType;
 use App\Models\Company;
 use App\Models\User;
+use App\Services\Access\AccessResolver;
 use App\Services\EventLog\EventRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,7 @@ class ChangeUserRoleAction
         private readonly EventRecorder $events,
         private readonly AdminGuard $adminGuard,
         private readonly UserLock $lock,
+        private readonly AccessResolver $resolver,
     ) {}
 
     public function handle(User $actor, User $user, Company $company, CompanyRole $role): User
@@ -32,7 +34,11 @@ class ChangeUserRoleAction
                 throw ValidationException::withMessages(['role' => __('selen.users.owner_role_by_transfer')]);
             }
 
-            $from = CompanyRole::of($company->permissionsOf($user)->isAdmin());
+            // Гость администратором компании не бывает (П2c); роль убранного из компании — какой она записана
+            if ($this->resolver->membership($company, $user)?->kind !== AccessResolver::HOME) {
+                throw ValidationException::withMessages(['role' => __('selen.users.guest_no_role')]);
+            }
+            $from = CompanyRole::of($company->permissionsOf($user)->isAssignedAdmin());
             if ($from === $role) {
                 return $user;
             }

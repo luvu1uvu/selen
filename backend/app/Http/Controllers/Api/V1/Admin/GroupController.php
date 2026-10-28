@@ -87,7 +87,7 @@ class GroupController extends Controller
 
     public function removeMember(Request $request, Company $company, Group $group, User $user, RemoveGroupMemberAction $action): Response
     {
-        Gate::authorize('update', $group);
+        Gate::authorize('manageMembers', $group);
 
         $action->handle($request->user(), $group, $user);
 
@@ -115,7 +115,7 @@ class GroupController extends Controller
 
     public function revokeSpace(Request $request, Company $company, Group $group, Space $space, RevokeSpaceGroupAction $action): Response
     {
-        Gate::authorize('update', $group);
+        Gate::authorize('manageSpaces', $group);
 
         $action->handle($request->user(), $space, $group, AssignSpaceRoleAction::VIA);
 

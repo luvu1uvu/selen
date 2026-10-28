@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Route;
 | другая компания — 404 с единым телом (её для него нет, как несуществующей). Маршруты без компании в адресе (список
 | и создание компаний — только Владелец) другой компании не касаются: людям другой компании — так же, как этой.
 | П2c: участник с выданным правом компании (лично и через группу) — как администратор компании на маршрутах этого
-| права (routePermission) и как участник на остальных; гость компании — 404 (админки компании для него нет), как
+| права (routePermissions) и как участник на остальных; гость компании — 404 (админки компании для него нет), как
 | человек другой компании. Цели П2c — гость, отключённый Владельцем.
 | Новый админский маршрут без строки здесь роняет тест «все админские маршруты есть в матрице».
 */
@@ -200,25 +200,29 @@ beforeEach(function () {
 });
 
 /**
- * Право компании, которое открывает маршрут участнику (П2c): с ним он — как администратор компании, без него — как
- * участник. null — маршрут только Владельца и администратора компании (роли, права компании, владение, компании).
+ * Права компании, которые открывают маршрут участнику (П2c): с ними он — как администратор компании, без них — как
+ * участник. null — маршрут только Владельца и администратора компании (роли, права компании, владение, компании,
+ * передача доступа при деактивации). Состав и доступ группы — ещё и «управлять доступом» (это выдача доступа).
+ *
+ * @return list<Permission>|null
  */
-function routePermission(string $method, string $path): ?Permission
+function routePermissions(string $method, string $path, array $body = []): ?array
 {
     $path = (string) preg_replace('/^admin\/companies\/\{company\}\//', '', $path);
 
     return match (true) {
-        str_starts_with($path, 'admin/companies'),
+        str_starts_with($path, 'admin/companies'), isset($body['successor_id']),
         (bool) preg_match('/^users\/[^\/]+\/(role|transfer-ownership|transfer-impact|block|unblock|permissions)$/', $path),
         (bool) preg_match('/^groups\/[^\/]+\/permissions$/', $path) => null,
-        $path === 'users', str_starts_with($path, 'users/'), str_starts_with($path, 'guests') => Permission::CompanyManageUsers,
-        str_starts_with($path, 'invitations'), $path === 'grantable-spaces' => Permission::CompanyInviteUsers,
-        str_starts_with($path, 'groups') => Permission::CompanyManageGroups,
-        $path === 'events' => Permission::CompanyViewEventLog,
-        (bool) preg_match('/^spaces\/[^\/]+\/members\//', $path), str_contains($path, '/directory') => Permission::CompanyManageAccess,
-        str_starts_with($path, 'spaces'), $path === 'navigation', str_starts_with($path, 'folders'), str_starts_with($path, 'nav-nodes') => Permission::CompanyManageStructure,
-        str_starts_with($path, 'trash') => Permission::CompanyManageTrash,
-        str_starts_with($path, 'labels'), str_starts_with($path, 'card-types') => Permission::CompanyManageDictionaries,
+        $path === 'users', str_starts_with($path, 'users/'), str_starts_with($path, 'guests') => [Permission::CompanyManageUsers],
+        str_starts_with($path, 'invitations'), $path === 'grantable-spaces' => [Permission::CompanyInviteUsers],
+        (bool) preg_match('/^groups\/[^\/]+\/(members|spaces)/', $path) => [Permission::CompanyManageGroups, Permission::CompanyManageAccess],
+        str_starts_with($path, 'groups') => [Permission::CompanyManageGroups],
+        $path === 'events' => [Permission::CompanyViewEventLog],
+        (bool) preg_match('/^spaces\/[^\/]+\/members\//', $path), str_contains($path, '/directory') => [Permission::CompanyManageAccess],
+        str_starts_with($path, 'spaces'), $path === 'navigation', str_starts_with($path, 'folders'), str_starts_with($path, 'nav-nodes') => [Permission::CompanyManageStructure],
+        str_starts_with($path, 'trash') => [Permission::CompanyManageTrash],
+        str_starts_with($path, 'labels'), str_starts_with($path, 'card-types') => [Permission::CompanyManageDictionaries],
         default => throw new LogicException("Нет права для маршрута {$method} {$path}"),
     };
 }
@@ -257,12 +261,12 @@ function expectAdminAnswer($response, ?bool $expected): void
 }
 
 it('участник с правом компании — как администратор на маршрутах права, иначе — как участник (лично и через группу)', function (string $method, string $path, bool $owner, bool $admin, bool $member, array $body, string $source) {
-    $permission = routePermission($method, $path);
+    $permissions = routePermissions($method, $path, $body);
     $granted = member();
     $subject = $source === 'group' ? addToGroup(makeGroup(), $granted) : $granted;
     // Ещё одно право — не то, что нужно маршруту: лишнее не должно открывать
-    $grants = array_filter([$permission, $permission === Permission::CompanyManageTrash ? Permission::CompanyViewEventLog : Permission::CompanyManageTrash]);
-    foreach ($grants as $grant) {
+    $extra = in_array(Permission::CompanyManageTrash, $permissions ?? [], true) ? Permission::CompanyViewEventLog : Permission::CompanyManageTrash;
+    foreach ([...($permissions ?? []), $extra] as $grant) {
         CompanyPermissionGrant::query()->forceCreate([
             'company_id' => company()->id,
             $source === 'group' ? 'group_id' : 'user_id' => $subject->id,
@@ -272,8 +276,25 @@ it('участник с правом компании — как админис�
 
     $response = $this->actingAs($granted)->json($method, '/api/v1/'.strtr($path, $this->objects), matrixBody($body, $this->objects));
 
-    expectAdminAnswer($response, $permission === null ? $member : $admin);
+    expectAdminAnswer($response, $permissions === null ? $member : $admin);
 })->with(adminEndpoints())->with(['personal', 'group']);
+
+it('с одним правом «управлять группами» доступ и состав группы с доступом не меняются (это выдача доступа)', function () {
+    $granted = member();
+    CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $granted->id, 'permission' => Permission::CompanyManageGroups]);
+    $this->actingAs($granted);
+    $group = $this->objects['{group}'];
+
+    $this->putJson(adminPath()."groups/{$group}/spaces/{$this->objects['{space}']}", ['role' => 'admin'])->assertForbidden();
+    $this->postJson(adminPath()."groups/{$group}/members", ['user_id' => $granted->id])->assertForbidden();
+    // Группа без доступа и прав компании — её состав он ведёт
+    $plain = makeGroup();
+    $this->postJson(adminPath()."groups/{$plain->id}/members", ['user_id' => $granted->id])->assertOk();
+    // Группа с правами компании — только администратор и Владелец, даже с «управлять доступом»
+    CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'group_id' => $plain->id, 'permission' => Permission::CompanyManageUsers]);
+    CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $granted->id, 'permission' => Permission::CompanyManageAccess]);
+    $this->postJson(adminPath()."groups/{$plain->id}/members", ['user_id' => member()->id])->assertForbidden();
+});
 
 it('все админские маршруты есть в матрице доступа', function () {
     $covered = collect(adminEndpoints())

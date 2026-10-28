@@ -57,6 +57,7 @@ export const ALL_USER_PERMISSIONS: AdminUserPermissions = {
   manage_invitation: true,
   transfer_ownership: true,
   block: true,
+  transfer_access: true,
   manage_guest: false,
   manage_permissions: true,
 }
@@ -68,6 +69,7 @@ export const NO_USER_PERMISSIONS: AdminUserPermissions = {
   manage_invitation: false,
   transfer_ownership: false,
   block: false,
+  transfer_access: false,
   manage_guest: false,
   manage_permissions: false,
 }

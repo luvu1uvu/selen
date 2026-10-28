@@ -57,6 +57,8 @@ return new class extends Migration
         }
 
         DB::unprepared(<<<'SQL'
+            DROP TRIGGER IF EXISTS company_members_guest_grants_check ON company_members;
+            DROP FUNCTION IF EXISTS company_members_guest_grants_check();
             DROP TRIGGER IF EXISTS company_members_kind_guard ON company_members;
             DROP FUNCTION IF EXISTS company_members_kind_guard();
             DROP TRIGGER IF EXISTS access_grants_guest_check ON access_grants;
@@ -203,6 +205,29 @@ return new class extends Migration
 
             CREATE TRIGGER company_members_kind_guard BEFORE UPDATE OF kind ON company_members
                 FOR EACH ROW EXECUTE FUNCTION company_members_kind_guard();
+
+            -- Человек становится гостем — у него в компании уже не должно быть выдач, которых гостю нельзя (с другой
+            -- стороны того же правила, что access_grants_guest_check: гость появляется после выдачи — Владелец без «дома»)
+            CREATE OR REPLACE FUNCTION company_members_guest_grants_check() RETURNS trigger
+            LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+            BEGIN
+                IF NEW.kind = 'guest' AND EXISTS (
+                    SELECT 1 FROM public.access_grants g
+                      LEFT JOIN public.nav_nodes n ON n.id = g.nav_node_id
+                     WHERE g.company_id = NEW.company_id AND g.user_id = NEW.user_id
+                       AND (n.space_id IS NULL OR EXISTS (
+                           SELECT 1 FROM public.role_permissions p WHERE p.role_id = g.role_id AND p.permission = 'space.manage_access'))
+                ) THEN
+                    RAISE EXCEPTION 'company_members: a guest gets only spaces and roles without access management'
+                        USING ERRCODE = 'check_violation';
+                END IF;
+
+                RETURN NEW;
+            END;
+            $$;
+
+            CREATE TRIGGER company_members_guest_grants_check BEFORE INSERT OR UPDATE OF kind ON company_members
+                FOR EACH ROW EXECUTE FUNCTION company_members_guest_grants_check();
             SQL);
 
         $this->replaceLinksCheck(withPermissionGrants: true);

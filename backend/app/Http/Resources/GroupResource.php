@@ -34,6 +34,11 @@ class GroupResource extends JsonResource
             'created_at' => $this->created_at->toIso8601ZuluString(),
             'members_count' => $this->whenCounted('members', fn () => $this->membersCount()),
             'spaces_count' => $this->whenCounted('spaceGrants'),
+            // Страница группы: что текущий пользователь может менять (состав и доступ — выдача доступа, П2c)
+            'permissions' => $this->whenLoaded('members', fn () => [
+                'manage_members' => $request->user()?->can('manageMembers', $this->resource) ?? false,
+                'manage_spaces' => $request->user()?->can('manageSpaces', $this->resource) ?? false,
+            ]),
             'members' => $this->whenLoaded('members', fn () => $this->members
                 ->sortBy(fn (User $user) => mb_strtolower($user->name))
                 ->values()

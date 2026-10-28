@@ -34,6 +34,14 @@ final class CompanyMembers
         return $inactive ? UserStatus::Deactivated : $user->status;
     }
 
+    /** Действующий «дом» этой компании (без запроса — из тех же членств). */
+    public static function isActiveHome(User $user, string $companyId): bool
+    {
+        $membership = self::of($companyId)->get($user->id);
+
+        return $membership?->kind === AccessResolver::HOME && $membership->deactivated_at === null;
+    }
+
     /** С какого момента человек деактивирован в этой компании (убран из неё или учётная запись); null — не деактивирован. */
     public static function deactivatedAt(User $user, string $companyId): ?Carbon
     {

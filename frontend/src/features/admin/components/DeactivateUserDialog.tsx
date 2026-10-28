@@ -31,7 +31,7 @@ export function DeactivateUserDialog({
   account = false,
   onClose,
 }: {
-  user: Pick<User, 'id' | 'name'> | null
+  user: (Pick<User, 'id' | 'name'> & { permissions?: { transfer_access: boolean } }) | null
   /** Отключить учётную запись во всех компаниях — только Владелец. */
   account?: boolean
   onClose: () => void
@@ -85,7 +85,7 @@ export function DeactivateUserDialog({
                 : t('users.confirm.deactivateText', { name: user?.name ?? '' })}
             </DialogDescription>
           </DialogHeader>
-          {!account && (
+          {!account && user?.permissions?.transfer_access && (
             <FormField
               id="deactivate-successor"
               label={t('users.transferAccess.label')}

@@ -10,6 +10,7 @@ use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\AccessGrant;
 use App\Models\Company;
+use App\Models\EventLogEntry;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
@@ -250,6 +251,20 @@ class AccessResolver
     }
 
     /**
+     * Что даёт группа (П2c): есть ли у неё выдачи доступа и права компании. Состав такой группы — это выдача доступа
+     * и прав компании, поэтому его меняет только тот, кто их выдаёт (GroupPolicy::manageMembers).
+     *
+     * @return array{access: bool, company_permissions: bool}
+     */
+    public function groupGrants(Group $group): array
+    {
+        return [
+            'access' => DB::table('access_grants')->where('group_id', $group->getKey())->exists(),
+            'company_permissions' => DB::table('company_permission_grants')->where('group_id', $group->getKey())->exists(),
+        ];
+    }
+
+    /**
      * Откуда у человека права компании — для вкладки «Права компании» (П2c): выданные лично и через группы компании
      * (не в архиве; «Все сотрудники» — если он активный «дом»). permission → группы.
      *
@@ -418,18 +433,31 @@ class AccessResolver
     }
 
     /**
-     * Подзапрос id людей, события «о человеке» (без компании: вход, смена пароля, отключение учётной записи) которых видит
-     * журнал компании: её действующие «дома» и убранные из неё, если они больше нигде не работают (учётная запись
-     * деактивирована). Убранный, но работающий в другой компании, — нет: его входы выдали бы, что он работает где-то ещё.
+     * События «о человеке» (без компании: вход, смена пароля, отключение учётной записи), которые видит журнал компании
+     * (условие на event_log): о её действующих «домах» — все; об убранных из неё, которые больше нигде не работают
+     * (учётная запись деактивирована), — до того, как их убрали, и после того, как они перестали работать везде (попытки
+     * входа уволенного). Убранный, но работающий в другой компании, — ничего: его входы выдали бы, что он работает где-то
+     * ещё (ревью П2c-1).
+     *
+     * @param  EloquentBuilder<EventLogEntry>  $query
+     * @return EloquentBuilder<EventLogEntry>
      */
-    public function eventSubjectIds(Company $company): Builder
+    public function eventsAboutPeople(EloquentBuilder $query, Company $company): EloquentBuilder
     {
-        return $this->companyMemberIds($company)->union($this->memberships()
-            ->select('user_id')
-            ->where('company_id', $company->getKey())
-            ->where('kind', self::HOME)
-            ->whereNotNull('deactivated_at')
-            ->whereIn('user_id', DB::table('users')->select('id')->where('status', UserStatus::Deactivated->value)));
+        return $query->where(fn (EloquentBuilder $q) => $q
+            ->whereIn('subject_id', $this->companyMemberIds($company))
+            ->orWhereExists(fn (Builder $q) => $q->from('company_members')
+                ->join('users', 'users.id', '=', 'company_members.user_id')
+                ->whereColumn('company_members.user_id', 'event_log.subject_id')
+                ->where('company_members.company_id', $company->getKey())
+                ->where('company_members.kind', self::HOME)
+                ->whereNotNull('company_members.deactivated_at')
+                ->where('users.status', UserStatus::Deactivated->value)
+                // До ухода из этой компании и после того, как он перестал работать везде; между — он работал в другой
+                ->where(fn (Builder $q) => $q
+                    ->whereColumn('event_log.occurred_at', '<=', 'company_members.deactivated_at')
+                    ->orWhereColumn('event_log.occurred_at', '>=', 'users.deactivated_at'))
+                ->selectRaw('1')));
     }
 
     /**
@@ -504,6 +532,12 @@ class AccessResolver
     public function isHome(User $user, Company $company): bool
     {
         return $this->homes()->where('company_id', $company->getKey())->where('user_id', $user->getKey())->exists();
+    }
+
+    /** Подзапрос id компаний, где у пользователя есть любое членство («дом», в том числе убранный, или гость). */
+    public function membershipCompanyIds(User $user): Builder
+    {
+        return $this->memberships()->select('company_id')->where('user_id', $user->getKey());
     }
 
     /**

@@ -12,7 +12,7 @@ class StoreGroupMemberRequest extends FormRequest
 {
     public function authorize(): Response
     {
-        return Gate::inspect('update', $this->group());
+        return Gate::inspect('manageMembers', $this->group());
     }
 
     private function group(): Group

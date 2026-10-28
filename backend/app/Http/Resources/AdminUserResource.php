@@ -6,7 +6,6 @@ use App\Enums\UserStatus;
 use App\Models\Company;
 use App\Models\Invitation;
 use App\Models\User;
-use App\Services\Access\AccessResolver;
 use App\Services\Access\CompanyMembers;
 use Illuminate\Http\Request;
 
@@ -41,7 +40,7 @@ class AdminUserResource extends UserResource
         // Время входов и часовой пояс — только действующим сотрудникам компании (минимум ПДн, аудит П2b-2, S-3): Владелец
         // вне его «домов», гость и убранный из компании по ним выдали бы, что человек работает где-то ещё
         if (($user->isOwner() || $account['status'] === UserStatus::Deactivated || $guest !== null)
-            && ! app(AccessResolver::class)->isHome($user, $company)) {
+            && ! CompanyMembers::isActiveHome($user, $company->id)) {
             $account = ['last_login_at' => null, 'timezone' => null] + $account;
         }
 
@@ -61,6 +60,8 @@ class AdminUserResource extends UserResource
                 'manage_invitation' => $guest === null && $actor->can('manages', [Invitation::class, $user, $company]),
                 'transfer_ownership' => $guest === null && $actor->can('transferOwnership', [$user, $company]),
                 'block' => $guest === null && $actor->can('block', [$user, $company]),
+                // Деактивация с передачей доступа преемнику — Владелец и администратор компании
+                'transfer_access' => $guest === null && $actor->can('transferAccess', [$user, $company]),
                 'manage_guest' => $guest !== null && $actor->can('manageGuests', [User::class, $company]),
                 'manage_permissions' => $guest === null && $actor->can('managePermissions', [$user, $company]),
             ],

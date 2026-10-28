@@ -10,7 +10,7 @@ import {
 import { useCurrentUser } from '@/features/auth/queries'
 import { appReturnPath, fileReturnPath, openServerPage } from '@/shared/lib/browser'
 import { NotFoundState } from '@/shared/components/NotFoundState'
-import { hasAdminAccess } from '@/shared/lib/roles'
+import { hasAdminAccess } from '@/features/admin/company'
 import { Button } from '@/shared/ui/button'
 
 function FullPageLoader() {
@@ -154,7 +154,9 @@ export function AdminRedirect() {
   const { search } = useLocation()
   const company = defaultAdminCompany(user)
 
-  if (!company) return <Navigate to="/" replace />
+  // Без раздела — первая страница, на которую есть право (П2c: у участника может быть только «журнал»)
+  const first = firstAdminPath(company)
+  if (!company || !first) return <Navigate to="/" replace />
   if (rest !== '' && !ADMIN_SECTIONS.includes(rest.split('/')[0])) return <AdminNotFound />
-  return <Navigate to={adminUrl(company.id, rest || 'users') + search} replace />
+  return <Navigate to={adminUrl(company.id, rest || first) + search} replace />
 }

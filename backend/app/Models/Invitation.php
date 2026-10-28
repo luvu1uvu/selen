@@ -50,7 +50,6 @@ class Invitation extends Model implements HasCompany
         ];
     }
 
-    /** sha256 от токена из ссылки. В БД хранится только хеш. */
     /**
      * Последнее приглашение каждого из людей — в эту компанию (аудит П2b-2, S-4): Владелец и человек с «домами»
      * в нескольких компаниях видны в нескольких компаниях, приглашение другой компании здесь не учитывается.
@@ -71,6 +70,7 @@ class Invitation extends Model implements HasCompany
         }
     }
 
+    /** sha256 от токена из ссылки. В БД хранится только хеш. */
     public static function hashToken(#[\SensitiveParameter] string $token): string
     {
         return hash('sha256', $token);

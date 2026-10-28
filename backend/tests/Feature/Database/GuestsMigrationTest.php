@@ -29,7 +29,9 @@ it('переход: деактивированные убраны из свои�
         $migration->up();
 
         $membership = fn (User $user) => DB::table('company_members')->where('user_id', $user->id)->sole();
-        expect($membership($gone)->deactivated_at)->not->toBeNull()
+        // Деактивированный после перехода прав не получает (сравнение ниже их не видит — проверяем отдельно)
+        expect(collect(AccessSnapshot::current()['pairs'])->keys()->filter(fn (string $key) => str_ends_with($key, ":{$gone->id}"))->all())->toBe([])
+            ->and($membership($gone)->deactivated_at)->not->toBeNull()
             ->and($membership($active)->deactivated_at)->toBeNull()
             ->and(AccessSnapshot::activeUsers(AccessSnapshot::current()))->toBe($before)
             ->and(Schema::hasTable('company_permission_grants'))->toBeTrue();

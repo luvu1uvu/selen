@@ -15,7 +15,12 @@ trait ParsesGuestExpiry
     /** @return array<string, mixed> */
     protected function guestExpiryRules(): array
     {
-        return ['expires_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today']];
+        /** @var User $actor */
+        $actor = $this->user();
+        // «Сегодня» — в часовом поясе того, кто задаёт срок (а не в UTC)
+        $today = Date::now($actor->timezone)->format('Y-m-d');
+
+        return ['expires_on' => ['nullable', 'date_format:Y-m-d', "after_or_equal:{$today}"]];
     }
 
     public function expiresAt(): ?CarbonInterface

@@ -65,6 +65,9 @@ export function GroupPage() {
   const group = groupQuery.data
   if (!group) return <p className="text-muted-foreground text-sm">{tc('states.loading')}</p>
   const editable = !group.archived_at
+  // Состав и доступ группы — выдача доступа: с одним правом «управлять группами» их не поменять (П2c)
+  const editableMembers = editable && (group.permissions?.manage_members ?? true)
+  const editableSpaces = editable && (group.permissions?.manage_spaces ?? true)
   // Встроенная «Все сотрудники»: состав вычисляется, группу нельзя изменить или архивировать —
   // только выдавать пространствам (без роли администратора)
   const isSystem = group.system !== null
@@ -124,14 +127,14 @@ export function GroupPage() {
         {isSystem && (
           <p className="text-muted-foreground max-w-2xl text-sm">{t('groups.members.system')}</p>
         )}
-        {editable && !isSystem && <AddMemberForm group={group} />}
+        {editableMembers && !isSystem && <AddMemberForm group={group} />}
         {!isSystem && (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('groups.members.name')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('groups.members.added')}</TableHead>
-                {editable && (
+                {editableMembers && (
                   <TableHead className="w-28">
                     <span className="sr-only">{t('groups.members.actions')}</span>
                   </TableHead>
@@ -160,7 +163,7 @@ export function GroupPage() {
                   <TableCell className="hidden md:table-cell">
                     <AddedAt value={member.added_at} />
                   </TableCell>
-                  {editable && (
+                  {editableMembers && (
                     <TableCell>
                       <Button
                         variant="ghost"
@@ -188,10 +191,10 @@ export function GroupPage() {
           </h2>
           <p className="text-muted-foreground text-sm">{t('groups.spaces.description')}</p>
         </div>
-        {editable && <SpaceAccessForm group={group} />}
+        {editableSpaces && <SpaceAccessForm group={group} />}
         <SpaceAccessTable
           group={group}
-          editable={editable}
+          editable={editableSpaces}
           onRevoke={(id, name) => setConfirm({ kind: 'space', id, name })}
         />
       </section>

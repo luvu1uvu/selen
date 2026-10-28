@@ -2,6 +2,7 @@
 
 use App\Enums\BoardTemplate;
 use App\Enums\EventType;
+use App\Enums\Permission;
 use App\Enums\SpaceRole;
 use App\Enums\StandardRole;
 use App\Enums\UserStatus;
@@ -14,6 +15,8 @@ use App\Notifications\AccessOpenedNotification;
 use App\Notifications\InvitationNotification;
 use App\Services\EventLog\EventRecorder;
 use Database\Factories\UserFactory;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 /*
@@ -275,17 +278,103 @@ describe('приглашение существующего сотрудника
     });
 });
 
-it('события «о человеке» убранного из компании: пока он работает в другой — не видны; ушёл отовсюду — видны', function () {
+it('события «о человеке» убранного из компании: пока он работает в другой — не видны; ушёл отовсюду — видны только до ухода', function () {
     $both = member();
     $both->companies()->attach($this->second->id, ['kind' => 'home']);
     $secondAdmin = admin(company: $this->second);
+    $recorder = app(EventRecorder::class);
+    $before = $recorder->record(EventType::PasswordChanged, $both, $both);
+    $this->travel(1)->minutes();
     $this->actingAs($this->admin)->postJson(adminPath()."users/{$both->id}/deactivate")->assertOk();
-    $event = app(EventRecorder::class)->record(EventType::PasswordChanged, $both, $both);
+    $this->travel(1)->minutes();
+    $after = $recorder->record(EventType::PasswordChanged, $both, $both);
 
     $ids = fn (User $actor, $company) => collect($this->actingAs($actor)->getJson(adminPath($company).'events')->json('data'))->pluck('id');
-    expect($ids($this->admin, company()))->not->toContain($event->id)
-        ->and($ids($secondAdmin, $this->second))->toContain($event->id);
+    expect($ids($this->admin, company()))->not->toContain($before->id)->not->toContain($after->id)
+        ->and($ids($secondAdmin, $this->second))->toContain($before->id, $after->id);
 
+    // Ушёл и из второй — первой видны события до его ухода из неё и после ухода отовсюду, но не то, что было, когда он
+    // работал только во второй
+    $this->travel(1)->minutes();
     $this->actingAs($secondAdmin)->postJson(adminPath($this->second)."users/{$both->id}/deactivate")->assertOk();
-    expect($ids($this->admin, company()))->toContain($event->id);
+    $this->travel(1)->minutes();
+    $gone = $recorder->record(EventType::LoginFailed, null, $both, ['reason' => 'deactivated']);
+    expect($ids($this->admin, company()))->toContain($before->id, $gone->id)->not->toContain($after->id);
+});
+
+describe('ревью П2c-1: передача доступа и права компании не выдают лишнего', function () {
+    it('себя преемником не назначить; участник с одним «управлять пользователями» передать доступ не может', function () {
+        $leaving = member();
+        addToSpace(space(['key' => 'DEV']), $leaving, SpaceRole::Admin);
+        $manager = member();
+        CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $manager->id, 'permission' => 'company.manage_users']);
+
+        $this->actingAs($this->admin)->postJson(adminPath()."users/{$leaving->id}/deactivate", ['successor_id' => $this->admin->id])
+            ->assertJsonValidationErrors(['successor_id' => __('selen.users.successor_invalid')]);
+        $this->actingAs($manager)->postJson(adminPath()."users/{$leaving->id}/deactivate", ['successor_id' => member()->id])->assertForbidden();
+        // Без передачи — может
+        $this->actingAs($manager)->postJson(adminPath()."users/{$leaving->id}/deactivate")->assertOk();
+    });
+
+    it('права, которые выдаёт только Владелец, передаёт только Владелец', function () {
+        foreach ([[$this->admin, false], [$this->owner, true]] as [$actor, $copied]) {
+            $leaving = member();
+            $successor = member();
+            CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $leaving->id, 'permission' => 'company.view_time_analytics']);
+            CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $leaving->id, 'permission' => 'company.invite_users']);
+
+            $this->actingAs($actor)->postJson(adminPath()."users/{$leaving->id}/deactivate", ['successor_id' => $successor->id])->assertOk();
+            expect(company()->permissionsOf($successor)->allows(Permission::CompanyViewTimeAnalytics))->toBe($copied)
+                ->and(company()->permissionsOf($successor)->allows(Permission::CompanyInviteUsers))->toBeTrue();
+        }
+    });
+
+    it('администратор сохраняет «Права компании» человека, у которого есть право от Владельца; права администратора меняет только Владелец', function () {
+        $dina = member();
+        CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $dina->id, 'permission' => 'company.view_time_analytics']);
+
+        $this->actingAs($this->admin)->putJson(adminPath()."users/{$dina->id}/permissions", [
+            'permissions' => ['company.view_time_analytics', 'company.invite_users'],
+        ])->assertOk();
+        expect(company()->permissionsOf($dina)->permissions())->toEqualCanonicalizing(['company.view_time_analytics', 'company.invite_users']);
+
+        $other = admin();
+        $this->putJson(adminPath()."users/{$other->id}/permissions", ['permissions' => ['company.invite_users']])->assertForbidden();
+        $this->putJson(adminPath()."users/{$this->admin->id}/permissions", ['permissions' => ['company.invite_users']])->assertForbidden();
+        $this->actingAs($this->owner)->putJson(adminPath()."users/{$other->id}/permissions", ['permissions' => ['company.view_time_analytics']])->assertOk();
+    });
+
+    it('гостю роль в компании не меняют; бывший Владелец сохраняет выдачи там, где он гость', function () {
+        $guest = User::factory()->inCompany($this->second)->guestIn(company())->create();
+        $this->actingAs($this->owner)->patchJson(adminPath()."users/{$guest->id}/role", ['role' => 'admin'])
+            ->assertJsonValidationErrors(['role' => __('selen.users.guest_no_role')]);
+
+        // Владелец — гость «Компании 2» (был им до владения), доступ к SALES — законный
+        $this->owner->companies()->newPivotStatement()->insert(['company_id' => $this->second->id, 'user_id' => $this->owner->id, 'kind' => 'guest', 'created_at' => now(), 'updated_at' => now()]);
+        $sales = space(['key' => 'SALES', 'company_id' => $this->second->id]);
+        addToSpace($sales, $this->owner, SpaceRole::Commenter);
+        $this->postJson(adminPath().'users/'.member()->id.'/transfer-ownership', ['password' => UserFactory::PASSWORD])->assertOk();
+        expect(AccessGrant::query()->onSpace($sales)->where('user_id', $this->owner->id)->exists())->toBeTrue();
+    });
+
+    it('гостем не стать, если в компании уже есть выдача, которой гостю нельзя (БД)', function () {
+        // Владелец без «дома» во второй компании — администратор её пространства
+        addToSpace(space(['key' => 'SALES', 'company_id' => $this->second->id]), $this->owner, SpaceRole::Admin);
+
+        expect(fn () => DB::transaction(fn () => $this->owner->companies()->newPivotStatement()->insert([
+            'company_id' => $this->second->id, 'user_id' => $this->owner->id, 'kind' => 'guest', 'created_at' => now(), 'updated_at' => now(),
+        ])))->toThrow(QueryException::class, 'a guest gets only');
+    });
+
+    it('срок гостя — не раньше сегодняшнего дня в часовом поясе того, кто задаёт', function () {
+        $this->travelTo(now()->setTimezone('UTC')->setTime(22, 30));
+        $this->admin->forceFill(['timezone' => 'Asia/Novosibirsk'])->save();   // у него уже завтра
+        member(['email' => 'g@selen.test'], $this->second);
+        $todayUtc = now('UTC')->format('Y-m-d');
+
+        $this->actingAs($this->admin)->postJson(adminPath().'guests', [
+            'email' => 'g@selen.test', 'expires_on' => $todayUtc,
+            'spaces' => [['space_id' => space(['key' => 'DEV'])->id, 'role' => 'commenter']],
+        ])->assertJsonValidationErrors('expires_on');
+    });
 });

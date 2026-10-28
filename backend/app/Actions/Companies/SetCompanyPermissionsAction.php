@@ -41,11 +41,6 @@ class SetCompanyPermissionsAction
     public function handle(User $actor, Company $company, User|Group $subject, array $permissions): void
     {
         $editable = self::editableBy($actor);
-        foreach ($permissions as $permission) {
-            if (! in_array($permission, $editable, true)) {
-                throw ValidationException::withMessages(['permissions' => __('selen.company_permissions.owner_only')]);
-            }
-        }
 
         DB::transaction(function () use ($actor, $company, $subject, $permissions, $editable) {
             // Строка субъекта — под блокировкой: параллельные изменения его прав идут по очереди
@@ -53,6 +48,14 @@ class SetCompanyPermissionsAction
             $column = $subject instanceof User ? 'user_id' : 'group_id';
             $current = CompanyPermissionGrant::query()->inCompany($company)->where($column, $subject->getKey())->get()
                 ->keyBy(fn (CompanyPermissionGrant $grant) => $grant->permission->value);
+
+            // Недоступное автору право можно прислать, только если оно уже выдано (галочка Владельца не мешает
+            // администратору сохранить свои); выдать его — 422
+            foreach ($permissions as $permission) {
+                if (! in_array($permission, $editable, true) && ! $current->has($permission->value)) {
+                    throw ValidationException::withMessages(['permissions' => __('selen.company_permissions.owner_only')]);
+                }
+            }
 
             foreach ($editable as $permission) {
                 $wanted = in_array($permission, $permissions, true);

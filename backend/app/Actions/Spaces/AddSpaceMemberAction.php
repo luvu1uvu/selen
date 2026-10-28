@@ -33,8 +33,9 @@ class AddSpaceMemberAction
         return DB::transaction(function () use ($actor, $space, $user, $role, $via, $ownCardsOnly) {
             $space = $this->guard->lock($space);
 
-            // Деактивированный или убранный из компании пространства (П2c) — выдача «спала» бы
-            if ($user->isDeactivated() || ! $this->resolver->isActiveParticipant($space->company_id, $user)) {
+            // Деактивированный или убранный из компании пространства (П2c) — выдача «спала» бы. Отключённый Владельцем
+            // остаётся сотрудником (приглашение с доступом к пространствам — П2c): выдача заработает, когда его включат
+            if (($user->isDeactivated() && ! $user->isBlocked()) || ! $this->resolver->isActiveParticipant($space->company_id, $user)) {
                 throw ValidationException::withMessages(['user_id' => __('selen.spaces.member_deactivated')]);
             }
 

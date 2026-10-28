@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Group;
 use App\Models\User;
 use App\Policies\Concerns\ChecksCompanyPermission;
+use App\Services\Access\AccessResolver;
 use Illuminate\Auth\Access\Response;
 
 /**
@@ -39,6 +40,39 @@ class GroupPolicy
         $response = $this->allowCompany($actor, $group->company, Permission::CompanyManageGroups);
 
         return $response->allowed() && $group->isArchived() ? Response::deny(__('selen.groups.archived')) : $response;
+    }
+
+    /**
+     * Доступ группы к пространствам (выдать, сменить роль, снять) — это выдача доступа: нужно ещё право компании
+     * «управлять доступом» (как роль в пространстве из админки). С одним «управлять группами» участник иначе выдал бы
+     * себе через группу роль в любом пространстве (ревью П2c-1).
+     */
+    public function manageSpaces(User $actor, Group $group): Response
+    {
+        $response = $this->update($actor, $group);
+
+        return $response->allowed() && ! $group->company->permissionsOf($actor)->allows(Permission::CompanyManageAccess)
+            ? Response::deny()
+            : $response;
+    }
+
+    /**
+     * Состав группы: если группа даёт доступ к пространствам — ещё «управлять доступом», если права компании — только
+     * Владелец и администратор компании (права компании выдают только они, решение PM 23.10, В17).
+     */
+    public function manageMembers(User $actor, Group $group): Response
+    {
+        $response = $this->update($actor, $group);
+        if (! $response->allowed()) {
+            return $response;
+        }
+
+        $grants = app(AccessResolver::class)->groupGrants($group);
+        $access = $group->company->permissionsOf($actor);
+        $allowed = (! $grants['access'] || $access->allows(Permission::CompanyManageAccess))
+            && (! $grants['company_permissions'] || $access->isAdmin());
+
+        return $allowed ? $response : Response::deny();
     }
 
     public function archive(User $actor, Group $group): Response

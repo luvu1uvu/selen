@@ -24,13 +24,3 @@ export function adminCompanies(
 ): AdminCompany[] {
   return user?.admin_companies ?? []
 }
-
-/**
- * Есть ли у текущего пользователя «Администрирование»: Владелец, администратор компании или участник, которому выданы
- * права компании (лично или через группу, П2c) — тогда в меню только его разделы.
- */
-export function hasAdminAccess(
-  user: (WithRole & Pick<User, 'admin_companies'>) | null | undefined,
-): boolean {
-  return isSystemAdmin(user) || adminCompanies(user).length > 0
-}

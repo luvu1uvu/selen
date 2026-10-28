@@ -55,7 +55,8 @@ class DeactivateUserAction
             }
 
             if ($successor !== null) {
-                if ($successor->is($user) || ! $this->resolver->isHome($successor, $company) || ! $successor->isActive()) {
+                // Преемник — не сам уходящий и не автор: себе через передачу доступ не выдают (ревью П2c-1)
+                if ($successor->is($user) || $successor->is($actor) || ! $this->resolver->isHome($successor, $company) || ! $successor->isActive()) {
                     throw ValidationException::withMessages(['successor_id' => __('selen.users.successor_invalid')]);
                 }
                 $this->transfer->handle($actor, $user, $successor, $company);

@@ -48,6 +48,17 @@ class UserPolicy
         return $this->managesOther($actor, $user, $company);
     }
 
+    /**
+     * Передать доступ уходящего преемнику — это выдача доступа к пространствам, групп и прав компании: только Владелец
+     * и администратор компании (права компании выдают только они, В17; ревью П2c-1).
+     */
+    public function transferAccess(User $actor, User $user, Company $company): Response
+    {
+        $response = $this->deactivate($actor, $user, $company);
+
+        return $response->allowed() && ! $company->permissionsOf($actor)->isAdmin() ? Response::deny() : $response;
+    }
+
     public function reactivate(User $actor, User $user, Company $company): Response
     {
         return $this->managesOther($actor, $user, $company);
@@ -67,14 +78,17 @@ class UserPolicy
 
     /**
      * Права компании человека («Права компании»): смотреть и менять — Владелец и администратор компании (участник
-     * с правами их не выдаёт, решение PM 23.10, В17). Цель — действующий «дом», не Владелец (у него все права).
+     * с правами их не выдаёт, решение PM 23.10, В17). Цель — действующий «дом», не Владелец (у него все права);
+     * администратора компании (и себя) — только Владелец.
      * Какие именно права может менять автор — CompanyPermissions::editableBy().
      */
     public function managePermissions(User $actor, User $user, Company $company): Response
     {
+        // Права администратора компании (и свои) меняет только Владелец: администраторами управляет он (правило 16)
         return $this->allowCompanyMemberIf($actor, $company, fn () => $company->permissionsOf($actor)->isAdmin()
             && ! $user->isOwner()
-            && $company->permissionsOf($user)->isMember());
+            && $company->permissionsOf($user)->isMember()
+            && ($actor->isOwner() || ! $company->permissionsOf($user)->isAssignedAdmin()));
     }
 
     /**

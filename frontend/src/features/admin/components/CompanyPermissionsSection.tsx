@@ -83,8 +83,9 @@ export function CompanyPermissionsSection(
         }))
 
   const toggle = async (permission: CompanyPermission, checked: boolean) => {
+    // Только права, которые автор может менять: выданное Владельцем остаётся как есть (сервер его не трогает)
     const next = rows
-      .filter((row) => (row.permission === permission ? checked : row.checked))
+      .filter((row) => row.editable && (row.permission === permission ? checked : row.checked))
       .map((row) => row.permission)
     try {
       await save.mutateAsync(next)

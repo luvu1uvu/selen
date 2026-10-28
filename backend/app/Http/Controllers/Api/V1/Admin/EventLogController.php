@@ -15,7 +15,8 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 /**
  * Журнал событий компании (ADR-0024; решение PM 23.10): события компании и события без компании «о человеке»
  * (объект — пользователь: вход, смена пароля, передача владения, отключение учётной записи) — о её людях
- * (AccessResolver::eventSubjectIds: убранный из компании, но работающий в другой, — нет). Системные события без человека
+ * (AccessResolver::eventsAboutPeople: убранный из компании, но работающий в другой, — нет; ушедший отовсюду — до
+ * того, как его убрали). Системные события без человека
  * (неудачный вход с неизвестным email, позже — создание компании) — только Владельцу.
  */
 class EventLogController extends Controller
@@ -29,10 +30,9 @@ class EventLogController extends Controller
         $entries = EventLogEntry::query()
             ->where(fn (Builder $q) => $q
                 ->where('company_id', $company->id)
-                ->orWhere(fn (Builder $q) => $q
+                ->orWhere(fn (Builder $q) => $resolver->eventsAboutPeople($q
                     ->whereNull('company_id')
-                    ->where('subject_type', $user)
-                    ->whereIn('subject_id', $resolver->eventSubjectIds($company)))
+                    ->where('subject_type', $user), $company))
                 ->when($actor->isOwner(), fn (Builder $q) => $q->orWhere(fn (Builder $q) => $q
                     ->whereNull('company_id')
                     ->where(fn (Builder $q) => $q->whereNull('subject_type')->orWhere('subject_type', '!=', $user)))))

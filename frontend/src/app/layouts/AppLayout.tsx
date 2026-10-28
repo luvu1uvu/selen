@@ -26,13 +26,14 @@ import {
   adminUrl,
   defaultAdminCompany,
   firstAdminPath,
+  hasAdminAccess,
   hasCompanyPermission,
 } from '@/features/admin/company'
 import { useCurrentUser, useLogout } from '@/features/auth/queries'
 import { useUpdateTheme } from '@/features/profile/queries'
 import { TreePanel } from '@/features/navigation/components/TreePanel'
 import { Hint } from '@/shared/components/Hint'
-import { adminCompanies, hasAdminAccess, isOwner } from '@/shared/lib/roles'
+import { adminCompanies, isOwner } from '@/shared/lib/roles'
 import { isTheme } from '@/shared/lib/theme'
 import type { CompanyPermission, Theme } from '@/shared/types/api'
 import { cn } from '@/shared/lib/utils'
@@ -245,7 +246,8 @@ function AdminPanel({
   const selectCompany = (id: string) => {
     const same =
       ADMIN_SECTIONS.some((item) => item.path === section) || USERS_PATHS.includes(section)
-    navigate(adminUrl(id, same ? section : 'users'))
+    const target = companies.find((item) => item.id === id)
+    navigate(adminUrl(id, same ? section : (firstAdminPath(target) ?? 'users')))
     onNavigate()
   }
 

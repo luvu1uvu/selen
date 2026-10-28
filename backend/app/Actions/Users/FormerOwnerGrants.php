@@ -64,7 +64,8 @@ class FormerOwnerGrants
     {
         return AccessGrant::query()
             ->where('user_id', $owner->getKey())
-            ->whereNotIn('company_id', $owner->companies()->pluck('companies.id'))
+            // Где он «дом» или гость — его выдачи законны и остаются
+            ->whereNotIn('company_id', $this->resolver->membershipCompanyIds($owner))
             ->whereHas('navNode', fn ($q) => $q->whereNotNull('space_id'));
     }
 }

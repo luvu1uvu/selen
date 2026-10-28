@@ -13,7 +13,10 @@ class DeactivateUserRequest extends FormRequest
 {
     public function authorize(): Response
     {
-        return Gate::inspect('deactivate', [$this->route('user'), $this->route('company')]);
+        // С преемником — ещё и право передать доступ (только Владелец и администратор компании)
+        $ability = $this->filled('successor_id') ? 'transferAccess' : 'deactivate';
+
+        return Gate::inspect($ability, [$this->route('user'), $this->route('company')]);
     }
 
     /**

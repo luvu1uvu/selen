@@ -21,6 +21,7 @@ use App\Services\Auth\AccountStatus;
 use App\Services\EventLog\EventRecorder;
 use App\Services\Invitations\InvitationIssuer;
 use App\Services\Invitations\IssuedInvitation;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -68,9 +69,12 @@ class InviteUserAction
         });
 
         [$result, $issued] = $outcome;
-        $result->user->notify($issued === null
-            ? new AccessOpenedNotification
-            : new InvitationNotification($issued->invitation, $issued->token));
+        // Отключённому Владельцем письмо «Вам открыт доступ» не нужно — войти он не может
+        if ($issued !== null) {
+            $result->user->notify(new InvitationNotification($issued->invitation, $issued->token));
+        } elseif (! $result->user->isBlocked()) {
+            $result->user->notify(new AccessOpenedNotification);
+        }
 
         return $result;
     }
@@ -78,13 +82,18 @@ class InviteUserAction
     /** @return array{InviteResult, IssuedInvitation} */
     private function inviteNew(User $inviter, Company $company, string $name, string $email, CompanyRole $role): array
     {
-        $user = User::query()->create([
-            'name' => $name,
-            'email' => $email,
-            'role' => UserRole::Member,
-            'status' => UserStatus::Invited,
-            'timezone' => config('selen.default_timezone'),
-        ]);
+        try {
+            $user = User::query()->create([
+                'name' => $name,
+                'email' => $email,
+                'role' => UserRole::Member,
+                'status' => UserStatus::Invited,
+                'timezone' => config('selen.default_timezone'),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Тот же email пригласили одновременно (новую строку нечем заблокировать заранее)
+            throw ValidationException::withMessages(['email' => __('selen.invitations.concurrent')]);
+        }
         $this->memberships->addHome($company, $user, $role === CompanyRole::Admin);
 
         $issued = $this->issueInvitation($inviter, $company, $user, $role);

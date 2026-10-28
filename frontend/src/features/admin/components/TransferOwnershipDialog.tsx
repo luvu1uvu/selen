@@ -123,8 +123,9 @@ export function TransferOwnershipDialog() {
               <ul className="grid gap-1">
                 {lost.map((space) => (
                   <li key={space.id}>
-                    {t('users.lastAdmin.space', { name: space.name, key: space.key })}
-                    {unmanaged.has(space.id) && ` — ${t('users.transfer.unmanaged')}`}
+                    {unmanaged.has(space.id)
+                      ? t('users.transfer.lostSpaceUnmanaged', { name: space.name, key: space.key })
+                      : t('users.lastAdmin.space', { name: space.name, key: space.key })}
                   </li>
                 ))}
               </ul>
