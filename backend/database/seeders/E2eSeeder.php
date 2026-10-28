@@ -101,7 +101,8 @@ use Illuminate\Support\Facades\DB;
  * Приёмка «Права 2.0», П2b-1 — компании (acceptance/stage-R2, ТК-R2.5–R2.8): пространство RCOMP «Права: компания»
  * и четыре человека, которые не входят в систему, — см. companies(). П2b-2 — «E2E Компания 2» и «E2E Компания 3»,
  * администратор двух компаний и человек с двумя «домами» — см. moreCompanies(). П2c-1 — гости, деактивация в компании,
- * права компании: пространство RGUEST и люди e2e-guest*, e2e-partly, e2e-rights — см. guestsAndRights().
+ * права компании: пространство RGUEST и люди e2e-guest*, e2e-partly, e2e-rights — см. guestsAndRights(); для автотестов
+ * ТК-R2.16–R2.22 ещё RLEAVE, RKEEP, e2e-leaver, e2e-successor, e2e-blocked, e2e-invitee — см. guestsAndRightsCases().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  * Приёмка пачки UX-3 (acceptance/stage-ux3): пространство UXC «Пачка UX-3» — см. uxBatch3().
  */
@@ -306,6 +307,8 @@ class E2eSeeder extends Seeder
 
         // Приёмка «Права 2.0», П2c-1 — гости, деактивация в компании, права компании (acceptance/stage-R2)
         $this->guestsAndRights($admin, $second);
+        // …и данные приёмочных автотестов тест-кейсов П2c-1 (ТК-R2.16–R2.22)
+        $this->guestsAndRightsCases($admin, $second);
 
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
@@ -554,6 +557,57 @@ class E2eSeeder extends Seeder
 
         $rights = User::factory()->create(['name' => 'E2E Только приглашать', 'email' => 'e2e-rights@selen.test']);
         app(SetCompanyPermissionsAction::class)->handle($admin, Company::primary(), $rights, [Permission::CompanyInviteUsers]);
+    }
+
+    /**
+     * «Права 2.0», П2c-1 — данные приёмочных автотестов ТК-R2.16–R2.22 (e2e/acceptance/stage-R2) сверх guestsAndRights().
+     * Пароль — как у всех.
+     *
+     * - ТК-R2.16, ТК-R2.18: «E2E Кандидат в гости» и «E2E Гость» — ещё и комментаторы RSECOND (пространство их «дома»,
+     *   «E2E Компании 2»): у гостя в дереве заголовки обеих компаний, как у Кирилла и Бориса демо-данных.
+     * - ТК-R2.17: «E2E Гость» — ещё и гость «E2E Компании 3» в RTHIRD (Редактор) на 30 дней — до конца дня по часовому
+     *   поясу того, кто задаёт срок (Москва), как в интерфейсе; как Вера демо-данных. Тест меняет срок, убирает гостя
+     *   и возвращает его.
+     * - ТК-R2.20: «E2E Уходящий» (e2e-leaver@, не входит) — лично Редактор RLEAVE «Передача: работа» и участник группы
+     *   «E2E Группа уходящего» (Комментатор RKEEP); «E2E Преемник» (e2e-successor@, не входит) — лично Администратор
+     *   RKEEP «Передача: дежурства». Как Григорий и Егор демо-данных: Уходящего деактивируют с передачей доступа
+     *   Преемнику и возвращают.
+     * - ТК-R2.21: «E2E Отключаемый» (e2e-blocked@) — участник «Компании 1»; Владелец отключает его учётную запись
+     *   (сохранённый вход завершается) и включает. Свой человек: после теста его сохранённый вход не действует.
+     * - ТК-R2.22: «E2E Сотрудница второй» (e2e-invitee@) — «дом» в «E2E Компании 2», комментатор RSECOND; администратор
+     *   «Компании 1» приглашает её (как Ларису демо-данных) — «Сотрудник добавлен», сразу редактор RGUEST.
+     */
+    private function guestsAndRightsCases(User $admin, Company $second): void
+    {
+        $multiAdmin = User::query()->where('email', 'e2e-multi-admin@selen.test')->sole();
+        $sales = Space::query()->where('key', 'RSECOND')->sole();
+        $addMember = app(AddSpaceMemberAction::class);
+
+        // ТК-R2.16, R2.18, R2.22: своё пространство во второй компании — у них в дереве обе компании
+        $invitee = User::factory()->inCompany($second)->create(['name' => 'E2E Сотрудница второй', 'email' => 'e2e-invitee@selen.test']);
+        foreach (['e2e-guest-candidate@selen.test', 'e2e-guest@selen.test', $invitee->email] as $email) {
+            $addMember->handle($multiAdmin, $sales, User::query()->where('email', $email)->sole(), SpaceRole::Commenter);
+        }
+
+        // ТК-R2.17: гость третьей компании на 30 дней (как Вера демо-данных)
+        $third = Company::query()->where('name', 'E2E Компания 3')->sole();
+        app(AddGuestAction::class)->handle($multiAdmin, $third, 'e2e-guest@selen.test', now('Europe/Moscow')->addDays(30)->endOfDay()->utc(), [
+            ['space' => Space::query()->where('key', 'RTHIRD')->sole(), 'role' => SpaceRole::Editor, 'own_cards_only' => false],
+        ]);
+
+        // ТК-R2.20: уходящий и преемник (как Григорий и Егор демо-данных)
+        $leaver = User::factory()->create(['name' => 'E2E Уходящий', 'email' => 'e2e-leaver@selen.test']);
+        $successor = User::factory()->create(['name' => 'E2E Преемник', 'email' => 'e2e-successor@selen.test']);
+        $work = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Передача: работа', 'key' => 'RLEAVE'], [$admin]);
+        $addMember->handle($admin, $work, $leaver, SpaceRole::Editor);
+        $duty = app(CreateSpaceAction::class)->handle($admin, Company::primary(), ['name' => 'Передача: дежурства', 'key' => 'RKEEP'], [$admin]);
+        $addMember->handle($admin, $duty, $successor, SpaceRole::Admin);
+        $group = app(SaveGroupAction::class)->handle($admin, Company::primary(), ['name' => 'E2E Группа уходящего']);
+        app(AddGroupMemberAction::class)->handle($admin, $group, $leaver);
+        app(GrantSpaceGroupAction::class)->handle($admin, $duty, $group, SpaceRole::Commenter);
+
+        // ТК-R2.21: учётную запись отключает Владелец
+        User::factory()->create(['name' => 'E2E Отключаемый', 'email' => 'e2e-blocked@selen.test']);
     }
 
     /**

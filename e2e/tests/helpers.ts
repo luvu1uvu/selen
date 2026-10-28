@@ -15,6 +15,14 @@ export const USERS = [
   // «Права 2.0», П2b-2: администратор двух компаний и человек с «домами» в двух компаниях (E2eSeeder::moreCompanies)
   'e2e-multi-admin@selen.test',
   'e2e-two-homes@selen.test',
+  // «Права 2.0», П2c-1 (E2eSeeder::guestsAndRights, guestsAndRightsCases): гости, убранный из второй компании, право
+  // «приглашать», отключаемая учётная запись (ТК-R2.21 завершает её сеанс), приглашаемая сотрудница другой компании
+  'e2e-guest@selen.test',
+  'e2e-guest-candidate@selen.test',
+  'e2e-partly@selen.test',
+  'e2e-rights@selen.test',
+  'e2e-blocked@selen.test',
+  'e2e-invitee@selen.test',
   // «Редизайн», шаг 2: сохранённая тема «Тёмная» (E2eSeeder::darkTheme) — проект «dark», acceptance/stage-RD2
   'e2e-dark@selen.test',
 ] as const
