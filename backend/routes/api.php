@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\CardSearchController;
 use App\Http\Controllers\Api\V1\CardTypeController;
 use App\Http\Controllers\Api\V1\ChecklistController;
 use App\Http\Controllers\Api\V1\CommentController;
+use App\Http\Controllers\Api\V1\EmailChangeController;
 use App\Http\Controllers\Api\V1\GroupDirectoryController;
 use App\Http\Controllers\Api\V1\InvitationAcceptanceController;
 use App\Http\Controllers\Api\V1\LabelController;
@@ -69,9 +70,16 @@ Route::middleware('throttle:invitations')->group(function () {
     Route::post('invitations/{token}/accept', [InvitationAcceptanceController::class, 'store'])->name('invitations.accept');
 });
 
+// Подтверждение нового email по ссылке из письма (смена администратором, П2c-2): email меняет только POST
+Route::middleware('throttle:email-change-links')->group(function () {
+    Route::get('email-changes/{token}', [EmailChangeController::class, 'show'])->name('email-changes.show');
+    Route::post('email-changes/{token}/confirm', [EmailChangeController::class, 'store'])->name('email-changes.confirm');
+});
+
 // --- Для вошедших пользователей -----------------------------------------
-// tab-user: запрос от имени пользователя вкладки SPA (X-Selen-User), иначе 409 (ADR-0002, «Изменения»)
-Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
+// tab-user: запрос от имени пользователя вкладки SPA (X-Selen-User), иначе 409 (ADR-0002, «Изменения»);
+// last-seen: «последняя активность» в «Пользователях» (П2c-2)
+Route::middleware(['auth:sanctum', 'active', 'tab-user', 'last-seen'])->group(function () {
     // Кто вошёл, сервер говорит сам; выйти можно из любой сессии — без сверки пользователя вкладки
     Route::get('auth/me', CurrentUserController::class)->withoutMiddleware('tab-user')->name('auth.me');
     Route::post('auth/logout', [AuthenticatedSessionController::class, 'destroy'])->withoutMiddleware('tab-user')->name('auth.logout');
@@ -211,6 +219,12 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
         // Отключить и включить учётную запись — только Владелец (П2c)
         Route::post('users/{user}/block', [UserController::class, 'block'])->name('users.block');
         Route::post('users/{user}/unblock', [UserController::class, 'unblock'])->name('users.unblock');
+        // «Завершить все сеансы» и смена email (П2c-2); запрос смены — письма на два адреса, с лимитом
+        Route::post('users/{user}/terminate-sessions', [UserController::class, 'terminateSessions'])->name('users.terminate-sessions');
+        Route::post('users/{user}/email-change', [UserController::class, 'requestEmailChange'])
+            ->middleware('throttle:email-change')
+            ->name('users.email-change');
+        Route::delete('users/{user}/email-change', [UserController::class, 'cancelEmailChange'])->name('users.email-change.cancel');
         Route::get('users/{user}/access', [UserAccessController::class, 'access'])->name('users.access');
         Route::get('users/{user}/deactivation-impact', [UserAccessController::class, 'deactivationImpact'])->name('users.deactivation-impact');
         // Права компании человека и группы — галочки (П2c)
@@ -247,6 +261,8 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
         Route::post('invitations/{invitation}/revoke', [InvitationController::class, 'revoke'])->name('invitations.revoke');
 
         Route::get('events', [EventLogController::class, 'index'])->name('events.index');
+        // Люди компании для фильтра журнала по человеку (П2c-2): только имена
+        Route::get('events/people', [EventLogController::class, 'people'])->name('events.people');
 
         Route::get('spaces', [AdminSpaceController::class, 'index'])->name('spaces.index');
         Route::post('spaces', [AdminSpaceController::class, 'store'])->name('spaces.store');

@@ -66,6 +66,8 @@ class UserResource extends JsonResource
             'status' => $this->status,
             'timezone' => $this->timezone,
             'last_login_at' => $this->last_login_at?->toIso8601ZuluString(),
+            // «Последняя активность» (П2c-2): время запроса, с точностью до нескольких минут (TouchLastSeen)
+            'last_seen_at' => $this->last_seen_at?->toIso8601ZuluString(),
             'deactivated_at' => $this->deactivated_at?->toIso8601ZuluString(),
             'created_at' => $this->created_at->toIso8601ZuluString(),
             // Только в админских списках (загружается явно)

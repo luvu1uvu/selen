@@ -64,6 +64,31 @@ class UserPolicy
         return $this->managesOther($actor, $user, $company);
     }
 
+    /**
+     * «Завершить все сеансы» (П2c-2) — как деактивация: право «управлять пользователями», Владельцем не управляет никто,
+     * администраторами компании — только Владелец. Цель — действующий сотрудник этой компании: сеансы у учётной записи
+     * общие, а гость и убранный из компании работают в другой (решение PM 28.10, п. 8 — администратор любой его компании).
+     */
+    public function terminateSessions(User $actor, User $user, Company $company): Response
+    {
+        $response = $this->managesOther($actor, $user, $company);
+
+        return $response->allowed() && ! $company->permissionsOf($user)->isMember() ? Response::deny() : $response;
+    }
+
+    /**
+     * Смена email (П2c-2, LATER-9) — как «Завершить все сеансы»; у сотрудника нескольких компаний учётная запись общая —
+     * его email меняет только Владелец (решение PM 28.10, п. 8). Ещё не принявший приглашение — 422 в Action.
+     */
+    public function changeEmail(User $actor, User $user, Company $company): Response
+    {
+        $response = $this->terminateSessions($actor, $user, $company);
+
+        return $response->allowed() && $company->permissionsOf($user)->hasOtherHomes() && ! $actor->isOwner()
+            ? Response::deny()
+            : $response;
+    }
+
     /** Передаёт владение только Владелец и только другому (активность получателя проверяет Action — 422). */
     public function transferOwnership(User $actor, User $user, Company $company): Response
     {

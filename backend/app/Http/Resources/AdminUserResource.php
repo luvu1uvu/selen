@@ -37,12 +37,14 @@ class AdminUserResource extends UserResource
         $account['status'] = CompanyMembers::statusOf($user, $company->id);
         $account['deactivated_at'] = CompanyMembers::deactivatedAt($user, $company->id)?->toIso8601ZuluString();
         $guest = CompanyMembers::guestOf($user, $company->id);
-        // Время входов и часовой пояс — только действующим сотрудникам компании (минимум ПДн, аудит П2b-2, S-3): Владелец
-        // вне его «домов», гость и убранный из компании по ним выдали бы, что человек работает где-то ещё
+        // Время входов и активности и часовой пояс — только действующим сотрудникам компании (минимум ПДн, аудит П2b-2,
+        // S-3): Владелец вне его «домов», гость и убранный из компании по ним выдали бы, что человек работает где-то ещё
         if (($user->isOwner() || $account['status'] === UserStatus::Deactivated || $guest !== null)
             && ! CompanyMembers::isActiveHome($user, $company->id)) {
-            $account = ['last_login_at' => null, 'timezone' => null] + $account;
+            $account = ['last_login_at' => null, 'last_seen_at' => null, 'timezone' => null] + $account;
         }
+        $canChangeEmail = $guest === null && $actor->can('changeEmail', [$user, $company]);
+        $emailChange = $canChangeEmail ? $user->emailChangeRequest : null;
 
         return $account + [
             // Гость компании: срок (null — без срока), истёк ли (П2c)
@@ -52,6 +54,12 @@ class AdminUserResource extends UserResource
             ],
             // Учётную запись отключил Владелец (вернуть может только он)
             'blocked' => $user->isBlocked(),
+            // Новый email ждёт подтверждения по ссылке (П2c-2) — тем, кто может менять email
+            'email_change' => $emailChange === null ? null : [
+                'email' => $emailChange->new_email,
+                'expires_at' => $emailChange->expires_at->toIso8601ZuluString(),
+                'expired' => $emailChange->isExpired(),
+            ],
             'permissions' => [
                 'update_role' => $guest === null && $actor->can('updateRole', [$user, $company]),
                 'deactivate' => $guest === null && $actor->can('deactivate', [$user, $company]),
@@ -65,6 +73,9 @@ class AdminUserResource extends UserResource
                 // Гостей ведут только в копии с несколькими компаниями (ADR-0026): иначе их маршруты — 404
                 'manage_guest' => $guest !== null && config('selen.multi_company') && $actor->can('manageGuests', [User::class, $company]),
                 'manage_permissions' => $guest === null && $actor->can('managePermissions', [$user, $company]),
+                // «Завершить все сеансы» и смена email (П2c-2)
+                'terminate_sessions' => $guest === null && $actor->can('terminateSessions', [$user, $company]),
+                'change_email' => $canChangeEmail,
             ],
         ];
     }

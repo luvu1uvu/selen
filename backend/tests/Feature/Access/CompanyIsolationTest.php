@@ -47,8 +47,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 const ROUTES_WITHOUT_COMPANY_OBJECTS = [
     'POST auth/login', 'POST auth/forgot-password', 'POST auth/reset-password', 'POST auth/logout', 'GET auth/me',
-    // Приглашение по токену из письма — до входа, без компании в адресе
+    // Приглашение и подтверждение нового email по токену из письма — до входа, без компании в адресе
     'GET invitations/{token}', 'POST invitations/{token}/accept',
+    'GET email-changes/{token}', 'POST email-changes/{token}/confirm',
     // Свой профиль
     'PATCH profile', 'PUT profile/password', 'PUT profile/theme',
     // Свои дерево и пространства — только по правам пользователя (проверяет (б))

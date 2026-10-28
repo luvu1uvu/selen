@@ -18,6 +18,8 @@ return [
         // Письмо «Вам открыт доступ» существующему сотруднику и гостю (П2c)
         'login' => '/login',
         'password_reset' => '/reset-password/{token}?email={email}',
+        // Подтверждение нового email (смена администратором, П2c-2)
+        'email_change' => '/email-change/{token}',
         // Ссылка на файл (/files/{id}): нет такого или нет доступа — одна страница Selen (UI-1b, решение PM 22.10)
         'file_not_found' => '/file-not-found',
     ],
@@ -31,6 +33,14 @@ return [
         // Срок жизни ссылки-приглашения, в часах.
         'ttl_hours' => (int) env('SELEN_INVITATION_TTL_HOURS', 72),
     ],
+
+    // Смена email администратором (LATER-9): срок ссылки подтверждения на новый адрес, в часах — как у приглашения
+    'email_change' => [
+        'ttl_hours' => 72,
+    ],
+
+    // «Последняя активность» в «Пользователях»: время запроса пишется не чаще раза в столько минут (TouchLastSeen)
+    'last_seen_interval_minutes' => 5,
 
     'auth_audit' => [
         // Срок хранения IP и user agent событий входа (таблица auth_audit), в месяцах.

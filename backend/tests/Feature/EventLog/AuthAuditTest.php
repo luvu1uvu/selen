@@ -1,8 +1,11 @@
 <?php
 
 use App\Enums\EventType;
+use App\Enums\Permission;
 use App\Models\AuthAuditEntry;
+use App\Models\CompanyPermissionGrant;
 use App\Services\EventLog\EventRecorder;
+use Database\Factories\UserFactory;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Artisan;
 
@@ -45,4 +48,21 @@ it('показывает IP события входа в журнале адми
         ->assertOk()
         ->assertJsonPath('data.0.auth_audit.ip', '127.0.0.1')
         ->assertJsonPath('data.0.meta', ['source' => 'http']);
+});
+
+it('IP и браузер входа, неудачного входа и выхода — в журнале у того, кому выдано право «журнал» (решение PM 28.10)', function () {
+    member(['email' => 'boris@selen.test']);
+    $session = browser('10.0.0.7')->withHeader('User-Agent', 'Mozilla/5.0 (Macintosh) Chrome/131.0.0.0 Safari/537.36');
+    $session->post('/api/v1/auth/login', ['email' => 'boris@selen.test', 'password' => 'неверный пароль 1'])->assertUnprocessable();
+    $session->post('/api/v1/auth/login', ['email' => 'boris@selen.test', 'password' => UserFactory::PASSWORD])->assertOk();
+    $session->post('/api/v1/auth/logout')->assertNoContent();
+    $journal = member();
+    CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $journal->id, 'permission' => Permission::CompanyViewEventLog]);
+
+    $rows = collect($this->actingAs($journal)->getJson(adminPath().'events')->assertOk()->json('data'))->keyBy('event_type');
+
+    foreach (['auth.login_failed', 'auth.login_succeeded', 'auth.logout'] as $type) {
+        expect($rows[$type]['auth_audit'])->toBe(['ip' => '10.0.0.7', 'user_agent' => 'Mozilla/5.0 (Macintosh) Chrome/131.0.0.0 Safari/537.36']);
+    }
+    expect(config('selen.auth_audit.retention_months'))->toBe(12);
 });

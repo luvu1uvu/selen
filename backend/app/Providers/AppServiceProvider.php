@@ -143,6 +143,16 @@ class AppServiceProvider extends ServiceProvider
             Limit::perDay(300)->by('day:'.$request->user()?->getAuthIdentifier())->response($tooManyInvitations),
         ]);
 
+        // Смена email администратором (П2c-2): письма на новый и старый адрес — не чаще 10 запросов в минуту на автора
+        RateLimiter::for('email-change', fn (Request $request) => Limit::perMinute(10)
+            ->by((string) $request->user()?->getAuthIdentifier())
+            ->response($tooMany('selen.throttle')));
+
+        // Страница подтверждения нового email по ссылке из письма: защита от перебора токенов, как у приглашения
+        RateLimiter::for('email-change-links', fn (Request $request) => Limit::perMinute(20)
+            ->by($request->ip())
+            ->response($tooMany('selen.throttle')));
+
         // Страница приглашения: защита от перебора токенов
         RateLimiter::for('invitations', fn (Request $request) => Limit::perMinute(20)
             ->by($request->ip())
