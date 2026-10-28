@@ -153,6 +153,8 @@ describe('Админка нескольких компаний', () => {
     // Выбрали — фокус на «Изменить выбор», очистили — в поиске (UX-ревью П2c-1, U-2)
     const clear = within(dialog).getByRole('button', { name: 'Изменить выбор' })
     await waitFor(() => expect(clear).toHaveFocus())
+    // У кнопки-значка — подсказка Tooltip, видимая с клавиатуры (U-5)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Изменить выбор')
     await userEvent.click(clear)
     await waitFor(() => expect(within(dialog).getByPlaceholderText(/Поиск/)).toHaveFocus())
     await userEvent.click(await within(dialog).findByRole('button', { name: /Вера Нова/ }))
