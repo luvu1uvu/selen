@@ -6,7 +6,9 @@ import { openCompanyUsers } from './helpers'
 /**
  * ТК-R2.33: в копии одной команды (ADR-0026) подписи приглашения и права «Управлять пользователями» — без гостей и
  * без учётных записей из других компаний. owner@ → e2e-owner, «Демо Участник» → «E2E Посторонний» (e2e-outsider,
- * участник «Компании 1»). Галочки не меняются. Тег @single-company — второй прогон scripts/e2e.sh.
+ * участник «Компании 1»). Галочки не меняются. Тег @single-company — второй прогон scripts/e2e.sh. П2c-2: подпись
+ * «Управлять пользователями» — «…деактивирует и возвращает сотрудников, меняет их email и завершает сеансы» (UX-ревью
+ * U-4, решение PM 28.10 по отчёту «Одна компания на копию», п. 3; новые действия П2c-2).
  */
 test.use({ storageState: authFile('e2e-owner@selen.test') })
 
@@ -31,7 +33,8 @@ test('ТК-R2.33. Приглашение и права компании — бе
   const manageUsers = rights.getByRole('checkbox', { name: 'Управлять пользователями', exact: true })
   await expect(manageUsers).toBeVisible()
   await expect(manageUsers).toHaveAccessibleDescription(
-    'видит всех сотрудников, пространства и группы компании; деактивирует и возвращает участников',
+    'видит всех сотрудников, пространства и группы компании; деактивирует и возвращает сотрудников, меняет их email и ' +
+      'завершает сеансы',
   )
   await expect(rights.getByText('Управлять пользователями и гостями')).toHaveCount(0)
   await expect(rights).not.toContainText('ведёт гостей')

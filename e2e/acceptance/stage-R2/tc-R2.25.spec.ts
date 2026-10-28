@@ -5,16 +5,18 @@ import { adminRail, openAdminPanel, openCompanyUsers, usersTabs } from './helper
 /**
  * ТК-R2.25: права «по умолчанию для новых» задаются группе «Все сотрудники» (решение PM 28.10, п. 7). admin@ →
  * e2e-admin, zhanna@ → e2e-editor (участник «Компании 1» без прав в админке). Право выдаётся на время проверки
- * и снимается — тест можно повторить.
+ * и снимается — тест можно повторить. П2c-2: право называется «Смотреть журнал событий» (было «Журнал событий»,
+ * решение PM по отчёту П2c-1, п. 6); любое право группе «Все сотрудники» выдаётся только после подтверждения «Выдать
+ * право всем сотрудникам?» → «Выдать всем» (там же, п. 3), снимается — без окна.
  */
 
-/** «Пользователи» → «Группы» → «Все сотрудники» → галочка «Журнал событий» в «Правах компании». */
+/** «Пользователи» → «Группы» → «Все сотрудники» → галочка «Смотреть журнал событий» в «Правах компании». */
 async function eventLogRight(admin: Page) {
   await openCompanyUsers(admin)
   await usersTabs(admin).getByRole('link', { name: 'Группы' }).click()
   await admin.getByRole('link', { name: 'Все сотрудники', exact: true }).click()
   await expect(admin.getByRole('heading', { name: 'Все сотрудники' })).toBeVisible()
-  return admin.getByRole('region', { name: 'Права компании' }).getByRole('checkbox', { name: /^Журнал событий/ })
+  return admin.getByRole('region', { name: 'Права компании' }).getByRole('checkbox', { name: /^Смотреть журнал событий/ })
 }
 
 test('ТК-R2.25. Права компании группе «Все сотрудники» — у каждого сотрудника @tc-R2.25', async ({ browser }) => {
@@ -22,11 +24,14 @@ test('ТК-R2.25. Права компании группе «Все сотруд
   const employee = await pageAs(browser, 'e2e-editor@selen.test')
   await expect(adminRail(employee)).toHaveCount(0)
 
-  // 1. Администратор: «Все сотрудники» → «Права компании»: отметить «Журнал событий»
+  // 1. Администратор: «Все сотрудники» → «Права компании»: отметить «Смотреть журнал событий» → «Выдать всем»
   const admin = await pageAs(browser, 'e2e-admin@selen.test')
   const right = await eventLogRight(admin)
   await expect(right).not.toBeChecked()
   await right.click()
+  const confirm = admin.getByRole('dialog', { name: 'Выдать право всем сотрудникам?' })
+  await confirm.getByRole('button', { name: 'Выдать всем' }).click()
+  await expect(confirm).toBeHidden()
   await expect(admin.getByText('Права сохранены')).toBeVisible()
   await expect(right).toBeChecked()
 
