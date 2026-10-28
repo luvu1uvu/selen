@@ -3,6 +3,7 @@
 namespace App\Actions\Users;
 
 use App\Enums\EventType;
+use App\Enums\UserStatus;
 use App\Models\EmailChangeRequest;
 use App\Models\User;
 use App\Notifications\EmailChangedNotification;
@@ -32,11 +33,17 @@ class ConfirmEmailChangeAction
         private readonly UserSessions $sessions,
     ) {}
 
-    /** Запрос по токену из ссылки — ещё действующий; иначе 422 (одинаково для «нет такого» и «истёк»). */
+    /**
+     * Запрос по токену из ссылки — ещё действующий; иначе 422, одинаково для «нет такого», «истёк» и «человек больше не
+     * может войти или стал Владельцем» (до проверки пароля — аудит П2c-2, S-2: иначе по ответу можно было бы проверять
+     * пароль Владельца или отключённого).
+     */
     public function findUsable(#[\SensitiveParameter] string $token): EmailChangeRequest
     {
         $request = EmailChangeRequest::findByToken($token);
-        if ($request === null || $request->isExpired()) {
+        $user = $request?->user;
+        if ($request === null || $request->isExpired() || $user === null || $user->isOwner() || $user->isBlocked()
+            || $user->status !== UserStatus::Active) {
             throw ValidationException::withMessages(['token' => __('selen.email_change.link_invalid')]);
         }
 
@@ -95,8 +102,11 @@ class ConfirmEmailChangeAction
         }
         RateLimiter::hit($key);
 
-        $hash = User::query()->whereKey($userId)->value('password');
-        if (! is_string($hash) || ! Hash::check($password, $hash)) {
+        $user = User::query()->findOrFail($userId);
+        if (! Hash::check($password, (string) $user->password)) {
+            // Подбор пароля по ссылке виден в журнале, с IP и браузером (аудит П2c-2, S-1)
+            $this->events->record(EventType::EmailChangePasswordFailed, null, $user);
+
             throw ValidationException::withMessages(['password' => __('selen.email_change.password')]);
         }
         RateLimiter::clear($key);

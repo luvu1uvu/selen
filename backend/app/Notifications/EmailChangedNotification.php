@@ -3,12 +3,16 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-/** Уведомление на прежний адрес: новый email подтверждён (П2c-2). Новый адрес — маской. */
-class EmailChangedNotification extends Notification implements ShouldQueue
+/**
+ * Уведомление на прежний адрес: новый email подтверждён (П2c-2). Новый адрес — маской. Задача очереди шифруется: в ней
+ * адрес и имя (аудит П2c-2, S-3).
+ */
+class EmailChangedNotification extends Notification implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 

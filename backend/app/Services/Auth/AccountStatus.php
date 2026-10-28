@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Enums\UserStatus;
+use App\Models\EmailChangeRequest;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use Illuminate\Support\Facades\Date;
@@ -33,6 +34,8 @@ class AccountStatus
         if (($homes === 0 || $user->blocked_at !== null) && $user->status !== UserStatus::Deactivated) {
             $user->forceFill(['status' => UserStatus::Deactivated, 'deactivated_at' => Date::now()])->save();
             $this->sessions->terminate($user);
+            // Ждущая смена email уходит вместе со входом (аудит П2c-2, S-2)
+            EmailChangeRequest::query()->whereKey($user->getKey())->delete();
 
             return;
         }

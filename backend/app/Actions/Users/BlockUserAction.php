@@ -5,6 +5,7 @@ namespace App\Actions\Users;
 use App\Enums\EventType;
 use App\Enums\UserStatus;
 use App\Models\Company;
+use App\Models\EmailChangeRequest;
 use App\Models\User;
 use App\Services\Auth\UserSessions;
 use App\Services\EventLog\EventRecorder;
@@ -50,6 +51,8 @@ class BlockUserAction
                 'deactivated_at' => $user->deactivated_at ?? $now,
             ])->save();
             $this->sessions->terminate($user);
+            // Ждущая смена email уходит вместе со входом: отключённого ведёт только Владелец (аудит П2c-2, S-2)
+            EmailChangeRequest::query()->whereKey($user->id)->delete();
 
             $this->events->record(EventType::UserBlocked, $actor, $user);
 

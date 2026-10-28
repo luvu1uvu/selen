@@ -13,12 +13,12 @@ use App\Http\Resources\UserResource;
  */
 class InvitationAcceptanceController extends Controller
 {
-    public function show(string $token, AcceptInvitationAction $action): PublicInvitationResource
+    public function show(#[\SensitiveParameter] string $token, AcceptInvitationAction $action): PublicInvitationResource
     {
         return new PublicInvitationResource($action->findUsable($token));
     }
 
-    public function store(AcceptInvitationRequest $request, string $token, AcceptInvitationAction $action): UserResource
+    public function store(AcceptInvitationRequest $request, #[\SensitiveParameter] string $token, AcceptInvitationAction $action): UserResource
     {
         $user = $action->handle($token, $request->string('password')->toString());
 

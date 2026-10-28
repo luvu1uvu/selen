@@ -94,6 +94,8 @@ export function EmailChangePage() {
               <form onSubmit={onSubmit} className="grid gap-4" noValidate>
                 {errors.root?.message && <Alert variant="destructive">{errors.root.message}</Alert>}
                 <p className="text-muted-foreground text-sm">{t('emailChange.note')}</p>
+                {/* Ссылку могут переслать с просьбой «подтвердите пароль» (аудит П2c-2, вопрос 1) */}
+                <Alert variant="warning">{t('emailChange.warning')}</Alert>
                 <FormField
                   id="email-change-password"
                   label={t('emailChange.password')}

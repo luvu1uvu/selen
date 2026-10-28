@@ -74,7 +74,7 @@ class RequestEmailChangeAction
 
         // Письма — после фиксации: адреса — явно, а не из модели (очередь перечитала бы её, когда email уже сменился)
         Notification::route('mail', $email)
-            ->notify(new EmailChangeConfirmationNotification($user->name, $user->timezone, $token, $expiresAt));
+            ->notify(new EmailChangeConfirmationNotification($user->timezone, $token, $expiresAt));
         Notification::route('mail', $user->email)
             ->notify(new EmailChangeRequestedNotification($user->name, $actor->name, EmailChangeRequest::mask($email)));
 

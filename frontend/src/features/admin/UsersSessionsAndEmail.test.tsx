@@ -449,3 +449,25 @@ describe('Подтверждение нового email по ссылке (П2c-
     expect(screen.queryByRole('button', { name: 'Подтвердить адрес' })).toBeNull()
   })
 })
+
+describe('Ссылка подтверждения: токен кодируется в адресе API (аудит П2c-2, S-4)', () => {
+  it('«/» в токене не уводит запрос на другой маршрут API', async () => {
+    const tokens: string[] = []
+    server.use(
+      http.get('*/api/v1/auth/me', () => HttpResponse.json({ message: 'no' }, { status: 401 })),
+      http.get('*/api/v1/email-changes/:token', ({ params }) => {
+        tokens.push(String(params.token))
+        return HttpResponse.json({ data: { email: 'x@selen.test' } })
+      }),
+    )
+    renderApp('/email-change/..%2Fauth%2Fme')
+
+    expect(
+      await screen.findByText('Подтвердите новый email для входа в Selen: x@selen.test.'),
+    ).toBeInTheDocument()
+    expect(tokens).toEqual(['../auth/me'])
+    expect(
+      screen.getByText(/Если вы не просили сменить email, не вводите пароль/),
+    ).toBeInTheDocument()
+  })
+})

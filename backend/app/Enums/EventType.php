@@ -22,6 +22,8 @@ enum EventType: string
     // Новый email подтверждён по ссылке из письма (П2c-2, LATER-9): без компании, «о человеке»; адресов в журнале нет,
     // IP и браузер того, кто перешёл по ссылке, — в auth_audit. {requested_by_id}
     case EmailChanged = 'auth.email_changed';
+    // Неверный пароль на странице подтверждения нового email (аудит П2c-2, S-1): «о человеке», без компании
+    case EmailChangePasswordFailed = 'auth.email_change_password_failed';
 
     // Компании (subject — компания; события системные, без компании — видит только Владелец, ADR-0024; название
     // в журнал не пишется)

@@ -15,12 +15,12 @@ use Illuminate\Http\JsonResponse;
 class EmailChangeController extends Controller
 {
     /** Какой адрес подтверждается — его владелец и так видит его в своей почте. */
-    public function show(string $token, ConfirmEmailChangeAction $action): JsonResponse
+    public function show(#[\SensitiveParameter] string $token, ConfirmEmailChangeAction $action): JsonResponse
     {
         return response()->json(['data' => ['email' => $action->findUsable($token)->new_email]]);
     }
 
-    public function store(ConfirmEmailChangeRequest $request, string $token, ConfirmEmailChangeAction $action): JsonResponse
+    public function store(ConfirmEmailChangeRequest $request, #[\SensitiveParameter] string $token, ConfirmEmailChangeAction $action): JsonResponse
     {
         return response()->json(['data' => ['email' => $action->handle($token, $request->string('password')->toString())->email]]);
     }

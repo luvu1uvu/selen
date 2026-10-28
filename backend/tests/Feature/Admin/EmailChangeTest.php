@@ -10,6 +10,8 @@ use App\Notifications\EmailChangeConfirmationNotification;
 use App\Notifications\EmailChangedNotification;
 use App\Notifications\EmailChangeRequestedNotification;
 use Database\Factories\UserFactory;
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -271,4 +273,55 @@ it('просроченный чужой запрос не держит адре�
 
     $this->actingAs($this->admin)->postJson(adminPath()."users/{$this->user->id}/email-change", ['email' => 'free@selen.test'])->assertOk();
     expect(EmailChangeRequest::query()->sole()->user_id)->toBe($this->user->id);
+});
+
+it('аудит П2c-2, S-1: неверный пароль на странице ссылки — событие журнала с IP и браузером', function () {
+    $token = requestEmailChange($this, $this->admin, $this->user, 'boris.new@selen.test');
+
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => 'неверный'])->assertUnprocessable();
+
+    $event = EventLogEntry::query()->where('event_type', 'auth.email_change_password_failed')->sole();
+    expect($event->actor_id)->toBeNull()
+        ->and($event->subject_id)->toBe($this->user->id)
+        ->and($event->company_id)->toBeNull()
+        ->and(AuthAuditEntry::query()->where('event_log_id', $event->id)->sole()->ip)->toBe('127.0.0.1');
+    expectNoPersonalDataInEventLog();
+});
+
+it('аудит П2c-2, S-2: деактивация и отключение снимают ждущую смену; ссылка неактивного и Владельца не проверяет пароль', function () {
+    $token = requestEmailChange($this, $this->admin, $this->user, 'boris.new@selen.test');
+    $this->actingAs($this->admin)->postJson(adminPath()."users/{$this->user->id}/deactivate")->assertOk();
+    expect(EmailChangeRequest::query()->count())->toBe(0);
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable()
+        ->assertJsonValidationErrors('token');
+
+    $owner = owner();
+    $other = member();
+    $blockToken = requestEmailChange($this, $this->admin, $other, 'other.new@selen.test');
+    $this->actingAs($owner)->postJson(adminPath()."users/{$other->id}/block")->assertOk();
+    expect(EmailChangeRequest::query()->count())->toBe(0);
+    $this->postJson("/api/v1/email-changes/{$blockToken}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable()
+        ->assertJsonValidationErrors('token');
+
+    // Стал Владельцем, пока ссылка ждала: ответ — о ссылке, а не о пароле (пароль Владельца так не проверить)
+    $third = member();
+    $ownerToken = requestEmailChange($this, $this->admin, $third, 'third.new@selen.test');
+    DB::table('users')->where('id', $owner->id)->update(['role' => 'member']);
+    DB::table('users')->where('id', $third->id)->update(['role' => 'owner']);
+    $this->postJson("/api/v1/email-changes/{$ownerToken}/confirm", ['password' => 'неверный'])->assertUnprocessable()
+        ->assertJsonValidationErrors('token')->assertJsonMissingValidationErrors('password');
+});
+
+it('аудит П2c-2, S-3: письмо на новый адрес — без имени; уведомления с адресами шифруются в очереди; упавшие задачи — по сроку', function () {
+    requestEmailChange($this, $this->admin, $this->user, 'boris.new@selen.test');
+
+    Notification::assertSentTo(new AnonymousNotifiable, EmailChangeConfirmationNotification::class,
+        function (EmailChangeConfirmationNotification $n, $c, AnonymousNotifiable $to) {
+            $mail = $n->toMail($to);
+
+            return ! str_contains($mail->greeting.' '.implode(' ', $mail->introLines), 'Борис');
+        });
+    expect(new EmailChangeRequestedNotification('Имя', 'Автор', 'b***@selen.test'))->toBeInstanceOf(ShouldBeEncrypted::class)
+        ->and(new EmailChangedNotification('Имя', 'b***@selen.test'))->toBeInstanceOf(ShouldBeEncrypted::class)
+        ->and(collect(app(Schedule::class)->events())->pluck('command')->implode("\n"))->toContain('queue:prune-failed');
 });

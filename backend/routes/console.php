@@ -16,6 +16,9 @@ Schedule::command('model:prune', ['--model' => [AuthAuditEntry::class]])->dailyA
 // Просроченные запросы смены email (новый адрес — ПДн, хранится только пока ждёт подтверждения; П2c-2)
 Schedule::command('model:prune', ['--model' => [EmailChangeRequest::class]])->dailyAt('03:35');
 
+// Упавшие задачи очереди (в них — адреса и имена из писем, хоть и зашифрованные) — не дольше 30 дней (аудит П2c-2, S-3)
+Schedule::command('queue:prune-failed', ['--hours' => 24 * 30])->dailyAt('03:45');
+
 // Файлы удалённых вложений стираются через Attachment::PURGE_AFTER_DAYS (строка остаётся) — ADR-0010
 Schedule::command('model:prune', ['--model' => [Attachment::class]])->dailyAt('03:40');
 

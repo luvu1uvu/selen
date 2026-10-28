@@ -10,6 +10,7 @@ export const EVENT_TYPES = [
   'auth.password_reset_requested',
   'auth.password_reset_completed',
   'auth.email_changed',
+  'auth.email_change_password_failed',
   'company.created',
   'company.renamed',
   'company.permission_granted',

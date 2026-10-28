@@ -11,7 +11,8 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Письмо на новый адрес со ссылкой подтверждения (смена email администратором, П2c-2). Адрес получателя — явно
- * (Notification::route), а не из модели: пока ссылка не подтверждена, у учётной записи прежний email.
+ * (Notification::route), а не из модели: пока ссылка не подтверждена, у учётной записи прежний email. Имени человека
+ * в письме нет: адрес ещё не подтверждён.
  *
  * Отправляется через очередь; задача шифруется (ShouldBeEncrypted), т. к. содержит токен.
  */
@@ -20,7 +21,6 @@ class EmailChangeConfirmationNotification extends Notification implements Should
     use Queueable;
 
     public function __construct(
-        public readonly string $name,
         public readonly string $timezone,
         #[\SensitiveParameter] public readonly string $token,
         public readonly CarbonInterface $expiresAt,
@@ -42,7 +42,8 @@ class EmailChangeConfirmationNotification extends Notification implements Should
 
         return (new MailMessage)
             ->subject(__('mail.email_change.confirm_subject', ['app' => config('app.name')]))
-            ->greeting(__('mail.greeting', ['name' => $this->name]))
+            // Без имени: адрес ещё не подтверждён — при опечатке письмо прочтёт посторонний (аудит П2c-2, S-3)
+            ->greeting(__('mail.greeting_anonymous'))
             ->line(__('mail.email_change.confirm_intro', ['app' => config('app.name')]))
             ->action(__('mail.email_change.confirm_action'), $url)
             ->line(__('mail.email_change.confirm_after'))
