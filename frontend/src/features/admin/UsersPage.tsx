@@ -23,10 +23,11 @@ export function UsersPage() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <p className="text-muted-foreground max-w-2xl min-w-0 text-sm">
+        <p className="text-muted-foreground max-w-2xl min-w-0 text-sm lg:pt-2">
           {t('users.description', { context: companyModeContext(me) })}
         </p>
-        {/* Кнопки — одним рядом (у Владельца их три): рядом с пояснением — с 1024 px, уже — под ним (UX-ревью П2c-1, U-7) */}
+        {/* Кнопки — одним рядом: рядом с пояснением — с 1024 px, уже — под ним (UX-ревью П2c-1, U-7); первая строка
+            пояснения — по центру кнопок (lg:pt-2, UX-ревью «Одна компания на копию», U-1) */}
         <div className="flex shrink-0 flex-wrap gap-2">
           {isOwner(me) && <TransferOwnershipDialog />}
           {isMultiCompany(me) && hasCompanyPermission(company, 'company.manage_users') && (
@@ -52,7 +53,7 @@ export function InvitationsPage() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <p className="text-muted-foreground text-sm">{t('invitations.description')}</p>
+        <p className="text-muted-foreground text-sm lg:pt-2">{t('invitations.description')}</p>
         <InviteUserDialog />
       </div>
       <InvitationsTable />
