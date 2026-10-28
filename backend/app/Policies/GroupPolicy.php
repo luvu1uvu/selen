@@ -57,27 +57,51 @@ class GroupPolicy
     }
 
     /**
-     * Состав группы: если группа даёт доступ к пространствам — ещё «управлять доступом», если права компании — только
-     * Владелец и администратор компании (права компании выдают только они, решение PM 23.10, В17).
+     * Состав группы ($adding — добавить человека): если группа даёт доступ к пространствам — ещё «управлять доступом»,
+     * если права компании — только Владелец и администратор компании (права компании выдают только они, решение PM
+     * 23.10, В17); добавить в группу с правом, которое выдаёт только Владелец, — только Владелец (аудит П2c-1, S-1).
      */
-    public function manageMembers(User $actor, Group $group): Response
+    public function manageMembers(User $actor, Group $group, bool $adding = true): Response
     {
         $response = $this->update($actor, $group);
-        if (! $response->allowed()) {
-            return $response;
-        }
 
-        $grants = app(AccessResolver::class)->groupGrants($group);
-        $access = $group->company->permissionsOf($actor);
-        $allowed = (! $grants['access'] || $access->allows(Permission::CompanyManageAccess))
-            && (! $grants['company_permissions'] || $access->isAdmin());
-
-        return $allowed ? $response : Response::deny();
+        return $response->allowed() && ! $this->grantsWhatGroupGives($actor, $group, $adding) ? Response::deny() : $response;
     }
 
+    /**
+     * Архив группы снимает её доступ и права компании, возврат — снова выдаёт: те же условия, что у состава (аудит П2c-1,
+     * S-2); вернуть группу с правом Владельца — только Владелец.
+     */
     public function archive(User $actor, Group $group): Response
     {
-        return $this->allowCompany($actor, $group->company, Permission::CompanyManageGroups);
+        return $this->toggleArchive($actor, $group, restoring: false);
+    }
+
+    public function restore(User $actor, Group $group): Response
+    {
+        return $this->toggleArchive($actor, $group, restoring: true);
+    }
+
+    private function toggleArchive(User $actor, Group $group, bool $restoring): Response
+    {
+        $response = $this->allowCompany($actor, $group->company, Permission::CompanyManageGroups);
+
+        return $response->allowed() && ! $this->grantsWhatGroupGives($actor, $group, $restoring) ? Response::deny() : $response;
+    }
+
+    /**
+     * Может ли автор выдать (и снять) то, что даёт группа: её доступ к пространствам — с «управлять доступом», её права
+     * компании — администратор компании; право, которое выдаёт только Владелец, — выдать (добавить, вернуть из архива)
+     * может только Владелец, снять — и администратор.
+     */
+    private function grantsWhatGroupGives(User $actor, Group $group, bool $granting): bool
+    {
+        $grants = app(AccessResolver::class)->groupGrants($group);
+        $access = $group->company->permissionsOf($actor);
+
+        return (! $grants['access'] || $access->allows(Permission::CompanyManageAccess))
+            && (! $grants['company_permissions'] || $access->isAdmin())
+            && (! $granting || ! $grants['owner_permissions'] || $actor->isOwner());
     }
 
     /**

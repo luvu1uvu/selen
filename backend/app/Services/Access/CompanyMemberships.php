@@ -25,7 +25,8 @@ class CompanyMemberships
             ->where('company_id', $company->getKey())
             ->where('user_id', $user->getKey())
             ->where('kind', AccessResolver::GUEST)
-            ->update(['kind' => AccessResolver::HOME, 'expires_at' => null, 'is_admin' => $admin, 'updated_at' => $now]);
+            // «Дом» начинается сейчас (журнал показывает события «о человеке» с прихода в компанию)
+            ->update(['kind' => AccessResolver::HOME, 'expires_at' => null, 'is_admin' => $admin, 'created_at' => $now, 'updated_at' => $now]);
 
         if ($updated === 0) {
             DB::table('company_members')->insert([

@@ -103,18 +103,21 @@ export function GroupPage() {
                   {t('groups.edit')}
                 </Button>
               )}
-              <Button
-                variant="outline"
-                disabled={archive.isPending}
-                onClick={() =>
-                  run(
-                    () => archive.mutateAsync({ id: group.id, archived: editable }),
-                    editable ? t('groups.toasts.archived') : t('groups.toasts.restored'),
-                  )
-                }
-              >
-                {editable ? t('groups.archive') : t('groups.restore')}
-              </Button>
+              {/* Архив снимает доступ и права группы, возврат — снова выдаёт: не каждому, кто ведёт группы (П2c) */}
+              {(group.permissions?.archive ?? true) && (
+                <Button
+                  variant="outline"
+                  disabled={archive.isPending}
+                  onClick={() =>
+                    run(
+                      () => archive.mutateAsync({ id: group.id, archived: editable }),
+                      editable ? t('groups.toasts.archived') : t('groups.toasts.restored'),
+                    )
+                  }
+                >
+                  {editable ? t('groups.archive') : t('groups.restore')}
+                </Button>
+              )}
             </div>
           )}
         </div>

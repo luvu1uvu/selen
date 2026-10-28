@@ -13,10 +13,12 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Notifications\AccessOpenedNotification;
 use App\Notifications\InvitationNotification;
+use App\Providers\AppServiceProvider;
 use App\Services\EventLog\EventRecorder;
 use Database\Factories\UserFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 
 /*
@@ -376,5 +378,94 @@ describe('ревью П2c-1: передача доступа и права ко�
             'email' => 'g@selen.test', 'expires_on' => $todayUtc,
             'spaces' => [['space_id' => space(['key' => 'DEV'])->id, 'role' => 'commenter']],
         ])->assertJsonValidationErrors('expires_on');
+    });
+});
+
+describe('аудит П2c-1: права Владельца и группы, журнал, письма', function () {
+    it('S-1: в группу с правом Владельца добавляет только Владелец; передача доступа администратором её не копирует', function () {
+        $group = makeGroup(['name' => 'Аналитики']);
+        CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'group_id' => $group->id, 'permission' => 'company.view_time_analytics']);
+        $gate = fn (User $user) => Gate::forUser($user)->allows(AppServiceProvider::VIEW_WORK_TIME_ANALYTICS, company());
+
+        $this->actingAs($this->admin)->postJson(adminPath()."groups/{$group->id}/members", ['user_id' => $this->admin->id])->assertForbidden();
+        expect($gate($this->admin))->toBeFalse();
+
+        $leaving = member();
+        addToGroup($group, $leaving);
+        $successor = member();
+        $this->postJson(adminPath()."users/{$leaving->id}/deactivate", ['successor_id' => $successor->id])->assertOk();
+        expect($group->members()->whereKey($successor->id)->exists())->toBeFalse()
+            ->and($gate($successor))->toBeFalse();
+
+        // Убрать из такой группы администратор может; добавить — Владелец
+        $this->actingAs($this->owner)->postJson(adminPath()."groups/{$group->id}/members", ['user_id' => $successor->id])->assertOk();
+        $this->actingAs($this->admin)->deleteJson(adminPath()."groups/{$group->id}/members/{$successor->id}")->assertNoContent();
+    });
+
+    it('S-2: архив и возврат группы с доступом — с «управлять доступом», с правами компании — администратор, с правом Владельца — вернуть только Владелец', function () {
+        $groups = member();
+        CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $groups->id, 'permission' => 'company.manage_groups']);
+        $withAccess = makeGroup(['name' => 'С доступом']);
+        grantGroup(space(['key' => 'DEV']), $withAccess, SpaceRole::Editor);
+        $plain = makeGroup(['name' => 'Пустая']);
+        $owners = makeGroup(['name' => 'Аналитики']);
+        CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'group_id' => $owners->id, 'permission' => 'company.view_time_analytics']);
+
+        $this->actingAs($groups);
+        $this->postJson(adminPath()."groups/{$withAccess->id}/archive")->assertForbidden();
+        $this->postJson(adminPath()."groups/{$plain->id}/archive")->assertOk();
+        $this->postJson(adminPath()."groups/{$plain->id}/restore")->assertOk();
+
+        $this->actingAs($this->admin)->postJson(adminPath()."groups/{$owners->id}/archive")->assertOk();
+        $this->postJson(adminPath()."groups/{$owners->id}/restore")->assertForbidden();
+        $this->actingAs($this->owner)->postJson(adminPath()."groups/{$owners->id}/restore")->assertOk();
+    });
+
+    it('S-3: журнал компании показывает входы нового сотрудника только с его прихода', function () {
+        $larisa = member(['email' => 'larisa@selen.test'], $this->second);
+        $recorder = app(EventRecorder::class);
+        $before = $recorder->record(EventType::LoginSucceeded, $larisa, $larisa);
+        $this->travel(1)->minutes();
+        Notification::fake();
+        $this->actingAs($this->admin)->postJson(adminPath().'invitations', ['name' => 'Л', 'email' => 'larisa@selen.test', 'role' => 'member'])
+            ->assertCreated()->assertJsonPath('data.result', 'added');
+        $this->travel(1)->minutes();
+        $after = $recorder->record(EventType::LoginSucceeded, $larisa, $larisa);
+
+        $ids = collect($this->getJson(adminPath().'events')->assertOk()->json('data'))->pluck('id');
+        expect($ids)->toContain($after->id)->not->toContain($before->id);
+        // Своя (первая) компания видит всю её историю
+        $ids = collect($this->actingAs(admin(company: $this->second))->getJson(adminPath($this->second).'events')->json('data'))->pluck('id');
+        expect($ids)->toContain($before->id, $after->id);
+    });
+
+    it('S-4: передача доступа, когда у преемника уже есть то же право компании', function () {
+        $leaving = member();
+        $successor = member();
+        foreach ([$leaving, $successor] as $user) {
+            CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $user->id, 'permission' => 'company.invite_users']);
+        }
+
+        $this->actingAs($this->admin)->postJson(adminPath()."users/{$leaving->id}/deactivate", ['successor_id' => $successor->id])->assertOk();
+        expect(CompanyPermissionGrant::query()->where('user_id', $successor->id)->count())->toBe(1);
+    });
+
+    it('S-5: отключённому Владельцем письма не уходят, повтор приглашения — отказ', function () {
+        Notification::fake();
+        $blocked = User::factory()->inCompany($this->second)->blocked()->create(['email' => 'b@selen.test', 'password' => null]);
+
+        $this->actingAs($this->admin)->postJson(adminPath().'invitations', ['name' => 'Б', 'email' => 'b@selen.test', 'role' => 'member'])->assertCreated();
+        Notification::assertNothingSent();
+        $invitation = Invitation::query()->where('user_id', $blocked->id)->sole();
+        $this->postJson(adminPath()."invitations/{$invitation->id}/resend")
+            ->assertJsonValidationErrors(['invitation' => __('selen.users.blocked')]);
+    });
+
+    it('S-6: у гостя время деактивации учётной записи не показывается', function () {
+        $guest = User::factory()->inCompany($this->second)->guestIn(company())->create();
+        $this->actingAs(admin(company: $this->second))->postJson(adminPath($this->second)."users/{$guest->id}/deactivate")->assertOk();
+
+        $row = collect($this->actingAs($this->admin)->getJson(adminPath().'users?status=guest')->json('data'))->sole();
+        expect($row['status'])->toBe('deactivated')->and($row['deactivated_at'])->toBeNull();
     });
 });

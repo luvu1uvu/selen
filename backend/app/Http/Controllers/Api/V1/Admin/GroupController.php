@@ -73,7 +73,7 @@ class GroupController extends Controller
 
     public function restore(Request $request, Company $company, Group $group, SetGroupArchivedAction $action): GroupResource
     {
-        Gate::authorize('archive', $group);
+        Gate::authorize('restore', $group);
 
         return new GroupResource($this->reload($action->handle($request->user(), $group, false)));
     }
@@ -87,7 +87,7 @@ class GroupController extends Controller
 
     public function removeMember(Request $request, Company $company, Group $group, User $user, RemoveGroupMemberAction $action): Response
     {
-        Gate::authorize('manageMembers', $group);
+        Gate::authorize('manageMembers', [$group, false]);
 
         $action->handle($request->user(), $group, $user);
 

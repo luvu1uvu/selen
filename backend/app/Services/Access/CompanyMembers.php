@@ -46,6 +46,11 @@ final class CompanyMembers
     public static function deactivatedAt(User $user, string $companyId): ?Carbon
     {
         $membership = self::of($companyId)->get($user->id);
+        // У гостя — не показываем: время деактивации его учётной записи выдало бы, когда он ушёл из своей компании
+        // (аудит П2c-1, S-6)
+        if ($membership?->kind === AccessResolver::GUEST) {
+            return null;
+        }
         $removed = $membership?->deactivated_at === null ? null : Date::parse($membership->deactivated_at);
 
         return $removed ?? (self::statusOf($user, $companyId) === UserStatus::Deactivated ? $user->deactivated_at : null);

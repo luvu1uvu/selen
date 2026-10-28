@@ -38,6 +38,8 @@ class GroupResource extends JsonResource
             'permissions' => $this->whenLoaded('members', fn () => [
                 'manage_members' => $request->user()?->can('manageMembers', $this->resource) ?? false,
                 'manage_spaces' => $request->user()?->can('manageSpaces', $this->resource) ?? false,
+                // Архив снимает, возврат снова выдаёт её доступ и права (аудит П2c-1, S-2)
+                'archive' => $request->user()?->can($this->resource->isArchived() ? 'restore' : 'archive', $this->resource) ?? false,
             ]),
             'members' => $this->whenLoaded('members', fn () => $this->members
                 ->sortBy(fn (User $user) => mb_strtolower($user->name))

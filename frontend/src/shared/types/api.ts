@@ -592,7 +592,7 @@ export interface Group {
   members_count: number
   spaces_count: number
   /** Страница группы: можно ли менять состав и доступ к пространствам (П2c: это выдача доступа). */
-  permissions?: { manage_members: boolean; manage_spaces: boolean }
+  permissions?: { manage_members: boolean; manage_spaces: boolean; archive: boolean }
   members?: (DirectoryUser & { added_at: string })[]
   spaces?: {
     space: { id: string; key: string; name: string; archived_at: string | null }

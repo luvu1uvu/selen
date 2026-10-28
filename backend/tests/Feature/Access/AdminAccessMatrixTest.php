@@ -216,7 +216,7 @@ function routePermissions(string $method, string $path, array $body = []): ?arra
         (bool) preg_match('/^groups\/[^\/]+\/permissions$/', $path) => null,
         $path === 'users', str_starts_with($path, 'users/'), str_starts_with($path, 'guests') => [Permission::CompanyManageUsers],
         str_starts_with($path, 'invitations'), $path === 'grantable-spaces' => [Permission::CompanyInviteUsers],
-        (bool) preg_match('/^groups\/[^\/]+\/(members|spaces)/', $path) => [Permission::CompanyManageGroups, Permission::CompanyManageAccess],
+        (bool) preg_match('/^groups\/[^\/]+\/(members|spaces|archive|restore)/', $path) => [Permission::CompanyManageGroups, Permission::CompanyManageAccess],
         str_starts_with($path, 'groups') => [Permission::CompanyManageGroups],
         $path === 'events' => [Permission::CompanyViewEventLog],
         (bool) preg_match('/^spaces\/[^\/]+\/members\//', $path), str_contains($path, '/directory') => [Permission::CompanyManageAccess],

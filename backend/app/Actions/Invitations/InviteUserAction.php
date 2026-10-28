@@ -69,12 +69,13 @@ class InviteUserAction
         });
 
         [$result, $issued] = $outcome;
-        // Отключённому Владельцем письмо «Вам открыт доступ» не нужно — войти он не может
-        if ($issued !== null) {
-            $result->user->notify(new InvitationNotification($issued->invitation, $issued->token));
-        } elseif (! $result->user->isBlocked()) {
-            $result->user->notify(new AccessOpenedNotification);
+        // Отключённому Владельцем письмо не нужно — войти и принять приглашение он не может (аудит П2c-1, S-5)
+        if ($result->user->isBlocked()) {
+            return $result;
         }
+        $result->user->notify($issued === null
+            ? new AccessOpenedNotification
+            : new InvitationNotification($issued->invitation, $issued->token));
 
         return $result;
     }

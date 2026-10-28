@@ -43,6 +43,10 @@ class ResendInvitationAction
             $user = $this->lock->lock($actor, $authorized, $company);
 
             $this->ensureCanResend($previous, $user, $company);
+            // Отключённому Владельцем приглашение не поможет — сначала его должен включить Владелец (аудит П2c-1, S-5)
+            if ($user->isBlocked()) {
+                throw ValidationException::withMessages(['invitation' => __('selen.users.blocked')]);
+            }
             $previousState = $previous->state();
 
             $issued = $this->issuer->issue($company, $user, $actor);

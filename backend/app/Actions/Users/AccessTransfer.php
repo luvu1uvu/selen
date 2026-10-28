@@ -96,7 +96,9 @@ class AccessTransfer
         foreach ($groups as $group) {
             /** @var Group $group */
             $group = Group::query()->lockForUpdate()->findOrFail($group->id);
-            if ($group->members()->whereKey($to->id)->exists()) {
+            // В группу с правом, которое выдаёт только Владелец, добавляет только он (аудит П2c-1, S-1)
+            $ownerOnly = ! $actor->isOwner() && $this->resolver->groupGrants($group)['owner_permissions'];
+            if ($ownerOnly || $group->members()->whereKey($to->id)->exists()) {
                 continue;
             }
 
@@ -113,7 +115,7 @@ class AccessTransfer
         foreach ($theirs as $grant) {
             // Права, которые выдаёт только Владелец, передаёт только он (решение PM 23.10, В17)
             $ownerOnly = in_array($grant->permission, Permission::ownerGranted(), true) && ! $actor->isOwner();
-            if ($ownerOnly || in_array($grant->permission->value, $mine, true)) {
+            if ($ownerOnly || in_array($grant->permission, $mine, true)) {
                 continue;
             }
 

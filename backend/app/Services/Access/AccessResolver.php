@@ -254,13 +254,17 @@ class AccessResolver
      * Что даёт группа (П2c): есть ли у неё выдачи доступа и права компании. Состав такой группы — это выдача доступа
      * и прав компании, поэтому его меняет только тот, кто их выдаёт (GroupPolicy::manageMembers).
      *
-     * @return array{access: bool, company_permissions: bool}
+     * @return array{access: bool, company_permissions: bool, owner_permissions: bool}
      */
     public function groupGrants(Group $group): array
     {
+        $permissions = DB::table('company_permission_grants')->where('group_id', $group->getKey())->pluck('permission');
+        $ownerGranted = array_map(fn (Permission $p) => $p->value, Permission::ownerGranted());
+
         return [
             'access' => DB::table('access_grants')->where('group_id', $group->getKey())->exists(),
-            'company_permissions' => DB::table('company_permission_grants')->where('group_id', $group->getKey())->exists(),
+            'company_permissions' => $permissions->isNotEmpty(),
+            'owner_permissions' => $permissions->intersect($ownerGranted)->isNotEmpty(),
         ];
     }
 
@@ -434,7 +438,7 @@ class AccessResolver
 
     /**
      * События «о человеке» (без компании: вход, смена пароля, отключение учётной записи), которые видит журнал компании
-     * (условие на event_log): о её действующих «домах» — все; об убранных из неё, которые больше нигде не работают
+     * (условие на event_log): о её действующих «домах» — с их прихода в неё (о первом «доме» человека — все); об убранных из неё, которые больше нигде не работают
      * (учётная запись деактивирована), — до того, как их убрали, и после того, как они перестали работать везде (попытки
      * входа уволенного). Убранный, но работающий в другой компании, — ничего: его входы выдали бы, что он работает где-то
      * ещё (ревью П2c-1).
@@ -445,7 +449,19 @@ class AccessResolver
     public function eventsAboutPeople(EloquentBuilder $query, Company $company): EloquentBuilder
     {
         return $query->where(fn (EloquentBuilder $q) => $q
-            ->whereIn('subject_id', $this->companyMemberIds($company))
+            // Действующий «дом» — с того, как он пришёл в компанию (аудит П2c-1, S-3: его входы, пока он работал только
+            // в другой, ей не показываем); первый «дом» человека — вся история
+            ->whereExists(fn (Builder $q) => $this->activeMemberships(guests: false, query: $q->from('company_members'))
+                ->whereColumn('company_members.user_id', 'event_log.subject_id')
+                ->where('company_members.company_id', $company->getKey())
+                ->where(fn (Builder $q) => $q
+                    ->whereColumn('event_log.occurred_at', '>=', 'company_members.created_at')
+                    ->orWhereNotExists(fn (Builder $q) => $q->from('company_members AS earlier')
+                        ->whereColumn('earlier.user_id', 'company_members.user_id')
+                        ->where('earlier.kind', self::HOME)
+                        ->whereColumn('earlier.created_at', '<', 'company_members.created_at')
+                        ->selectRaw('1')))
+                ->selectRaw('1'))
             ->orWhereExists(fn (Builder $q) => $q->from('company_members')
                 ->join('users', 'users.id', '=', 'company_members.user_id')
                 ->whereColumn('company_members.user_id', 'event_log.subject_id')
