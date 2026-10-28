@@ -27,6 +27,9 @@ beforeEach(function () {
     // строятся минуты, их проверяет BoardsDemoSeederTest
     $this->seed(DemoSeeder::class);
     addToSpace(space(['key' => 'DEV', 'name' => 'Разработка']), member(['name' => 'Анна Смирнова', 'email' => 'anna@selen.test']), SpaceRole::Admin);
+    // Гости демо (П2c) — сотрудники «Компании 1» из BoardsDemoSeeder
+    member(['name' => 'Борис Петров', 'email' => 'boris@selen.test']);
+    member(['name' => 'Вера Соколова', 'email' => 'vera@selen.test']);
     $this->seed(CompaniesDemoSeeder::class);
     $this->user = fn (string $login) => User::query()->where('email', "{$login}@selen.test")->sole();
 });
@@ -69,4 +72,19 @@ it('у сотрудников одной компании названий ко�
             ->and(treeSpaceKeys($response->json('data.0.items')))->toBe($keys);
     }
     expectNoPersonalDataInEventLog();
+});
+
+it('гости (П2c): Борис — в «Поддержке» «Компании 2» без срока, Вера — в «Складе» «Компании 3» со сроком', function () {
+    $boris = ($this->user)('boris');
+    $trees = $this->actingAs($boris)->getJson('/api/v1/navigation')->assertOk()->json('data');
+    // В тесте у Бориса нет пространств «Компании 1» — в дереве одна компания (в демо — обе, с названиями)
+    expect(collect($trees)->flatMap(fn (array $tree) => treeSpaceKeys($tree['items']))->all())->toBe(['SUP']);
+    $this->getJson('/api/v1/spaces/SUP')->assertOk()->assertJsonPath('data.my_role', 'commenter');
+    $this->getJson('/api/v1/spaces/SALES')->assertNotFound();
+
+    $irina = ($this->user)('irina');
+    $third = Company::query()->where('name', 'Компания 3')->sole();
+    $vera = collect($this->actingAs($irina)->getJson(adminPath($third).'users?status=guest')->assertOk()->json('data'))->sole();
+    expect($vera['email'])->toBe('vera@selen.test')
+        ->and($vera['guest']['expires_at'])->not->toBeNull();
 });

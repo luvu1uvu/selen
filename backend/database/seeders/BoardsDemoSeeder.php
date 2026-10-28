@@ -49,12 +49,12 @@ use App\Models\Lane;
 use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
+use App\Services\Access\CompanyMemberships;
 use App\Services\Cards\CardVisibility;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Date;
-use App\Services\Access\CompanyMemberships;
 
 /**
  * Демо-данные досок для локальной разработки (только APP_ENV=local, вызывается из DatabaseSeeder).
