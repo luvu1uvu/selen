@@ -55,8 +55,9 @@
 | Таблица | Ключевые поля |
 |---|---|
 | `companies` | `id` ULID, `name` (unique без учёта регистра), `created_by`, timestamps — компании (ADR-0024); не удаляются |
-| `company_members` | `company_id`, `user_id` (PK пара), `kind` (`home`; гости — П2c), `is_admin` (администратор компании), timestamps — членство |
-| `users` | `id` ULID, `name`, `email` (unique, lower-case), `password` (null до принятия приглашения), `role` owner/member (Владелец — один: уникальный частичный индекс, CHECK «активен», отложенный триггер, ADR-0017; администратор — у компании, ADR-0024), `status` invited/active/deactivated, `timezone` (Europe/Moscow), `last_login_at`, `deactivated_at`, `remember_token`, timestamps |
+| `company_members` | `company_id`, `user_id` (PK пара), `kind` (`home` / `guest`, П2c), `is_admin` (администратор компании, только у «дома»), `expires_at` (срок гостя, по желанию), `deactivated_at` (убран из компании, только у «дома»), timestamps — членство |
+| `company_permission_grants` | `id`, `company_id`, `user_id` или `group_id` (ровно одно; группа — той же компании), `permission` (`company.*`), `granted_by`, timestamps — права компании лично и группам (П2c) |
+| `users` | `id` ULID, `name`, `email` (unique, lower-case), `password` (null до принятия приглашения), `role` owner/member (Владелец — один: уникальный частичный индекс, CHECK «активен», отложенный триггер, ADR-0017; администратор — у компании, ADR-0024), `status` invited/active/deactivated (замок входа: deactivated — без действующего «дома» или отключён Владельцем, П2c), `timezone` (Europe/Moscow), `last_login_at`, `deactivated_at`, `blocked_at` (учётную запись отключил Владелец), `remember_token`, timestamps |
 | `invitations` | `id` ULID, `company_id`, `user_id`, `email`, `token_hash` (sha256, unique), `invited_by_id`, `expires_at`, `accepted_at`, `revoked_at`, `superseded_by_id`, timestamps |
 | `event_log` | `id` bigint identity, `company_id` (пусто — без компании), `occurred_at` timestamptz(6), `event_type`, `actor_id`, `subject_type`, `subject_id`, `payload` jsonb (только id и enum, без ПДн), `meta` jsonb (`source`) |
 | `auth_audit` | `occurred_at`, `event_log_id`, `event_type`, `user_id`, `email_attempted`, `ip`, `user_agent` — НЕ append-only, хранится 12 мес. (ADR-0003) |
@@ -114,6 +115,9 @@
 компании — 404), права компании — `Company::permissionsOf()`; справочники и ссылки в запросах — «в этой компании»;
 связи между компаниями запрещены в БД (составные FK, триггеры). Всё, что было до компаний, — «Компания 1»; пока
 компания одна, интерфейс прежний. Тесты — `CompanyIsolationTest`, `AdminAccessMatrixTest` по компаниям.
+С П2c: гость (личные выдачи на пространства, срок по желанию), деактивация в компании (отметка у «дома»; вход закрыт,
+когда не осталось действующего «дома» — `AccountStatus`), отключение учётной записи Владельцем, права компании лично
+и группам (`company_permission_grants`); статус человека для показа — в компании пространства (`CompanyMembers`).
 
 Режим «только свои карточки» ([adr/0008-own-cards-only.md](adr/0008-own-cards-only.md)) — область карточек роли
 («Редактор / Комментатор — только свои карточки»): участник видит только карточки, где он заказчик, ответственный или участник; остальные — 404
