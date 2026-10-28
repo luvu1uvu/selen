@@ -154,6 +154,19 @@ describe('«Завершить все сеансы»', function () {
             ->and($rows[$removed->id]['permissions']['terminate_sessions'])->toBeFalse();
     });
 
+    it('отключённого Владельцем — только Владелец: администратору нет ни сеансов, ни смены email (LATER-143)', function () {
+        $admin = admin();
+        $blocked = User::factory()->blocked()->create();
+
+        $this->actingAs($admin)->postJson(adminPath()."users/{$blocked->id}/terminate-sessions")->assertForbidden();
+        $this->actingAs($admin)->postJson(adminPath()."users/{$blocked->id}/email-change", ['email' => 'new@selen.test'])->assertForbidden();
+        $row = collect($this->actingAs($admin)->getJson(adminPath().'users')->json('data'))->firstWhere('id', $blocked->id);
+        expect($row['permissions']['terminate_sessions'])->toBeFalse()
+            ->and($row['permissions']['change_email'])->toBeFalse();
+
+        $this->actingAs(owner())->postJson(adminPath()."users/{$blocked->id}/email-change", ['email' => 'new@selen.test'])->assertOk();
+    });
+
     it('сотрудник двух компаний — администратор любой из них (решение PM 28.10, п. 8)', function () {
         $other = otherCompany();
         $user = member();

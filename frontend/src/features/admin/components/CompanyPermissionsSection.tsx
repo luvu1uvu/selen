@@ -73,7 +73,9 @@ export function CompanyPermissionsSection(
   const saveGroup = useSaveGroupPermissions(props.groupId ?? '')
   const save = props.userId !== undefined ? saveUser : saveGroup
   const query = props.userId !== undefined ? userQuery : groupQuery
+  // Право остаётся, пока окно закрывается (иначе на время анимации текст стал бы «Право «» получат…»)
   const [toEveryone, setToEveryone] = useState<CompanyPermission | null>(null)
+  const [everyoneOpen, setEveryoneOpen] = useState(false)
 
   const rows: Row[] =
     props.userId !== undefined
@@ -109,12 +111,13 @@ export function CompanyPermissionsSection(
   const name = (permission: CompanyPermission) =>
     t(`permissions.names.${permissionKey(permission)}`, { context })
 
-  const toggle = async (permission: CompanyPermission, checked: boolean) => {
+  const toggle = async (permission: CompanyPermission, checked: boolean, confirmed = false) => {
     // Пока сохраняется прошлый щелчок, новый ждёт; галочки не отключаем — иначе браузер снимет фокус с нажатой
     if (save.isPending) return
     // Право всем сотрудникам компании (и будущим) — только после подтверждения (решение PM по отчёту П2c-1, п. 3)
-    if (props.everyone && checked && toEveryone === null) {
+    if (props.everyone && checked && !confirmed) {
       setToEveryone(permission)
+      setEveryoneOpen(true)
       return
     }
     // Только права, которые автор может менять: выданное Владельцем остаётся как есть (сервер его не трогает); у
@@ -203,8 +206,8 @@ export function CompanyPermissionsSection(
         })}
       </ul>
       <ConfirmDialog
-        open={toEveryone !== null}
-        onOpenChange={(open) => !open && setToEveryone(null)}
+        open={everyoneOpen}
+        onOpenChange={setEveryoneOpen}
         pending={save.isPending}
         confirmVariant="default"
         title={t('permissions.everyoneConfirm.title')}
@@ -213,8 +216,8 @@ export function CompanyPermissionsSection(
         })}
         confirmLabel={t('permissions.everyoneConfirm.confirm')}
         onConfirm={async () => {
-          if (toEveryone) await toggle(toEveryone, true)
-          setToEveryone(null)
+          if (toEveryone) await toggle(toEveryone, true, true)
+          setEveryoneOpen(false)
         }}
       />
     </section>

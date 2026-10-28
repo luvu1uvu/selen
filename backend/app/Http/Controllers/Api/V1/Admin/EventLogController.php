@@ -47,7 +47,8 @@ class EventLogController extends Controller
             ->when($request->validated('subject_type'), fn ($q, $type) => $q->where('subject_type', $type))
             ->when($request->validated('subject_id'), fn ($q, $id) => $q->where('subject_id', $id))
             ->orderByDesc('id')
-            ->paginate(50);
+            ->paginate(50)
+            ->withQueryString();
 
         return EventLogEntryResource::collection($entries);
     }

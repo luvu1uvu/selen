@@ -97,6 +97,9 @@ it('фильтр по человеку: что он сделал и что сд�
         ->and($types("user_id={$boris->id}&event_type=auth.logout"))->toBe(['auth.logout'])
         ->and($types("user_id={$vera->id}"))->toBe(['auth.logout'])
         ->and($types('user_id=nobody'))->toBe([]);
+    // Ссылки страниц в ответе — с фильтрами (замечание тестировщика П2c-2)
+    expect($this->actingAs($admin)->getJson(adminPath()."events?user_id={$boris->id}")->json('links.first'))
+        ->toContain("user_id={$boris->id}");
 });
 
 it('люди для фильтра журнала — люди компании, только имена; другой компании и без права «журнал» — нет', function () {

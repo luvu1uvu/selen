@@ -72,8 +72,10 @@ class UserPolicy
     public function terminateSessions(User $actor, User $user, Company $company): Response
     {
         $response = $this->managesOther($actor, $user, $company);
+        // Учётную запись, которую отключил Владелец, ведёт только он (решение PM 28.10, п. 2; LATER-143)
+        $other = ! $company->permissionsOf($user)->isMember() || ($user->isBlocked() && ! $actor->isOwner());
 
-        return $response->allowed() && ! $company->permissionsOf($user)->isMember() ? Response::deny() : $response;
+        return $response->allowed() && $other ? Response::deny() : $response;
     }
 
     /**
