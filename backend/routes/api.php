@@ -219,10 +219,11 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user', 'last-seen'])->group(fu
         // Отключить и включить учётную запись — только Владелец (П2c)
         Route::post('users/{user}/block', [UserController::class, 'block'])->name('users.block');
         Route::post('users/{user}/unblock', [UserController::class, 'unblock'])->name('users.unblock');
-        // «Завершить все сеансы» и смена email (П2c-2); запрос смены — письма на два адреса, с лимитом
+        // «Завершить все сеансы» и смена email (П2c-2); запрос смены — письма на два адреса и ответ «email уже
+        // используется», поэтому с общим лимитом приглашений (ревью П2c-2)
         Route::post('users/{user}/terminate-sessions', [UserController::class, 'terminateSessions'])->name('users.terminate-sessions');
         Route::post('users/{user}/email-change', [UserController::class, 'requestEmailChange'])
-            ->middleware('throttle:email-change')
+            ->middleware('throttle:invitations-send')
             ->name('users.email-change');
         Route::delete('users/{user}/email-change', [UserController::class, 'cancelEmailChange'])->name('users.email-change.cancel');
         Route::get('users/{user}/access', [UserAccessController::class, 'access'])->name('users.access');

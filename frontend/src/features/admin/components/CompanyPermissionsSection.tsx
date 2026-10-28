@@ -86,7 +86,10 @@ export function CompanyPermissionsSection(
           byAdmin: row.by_admin_role,
           note:
             [
-              row.by_admin_role ? t('permissions.byAdmin') : null,
+              // Выданное лично у администратора — не снять галочкой, но видно (ревью П2c-2): после снятия роли оно останется
+              row.by_admin_role
+                ? t(row.personal ? 'permissions.byAdminAndPersonal' : 'permissions.byAdmin')
+                : null,
               row.groups.length > 0
                 ? t('permissions.byGroups', { groups: row.groups.map((g) => g.name).join(', ') })
                 : null,

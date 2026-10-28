@@ -132,9 +132,12 @@ class AppServiceProvider extends ServiceProvider
 
         // Отправка приглашений (новое и «Отправить повторно»): 10 в минуту и 300 в сутки на приглашающего (решение PM
         // 26.10) — перебор email по ответу «email уже используется» медленный; отказы тоже считаются. Ключи у пределов
-        // разные: с одинаковым ключом они делили бы один счётчик
+        // разные: с одинаковым ключом они делили бы один счётчик. Тот же счётчик — у гостей и смены email (П2c-2, ревью):
+        // их ответ «email уже используется» — такой же способ перебора; текст — свой у смены email
         $tooManyInvitations = fn (Request $request, array $headers): JsonResponse => response()->json(
-            ['message' => __('selen.invitations.throttle', ['time' => $this->waitTime((int) ($headers['Retry-After'] ?? 60))])],
+            ['message' => __($request->routeIs('admin.users.email-change') ? 'selen.email_change.throttle' : 'selen.invitations.throttle', [
+                'time' => $this->waitTime((int) ($headers['Retry-After'] ?? 60)),
+            ])],
             429,
             $headers,
         );
@@ -143,12 +146,8 @@ class AppServiceProvider extends ServiceProvider
             Limit::perDay(300)->by('day:'.$request->user()?->getAuthIdentifier())->response($tooManyInvitations),
         ]);
 
-        // Смена email администратором (П2c-2): письма на новый и старый адрес — не чаще 10 запросов в минуту на автора
-        RateLimiter::for('email-change', fn (Request $request) => Limit::perMinute(10)
-            ->by((string) $request->user()?->getAuthIdentifier())
-            ->response($tooMany('selen.throttle')));
-
-        // Страница подтверждения нового email по ссылке из письма: защита от перебора токенов, как у приглашения
+        // Страница подтверждения нового email по ссылке из письма (П2c-2): защита от перебора токенов, как у приглашения;
+        // подбор пароля по ссылке — ещё и 5 попыток в минуту на учётную запись (ConfirmEmailChangeAction)
         RateLimiter::for('email-change-links', fn (Request $request) => Limit::perMinute(20)
             ->by($request->ip())
             ->response($tooMany('selen.throttle')));

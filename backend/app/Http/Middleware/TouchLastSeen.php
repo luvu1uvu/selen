@@ -21,7 +21,7 @@ class TouchLastSeen
     {
         $response = $next($request);
 
-        // После запроса: выход и завершённая сессия пользователя не оставляют — время не пишется
+        // После запроса (пишется и при выходе: guard sanctum помнит пользователя — выход тоже активность)
         $user = $request->user();
         if ($user instanceof User) {
             $this->touch($user);

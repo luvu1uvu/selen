@@ -18,11 +18,10 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Смена email администратором (LATER-9, решение PM 28.10): email меняется не сразу, а когда по ссылке из письма на новый
- * адрес перейдут (ConfirmEmailChangeAction) — опечатка не уведёт учётную запись. До этого вход и сброс пароля — по
- * прежнему адресу. На прежний адрес сразу уходит уведомление (новый адрес — маской): захват учётной записи
- * администратором, который поставил свой адрес, человек увидит сразу, а Владелец — в журнале. Новый запрос заменяет
- * прежний. Событие — без адресов.
+ * Смена email администратором (LATER-9, решения PM 28.10): email меняется не сразу, а когда человек подтвердит новый
+ * адрес по ссылке из письма своим паролем (ConfirmEmailChangeAction) — ни опечатка, ни администратор, поставивший свой
+ * адрес, учётную запись не уведут. До этого вход и сброс пароля — по прежнему адресу. На прежний адрес сразу уходит
+ * уведомление (новый адрес — маской). Новый запрос заменяет прежний. Событие — без адресов.
  */
 class RequestEmailChangeAction
 {
@@ -44,6 +43,8 @@ class RequestEmailChangeAction
             if ($user->email === $email) {
                 throw ValidationException::withMessages(['email' => __('selen.email_change.same')]);
             }
+            // Просроченный чужой запрос на этот адрес (его ещё не удалил планировщик) адрес не держит
+            EmailChangeRequest::query()->where('new_email', $email)->where('expires_at', '<', Date::now())->delete();
             $taken = User::query()->where('email', $email)->exists()
                 || EmailChangeRequest::query()->where('new_email', $email)->whereKeyNot($user->id)->exists();
             if ($taken) {

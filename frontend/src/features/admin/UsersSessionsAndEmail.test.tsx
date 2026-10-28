@@ -159,15 +159,18 @@ describe('«Пользователи» (П2c-2)', () => {
     expect(
       await screen.findByText('Письмо со ссылкой отправлено на boris.new@selen.test'),
     ).toBeInTheDocument()
+    // Строка «ждёт подтверждения» — и под email, и под именем на узком экране
     expect(
-      await screen.findByText('Новый: boris.new@selen.test — ждёт подтверждения'),
-    ).toBeInTheDocument()
+      await screen.findAllByText('Новый: boris.new@selen.test — ждёт подтверждения'),
+    ).toHaveLength(2)
 
     await openMenu('Борис')
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Отменить смену email' }))
     await waitFor(() => expect(cancelled).toBe(true))
     await waitFor(() =>
-      expect(screen.queryByText('Новый: boris.new@selen.test — ждёт подтверждения')).toBeNull(),
+      expect(
+        screen.queryAllByText('Новый: boris.new@selen.test — ждёт подтверждения'),
+      ).toHaveLength(0),
     )
   })
 
@@ -380,15 +383,22 @@ describe('«Права компании» (П2c-2)', () => {
 })
 
 describe('Подтверждение нового email по ссылке (П2c-2)', () => {
-  it('показывает адрес; email меняет только кнопка', async () => {
-    let confirmed = false
+  it('показывает адрес; email меняет только кнопка с нынешним паролем; неверный пароль — под полем', async () => {
+    const bodies: unknown[] = []
     server.use(
       http.get('*/api/v1/auth/me', () => HttpResponse.json({ message: 'no' }, { status: 401 })),
       http.get('*/api/v1/email-changes/tok', () =>
         HttpResponse.json({ data: { email: 'boris.new@selen.test' } }),
       ),
-      http.post('*/api/v1/email-changes/tok/confirm', () => {
-        confirmed = true
+      http.post('*/api/v1/email-changes/tok/confirm', async ({ request }) => {
+        const body = (await request.json()) as { password: string }
+        bodies.push(body)
+        if (body.password !== 'password-123') {
+          return HttpResponse.json(
+            { message: 'Неверный пароль.', errors: { password: ['Неверный пароль.'] } },
+            { status: 422 },
+          )
+        }
         return HttpResponse.json({ data: { email: 'boris.new@selen.test' } })
       }),
     )
@@ -397,18 +407,30 @@ describe('Подтверждение нового email по ссылке (П2c-
     expect(
       await screen.findByText('Подтвердите новый email для входа в Selen: boris.new@selen.test.'),
     ).toBeInTheDocument()
-    expect(confirmed).toBe(false)
+    const password = screen.getByLabelText('Нынешний пароль')
     await userEvent.click(screen.getByRole('button', { name: 'Подтвердить адрес' }))
+    expect(await screen.findByText('Укажите пароль')).toBeInTheDocument()
+    expect(bodies).toEqual([])
 
+    await userEvent.type(password, 'чужой пароль')
+    await userEvent.click(screen.getByRole('button', { name: 'Подтвердить адрес' }))
+    expect(await screen.findByText('Неверный пароль.')).toBeInTheDocument()
+
+    await userEvent.clear(password)
+    await userEvent.type(password, 'password-123')
+    await userEvent.click(screen.getByRole('button', { name: 'Подтвердить адрес' }))
     expect(
       await screen.findByText(
-        'Email изменён на boris.new@selen.test. Войдите с новым адресом и прежним паролем.',
+        'Email изменён на boris.new@selen.test. Войдите с новым адресом и тем же паролем.',
       ),
     ).toBeInTheDocument()
-    expect(confirmed).toBe(true)
+    expect(bodies.at(-1)).toEqual({ password: 'password-123' })
+    // Вкладка снова в фокусе — ссылку не перечитываем: она одноразовая, ошибки «недействительна» нет
+    window.dispatchEvent(new Event('focus'))
+    expect(screen.queryByText(/недействительна/)).toBeNull()
   })
 
-  it('ссылка недействительна — текст сервера, кнопки нет', async () => {
+  it('ссылка недействительна — текст сервера, формы нет', async () => {
     server.use(
       http.get('*/api/v1/auth/me', () => HttpResponse.json({ message: 'no' }, { status: 401 })),
       http.get('*/api/v1/email-changes/old', () =>

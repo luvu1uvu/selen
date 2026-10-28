@@ -77,6 +77,21 @@ describe('последняя активность', function () {
     });
 });
 
+it('миграция: начальная «последняя активность» — время последнего входа', function () {
+    asSchemaOwner(function () {
+        $migration = require database_path('migrations/2026_10_28_200001_add_last_seen_and_email_change_requests.php');
+        $migration->down();
+        $user = member();
+        $never = member();
+        DB::table('users')->where('id', $user->id)->update(['last_login_at' => '2026-05-01 10:00:00+00']);
+
+        $migration->up();
+
+        expect(DB::table('users')->where('id', $user->id)->value('last_seen_at'))->toStartWith('2026-05-01 10:00:00')
+            ->and(DB::table('users')->where('id', $never->id)->value('last_seen_at'))->toBeNull();
+    });
+});
+
 describe('«Завершить все сеансы»', function () {
     it('администратор завершает все сеансы участника: другие устройства выходят, событие в журнале компании', function () {
         $admin = admin();

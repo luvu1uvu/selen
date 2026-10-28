@@ -10,17 +10,23 @@ use App\Services\Auth\UserSessions;
 use App\Services\EventLog\EventRecorder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Подтверждение нового email по ссылке из письма (П2c-2, LATER-9; страница без входа). Email учётной записи меняется,
- * ссылки сброса пароля на прежний адрес перестают работать, все сеансы человека завершаются — войти можно уже с новым
- * адресом и прежним паролем. На прежний адрес — уведомление. Событие auth.email_changed — «о человеке», без адресов; IP
- * и браузер того, кто перешёл по ссылке, — в auth_audit.
+ * Подтверждение нового email по ссылке из письма (П2c-2, LATER-9; страница без входа). Подтверждает сам человек — своим
+ * нынешним паролем (решение PM 28.10 по ревью П2c-2): ни администратор, поставивший свой адрес, ни посторонний, которому
+ * письмо ушло по опечатке, учётную запись не заберут. Email меняется, ссылки сброса пароля на прежний адрес перестают
+ * работать, все сеансы человека завершаются — войти можно уже с новым адресом и тем же паролем. На прежний адрес —
+ * уведомление. Событие auth.email_changed — «о человеке», без адресов; IP и браузер — в auth_audit.
  */
 class ConfirmEmailChangeAction
 {
+    /** Подбор пароля по ссылке: попыток в минуту на учётную запись (как у входа по email). */
+    private const PASSWORD_ATTEMPTS = 5;
+
     public function __construct(
         private readonly EventRecorder $events,
         private readonly UserSessions $sessions,
@@ -37,8 +43,10 @@ class ConfirmEmailChangeAction
         return $request;
     }
 
-    public function handle(#[\SensitiveParameter] string $token): User
+    public function handle(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $password): User
     {
+        $this->checkPassword($this->findUsable($token)->user_id, $password);
+
         [$user, $oldEmail] = DB::transaction(function () use ($token) {
             $request = $this->findUsable($token);
             // Строка человека, затем запроса — в том же порядке, что и при запросе смены (UserLock)
@@ -74,5 +82,23 @@ class ConfirmEmailChangeAction
             ->notify(new EmailChangedNotification($user->name, EmailChangeRequest::mask($user->email)));
 
         return $user;
+    }
+
+    /** Нынешний пароль учётной записи — не больше PASSWORD_ATTEMPTS попыток в минуту; неверные тоже считаются. */
+    private function checkPassword(string $userId, #[\SensitiveParameter] string $password): void
+    {
+        $key = 'email-change-password:'.$userId;
+        if (RateLimiter::tooManyAttempts($key, self::PASSWORD_ATTEMPTS)) {
+            throw ValidationException::withMessages(['password' => __('selen.email_change.password_throttle', [
+                'seconds' => RateLimiter::availableIn($key),
+            ])]);
+        }
+        RateLimiter::hit($key);
+
+        $hash = User::query()->whereKey($userId)->value('password');
+        if (! is_string($hash) || ! Hash::check($password, $hash)) {
+            throw ValidationException::withMessages(['password' => __('selen.email_change.password')]);
+        }
+        RateLimiter::clear($key);
     }
 }

@@ -45,9 +45,14 @@ export async function fetchEmailChange(token: string): Promise<{ email: string }
   return data.data
 }
 
-/** Подтвердить новый email: email меняется, все сеансы человека завершаются. */
-export async function confirmEmailChange(token: string): Promise<{ email: string }> {
+/** Подтвердить новый email нынешним паролем: email меняется, все сеансы человека завершаются. */
+export async function confirmEmailChange(
+  token: string,
+  password: string,
+): Promise<{ email: string }> {
   await ensureCsrfCookie()
-  const { data } = await api.post<Resource<{ email: string }>>(`/email-changes/${token}/confirm`)
+  const { data } = await api.post<Resource<{ email: string }>>(`/email-changes/${token}/confirm`, {
+    password,
+  })
   return data.data
 }

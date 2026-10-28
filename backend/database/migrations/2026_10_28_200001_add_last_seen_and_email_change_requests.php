@@ -2,13 +2,15 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * П2c-2: «последняя активность» в «Пользователях» и смена email администратором (LATER-9, решение PM 28.10).
  *
  * users.last_seen_at — время последнего запроса вошедшего пользователя, обновляется не чаще раза в несколько минут
- * (middleware TouchLastSeen, config selen.last_seen_interval_minutes).
+ * (middleware TouchLastSeen, config selen.last_seen_interval_minutes). До неё активность не писалась — начальное значение
+ * — время последнего входа: иначе давно не заходившие встали бы в сортировке вместе с теми, кто не входил никогда.
  *
  * email_change_requests — запрос смены email, который ждёт подтверждения по ссылке из письма на новый адрес: у человека
  * не больше одного. Подтверждение и отмена удаляют строку (история — события журнала, без адресов), просроченные удаляет
@@ -23,6 +25,7 @@ return new class extends Migration
             $table->timestampTz('last_seen_at')->nullable();
             $table->index('last_seen_at');
         });
+        DB::table('users')->whereNotNull('last_login_at')->update(['last_seen_at' => DB::raw('last_login_at')]);
 
         Schema::create('email_change_requests', function (Blueprint $table) {
             $table->foreignUlid('user_id')->primary()->constrained('users')->restrictOnDelete();

@@ -250,7 +250,10 @@ export function UsersTable() {
                     </Link>{' '}
                     {isMe && <Badge variant="outline">{t('users.badges.you')}</Badge>}
                   </div>
-                  <div className="text-muted-foreground text-xs md:hidden">{user.email}</div>
+                  <div className="text-muted-foreground text-xs md:hidden">
+                    {user.email}
+                    {user.email_change && <PendingEmail change={user.email_change} />}
+                  </div>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   {user.email}
@@ -271,8 +274,7 @@ export function UsersTable() {
                   <UserStatusBadge user={user} />
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
-                  {/* До П2c-2 активность не писалась — тогда последний вход */}
-                  {formatDateTime(user.last_seen_at ?? user.last_login_at, me?.timezone)}
+                  {formatDateTime(user.last_seen_at, me?.timezone)}
                 </TableCell>
                 <TableCell>
                   {isMe || !hasActions ? (

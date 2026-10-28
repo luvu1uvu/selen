@@ -82,7 +82,7 @@ it('подтверждение по ссылке: email новый, сеансы
     $this->getJson("/api/v1/email-changes/{$token}")->assertOk()->assertExactJson(['data' => ['email' => 'boris.new@selen.test']]);
     expect($this->user->fresh()->email)->toBe('boris@selen.test');
 
-    $this->postJson("/api/v1/email-changes/{$token}/confirm")->assertOk()->assertExactJson(['data' => ['email' => 'boris.new@selen.test']]);
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => UserFactory::PASSWORD])->assertOk()->assertExactJson(['data' => ['email' => 'boris.new@selen.test']]);
 
     expect($this->user->fresh()->email)->toBe('boris.new@selen.test')
         ->and(EmailChangeRequest::query()->count())->toBe(0)
@@ -104,7 +104,7 @@ it('подтверждение по ссылке: email новый, сеансы
     expectNoPersonalDataInEventLog();
 
     // Ссылка — одноразовая
-    $this->postJson("/api/v1/email-changes/{$token}/confirm")->assertUnprocessable()->assertJsonValidationErrors('token');
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable()->assertJsonValidationErrors('token');
 });
 
 it('ссылка: неизвестная, просроченная, заменённая новым запросом и отменённая — 422 одним текстом', function () {
@@ -113,11 +113,11 @@ it('ссылка: неизвестная, просроченная, заменё
 
     $first = requestEmailChange($this, $this->admin, $this->user, 'first@selen.test');
     $second = requestEmailChange($this, $this->admin, $this->user, 'second@selen.test');
-    $this->postJson("/api/v1/email-changes/{$first}/confirm")->assertUnprocessable();
+    $this->postJson("/api/v1/email-changes/{$first}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable();
     expect(EmailChangeRequest::query()->sole()->new_email)->toBe('second@selen.test');
 
     $this->travel(73)->hours();
-    $this->postJson("/api/v1/email-changes/{$second}/confirm")->assertUnprocessable()
+    $this->postJson("/api/v1/email-changes/{$second}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable()
         ->assertJsonPath('errors.token.0', __('selen.email_change.link_invalid'));
     expect($this->user->fresh()->email)->toBe('boris@selen.test');
 });
@@ -127,7 +127,7 @@ it('отмена: ссылка перестаёт работать, событи
 
     $this->actingAs($this->admin)->deleteJson(adminPath()."users/{$this->user->id}/email-change")->assertOk()
         ->assertJsonPath('data.email_change', null);
-    $this->postJson("/api/v1/email-changes/{$token}/confirm")->assertUnprocessable();
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable();
     expect($this->user->fresh()->email)->toBe('boris@selen.test')
         ->and(loggedEventTypes())->toBe(['user.email_change_requested', 'user.email_change_cancelled']);
 
@@ -162,7 +162,7 @@ it('адрес заняли, пока ссылка ждала, — 422, email п
         'requested_by_id' => $this->admin->id, 'expires_at' => now()->addHour(), 'created_at' => now(),
     ]);
 
-    $this->postJson("/api/v1/email-changes/{$token}/confirm")->assertUnprocessable()
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable()
         ->assertJsonPath('errors.token.0', __('selen.email_change.link_taken'));
     expect($this->user->fresh()->email)->toBe('boris@selen.test');
 });
@@ -214,7 +214,7 @@ it('ссылка не подходит, если человек тем врем�
     DB::table('users')->where('id', $owner->id)->update(['role' => 'member']);
     DB::table('users')->where('id', $this->user->id)->update(['role' => 'owner']);
 
-    $this->postJson("/api/v1/email-changes/{$token}/confirm")->assertUnprocessable();
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable();
     expect($this->user->fresh()->email)->toBe('boris@selen.test');
 });
 
@@ -232,10 +232,43 @@ it('в списке «Пользователей» новый адрес вид�
     expect(EmailChangeRequest::query()->count())->toBe(0);
 });
 
-it('лимит запросов смены email — 10 в минуту на автора', function () {
+it('лимит — общий с приглашениями (10 в минуту на автора): ответ «email уже используется» — способ перебора', function () {
     $this->actingAs($this->admin);
-    foreach (range(1, 10) as $i) {
+    foreach (range(1, 5) as $i) {
         $this->postJson(adminPath()."users/{$this->user->id}/email-change", ['email' => "new{$i}@selen.test"])->assertOk();
     }
-    $this->postJson(adminPath()."users/{$this->user->id}/email-change", ['email' => 'new11@selen.test'])->assertTooManyRequests();
+    foreach (range(1, 5) as $i) {
+        $this->postJson(adminPath().'invitations', ['name' => 'Новый', 'email' => "invite{$i}@selen.test", 'role' => 'member']);
+    }
+    $this->postJson(adminPath()."users/{$this->user->id}/email-change", ['email' => 'new11@selen.test'])->assertTooManyRequests()
+        ->assertJsonPath('message', fn (string $message) => str_starts_with($message, 'Слишком много запросов на смену email'));
+});
+
+it('подтверждает только сам человек — своим паролем; неверный пароль — 422, 5 попыток в минуту (решение PM по ревью)', function () {
+    $token = requestEmailChange($this, $this->admin, $this->user, 'boris.new@selen.test');
+
+    // Администратор, у которого есть ссылка (его адрес), пароля человека не знает
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => 'пароль администратора'])->assertUnprocessable()
+        ->assertJsonPath('errors.password.0', __('selen.email_change.password'));
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", [])->assertUnprocessable()->assertJsonValidationErrors('password');
+    foreach (range(1, 4) as $i) {
+        $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => "неверный {$i}"])->assertUnprocessable();
+    }
+    // Шестая попытка в минуту — отказ даже с верным паролем
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => UserFactory::PASSWORD])->assertUnprocessable()
+        ->assertJsonPath('errors.password.0', fn (string $message) => str_starts_with($message, 'Слишком много попыток'));
+    expect($this->user->fresh()->email)->toBe('boris@selen.test');
+
+    $this->travel(61)->seconds();
+    $this->postJson("/api/v1/email-changes/{$token}/confirm", ['password' => UserFactory::PASSWORD])->assertOk();
+    expect($this->user->fresh()->email)->toBe('boris.new@selen.test');
+});
+
+it('просроченный чужой запрос не держит адрес занятым до ночной очистки', function () {
+    $other = member();
+    requestEmailChange($this, $this->admin, $other, 'free@selen.test');
+    $this->travel(73)->hours();
+
+    $this->actingAs($this->admin)->postJson(adminPath()."users/{$this->user->id}/email-change", ['email' => 'free@selen.test'])->assertOk();
+    expect(EmailChangeRequest::query()->sole()->user_id)->toBe($this->user->id);
 });
