@@ -45,7 +45,9 @@ PASS=()
 
 if [[ "$SINGLE_TESTS" -gt 0 ]]; then
   echo "Режим «одна компания»: тестов — ${SINGLE_TESTS}, php пересоздаётся с SELEN_MULTI_COMPANY=false"
-  E2E_MULTI_COMPANY=false "${E2E[@]}" up -d --wait --force-recreate --no-deps php nginx
+  # Для всех команд compose дальше: иначе run playwright (depends_on → nginx → php) вернул бы php прежний режим
+  export E2E_MULTI_COMPANY=false
+  "${E2E[@]}" up -d --wait --force-recreate --no-deps php nginx
   # Первый прогон без тестов (фильтр только по ним) не входил — тогда вход здесь
   DEPS=()
   [[ ! -d e2e/.auth ]] || DEPS=(--no-deps)
