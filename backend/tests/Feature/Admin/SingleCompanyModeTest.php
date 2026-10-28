@@ -4,6 +4,7 @@ use App\Actions\Companies\CreateCompanyAction;
 use App\Enums\SpaceRole;
 use App\Models\Company;
 use App\Models\User;
+use App\Services\Access\CompanyMembers;
 use Database\Seeders\BoardsDemoSeeder;
 use Database\Seeders\CompaniesDemoSeeder;
 use Database\Seeders\DatabaseSeeder;
@@ -58,6 +59,40 @@ it('гости — 404 и Владельцу, и администратору к
     expect($space->accessOf($guest))->not->toBeNull();
 });
 
+it('лимит приглашений не срабатывает раньше 404: запросы к гостям его не расходуют', function () {
+    $this->actingAs(admin());
+    $space = space(['key' => 'DEV']);
+    $foreign = member(company: otherCompany());
+
+    foreach (range(1, 11) as $_) {
+        $this->postJson(adminPath().'guests', ['email' => $foreign->email, 'spaces' => [['space_id' => $space->id, 'role' => 'commenter']]])
+            ->assertNotFound();
+    }
+    // Приглашение после этого не упирается в лимит (10 в минуту)
+    $this->postJson(adminPath().'invitations', ['name' => 'Новый Сотрудник', 'email' => 'new@selen.test', 'role' => 'member'])->assertCreated();
+});
+
+it('второго «дома» нет: приглашение сотрудника другой компании и гостя этой — 422 (если компаний в базе несколько)', function () {
+    $other = otherCompany();
+    $foreign = member(company: $other);
+    $guest = User::factory()->inCompany($other)->guestIn(company())->create();
+    $this->actingAs(admin());
+
+    foreach ([$foreign, $guest] as $person) {
+        $this->postJson(adminPath().'invitations', ['name' => $person->name, 'email' => $person->email, 'role' => 'member'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['email' => __('selen.invitations.other_company')]);
+    }
+    expect($foreign->companies()->pluck('companies.id')->all())->toBe([$other->id])
+        ->and(CompanyMembers::guestOf($guest, company()->id))->not->toBeNull();
+
+    // В режиме «несколько компаний» — «Сотрудник добавлен», как раньше
+    config(['selen.multi_company' => true]);
+    $this->postJson(adminPath().'invitations', ['name' => $foreign->name, 'email' => $foreign->email, 'role' => 'member'])
+        ->assertCreated()
+        ->assertJsonPath('data.result', 'added');
+});
+
 it('в списке пользователей действия с гостем не предлагаются; остальные — как в режиме «несколько компаний»', function () {
     $guest = User::factory()->inCompany(otherCompany())->guestIn(company())->create();
     $member = member();
@@ -100,17 +135,21 @@ it('остальная админка работает: пользователи
     $this->getJson(adminPath().'events')->assertOk();
 });
 
-it('app:company-mode: одна компания — всё в порядке; несколько в режиме «одна компания» — предупреждение в лог', function () {
+it('app:company-mode: одна компания — всё в порядке; несколько в режиме «одна компания» — предупреждение', function () {
     Log::spy();
     $this->artisan('app:company-mode')->assertSuccessful();
     $this->artisan('app:company-mode', ['--warning' => true])->doesntExpectOutputToContain('Режим')->assertSuccessful();
     Log::shouldNotHaveReceived('warning');
 
     otherCompany(['name' => 'Компания 2']);
+    // --warning (make host-status, каждый час на стенде) — только текст, без записи в лог
     $this->artisan('app:company-mode', ['--warning' => true])
         ->expectsOutputToContain('Режим «одна компания», а в базе компаний: 2')
         ->assertFailed();
-    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context) => $context === ['companies' => 2]);
+    Log::shouldNotHaveReceived('warning');
+    // По расписанию (раз в сутки) — строка в лог
+    $this->artisan('app:company-mode')->expectsOutputToContain('в базе компаний: 2')->assertFailed();
+    Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message, array $context) => $context === ['companies' => 2]);
 
     // В режиме «несколько компаний» несколько компаний — норма
     config(['selen.multi_company' => true]);

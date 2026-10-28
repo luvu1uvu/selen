@@ -5,7 +5,8 @@ const desktop = { ...devices['Desktop Chrome'], viewport: { width: 1600, height:
 // Режим копии (ADR-0026): стек E2E — «несколько компаний»; тесты режима «одна компания» (тег @single-company) идут
 // вторым прогоном scripts/e2e.sh, когда php пересоздан с SELEN_MULTI_COMPANY=false и задан E2E_SINGLE_COMPANY
 const SINGLE_COMPANY = /@single-company/
-const mode = process.env.E2E_SINGLE_COMPANY ? { grep: SINGLE_COMPANY } : { grepInvert: SINGLE_COMPANY }
+const mode =
+  process.env.E2E_SINGLE_COMPANY === '1' ? { grep: SINGLE_COMPANY } : { grepInvert: SINGLE_COMPANY }
 
 /**
  * E2E-тесты идут против изолированного стека docker-compose.e2e.yml (make e2e):

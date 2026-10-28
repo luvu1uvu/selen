@@ -38,7 +38,9 @@ export function UsersPage() {
         </div>
       </div>
       <UsersTable />
-      <GuestDialog open={addingGuest} guest={null} onClose={() => setAddingGuest(false)} />
+      {isMultiCompany(me) && (
+        <GuestDialog open={addingGuest} guest={null} onClose={() => setAddingGuest(false)} />
+      )}
     </div>
   )
 }
