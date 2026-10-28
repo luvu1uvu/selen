@@ -259,9 +259,9 @@ describe('Окно гостя: загрузка, пустые строки и ф
     await waitFor(() =>
       expect(within(dialog).getByRole('combobox', { name: 'Пространство' })).toHaveFocus(),
     )
-    // Роль и × строки названы её пространством
+    // × и «Только свои карточки» строки названы её пространством
     expect(
-      within(dialog).getByRole('combobox', { name: 'Роль в «Разработка (DEV)»' }),
+      within(dialog).getByRole('checkbox', { name: 'Только свои карточки в «Разработка (DEV)»' }),
     ).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Убрать «Разработка (DEV)»' }))
     await waitFor(() =>

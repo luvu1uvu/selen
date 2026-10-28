@@ -94,7 +94,8 @@ export function SpaceGrantsField({
                 ))}
             </NativeSelect>
             <NativeSelect
-              aria-label={t('spaceGrants.roleIn', { space: name })}
+              // Подпись без названия пространства: «Роль в «… Пространство …»» совпала бы по слову с полем пространства
+              aria-label={t('spaceGrants.role')}
               value={grant.role}
               onChange={(event) =>
                 update(index, {

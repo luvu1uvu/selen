@@ -62,6 +62,13 @@ export function GuestDialog({
         .filter((source) => source.type === 'personal')
         .map((source) => ({ entry, source })),
     ) ?? []
+  const editable: SpaceGrantInput[] = personal
+    .filter(({ entry }) => grantableIds.has(entry.space.id))
+    .map(({ entry, source }) => ({
+      space_id: entry.space.id,
+      role: source.role,
+      own_cards_only: source.own_cards_only,
+    }))
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
@@ -78,16 +85,12 @@ export function GuestDialog({
           <DialogDescription>{t('guests.description')}</DialogDescription>
         </DialogHeader>
         {ready ? (
+          // Пришли другие выдачи (обновление в фоне) — форма заново, с ними, как раньше делал reset
           <GuestForm
+            key={JSON.stringify(editable)}
             company={company}
             guest={guest}
-            editable={personal
-              .filter(({ entry }) => grantableIds.has(entry.space.id))
-              .map(({ entry, source }) => ({
-                space_id: entry.space.id,
-                role: source.role,
-                own_cards_only: source.own_cards_only,
-              }))}
+            editable={editable}
             readOnly={personal.filter(({ entry }) => !grantableIds.has(entry.space.id))}
             nothingToGrant={grantableIds.size === 0}
             onClose={onClose}

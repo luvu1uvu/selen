@@ -14,7 +14,7 @@ test('«Пригласить» с шестью пространствами по
   await page.getByRole('button', { name: 'Пригласить' }).click()
   const dialog = page.getByRole('dialog', { name: 'Пригласить пользователя' })
 
-  const spaces = dialog.getByRole('combobox', { name: 'Пространство' })
+  const spaces = dialog.getByRole('combobox', { name: 'Пространство', exact: true })
   for (let row = 0; row < 6; row++) {
     await dialog.getByRole('button', { name: 'Добавить пространство' }).click()
     await expect(spaces.nth(row)).toBeFocused()
