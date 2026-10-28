@@ -34,6 +34,15 @@ final class CompanyMembers
         return $inactive ? UserStatus::Deactivated : $user->status;
     }
 
+    /**
+     * Смотрит ли человек на компанию как гость (решение PM 28.10 по аудиту П2c-1, вопрос 1): гостю люди компании-хозяина —
+     * только по имени, без email, группы — без названий.
+     */
+    public static function viewsAsGuest(User $viewer, string $companyId): bool
+    {
+        return ! $viewer->isOwner() && self::of($companyId)->get($viewer->id)?->kind === AccessResolver::GUEST;
+    }
+
     /** Действующий «дом» этой компании (без запроса — из тех же членств). */
     public static function isActiveHome(User $user, string $companyId): bool
     {

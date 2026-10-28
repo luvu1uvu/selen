@@ -33,11 +33,14 @@ class SpacePersonResource extends JsonResource
         $personal = $this->resource['personal'];
         $groups = $this->resource['groups'];
 
+        // Гость — человек другой компании: людей компании-хозяина видит только по имени, группы — без названий
+        // (решение PM 28.10 по аудиту П2c-1); свой email — свой
+        $guestViewer = CompanyMembers::viewsAsGuest($request->user(), $this->resource['space_company_id']);
         $person = [
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
-                'email' => $user->email,
+                'email' => $guestViewer && $user->isNot($request->user()) ? null : $user->email,
                 // Статус — в компании пространства; гость — с бейджем (П2c)
                 'status' => CompanyMembers::statusOf($user, $this->resource['space_company_id']),
                 'guest' => CompanyMembers::guestOf($user, $this->resource['space_company_id']) !== null,
@@ -61,7 +64,7 @@ class SpacePersonResource extends JsonResource
                 ->reject(fn (AccessSource $source) => $source->isPersonal())
                 ->map(fn (AccessSource $source) => [
                     'id' => $source->groupId,
-                    'name' => $groups->get((string) $source->groupId)?->name,
+                    'name' => $guestViewer ? null : $groups->get((string) $source->groupId)?->name,
                     'role' => $source->legacyRole(),
                     'own_cards_only' => $source->ownCardsOnly(),
                 ])

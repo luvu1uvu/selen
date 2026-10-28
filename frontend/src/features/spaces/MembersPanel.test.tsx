@@ -86,6 +86,29 @@ describe('Участники пространства: люди и группы'
     ).not.toBeInTheDocument()
   })
 
+  it('гостю люди компании-хозяина — без email, группы — «группа» без названия (решение PM 28.10)', async () => {
+    serve(makeSpace(), [
+      {
+        user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active', guest: true },
+        role: 'commenter',
+        personal: { role: 'commenter', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
+        groups: [],
+      },
+      {
+        user: { id: 'u-olga', name: 'Ольга', email: null, status: 'active', guest: false },
+        role: 'editor',
+        personal: { role: 'editor', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
+        groups: [{ id: 'g-an', name: null, role: 'commenter', own_cards_only: false }],
+      },
+    ])
+    await openMembers()
+
+    const olga = within(await screen.findByRole('list', { name: 'Источники доступа Ольга' }))
+    expect(olga.getByText('группа: Комментатор')).toBeInTheDocument()
+    expect(screen.queryByText('olga@selen.test')).toBeNull()
+    expect(screen.getByText('anna@selen.test')).toBeInTheDocument()
+  })
+
   it('человека с доступом через группу можно добавить лично', async () => {
     let body: unknown
     serve(makeSpace())

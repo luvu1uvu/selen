@@ -71,6 +71,10 @@ describe('Права компании у человека', () => {
 
     await waitFor(() => expect(body).toEqual({ permissions: ['company.invite_users'] }))
     expect(await screen.findByText('Права сохранены')).toBeInTheDocument()
+    // У каждой галочки — что открывает право (решение PM 28.10)
+    expect(
+      screen.getByText('видит сводные отчёты по учтённому времени всех сотрудников'),
+    ).toBeInTheDocument()
   })
 
   it('нет права смотреть (администратор чужих прав, гость) — раздела нет', async () => {

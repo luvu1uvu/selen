@@ -114,6 +114,7 @@ export function CompanyPermissionsSection(
           const box = (
             <Checkbox
               id={id}
+              aria-describedby={`${id}-hint`}
               checked={row.checked}
               disabled={!row.editable || save.isPending}
               onCheckedChange={(checked) => toggle(row.permission, checked === true)}
@@ -138,11 +139,15 @@ export function CompanyPermissionsSection(
                   </TooltipContent>
                 </Tooltip>
               )}
-              <label htmlFor={id} className="grid gap-0.5 text-sm">
+              <div className="grid gap-0.5 text-sm">
                 {/* Точка — разделитель ключей i18next: в ключе перевода — «_», как у типов событий */}
-                <span>{t(`permissions.names.${permissionKey(row.permission)}`)}</span>
+                <label htmlFor={id}>{t(`permissions.names.${permissionKey(row.permission)}`)}</label>
+                {/* Что открывает право — выдают осознанно (решение PM 28.10 по аудиту П2c-1); описание галочки */}
+                <span id={`${id}-hint`} className="text-muted-foreground text-xs">
+                  {t(`permissions.hints.${permissionKey(row.permission)}`)}
+                </span>
                 {row.note && <span className="text-muted-foreground text-xs">{row.note}</span>}
-              </label>
+              </div>
             </li>
           )
         })}

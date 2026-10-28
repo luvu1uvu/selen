@@ -73,7 +73,8 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
             </TableRow>
           )}
           {grants.map((grant) => {
-            const { group } = grant
+            // Гостю группы компании-хозяина — без названий (решение PM 28.10); управлять ими он не может
+            const group = { ...grant.group, name: grant.group.name ?? t('members.hiddenGroup') }
             const editable = canManage && !group.archived_at
             return (
               <TableRow key={group.id}>

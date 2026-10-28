@@ -530,7 +530,8 @@ export interface CardTransition {
 /** Источник доступа через группу у человека в пространстве. */
 export interface PersonGroupSource {
   id: string
-  name: string
+  /** null — смотрит гость: группы компании-хозяина без названий (решение PM 28.10). */
+  name: string | null
   role: SpaceRole
   own_cards_only: boolean
 }
@@ -540,8 +541,11 @@ export interface PersonGroupSource {
  * Пользователю только с режимом «только свои карточки» источники не отдаются: есть только user.
  */
 export interface SpacePerson {
-  /** status — в компании пространства; guest — гость компании (бейдж, П2c). */
-  user: { id: string; name: string; email: string; status: UserStatus; guest: boolean }
+  /**
+   * status — в компании пространства; guest — гость компании (бейдж, П2c). email — null, когда смотрит гость (людей
+   * компании-хозяина он видит только по имени, решение PM 28.10).
+   */
+  user: { id: string; name: string; email: string | null; status: UserStatus; guest: boolean }
   /** Самая сильная роль по всем источникам (для показа). */
   role?: SpaceRole
   /** Личное участие; null — доступ только через группы. */
@@ -561,7 +565,8 @@ export type SystemGroup = 'everyone'
 export interface SpaceGroupGrant {
   group: {
     id: string
-    name: string
+    /** null — смотрит гость: группы компании-хозяина без названий (решение PM 28.10). */
+    name: string | null
     description: string | null
     system: SystemGroup | null
     archived_at: string | null

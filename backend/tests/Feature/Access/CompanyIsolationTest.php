@@ -443,6 +443,9 @@ it('(д) у гостя нет ничего, кроме выданных прос
     addToSpace($space, $guest, SpaceRole::Editor);
     // В своей компании B он тоже работает — тогда в дереве две компании, с названиями
     addToSpace($this->b['space'], $guest, SpaceRole::Commenter);
+    // Группа компании-хозяина с доступом к его пространству: гостю — без названия (решение PM 28.10 по аудиту П2c-1)
+    $hostGroup = addToGroup(makeGroup(['name' => 'Группа хозяина', 'description' => 'Описание группы хозяина']), $host);
+    grantGroup($space, $hostGroup, SpaceRole::Commenter);
     $board = makeBoard($space, $host, BoardTemplate::Simple, 'Гостевая доска');
     $card = makeCard($board, 'Review', $host, 'Гостевая карточка');
     $this->actingAs($guest);
@@ -466,9 +469,11 @@ it('(д) у гостя нет ничего, кроме выданных прос
 
     // Ответы без объектов в адресе и маршрутов его пространства — без людей и содержимого A
     $a = $this->a;
+    // Люди компании-хозяина в его пространстве — только по имени (без email), группы — без названий (решение PM 28.10)
     $markers = [
         'Альфа-маркер', 'ALFA-', $a['admin']->email, $a['editor']->email, $a['invited']->email,
         $a['space']->id, $a['board']->id, $a['card']->id, $a['folder']->id, $a['group']->id, $a['invited']->id,
+        $host->email, 'Группа хозяина', 'Описание группы хозяина',
     ];
     $params = ['{space}' => 'GUEST', '{board}' => $board->id, '{column}' => columnNamed($board, 'Review')->id,
         '{lane}' => firstLane($board)->id, '{card}' => $card->key()];
@@ -487,6 +492,14 @@ it('(д) у гостя нет ничего, кроме выданных прос
         }
     }
     expect($leaks)->toBe([]);
+
+    // Люди и группы — видны, но без email и названий; свой email гость видит
+    $people = collect($this->getJson('/api/v1/spaces/GUEST/members')->assertOk()->json('data'))->keyBy('user.id');
+    expect($people[$host->id]['user'])->toMatchArray(['name' => 'Хозяин гостевого', 'email' => null])
+        ->and($people[$host->id]['groups'][0]['name'])->toBeNull()
+        ->and($people[$guest->id]['user']['email'])->toBe('guest@selen.test');
+    $this->getJson('/api/v1/spaces/GUEST/groups')->assertOk()
+        ->assertJsonPath('data.0.group.name', null)->assertJsonPath('data.0.group.description', null);
 
     // Его пространство работает; в дереве — его «дом» и гостевое пространство под названием A; админки A нет
     $this->getJson('/api/v1/spaces/GUEST')->assertOk()->assertJsonPath('data.my_role', 'editor');
