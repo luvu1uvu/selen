@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\FileController;
+use App\Http\Middleware\EnsureMultiCompany;
 use App\Http\Middleware\EnsureSessionUserMatches;
 use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Foundation\Application;
@@ -33,6 +34,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'tab-user' => EnsureSessionUserMatches::class,
+            // Только копия с несколькими компаниями (ADR-0026): иначе — 404
+            'multi-company' => EnsureMultiCompany::class,
         ]);
         // API без редиректов на страницу входа: гость получает 401 JSON. Ссылка на файл (/files/{id}, UI-1b) — на вход
         // с возвратом к файлу: страница входа принимает только next вида /files/<id>

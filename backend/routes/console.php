@@ -14,3 +14,6 @@ Schedule::command('model:prune', ['--model' => [AuthAuditEntry::class]])->dailyA
 
 // Файлы удалённых вложений стираются через Attachment::PURGE_AFTER_DAYS (строка остаётся) — ADR-0010
 Schedule::command('model:prune', ['--model' => [Attachment::class]])->dailyAt('03:40');
+
+// Режим «одна компания», а компаний в базе несколько — предупреждение в лог (ADR-0026)
+Schedule::command('app:company-mode')->dailyAt('03:50');

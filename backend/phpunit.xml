@@ -67,6 +67,10 @@
         <!-- Никому не доверять X-Forwarded-*, даже если TRUSTED_PROXIES задан в .env (ADR-0021) -->
         <env name="TRUSTED_PROXIES" value="" force="true"/>
         <server name="TRUSTED_PROXIES" value="" force="true"/>
+        <!-- Тесты — в режиме «несколько компаний» (ADR-0026): компании, гости и изоляция; режим «одна компания» тесты
+             включают сами: config(['selen.multi_company' => false]) -->
+        <env name="SELEN_MULTI_COMPANY" value="true" force="true"/>
+        <server name="SELEN_MULTI_COMPANY" value="true" force="true"/>
         <env name="PULSE_ENABLED" value="false" force="true"/>
         <server name="PULSE_ENABLED" value="false" force="true"/>
         <env name="TELESCOPE_ENABLED" value="false" force="true"/>

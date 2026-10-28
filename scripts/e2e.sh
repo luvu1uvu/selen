@@ -5,6 +5,9 @@
 #
 #   ./scripts/e2e.sh [фильтры Playwright]   — например acceptance/stage-3/ (make e2e-stage STAGE=3)
 #   TC=3.8,3.9 ./scripts/e2e.sh             — только автотесты этих тест-кейсов, теги @tc-3.8 и @tc-3.9 (make e2e-tc)
+#
+# Два прогона на одном стеке (ADR-0026): сначала всё в режиме «несколько компаний», затем тесты с тегом @single-company —
+# php пересоздан с SELEN_MULTI_COMPANY=false, данные E2eSeeder те же, вход — сохранённый первым прогоном (e2e/.auth).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,5 +33,22 @@ test -d frontend/node_modules || "${E2E[@]}" run --rm --no-deps -T builder npm c
 echo "Стек E2E ${PROJECT}: http://$("${E2E[@]}" port nginx 80) — пока идёт прогон"
 "${E2E[@]}" exec -T php php artisan migrate:fresh --seed --seeder=E2eSeeder --force --database=pgsql_owner
 
-"${E2E[@]}" run --rm -T playwright \
-  sh -c 'npm ci --no-audit --no-fund && exec npx playwright test "$@"' playwright ${ARGS[@]+"${ARGS[@]}"}
+# Тесты режима «одна компания» под теми же фильтрами (вывод npm ci — в stderr, список — в stdout)
+SINGLE="$("${E2E[@]}" run --rm -T -e E2E_SINGLE_COMPANY=1 playwright \
+  sh -c 'npm ci --no-audit --no-fund >&2 && npx playwright test --list "$@"' playwright ${ARGS[@]+"${ARGS[@]}"} || true)"
+SINGLE_TESTS="$(grep -c '@single-company' <<< "$SINGLE" || true)"
+# Фильтр, под который попали только такие тесты, — первый прогон пустой; без них «No tests found» по-прежнему ошибка
+PASS=()
+[[ "$SINGLE_TESTS" -eq 0 ]] || PASS=(--pass-with-no-tests)
+
+"${E2E[@]}" run --rm -T playwright npx playwright test ${PASS[@]+"${PASS[@]}"} ${ARGS[@]+"${ARGS[@]}"}
+
+if [[ "$SINGLE_TESTS" -gt 0 ]]; then
+  echo "Режим «одна компания»: тестов — ${SINGLE_TESTS}, php пересоздаётся с SELEN_MULTI_COMPANY=false"
+  E2E_MULTI_COMPANY=false "${E2E[@]}" up -d --wait --force-recreate --no-deps php nginx
+  # Первый прогон без тестов (фильтр только по ним) не входил — тогда вход здесь
+  DEPS=()
+  [[ ! -d e2e/.auth ]] || DEPS=(--no-deps)
+  "${E2E[@]}" run --rm -T -e E2E_SINGLE_COMPANY=1 playwright \
+    npx playwright test ${DEPS[@]+"${DEPS[@]}"} ${ARGS[@]+"${ARGS[@]}"}
+fi
