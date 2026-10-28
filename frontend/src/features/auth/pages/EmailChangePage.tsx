@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
@@ -24,6 +24,11 @@ export function EmailChangePage() {
   const { t: tc } = useTranslation()
   const { token = '' } = useParams()
   const [changedTo, setChangedTo] = useState<string | null>(null)
+  // Форма с кнопкой исчезает — фокус на сообщение об успехе, а не в никуда (правила вида, раздел 11; UX-ревью П2c-2, U-9)
+  const success = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (changedTo !== null) success.current?.focus()
+  }, [changedTo])
 
   // Ссылка одноразовая: после подтверждения повторный запрос ответил бы «недействительна» — не перечитываем
   const request = useQuery({
@@ -70,7 +75,9 @@ export function EmailChangePage() {
       </CardHeader>
       <CardContent className="grid gap-4">
         {changedTo !== null ? (
-          <Alert role="status">{t('emailChange.success', { email: changedTo })}</Alert>
+          <Alert ref={success} role="status" tabIndex={-1}>
+            {t('emailChange.success', { email: changedTo })}
+          </Alert>
         ) : (
           <>
             {request.isPending && (

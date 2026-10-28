@@ -143,7 +143,9 @@ export function UsersTable() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{t('users.columns.name')}</TableHead>
+            <TableHead aria-sort={sort === 'name' ? 'ascending' : undefined}>
+              {t('users.columns.name')}
+            </TableHead>
             <TableHead className="hidden md:table-cell">{t('users.columns.email')}</TableHead>
             <TableHead>{t('users.columns.role')}</TableHead>
             <TableHead>{t('users.columns.status')}</TableHead>
@@ -163,7 +165,7 @@ export function UsersTable() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="-ml-2 h-8 px-2"
+                    className="-ml-2 h-8 px-2 has-[>svg]:px-2"
                     onClick={() => {
                       setSort(NEXT_SORT[sort])
                       setPage(1)
@@ -488,7 +490,8 @@ function PendingEmail({ change }: { change: NonNullable<AdminUser['email_change'
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span tabIndex={0} className="text-muted-foreground block w-fit text-xs">
+        {/* w-0 min-w-full: строка переносится по ширине ячейки и не раздвигает столбец (UX-ревью П2c-2, U-1) */}
+        <span tabIndex={0} className="text-muted-foreground block w-0 min-w-full text-xs">
           {change.expired
             ? t('users.emailChange.pendingExpired', { email: change.email })
             : t('users.emailChange.pending', { email: change.email })}

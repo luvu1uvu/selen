@@ -110,7 +110,7 @@ export function EventLogPage() {
                     : t('events.systemActor'))}
                 {entry.auth_audit && <AuthAudit audit={entry.auth_audit} />}
               </TableCell>
-              <TableCell className="hidden font-mono text-xs break-all whitespace-normal md:table-cell">
+              <TableCell className="hidden min-w-40 font-mono text-xs break-all whitespace-normal md:table-cell">
                 {entry.subject_type ? `${entry.subject_type}:${entry.subject_id}` : '—'}
               </TableCell>
               {/* Весь текст — в ячейке, переносом (LATER-142): длинные id и значения без пробелов тоже переносятся */}

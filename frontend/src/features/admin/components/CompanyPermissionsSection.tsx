@@ -158,7 +158,7 @@ export function CompanyPermissionsSection(
               aria-describedby={`${id}-hint`}
               checked={row.checked}
               disabled={!row.editable}
-              className="mt-0.5"
+              className={row.editable ? 'mt-0.5' : undefined}
               onCheckedChange={(checked) => toggle(row.permission, checked === true)}
             />
           )
@@ -176,7 +176,8 @@ export function CompanyPermissionsSection(
                       role="group"
                       aria-labelledby={`${id}-label`}
                       aria-describedby={`${id}-hint`}
-                      className="inline-flex"
+                      // Отступ выравнивания — на обёртке с фокусом: рамка фокуса — вровень с галочкой (UX-ревью П2c-2, U-7)
+                      className="mt-0.5 inline-flex"
                     >
                       {box}
                     </span>
