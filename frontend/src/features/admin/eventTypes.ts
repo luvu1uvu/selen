@@ -114,6 +114,19 @@ export const EVENT_TYPES = [
 
 export type EventType = (typeof EVENT_TYPES)[number]
 
+/**
+ * Событий компаний и гостей в копии с одной компанией не бывает (ADR-0026) — в фильтре журнала их нет. Старые события
+ * (если режим был «несколько компаний») видны в «Все события».
+ */
+export const MULTI_COMPANY_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>([
+  'company.created',
+  'company.renamed',
+  'user.added_to_company',
+  'user.guest_added',
+  'user.guest_updated',
+  'user.guest_removed',
+])
+
 export function eventTypeKey(type: string) {
   return `events.types.${type.replace('.', '_')}` as `events.types.${string}`
 }

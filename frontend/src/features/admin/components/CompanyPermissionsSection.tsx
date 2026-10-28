@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useCurrentUser } from '@/features/auth/queries'
 import { getErrorMessage, getErrorStatus } from '@/shared/api/errors'
+import { companyModeContext } from '@/shared/lib/roles'
 import type {
   CompanyPermission,
   GroupCompanyPermission,
@@ -45,13 +47,15 @@ type Row = {
  * «Права компании» галочками (П2c, аудит Kaiten «права на админ-разделы»): у человека — выданные лично (и откуда
  * ещё есть: роль администратора, группы), у группы — её права; у «Все сотрудники» — права всех новых сотрудников
  * (решение PM 28.10, п. 7). Галочку «удалять пользователей» и «аналитика трудозатрат» меняет только Владелец —
- * у администратора она недоступна, с подсказкой.
+ * у администратора она недоступна, с подсказкой. В копии с одной компанией (ADR-0026) подписи — без гостей.
  */
 export function CompanyPermissionsSection(
   props: { userId: string; groupId?: never } | { groupId: string; userId?: never },
 ) {
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
+  const { data: me } = useCurrentUser()
+  const context = companyModeContext(me)
   const userQuery = useUserPermissions(props.userId ?? '', props.userId !== undefined)
   const groupQuery = useGroupPermissions(props.groupId ?? '', props.groupId !== undefined)
   const saveUser = useSaveUserPermissions(props.userId ?? '')
@@ -152,11 +156,11 @@ export function CompanyPermissionsSection(
               <div className="grid gap-0.5 text-sm">
                 {/* Точка — разделитель ключей i18next: в ключе перевода — «_», как у типов событий */}
                 <label id={`${id}-label`} htmlFor={id}>
-                  {t(`permissions.names.${permissionKey(row.permission)}`)}
+                  {t(`permissions.names.${permissionKey(row.permission)}`, { context })}
                 </label>
                 {/* Что открывает право — выдают осознанно (решение PM 28.10 по аудиту П2c-1); описание галочки */}
                 <span id={`${id}-hint`} className="text-muted-foreground text-xs">
-                  {t(`permissions.hints.${permissionKey(row.permission)}`)}
+                  {t(`permissions.hints.${permissionKey(row.permission)}`, { context })}
                 </span>
                 {row.note && <span className="text-muted-foreground text-xs">{row.note}</span>}
               </div>

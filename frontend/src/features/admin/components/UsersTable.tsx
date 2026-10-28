@@ -10,7 +10,7 @@ import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { Pagination } from '@/shared/components/Pagination'
 import { formatDateTime } from '@/shared/lib/dates'
-import { isOwner } from '@/shared/lib/roles'
+import { isMultiCompany, isOwner } from '@/shared/lib/roles'
 import type { AdminUser, UserStatusFilter } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -106,7 +106,8 @@ export function UsersTable() {
           <option value="active">{t('users.filters.active')}</option>
           <option value="invited">{t('users.filters.invited')}</option>
           <option value="deactivated">{t('users.filters.deactivated')}</option>
-          <option value="guest">{t('users.filters.guest')}</option>
+          {/* Гости — только в копии с несколькими компаниями (ADR-0026) */}
+          {isMultiCompany(me) && <option value="guest">{t('users.filters.guest')}</option>}
         </NativeSelect>
       </div>
 

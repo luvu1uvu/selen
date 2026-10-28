@@ -33,7 +33,7 @@ import { useCurrentUser, useLogout } from '@/features/auth/queries'
 import { useUpdateTheme } from '@/features/profile/queries'
 import { TreePanel } from '@/features/navigation/components/TreePanel'
 import { Hint } from '@/shared/components/Hint'
-import { adminCompanies, isOwner } from '@/shared/lib/roles'
+import { adminCompanies, isMultiCompany, isOwner } from '@/shared/lib/roles'
 import { isTheme } from '@/shared/lib/theme'
 import type { CompanyPermission, Theme } from '@/shared/types/api'
 import { cn } from '@/shared/lib/utils'
@@ -217,8 +217,9 @@ const ADMIN_SECTIONS: {
 const USERS_PATHS = ['users', 'groups', 'invitations']
 
 /**
- * Панель «Администрирование» (ADR-0024): у Владельца — «Компании»; сверху — выбор компании (только если их
- * несколько: у кого компания одна, её названия нигде нет); пункты меню — по правам компании. Компания панели — из адреса
+ * Панель «Администрирование» (ADR-0024): у Владельца — «Компании» (только в копии с несколькими компаниями, ADR-0026);
+ * сверху — выбор компании (только если их несколько: у кого компания одна, её названия нигде нет); пункты меню — по
+ * правам компании. Компания панели — из адреса
  * админки компании, на других страницах — последняя выбранная.
  */
 function AdminPanel({
@@ -270,7 +271,7 @@ function AdminPanel({
         aria-label={t('nav.admin')}
         className="grid scroll-py-1 gap-0.5 overflow-y-auto px-2 pt-1 pb-4"
       >
-        {isOwner(user) && (
+        {isOwner(user) && isMultiCompany(user) && (
           <>
             <AdminLink to="/admin/companies" icon={Building} onNavigate={onNavigate}>
               {t('nav.companies')}
