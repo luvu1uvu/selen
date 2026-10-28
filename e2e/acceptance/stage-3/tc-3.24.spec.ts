@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
-import { ACTIONS_ONLY_OWNER, openUsers, userRow } from './helpers'
+import { ACTIONS_ONLY_OWNER, findUser, openUsers, userRow } from './helpers'
 
 test.use({ storageState: authFile('e2e-admin@selen.test') })
 
@@ -20,7 +20,9 @@ test('ТК-3.24. Обычный администратор ничего не м�
   )
   await page.keyboard.press('Escape')
 
-  // 3. «⋯» у участника: «Деактивировать» есть, «Сделать администратором» — нет
+  // 3. «⋯» у участника: «Деактивировать» есть, «Сделать администратором» — нет. Участника тест находит поиском
+  // (П2c-2): в списке 25 человек на странице, «E2E Редактор» — ближе к концу алфавита
+  await findUser(page, 'E2E Редактор')
   await userRow(page, 'E2E Редактор').getByRole('button', { name: 'Действия с пользователем' }).click()
   await expect(page.getByRole('menuitem', { name: 'Деактивировать' })).toBeVisible()
   await expect(page.getByRole('menuitem', { name: 'Сделать администратором' })).toHaveCount(0)

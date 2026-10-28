@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
+import { findUser } from '../stage-3/helpers'
 import { COMPANY_1, eventRows, openCompanyEvents, openCompanyUsers, userActions, whoCell } from './helpers'
 
 /**
  * ТК-R2.36: «Завершить все сеансы» выкидывает человека со всех устройств. owner@ → e2e-owner, anna@ → «E2E Сеансы»
  * (e2e-sessions@, E2eSeeder::sessionsAndEmail): окно инкогнито — его сохранённый вход в отдельном контексте. Шаг 4
  * (вход снова) — только вручную: вход через форму в автотестах запрещён (лимит входов), а сохранённый вход тест
- * завершает. После теста сохранённый вход e2e-sessions не действует — другие тесты его не используют.
+ * завершает. После теста сохранённый вход e2e-sessions не действует — другие тесты его не используют. Человека тест
+ * находит полем «Поиск по имени или email»: в списке 25 человек на странице.
  */
 
 const PERSON = 'E2E Сеансы'
@@ -18,6 +20,7 @@ test('ТК-R2.36. «Завершить все сеансы» @tc-R2.36', async (
   // 2. Владелец: «Пользователи» → «⋯» → «Завершить все сеансы…»: окно → «Завершить сеансы»
   const owner = await pageAs(browser, 'e2e-owner@selen.test')
   await openCompanyUsers(owner, COMPANY_1)
+  await findUser(owner, PERSON)
   await userActions(owner, PERSON).click()
   await owner.getByRole('menuitem', { name: 'Завершить все сеансы…' }).click()
   const dialog = owner.getByRole('dialog', { name: 'Завершить все сеансы?' })

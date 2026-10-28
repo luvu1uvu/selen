@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
-import { userRow } from '../stage-3/helpers'
+import { findUser, userRow } from '../stage-3/helpers'
 import { accessRow, openCompanyUsers, result, sources, userActions } from './helpers'
 
 /**
@@ -9,7 +9,8 @@ import { accessRow, openCompanyUsers, result, sources, userActions } from './hel
  * egor@ → «E2E Преемник» (лично «Администратор» RKEEP «Передача: дежурства», куда группа уходящего даёт «Комментатора»);
  * «Разработка» → RLEAVE, «Эксплуатация» → RKEEP, «Руководители» → «E2E Группа уходящего» (E2eSeeder::
  * guestsAndRightsCases). Оба в систему не входят. Передача — копирование (решение PM 28.10, п. 5): у вернувшегося
- * уходящего доступ на месте; повторный прогон даёт тот же результат.
+ * уходящего доступ на месте; повторный прогон даёт тот же результат. Людей тест находит полем «Поиск по имени или
+ * email» (П2c-2): в списке 25 человек на странице, «E2E Уходящий» — в конце алфавита, на второй странице.
  */
 test.use({ storageState: authFile('e2e-admin@selen.test') })
 
@@ -23,6 +24,7 @@ test('ТК-R2.20. Деактивация с передачей доступа @t
   // 1–2. «Пользователи» → «⋯» у уходящего → «Деактивировать»: преемник — «E2E Преемник» → «Деактивировать»
   await openCompanyUsers(page)
   const usersUrl = page.url()
+  await findUser(page, LEAVER)
   await userActions(page, LEAVER).click()
   await page.getByRole('menuitem', { name: 'Деактивировать' }).click()
   const dialog = page.getByRole('dialog', { name: 'Деактивировать в компании?' })
@@ -35,6 +37,7 @@ test('ТК-R2.20. Деактивация с передачей доступа @t
   await expect(status(page)).toHaveText('Деактивирован')
 
   // 3. «Пользователи» → преемник (ссылка на имени): его группы и «Доступ к пространствам»
+  await findUser(page, SUCCESSOR)
   await userRow(page, SUCCESSOR).getByRole('link', { name: SUCCESSOR, exact: true }).click()
   await expect(page.getByRole('heading', { name: SUCCESSOR })).toBeVisible()
   await expect(page.getByRole('link', { name: GROUP, exact: true })).toBeVisible()
@@ -48,6 +51,7 @@ test('ТК-R2.20. Деактивация с передачей доступа @t
 
   // 4. Вернуть уходящего: «⋯» → «Активировать» — «Активен», его доступ на месте
   await page.goto(usersUrl)
+  await findUser(page, LEAVER)
   await userActions(page, LEAVER).click()
   await page.getByRole('menuitem', { name: 'Активировать' }).click()
   await expect(status(page)).toHaveText('Активен')

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
-import { userRow } from '../stage-3/helpers'
+import { findUser, userRow } from '../stage-3/helpers'
 import { COMPANY_1, EMAIL_CANCEL_LINK, openCompanyUsers, userActions } from './helpers'
 
 /**
@@ -9,7 +9,7 @@ import { COMPANY_1, EMAIL_CANCEL_LINK, openCompanyUsers, userActions } from './h
  * запрос — шаг 2 заменяет его), anna@ (занятый адрес) → e2e-admin@. Шаг 4: токен ссылки из письма автотест не узнает
  * (в E2E письма уходят в лог), поэтому ссылку проверяет на «E2E Email к отмене» — запрос смены у него уже есть,
  * ссылка известна (EMAIL_CANCEL_TOKEN): до отмены она открывает форму, после — «недействительна». Письмо в Mailpit —
- * только вручную.
+ * только вручную. Людей в списке тест находит полем «Поиск по имени или email»: в списке 25 человек на странице.
  */
 
 const PERSON = 'E2E Смена email'
@@ -21,6 +21,7 @@ test('ТК-R2.38. Смена email: занятый адрес и отмена @t
   const email = (name: string) => userRow(owner, name).getByRole('cell').nth(1)
 
   // 1. «⋯» → «Изменить email…» → чужой адрес → «Отправить ссылку»: ошибка под полем, окно не закрылось
+  await findUser(owner, PERSON)
   await userActions(owner, PERSON).click()
   await owner.getByRole('menuitem', { name: 'Изменить email…' }).click()
   const dialog = owner.getByRole('dialog', { name: 'Изменить email' })
@@ -47,6 +48,7 @@ test('ТК-R2.38. Смена email: занятый адрес и отмена @t
   const link = await (await browser.newContext()).newPage()
   await link.goto(EMAIL_CANCEL_LINK)
   await expect(link.getByRole('button', { name: 'Подтвердить адрес' })).toBeVisible()
+  await findUser(owner, CANCEL)
   await expect(email(CANCEL)).toContainText('Новый: e2e-email-cancel-new@selen.test — ждёт подтверждения')
   await userActions(owner, CANCEL).click()
   await owner.getByRole('menuitem', { name: 'Отменить смену email' }).click()

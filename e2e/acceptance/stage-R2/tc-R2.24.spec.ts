@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
-import { userRow } from '../stage-3/helpers'
+import { findUser, userRow } from '../stage-3/helpers'
 import { openAdminPanel, openCompanyUsers, usersTabs } from './helpers'
 
 /**
@@ -8,7 +8,8 @@ import { openAdminPanel, openCompanyUsers, usersTabs } from './helpers'
  * dina@ → «E2E Только приглашать» (e2e-rights@, участник «Компании 1»). В E2E-данных право «Приглашать пользователей»
  * у него уже выдано лично (E2eSeeder::guestsAndRights), поэтому шаг 1 снимает галочку и ставит снова — проверяется
  * сохранение, итог тот же, что после шага 1 тест-кейса. П2c-2: права «Журнал событий» и «Корзина» называются
- * «Смотреть журнал событий» и «Возвращать из корзины» (решение PM по отчёту П2c-1, п. 6).
+ * «Смотреть журнал событий» и «Возвращать из корзины» (решение PM по отчёту П2c-1, п. 6). Человека тест находит полем
+ * «Поиск по имени или email»: в списке 25 человек на странице, «E2E Только приглашать» — в конце алфавита.
  */
 
 const PERSON = 'E2E Только приглашать'
@@ -17,6 +18,7 @@ test('ТК-R2.24. Права компании лично: только «при�
   // 1. «Пользователи» → человек (ссылка на имени) → «Права компании»: «Приглашать пользователей»
   const admin = await pageAs(browser, 'e2e-admin@selen.test')
   await openCompanyUsers(admin)
+  await findUser(admin, PERSON)
   await userRow(admin, PERSON).getByRole('link', { name: PERSON, exact: true }).click()
   await expect(admin.getByRole('heading', { name: PERSON })).toBeVisible()
   const rights = admin.getByRole('region', { name: 'Права компании' })

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { openBoard, pageAs } from '../../tests/helpers'
-import { roleCell, userRow } from '../stage-3/helpers'
+import { roleCell, searchUsers, userRow } from '../stage-3/helpers'
 import {
   COMPANY_1,
   COMPANY_2,
@@ -19,7 +19,8 @@ import {
  * Компании 2», комментатор её RSECOND); «Маркетинг» → RGUEST «Гостевое» (доска «Задачи», RGUEST-1) — E2eSeeder::
  * guestsAndRightsCases. Письмо «Вам открыт доступ в Selen» — только вручную (в стеке E2E письма не отправляются,
  * MAIL_MAILER=log). Повторный прогон на том же стеке не годится: она уже сотрудница «Компании 1» (после make e2e данные
- * заново).
+ * заново). Список «Пользователи» тест смотрит через поле «Поиск по имени или email» (П2c-2): в списке 25 человек
+ * на странице, «E2E Сотрудница второй» — в конце алфавита.
  */
 
 const PERSON = 'E2E Сотрудница второй'
@@ -31,6 +32,9 @@ test('ТК-R2.22. Пригласить сотрудника другой ком�
   // 1. «Пользователи» → «Пригласить»: имя, email, «Участник», «Гостевое» — «Редактор» → «Отправить приглашение»
   const admin = await pageAs(browser, 'e2e-admin@selen.test')
   await openCompanyUsers(admin)
+  // Поиск по её имени: список отфильтрован (Владельца в нём нет) — её в компании ещё нет
+  await searchUsers(admin, PERSON)
+  await expect(userRow(admin, 'E2E Владелец')).toHaveCount(0)
   await expect(userRow(admin, PERSON)).toHaveCount(0)
   await admin.getByRole('button', { name: 'Пригласить' }).click()
   const dialog = admin.getByRole('dialog', { name: 'Пригласить пользователя' })

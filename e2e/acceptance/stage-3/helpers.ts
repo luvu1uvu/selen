@@ -36,6 +36,23 @@ export function userRow(page: Page, name: string) {
   return page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) })
 }
 
+/** Поле «Поиск по имени или email» над списком «Пользователи»: ввести запрос. */
+export async function searchUsers(page: Page, query: string) {
+  await page.getByRole('textbox', { name: 'Поиск по имени или email' }).fill(query)
+}
+
+/**
+ * Найти человека в списке «Пользователи» поиском по имени — как сделал бы пользователь. В списке 25 человек на странице,
+ * по имени: люди в конце алфавита (и приглашённые с кириллическими именами) уходят на следующие страницы, когда людей
+ * в E2eSeeder становится больше. Возвращает строку человека.
+ */
+export async function findUser(page: Page, name: string) {
+  await searchUsers(page, name)
+  const row = userRow(page, name)
+  await expect(row).toBeVisible()
+  return row
+}
+
 /** Ячейка «Роль» в строке пользователя (колонки: Имя, Email, Роль…). */
 export function roleCell(page: Page, name: string) {
   return userRow(page, name).getByRole('cell').nth(2)

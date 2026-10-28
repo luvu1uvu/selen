@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { PASSWORD, pageAs } from '../../tests/helpers'
-import { userRow } from '../stage-3/helpers'
+import { findUser, userRow } from '../stage-3/helpers'
 import {
   COMPANY_1,
   EMAIL_CHANGE_LINK,
@@ -18,7 +18,8 @@ import {
  * «Запрошена смена email» в журнале) — у «E2E Смена email» (e2e-email@); ссылку из письма (шаги 4–6) открывает
  * «E2E Подтверждение email» (e2e-email-confirm@): смена на e2e-email-confirmed@ уже запрошена, ссылка известна
  * (EMAIL_CHANGE_TOKEN). Шаг 3 (письма в Mailpit) — только вручную; шаг 5 (вход прежним и новым адресом) — только
- * вручную (вход через форму в автотестах запрещён), вместо него — новый адрес в списке «Пользователи».
+ * вручную (вход через форму в автотестах запрещён), вместо него — новый адрес в списке «Пользователи». Людей в списке
+ * тест находит полем «Поиск по имени или email»: в списке 25 человек на странице.
  */
 
 const REQUEST = 'E2E Смена email'
@@ -30,6 +31,7 @@ test('ТК-R2.37. Смена email: ссылка на новый адрес, п�
   const email = (name: string) => userRow(owner, name).getByRole('cell').nth(1)
 
   // 1. «⋯» → «Изменить email…»: «Сейчас: …»; новый адрес → «Отправить ссылку»
+  await findUser(owner, REQUEST)
   await userActions(owner, REQUEST).click()
   await owner.getByRole('menuitem', { name: 'Изменить email…' }).click()
   const dialog = owner.getByRole('dialog', { name: 'Изменить email' })
@@ -42,6 +44,7 @@ test('ТК-R2.37. Смена email: ссылка на новый адрес, п�
   // 2. В строке — «Новый: … — ждёт подтверждения», email пока прежний
   await expect(email(REQUEST)).toContainText('e2e-email@selen.test')
   await expect(email(REQUEST)).toContainText('Новый: e2e-email-new@selen.test — ждёт подтверждения')
+  await findUser(owner, CONFIRM)
   await expect(email(CONFIRM)).toContainText('e2e-email-confirm@selen.test')
   await expect(email(CONFIRM)).toContainText('Новый: e2e-email-confirmed@selen.test — ждёт подтверждения')
 
@@ -57,6 +60,7 @@ test('ТК-R2.37. Смена email: ссылка на новый адрес, п�
   await submit.click()
   await expect(link.getByText('Неверный пароль.', { exact: true })).toBeVisible()
   await owner.reload()
+  await findUser(owner, CONFIRM)
   await expect(email(CONFIRM)).toContainText('Новый: e2e-email-confirmed@selen.test — ждёт подтверждения')
   // Верный пароль — «Email изменён на …»
   await password.fill(PASSWORD)
@@ -68,6 +72,7 @@ test('ТК-R2.37. Смена email: ссылка на новый адрес, п�
 
   // 5. (вход — только вручную) В «Пользователях» — новый адрес, строки «Новый: …» нет
   await owner.reload()
+  await findUser(owner, CONFIRM)
   await expect(email(CONFIRM)).toHaveText('e2e-email-confirmed@selen.test')
 
   // 6. «Журнал событий»: «Email изменён» — «Без входа», IP и браузер; адресов в «Подробностях» нет
