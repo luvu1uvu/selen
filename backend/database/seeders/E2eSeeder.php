@@ -626,7 +626,8 @@ class E2eSeeder extends Seeder
      *   После теста его сохранённый вход не действует.
      * - «E2E Смена email» (e2e-email@) — не входит: администратор запрашивает смену email и отменяет её.
      * - «E2E Подтверждение email» (e2e-email-confirm@) — не входит: смена на e2e-email-confirmed@ уже запрошена
-     *   администратором, ссылка из письма — /email-change/{EMAIL_CHANGE_TOKEN}; тест-кейс подтверждает адрес.
+     *   администратором, ссылка из письма — /email-change/{EMAIL_CHANGE_TOKEN}; тест-кейс подтверждает адрес паролем
+     *   учётной записи (UserFactory::PASSWORD).
      */
     private function sessionsAndEmail(User $admin): void
     {
