@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
+import { TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { useCurrentUser } from '@/features/auth/queries'
@@ -9,6 +10,7 @@ import { useAdminCompanyId } from '@/features/admin/company'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { applyValidationErrors, getErrorMessage } from '@/shared/api/errors'
 import type { DirectoryUser } from '@/shared/types/api'
+import { Alert } from '@/shared/ui/alert'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -21,7 +23,7 @@ import {
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
-import { useTransferOwnership } from '../queries'
+import { useTransferImpact, useTransferOwnership } from '../queries'
 
 /**
  * Передача владения (ADR-0017): только Владельцу. Новый Владелец — активный сотрудник, подтверждение — свой
@@ -35,6 +37,10 @@ export function TransferOwnershipDialog() {
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<DirectoryUser | null>(null)
   const transfer = useTransferOwnership()
+  // Что потеряет Владелец: личный доступ в компаниях, где он не сотрудник (решение PM 28.10, п. 6)
+  const impact = useTransferImpact(open && selected ? selected.id : null)
+  const lost = impact.data?.lost_spaces ?? []
+  const unmanaged = new Set(impact.data?.unmanaged_spaces.map((space) => space.id) ?? [])
 
   const schema = useMemo(
     () =>
@@ -107,6 +113,29 @@ export function TransferOwnershipDialog() {
               invalid={!!errors.user_id}
             />
           </FormField>
+          {/* Пока проверяем, что потеряет Владелец, — строка на месте предупреждения и передать нельзя (как в окне
+              деактивации) */}
+          {impact.isFetching && (
+            <p className="text-muted-foreground text-sm">{t('users.transfer.checking')}</p>
+          )}
+          {!impact.isFetching && lost.length > 0 && (
+            <Alert variant="warning" className="grid gap-2">
+              <div className="flex items-center gap-2 font-medium">
+                <TriangleAlert className="size-4 shrink-0" />
+                {t('users.transfer.lostTitle', { count: lost.length })}
+              </div>
+              <p>{t('users.transfer.lostText')}</p>
+              <ul className="grid gap-1">
+                {lost.map((space) => (
+                  <li key={space.id}>
+                    {unmanaged.has(space.id)
+                      ? t('users.transfer.lostSpaceUnmanaged', { name: space.name, key: space.key })
+                      : t('users.lastAdmin.space', { name: space.name, key: space.key })}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+          )}
           <FormField
             id="transfer-password"
             label={t('users.transfer.password')}
@@ -125,7 +154,11 @@ export function TransferOwnershipDialog() {
             <Button type="button" variant="outline" onClick={() => close(false)}>
               {tc('actions.cancel')}
             </Button>
-            <Button type="submit" variant="destructive" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={isSubmitting || impact.isFetching}
+            >
               {t('users.transfer.submit')}
             </Button>
           </DialogFooter>

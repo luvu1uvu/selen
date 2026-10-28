@@ -8,9 +8,11 @@ use App\Enums\StandardRole;
 use App\Models\AccessGrant;
 use App\Models\Space;
 use App\Models\User;
+use App\Services\Access\AccessResolver;
 use App\Services\EventLog\EventRecorder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Смена роли участника. Администратор пространства видит всё, поэтому при назначении admin
@@ -23,6 +25,7 @@ class ChangeSpaceMemberRoleAction
         private readonly EventRecorder $events,
         private readonly SpaceAdminGuard $guard,
         private readonly SpaceGrants $grants,
+        private readonly AccessResolver $resolver,
     ) {}
 
     public function handle(User $actor, Space $space, User $user, SpaceRole $role, ?string $via = null): AccessGrant
@@ -35,6 +38,11 @@ class ChangeSpaceMemberRoleAction
 
             if ($from === $role) {
                 return $grant;
+            }
+
+            // Гостю — только роли без «управления доступом» (ADR-0024)
+            if ($role->canManageSpace() && $this->resolver->isGuest($space->company_id, $user)) {
+                throw ValidationException::withMessages(['role' => __('selen.guests.no_manage_access')]);
             }
 
             if ($this->guard->managesAccess($grant)) {

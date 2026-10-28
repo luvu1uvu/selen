@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\AccessGrant;
+use App\Services\Access\CompanyMembers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,14 +21,20 @@ class SpaceGroupResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Гость — человек другой компании: группы компании-хозяина — без названий, описаний, пометки встроенной и
+        // численности (решение PM 28.10 по аудиту П2c-1, LATER-139)
+        $guestViewer = CompanyMembers::viewsAsGuest($request->user(), $this->company_id);
+
         return [
             'group' => [
                 'id' => $this->group->id,
-                'name' => $this->group->name,
-                'description' => $this->group->description,
-                'system' => $this->group->system_key,
+                'name' => $guestViewer ? null : $this->group->name,
+                'description' => $guestViewer ? null : $this->group->description,
+                // Гостю и «Все сотрудники» — просто «группа»: и пометка, и численность выдали бы размер компании-хозяина
+                // (LATER-139)
+                'system' => $guestViewer ? null : $this->group->system_key,
                 'archived_at' => $this->group->archived_at?->toIso8601ZuluString(),
-                'members_count' => $this->group->membersCount(),
+                'members_count' => $guestViewer ? null : $this->group->membersCount(),
             ],
             'role' => $this->legacyRole(),
             'own_cards_only' => $this->ownCardsOnly(),

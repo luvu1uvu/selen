@@ -49,6 +49,7 @@ use App\Models\Lane;
 use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
+use App\Services\Access\CompanyMemberships;
 use App\Services\Cards\CardVisibility;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
@@ -192,9 +193,12 @@ class BoardsDemoSeeder extends Seeder
             $user = $this->people[$login];
             $owner = $this->people[$owners[$space->key]];
             if ($login === 'gone') {
-                // Деактивированного добавить нельзя — в демо он «был добавлен до увольнения»
+                // Деактивированного добавить нельзя — в демо он «был добавлен до увольнения» (П2c: и убран из компании)
+                $memberships = app(CompanyMemberships::class);
                 $user->forceFill(['status' => 'active'])->save();
+                $memberships->reactivateHome(Company::primary(), $user);
                 $add->handle($owner, $space, $user, $role);
+                $memberships->deactivateHome(Company::primary(), $user);
                 $user->forceFill(['status' => 'deactivated'])->save();
 
                 continue;

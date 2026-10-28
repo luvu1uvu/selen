@@ -106,7 +106,8 @@ it('переводит всё в «Компанию 1» без изменени�
 
         $company = Company::query()->sole();
         expect($company->name)->toBe('Компания 1')
-            ->and(AccessSnapshot::current())->toBe($rights)
+            // У тех, кто может войти: деактивированным личная выдача с П2c прав не даёт (AccessSnapshot::activeUsers)
+            ->and(AccessSnapshot::activeUsers(AccessSnapshot::current()))->toBe(AccessSnapshot::activeUsers($rights))
             ->and(companySystemRoles())->toEqual($roles)
             ->and(DB::table('company_members')->where('company_id', $company->id)->where('kind', 'home')->count())->toBe($users)
             ->and(count($rights['pairs']))->toBeGreaterThan(20)
@@ -159,7 +160,7 @@ it('откат возвращает прежние схему, роли и да�
             ->and(DB::selectOne("SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'users_role_check'")->def)->toContain("'admin'");
 
         $migration->up();
-        expect(AccessSnapshot::current())->toBe($rights)
+        expect(AccessSnapshot::activeUsers(AccessSnapshot::current()))->toBe(AccessSnapshot::activeUsers($rights))
             ->and(companySystemRoles())->toEqual($roles);
     });
 });

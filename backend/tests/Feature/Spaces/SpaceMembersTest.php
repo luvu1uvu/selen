@@ -36,9 +36,10 @@ it('приглашённого (ещё не вошедшего) сотрудни
 it('не добавляет деактивированного и уже состоящего пользователя', function () {
     $gone = User::factory()->deactivated()->create();
 
+    // Деактивированный убран из компании (П2c): для выдачи доступа его нет — как человека другой компании
     $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $gone->id, 'role' => 'editor'])
         ->assertUnprocessable()
-        ->assertJsonPath('errors.user_id.0', __('selen.spaces.member_deactivated'));
+        ->assertJsonPath('errors.user_id.0', __('validation.exists', ['attribute' => 'user id']));
 
     $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $this->owner->id, 'role' => 'editor'])
         ->assertUnprocessable()

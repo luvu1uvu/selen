@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import { useCurrentUser } from '@/features/auth/queries'
-import { adminCompanies } from '@/shared/lib/roles'
+import { adminCompanies, isOwner } from '@/shared/lib/roles'
 import type { AdminCompany, CompanyPermission, User } from '@/shared/types/api'
 
 /**
@@ -64,4 +64,42 @@ export function adminUrl(companyId: string, path: string): string {
 export function useAdminUrl(): (path: string) => string {
   const company = useAdminCompanyId()
   return (path: string) => adminUrl(company, path)
+}
+
+/**
+ * Разделы админки по правам компании — в порядке меню: первая доступная страница для пункта «Пользователи» и адреса
+ * /admin/c/{id} без раздела (у участника с отдельными правами вкладки «Пользователи» может не быть, П2c).
+ */
+const ADMIN_PAGES: [string, CompanyPermission][] = [
+  ['users', 'company.manage_users'],
+  ['groups', 'company.manage_groups'],
+  ['invitations', 'company.invite_users'],
+  ['spaces', 'company.manage_structure'],
+  ['structure', 'company.manage_structure'],
+  ['card-types', 'company.manage_dictionaries'],
+  ['labels', 'company.manage_dictionaries'],
+  ['trash', 'company.manage_trash'],
+  ['events', 'company.view_event_log'],
+]
+
+/** Первая доступная страница админки компании; only — среди этих разделов (вкладки «Пользователей»). */
+export function firstAdminPath(
+  company: AdminCompany | undefined,
+  only?: string[],
+): string | undefined {
+  return ADMIN_PAGES.find(
+    ([path, permission]) =>
+      (only === undefined || only.includes(path)) && hasCompanyPermission(company, permission),
+  )?.[0]
+}
+
+/**
+ * Есть ли у текущего пользователя «Администрирование» (П2c): Владелец или хотя бы одна компания, где у него есть
+ * страница админки по правам компании (администратор или участник с выданными правами). Право без своей страницы
+ * («управлять доступом» — им пользуются в пространствах) раздел не открывает.
+ */
+export function hasAdminAccess(user: User | null | undefined): boolean {
+  return (
+    isOwner(user) || adminCompanies(user).some((company) => firstAdminPath(company) !== undefined)
+  )
 }

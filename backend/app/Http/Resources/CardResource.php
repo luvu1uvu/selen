@@ -10,6 +10,7 @@ use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\Label;
 use App\Models\User;
+use App\Services\Access\CompanyMembers;
 use App\Services\Cards\CardVisibility;
 use App\Services\Metrics\CardFlowMetrics;
 use App\Support\RichText\MentionedUsers;
@@ -36,7 +37,8 @@ class CardResource extends JsonResource
         $person = fn (?User $person) => $person === null ? null : [
             'id' => $person->id,
             'name' => $person->name,
-            'status' => $person->status,
+            // Статус — в компании пространства (П2c): убранный из неё — «деактивирован»
+            'status' => CompanyMembers::statusOf($person, $this->space->company_id),
             'in_space' => $this->space->accessOf($person)->isMember(),
         ];
 

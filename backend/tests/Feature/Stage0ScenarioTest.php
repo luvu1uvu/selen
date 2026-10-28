@@ -34,7 +34,7 @@ it('проходит сквозной сценарий этапа 0', function (
         'name' => 'Борис Новиков',
         'email' => 'Boris@Selen.test',
         'role' => 'member',
-    ])->assertCreated()->assertJsonPath('data.state', 'pending');
+    ])->assertCreated()->assertJsonPath('data.invitation.state', 'pending');
 
     $boris = User::query()->where('email', 'boris@selen.test')->firstOrFail();
     expect($boris->status)->toBe(UserStatus::Invited);

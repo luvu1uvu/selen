@@ -9,19 +9,19 @@ const me = makeUser({ id: 'me', name: 'Анна', role: 'member' })
 
 const people: SpacePerson[] = [
   {
-    user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active' },
+    user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active', guest: false },
     role: 'admin',
     personal: { role: 'admin', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
     groups: [],
   },
   {
-    user: { id: 'u-olga', name: 'Ольга', email: 'olga@selen.test', status: 'active' },
+    user: { id: 'u-olga', name: 'Ольга', email: 'olga@selen.test', status: 'active', guest: false },
     role: 'editor',
     personal: { role: 'editor', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
     groups: [{ id: 'g-an', name: 'Analysts', role: 'commenter', own_cards_only: false }],
   },
   {
-    user: { id: 'u-petr', name: 'Пётр', email: 'petr@selen.test', status: 'active' },
+    user: { id: 'u-petr', name: 'Пётр', email: 'petr@selen.test', status: 'active', guest: false },
     role: 'editor',
     personal: null,
     groups: [{ id: 'g-co', name: 'Contractors', role: 'editor', own_cards_only: true }],
@@ -84,6 +84,29 @@ describe('Участники пространства: люди и группы'
     expect(
       within(petrRow).queryByRole('button', { name: 'Исключить Пётр' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('гостю люди компании-хозяина — без email, группы — «группа» без названия (решение PM 28.10)', async () => {
+    serve(makeSpace(), [
+      {
+        user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active', guest: true },
+        role: 'commenter',
+        personal: { role: 'commenter', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
+        groups: [],
+      },
+      {
+        user: { id: 'u-olga', name: 'Ольга', email: null, status: 'active', guest: false },
+        role: 'editor',
+        personal: { role: 'editor', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
+        groups: [{ id: 'g-an', name: null, role: 'commenter', own_cards_only: false }],
+      },
+    ])
+    await openMembers()
+
+    const olga = within(await screen.findByRole('list', { name: 'Источники доступа Ольга' }))
+    expect(olga.getByText('группа: Комментатор')).toBeInTheDocument()
+    expect(screen.queryByText('olga@selen.test')).toBeNull()
+    expect(screen.getByText('anna@selen.test')).toBeInTheDocument()
   })
 
   it('человека с доступом через группу можно добавить лично', async () => {

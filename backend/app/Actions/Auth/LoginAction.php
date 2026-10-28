@@ -28,8 +28,9 @@ class LoginAction
             $this->fail($user, $email, 'invalid_credentials', __('selen.auth.failed'));
         }
 
+        // После верного пароля: отключённому Владельцем — к кому идти (вернуть может только он, П2c)
         if (! $user->isActive()) {
-            $this->fail($user, $email, 'inactive', __('selen.auth.deactivated'));
+            $this->fail($user, $email, 'inactive', __($user->isBlocked() ? 'selen.auth.blocked' : 'selen.auth.deactivated'));
         }
 
         return DB::transaction(function () use ($user, $remember) {

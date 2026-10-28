@@ -6,6 +6,7 @@ use App\Enums\EventType;
 use App\Enums\SpaceRole;
 use App\Models\CardType;
 use App\Models\Company;
+use App\Models\CompanyPermissionGrant;
 use App\Models\Group;
 use App\Models\Invitation;
 use App\Models\Label;
@@ -62,7 +63,7 @@ const ROUTES_WITHOUT_COMPANY_OBJECTS = [
  * GET-маршруты только для Владельца: администратору компании A они отвечают 403 — (б) проверяет и их ответы на маркеры,
  * но не требует успешного ответа.
  */
-const OWNER_ONLY_GET_ROUTES = ['admin/companies'];
+const OWNER_ONLY_GET_ROUTES = ['admin/companies', 'admin/companies/{company}/users/{user}/transfer-impact'];
 
 /**
  * Одинаковое наполнение компании: папка с пространством, доска, карточки со всем содержимым, метки пространства
@@ -383,7 +384,7 @@ it('(в) человек с «домами» в двух компаниях не 
 
 it('(г) выдача и группа человеку без «дома» в компании ничего не дают', function () {
     // Человек был «домом» A, получил личную выдачу и группу, затем «дом» в A пропал (в обход приложения; «убрать
-    // из компании» — П2c): строки выдачи и состава остались, но ничего не дают
+    // из компании» — П2c, отдельный тест ниже): строки выдачи и состава остались, но ничего не дают
     $stranger = $this->b['editor'];
     $stranger->companies()->attach(company()->id, ['kind' => 'home']);
     addToSpace($this->a['space'], $stranger, SpaceRole::Admin);
@@ -423,4 +424,138 @@ it('(г) администратор другой компании не упра�
     $this->getJson('/api/v1/companies/'.company()->id.'/users/directory')->assertNotFound();
     $this->patchJson("/api/v1/labels/{$this->a['company_label']->id}", ['name' => 'Чужая'])->assertNotFound();
     expect($this->a['editor']->fresh()->isActive())->toBeTrue();
+});
+
+/*
+| (д) Гость (П2c): у гостя нет ничего, кроме выданных пространств. Гость компании A («дом» — в B) с личной ролью
+| в отдельном пространстве GUEST: каждый маршрут с остальными объектами A — 404 с единым телом (как у человека другой
+| компании); ответы маршрутов без объектов в адресе и маршрутов его пространства — без людей, пространств, папок, групп,
+| досок и карточек A. Справочники компании (типы карточек, общие метки) в его пространстве видны — так задумано, их
+| ответы в проверку маркеров не входят. Название A он видит в дереве: у него две компании (решение PM 23.10, вопрос 4д).
+*/
+
+it('(д) у гостя нет ничего, кроме выданных пространств', function () {
+    $guest = User::factory()->inCompany($this->b['company'])->guestIn(company())
+        ->create(['name' => 'Гость', 'email' => 'guest@selen.test']);
+    $host = member(['name' => 'Хозяин гостевого', 'email' => 'host@selen.test']);
+    $space = space(['key' => 'GUEST', 'name' => 'Гостевое', 'company_id' => company()->id]);
+    addToSpace($space, $host, SpaceRole::Admin);
+    addToSpace($space, $guest, SpaceRole::Editor);
+    // В своей компании B он тоже работает — тогда в дереве две компании, с названиями
+    addToSpace($this->b['space'], $guest, SpaceRole::Commenter);
+    // Группа компании-хозяина с доступом к его пространству: гостю — без названия (решение PM 28.10 по аудиту П2c-1)
+    $hostGroup = addToGroup(makeGroup(['name' => 'Группа хозяина', 'description' => 'Описание группы хозяина']), $host);
+    grantGroup($space, $hostGroup, SpaceRole::Commenter);
+    $board = makeBoard($space, $host, BoardTemplate::Simple, 'Гостевая доска');
+    $card = makeCard($board, 'Review', $host, 'Гостевая карточка');
+    $this->actingAs($guest);
+
+    // Каждый маршрут с объектами A (не его пространства) — 404, как несуществующий
+    $paramsA = isolationParams($this->a);
+    $failures = [];
+    $checked = 0;
+    foreach (isolationRoutes() as [$method, $path, $names]) {
+        if ($names === [] || $names === ['token'] || $names === ['path']) {
+            continue;
+        }
+        $uri = isolationPath($path, $paramsA);
+        $response = $this->json($method, $uri, []);
+        $checked++;
+        if ($response->status() !== 404 || $response->json() !== ['message' => __('selen.not_found')]) {
+            $failures[] = "{$method} {$uri}: {$response->status()} ".mb_substr(isolationContent($response), 0, 200);
+        }
+    }
+    expect($checked)->toBeGreaterThan(100)->and($failures)->toBe([]);
+
+    // Ответы без объектов в адресе и маршрутов его пространства — без людей и содержимого A
+    $a = $this->a;
+    // Люди компании-хозяина в его пространстве — только по имени (без email), группы — без названий (решение PM 28.10)
+    $markers = [
+        'Альфа-маркер', 'ALFA-', $a['admin']->email, $a['editor']->email, $a['invited']->email,
+        $a['space']->id, $a['board']->id, $a['card']->id, $a['folder']->id, $a['group']->id, $a['invited']->id,
+        $host->email, 'Группа хозяина', 'Описание группы хозяина',
+    ];
+    $params = ['{space}' => 'GUEST', '{board}' => $board->id, '{column}' => columnNamed($board, 'Review')->id,
+        '{lane}' => firstLane($board)->id, '{card}' => $card->key()];
+    $leaks = [];
+    foreach (isolationRoutes() as [$method, $path, $names]) {
+        $dictionary = str_ends_with($path, '/card-types') || str_ends_with($path, '/labels');
+        if ($method !== 'GET' || $dictionary || array_diff($names, ['space', 'board', 'column', 'lane', 'card']) !== []
+            || str_starts_with($path, '/sanctum') || $path === '/up' || str_starts_with($path, 'admin/')) {
+            continue;
+        }
+        $response = $this->getJson(isolationPath($path, $params));
+        foreach ($markers as $marker) {
+            if (str_contains(isolationContent($response), $marker)) {
+                $leaks[] = "{$path}: «{$marker}»";
+            }
+        }
+    }
+    expect($leaks)->toBe([]);
+
+    // Люди и группы — видны, но без email и названий; свой email гость видит
+    $people = collect($this->getJson('/api/v1/spaces/GUEST/members')->assertOk()->json('data'))->keyBy('user.id');
+    expect($people[$host->id]['user'])->toMatchArray(['name' => 'Хозяин гостевого', 'email' => null])
+        ->and($people[$host->id]['groups'][0]['name'])->toBeNull()
+        ->and($people[$guest->id]['user']['email'])->toBe('guest@selen.test');
+    // И «Все сотрудники» хозяина — просто «группа»: без пометки встроенной и численности компании (LATER-139)
+    grantGroup($space, Group::everyone(company()), SpaceRole::Commenter);
+    foreach ($this->getJson('/api/v1/spaces/GUEST/groups')->assertOk()->json('data') as $grant) {
+        expect($grant['group'])->toMatchArray(['name' => null, 'description' => null, 'system' => null, 'members_count' => null]);
+    }
+
+    // Его пространство работает; в дереве — его «дом» и гостевое пространство под названием A; админки A нет
+    $this->getJson('/api/v1/spaces/GUEST')->assertOk()->assertJsonPath('data.my_role', 'editor');
+    $trees = collect($this->getJson('/api/v1/navigation')->assertOk()->json('data'));
+    expect($trees->pluck('name')->all())->toContain('Компания Альфа-имя', 'Компания Бета-маркер')
+        ->and(flatTree($trees->firstWhere('name', 'Компания Альфа-имя')['items']))->toBe(['GUEST'])
+        ->and($this->getJson('/api/v1/auth/me')->json('data.admin_companies'))->toBe([]);
+});
+
+it('(д) гостю истёк срок — пространства компании пропадают сами; продлили — возвращаются', function () {
+    $guest = User::factory()->inCompany($this->b['company'])->guestIn(company(), now()->addDays(3))->create();
+    addToSpace($this->a['space'], $guest, SpaceRole::Commenter);
+    $this->actingAs($guest);
+
+    $this->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertOk();
+    $this->travel(4)->days();
+    $this->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertNotFound();
+    $this->getJson("/api/v1/cards/{$this->a['card']->key()}")->assertNotFound();
+    expect(collect($this->getJson('/api/v1/navigation')->json('data'))->pluck('name'))->not->toContain('Компания Альфа-имя');
+
+    $this->actingAs($this->a['admin'])->putJson(adminPath()."guests/{$guest->id}", [
+        'expires_on' => now()->addDays(10)->format('Y-m-d'),
+        'spaces' => [['space_id' => $this->a['space']->id, 'role' => 'commenter']],
+    ])->assertOk();
+    $this->actingAs($guest)->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertOk();
+});
+
+it('(д) гостю нельзя: группы, «Все сотрудники», права компании, роль с управлением доступом', function () {
+    $guest = User::factory()->inCompany($this->b['company'])->guestIn(company())->create();
+    addToSpace($this->a['space'], $guest, SpaceRole::Commenter);
+    grantGroup($this->a['space'], Group::everyone(company()), SpaceRole::Editor);
+    $this->actingAs($this->a['admin']);
+
+    // Группа — только «дома»: гостя нет в справочнике и в составе
+    expect(collect($this->getJson('/api/v1/companies/'.company()->id.'/users/directory?search=')->json('data'))->pluck('id'))
+        ->not->toContain($guest->id);
+    $this->postJson(adminPath()."groups/{$this->a['group']->id}/members", ['user_id' => $guest->id])->assertUnprocessable();
+    // Роль с управлением доступом — 422; права компании — 403
+    $this->patchJson("/api/v1/spaces/{$this->a['space']->key}/members/{$guest->id}", ['role' => 'admin'])
+        ->assertUnprocessable()->assertJsonValidationErrors(['role' => __('selen.guests.no_manage_access')]);
+    $this->putJson(adminPath()."users/{$guest->id}/permissions", ['permissions' => ['company.invite_users']])->assertForbidden();
+
+    // «Все сотрудники» (Редактор) гостю не добавляет: роль — его личная (Комментатор)
+    $this->actingAs($guest)->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertOk()->assertJsonPath('data.my_role', 'commenter');
+
+    // И в обход приложения — БД не даёт
+    expect(fn () => DB::transaction(fn () => addToGroup($this->a['group'], $guest)))->toThrow(QueryException::class, 'another company')
+        ->and(fn () => DB::transaction(fn () => addToSpace(space(['key' => 'GADM']), $guest, SpaceRole::Admin)))
+        ->toThrow(QueryException::class, 'a guest gets only')
+        ->and(fn () => DB::transaction(fn () => $guest->companies()->newPivotStatement()->where('user_id', $guest->id)
+            ->where('company_id', company()->id)->update(['is_admin' => true])))
+        ->toThrow(QueryException::class, 'company_members_admin_check')
+        ->and(fn () => DB::transaction(fn () => CompanyPermissionGrant::query()->forceCreate([
+            'company_id' => company()->id, 'user_id' => $guest->id, 'permission' => 'company.invite_users',
+        ])))->toThrow(QueryException::class, 'another company');
 });

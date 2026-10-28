@@ -19,7 +19,8 @@ use Illuminate\Support\Carbon;
 /**
  * Компания — обособленная команда внутри Selen (docs/adr/0024-rights-2.md): свои дерево (папки и пространства), группы
  * со своей «Все сотрудники», метки, типы карточек, приглашения и журнал. Человек связан с компанией членством
- * (company_members): «дом» — полноправный сотрудник. Права в компании — только из permissionsOf() (AccessResolver).
+ * (company_members): «дом» — полноправный сотрудник (может быть убран из компании — deactivated_at), гость — личный доступ
+ * к отдельным пространствам (П2c). Права в компании — только из permissionsOf() (AccessResolver).
  * Компании не удаляются и не архивируются; создаёт и переименовывает их только Владелец (П2b-2).
  *
  * Объекты админки ищутся только среди объектов компании из адреса (scoped binding, admin/companies/{company}/…):
@@ -46,13 +47,14 @@ class Company extends Model
     private array $resolvedPermissions = [];
 
     /**
-     * Люди компании — её «дома» (членство; права — только через permissionsOf()).
+     * Люди компании — её «дома», в том числе убранные из неё (deactivated_at; членство — права только через
+     * permissionsOf()).
      *
      * @return BelongsToMany<User, $this>
      */
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'company_members')->withPivot(['kind', 'is_admin'])
+        return $this->belongsToMany(User::class, 'company_members')->withPivot(['kind', 'is_admin', 'deactivated_at'])
             ->wherePivot('kind', AccessResolver::HOME)
             ->withTimestamps();
     }
@@ -128,15 +130,19 @@ class Company extends Model
         $this->resolvedPermissions[(string) $user->getKey()] = $access;
     }
 
-    /** Роль человека в компании для показа: owner | admin | member (права — только permissionsOf()). */
+    /**
+     * Роль человека в компании для показа: owner | admin | member (права — только permissionsOf()). Убранный из компании
+     * администратор — admin: вернуть его и управлять им может только Владелец.
+     */
     public function roleOf(User $user): string
     {
-        return $user->isOwner() ? UserRole::Owner->value : CompanyRole::of($this->permissionsOf($user)->isAdmin())->value;
+        return $user->isOwner() ? UserRole::Owner->value : CompanyRole::of($this->permissionsOf($user)->isAssignedAdmin())->value;
     }
 
     /**
-     * Вложенный объект адреса admin/companies/{company}/… (scoped binding): человек — её «дом» или Владелец (участник
-     * всех компаний, ADR-0024: его доступ в компании видно и выдать можно); остальное — среди объектов компании (связи).
+     * Вложенный объект адреса admin/companies/{company}/… (scoped binding): человек — участник компании («дом», в том числе
+     * убранный из неё, гость) или Владелец (участник всех компаний, ADR-0024: его доступ в компании видно и выдать можно);
+     * остальное — среди объектов компании (связи).
      */
     public function resolveChildRouteBinding($childType, $value, $field): ?Model
     {

@@ -76,10 +76,34 @@ function asSchemaOwner(Closure $test): void
     }
 }
 
-/** Миграция компаний («Права 2.0», П2b-1): тесты прежних миграций откатывают её первой (down) и поднимают обратно (up). */
+/**
+ * Миграция компаний («Права 2.0», П2b-1) вместе со следующей за ней (П2c-1: гости, права компании): тесты прежних
+ * миграций откатывают их первыми (down — сначала П2c-1) и поднимают обратно (up — в обратном порядке).
+ */
 function companiesMigration(): object
 {
-    return require database_path('migrations/2026_10_23_300001_create_companies.php');
+    return new class(require database_path('migrations/2026_10_23_300001_create_companies.php'), guestsMigration())
+    {
+        public function __construct(private readonly object $companies, private readonly object $guests) {}
+
+        public function up(): void
+        {
+            $this->companies->up();
+            $this->guests->up();
+        }
+
+        public function down(): void
+        {
+            $this->guests->down();
+            $this->companies->down();
+        }
+    };
+}
+
+/** Миграция П2c-1 («Права 2.0»): гости, деактивация в компании, блокировка Владельцем, права компании. */
+function guestsMigration(): object
+{
+    return require database_path('migrations/2026_10_28_100001_add_guests_and_company_permissions.php');
 }
 
 /** Отдельный «браузер» со своими cookie (сессия, «Запомнить меня»). */

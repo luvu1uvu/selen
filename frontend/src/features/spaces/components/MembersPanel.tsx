@@ -111,6 +111,10 @@ function PeopleTable({ space }: { space: Space }) {
                     {person.user.id === me?.id && (
                       <Badge variant="outline">{tc('badges.you')}</Badge>
                     )}
+                    {person.user.guest && (
+                      // Гость — сотрудник другой компании с личным доступом (П2c); откуда он — не показываем
+                      <Badge variant="outline">{t('members.guest')}</Badge>
+                    )}
                     {person.user.status === 'deactivated' && (
                       <Badge variant="destructive">{t('members.deactivated')}</Badge>
                     )}
@@ -118,7 +122,10 @@ function PeopleTable({ space }: { space: Space }) {
                       <Badge variant="warning">{t('members.invited')}</Badge>
                     )}
                   </div>
-                  <div className="text-muted-foreground text-xs">{person.user.email}</div>
+                  {/* Гостю люди компании-хозяина — только по имени (решение PM 28.10) */}
+                  {person.user.email && (
+                    <div className="text-muted-foreground text-xs">{person.user.email}</div>
+                  )}
                   {showSources && (
                     <div className="mt-1">
                       <AccessSourceBadges person={person} />
@@ -144,7 +151,7 @@ function PeopleTable({ space }: { space: Space }) {
                             )
                           }
                         >
-                          <RoleSelectOptions />
+                          <RoleSelectOptions withoutAdmin={person.user.guest} />
                         </NativeSelect>
                       ) : (
                         <span className="text-muted-foreground text-sm whitespace-nowrap">
@@ -201,7 +208,9 @@ function PeopleTable({ space }: { space: Space }) {
                             variant="ghost"
                             size="sm"
                             aria-label={t('members.addPersonallyLabel', { name: person.user.name })}
-                            onClick={() => setToAdd(person.user)}
+                            onClick={() =>
+                              setToAdd({ ...person.user, email: person.user.email ?? '' })
+                            }
                           >
                             {t('members.addPersonally')}
                           </Button>

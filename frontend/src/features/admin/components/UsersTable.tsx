@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { Pagination } from '@/shared/components/Pagination'
 import { formatDateTime } from '@/shared/lib/dates'
 import { isOwner } from '@/shared/lib/roles'
-import type { AdminUser, UserStatus } from '@/shared/types/api'
+import type { AdminUser, UserStatusFilter } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
@@ -22,14 +22,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import {
   useChangeRole,
   useReactivateUser,
+  useRemoveGuest,
+  useSetUserBlocked,
   useResendInvitation,
   useRevokeInvitation,
   useUsers,
 } from '../queries'
 import { DeactivateUserDialog } from './DeactivateUserDialog'
+import { GuestBadge } from './GuestBadge'
+import { GuestDialog } from './GuestDialog'
 import { UserStatusBadge } from './UserStatusBadge'
 
-type Confirm = { kind: 'revoke'; user: AdminUser } | null
+type Confirm = { kind: 'revoke' | 'removeGuest'; user: AdminUser } | null
 
 export function UsersTable() {
   const { t } = useTranslation('admin')
@@ -37,17 +41,23 @@ export function UsersTable() {
   const { data: me } = useCurrentUser()
   const navigate = useNavigate()
   const url = useAdminUrl()
-  const [status, setStatus] = useState<UserStatus | ''>('')
+  const [status, setStatus] = useState<UserStatusFilter | ''>('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [toDeactivate, setToDeactivate] = useState<AdminUser | null>(null)
+  const [toBlock, setToBlock] = useState<AdminUser | null>(null)
+  // Гость окна остаётся, пока окно закрывается (иначе на время анимации заголовок стал бы «Добавить гостя»)
+  const [guest, setGuest] = useState<AdminUser | null>(null)
+  const [guestOpen, setGuestOpen] = useState(false)
 
   const usersQuery = useUsers({ status: status || undefined, search: search || undefined, page })
   const changeRole = useChangeRole()
   const reactivate = useReactivateUser()
   const resend = useResendInvitation()
   const revoke = useRevokeInvitation()
+  const block = useSetUserBlocked()
+  const removeGuest = useRemoveGuest()
 
   const run = async (action: () => Promise<unknown>, successMessage: string) => {
     try {
@@ -60,7 +70,10 @@ export function UsersTable() {
 
   const onConfirm = async () => {
     if (!confirm) return
-    if (confirm.user.invitation) {
+    if (confirm.kind === 'removeGuest') {
+      const userId = confirm.user.id
+      await run(() => removeGuest.mutateAsync(userId), t('guests.removed'))
+    } else if (confirm.user.invitation) {
       const invitationId = confirm.user.invitation.id
       await run(() => revoke.mutateAsync(invitationId), t('users.toasts.invitationRevoked'))
     }
@@ -84,7 +97,7 @@ export function UsersTable() {
           aria-label={t('users.columns.status')}
           value={status}
           onChange={(event) => {
-            setStatus(event.target.value as UserStatus | '')
+            setStatus(event.target.value as UserStatusFilter | '')
             setPage(1)
           }}
           className="sm:w-48"
@@ -93,6 +106,7 @@ export function UsersTable() {
           <option value="active">{t('users.filters.active')}</option>
           <option value="invited">{t('users.filters.invited')}</option>
           <option value="deactivated">{t('users.filters.deactivated')}</option>
+          <option value="guest">{t('users.filters.guest')}</option>
         </NativeSelect>
       </div>
 
@@ -134,11 +148,25 @@ export function UsersTable() {
               can.manage_invitation &&
               !!invitation &&
               (user.status === 'invited' || invitation.state === 'revoked')
+            // Вернуть в компанию — если учётную запись не отключил Владелец (её включает только он)
             const canReactivate =
-              can.reactivate && user.status === 'deactivated' && invitation?.state !== 'revoked'
+              can.reactivate &&
+              user.status === 'deactivated' &&
+              !user.blocked &&
+              invitation?.state !== 'revoked'
             const canDeactivate = can.deactivate && user.status === 'active'
+            const canBlock = can.block && !user.blocked && user.status !== 'invited'
+            const canUnblock = can.block && user.blocked
+            const canManageGuest = can.manage_guest && user.guest !== null
             const hasActions =
-              canChangeRole || hasPendingInvitation || canResend || canReactivate || canDeactivate
+              canChangeRole ||
+              hasPendingInvitation ||
+              canResend ||
+              canReactivate ||
+              canDeactivate ||
+              canBlock ||
+              canUnblock ||
+              canManageGuest
 
             return (
               <TableRow key={user.id}>
@@ -161,6 +189,8 @@ export function UsersTable() {
                     <Badge variant="secondary" title={t('users.badges.ownerHint')}>
                       {tc('roles.owner')}
                     </Badge>
+                  ) : user.guest ? (
+                    <GuestBadge guest={user.guest} />
                   ) : (
                     tc(`roles.${user.role}`)
                   )}
@@ -187,7 +217,9 @@ export function UsersTable() {
                         <p>{t('users.actions.access')}</p>
                         {!isMe && (
                           <p>
-                            {can.owner_only ? t('users.ownerOnly') : t('users.actionsUnavailable')}
+                            {user.blocked
+                              ? t('users.blockedOnlyOwner')
+                              : t('users.actionsUnavailable')}
                           </p>
                         )}
                       </TooltipContent>
@@ -230,6 +262,28 @@ export function UsersTable() {
                               {t('users.actions.resendInvitation')}
                             </DropdownMenuItem>
                           )}
+                          {canManageGuest && (
+                            <DropdownMenuItem
+                              onSelect={dialog(() => {
+                                setGuest(user)
+                                setGuestOpen(true)
+                              })}
+                            >
+                              {t('guests.edit')}
+                            </DropdownMenuItem>
+                          )}
+                          {canUnblock && (
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                run(
+                                  () => block.mutateAsync({ userId: user.id, blocked: false }),
+                                  t('users.toasts.unblocked'),
+                                )
+                              }
+                            >
+                              {t('users.actions.unblock')}
+                            </DropdownMenuItem>
+                          )}
                           {canReactivate && (
                             <DropdownMenuItem
                               onSelect={() =>
@@ -242,13 +296,32 @@ export function UsersTable() {
                               {t('users.actions.reactivate')}
                             </DropdownMenuItem>
                           )}
-                          {(canDeactivate || hasPendingInvitation) && <DropdownMenuSeparator />}
+                          {(canDeactivate ||
+                            hasPendingInvitation ||
+                            canBlock ||
+                            canManageGuest) && <DropdownMenuSeparator />}
+                          {canManageGuest && (
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={dialog(() => setConfirm({ kind: 'removeGuest', user }))}
+                            >
+                              {t('guests.removeEllipsis')}
+                            </DropdownMenuItem>
+                          )}
                           {canDeactivate && (
                             <DropdownMenuItem
                               variant="destructive"
                               onSelect={dialog(() => setToDeactivate(user))}
                             >
-                              {t('users.actions.deactivate')}
+                              {t('users.actions.deactivateEllipsis')}
+                            </DropdownMenuItem>
+                          )}
+                          {canBlock && (
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={dialog(() => setToBlock(user))}
+                            >
+                              {t('users.actions.blockEllipsis')}
                             </DropdownMenuItem>
                           )}
                           {hasPendingInvitation && (
@@ -275,13 +348,23 @@ export function UsersTable() {
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
-        pending={revoke.isPending}
+        pending={revoke.isPending || removeGuest.isPending}
         onConfirm={onConfirm}
-        title={t('users.confirm.revokeTitle')}
-        description={t('users.confirm.revokeText', { email: confirm?.user.email ?? '' })}
-        confirmLabel={t('users.actions.revokeInvitation')}
+        title={
+          confirm?.kind === 'removeGuest' ? t('guests.removeTitle') : t('users.confirm.revokeTitle')
+        }
+        description={
+          confirm?.kind === 'removeGuest'
+            ? t('guests.removeText', { name: confirm.user.name })
+            : t('users.confirm.revokeText', { email: confirm?.user.email ?? '' })
+        }
+        confirmLabel={
+          confirm?.kind === 'removeGuest' ? t('guests.remove') : t('users.actions.revokeInvitation')
+        }
       />
       <DeactivateUserDialog user={toDeactivate} onClose={() => setToDeactivate(null)} />
+      <DeactivateUserDialog user={toBlock} account onClose={() => setToBlock(null)} />
+      <GuestDialog open={guestOpen} guest={guest} onClose={() => setGuestOpen(false)} />
     </div>
   )
 }

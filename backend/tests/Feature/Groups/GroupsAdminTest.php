@@ -81,8 +81,9 @@ describe('состав', function () {
             ->assertJsonPath('data.members.0.id', $ivan->id)
             ->assertJsonPath('data.members_count', 1);
         $this->postJson(adminPath()."groups/{$group->id}/members", ['user_id' => $ivan->id])->assertUnprocessable();
+        // Деактивированный убран из компании (П2c) — для состава группы его нет, как человека другой компании
         $this->postJson(adminPath()."groups/{$group->id}/members", ['user_id' => member(['status' => 'deactivated'])->id])
-            ->assertJsonValidationErrors(['user_id' => __('selen.groups.member_deactivated')]);
+            ->assertJsonValidationErrors(['user_id' => __('validation.exists', ['attribute' => 'user id'])]);
 
         $this->deleteJson(adminPath()."groups/{$group->id}/members/{$ivan->id}")->assertNoContent();
         $this->deleteJson(adminPath()."groups/{$group->id}/members/{$ivan->id}")->assertNotFound();

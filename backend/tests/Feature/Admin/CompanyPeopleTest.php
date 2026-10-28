@@ -12,8 +12,8 @@ use App\Services\EventLog\EventRecorder;
 | - Владелец — участник всех компаний: в «Пользователях», в привязке {user} адресов и в выборе людей для выдачи доступа
 |   каждой компании (ему можно выдать доступ, в том числе он сам себе); в состав групп чужой компании — нет (группы —
 |   только «дома»), события «о человеке» — только компаниям, где он «дом» (решение PM 23.10, п. 2);
-| - учётной записью человека с «домами» в нескольких компаниях (деактивация, возврат) управляет только Владелец — до
-|   «деактивации в компании» (П2c; решение PM 26.10).
+| - человек с «домами» в нескольких компаниях: «Деактивировать» в админке компании убирает его только из неё, вход
+|   закрывается, когда не осталось ни одного «дома» (П2c; до П2c — только Владелец, решение PM 26.10).
 */
 
 beforeEach(function () {
@@ -100,39 +100,36 @@ describe('человек с «домами» в двух компаниях', fu
         $this->firstAdmin = admin();
     });
 
-    it('деактивирует и возвращает только Владелец; администратору — 403 и подсказка', function () {
-        foreach ([[$this->firstAdmin, company()], [$this->secondAdmin, $this->second]] as [$admin, $company]) {
-            $this->actingAs($admin);
-            $row = collect($this->getJson(adminPath($company).'users')->assertOk()->json('data'))->firstWhere('id', $this->both->id);
-            expect($row['permissions'])->toMatchArray(['deactivate' => false, 'reactivate' => false, 'owner_only' => true]);
+    it('администратор убирает его только из своей компании; вход закрывается, когда не осталось «домов»', function () {
+        $space = space(['key' => 'SEC', 'company_id' => $this->second->id]);
+        addToSpace($space, $this->both, SpaceRole::Editor);
+        $this->actingAs($this->secondAdmin);
+        $row = collect($this->getJson(adminPath($this->second).'users')->assertOk()->json('data'))->firstWhere('id', $this->both->id);
+        expect($row['permissions'])->toMatchArray(['deactivate' => true, 'reactivate' => true, 'block' => false]);
 
-            $this->postJson(adminPath($company)."users/{$this->both->id}/deactivate")->assertForbidden();
-            $this->getJson(adminPath($company)."users/{$this->both->id}/deactivation-impact")->assertForbidden();
-        }
+        $this->postJson(adminPath($this->second)."users/{$this->both->id}/deactivate")->assertOk()->assertJsonPath('data.status', 'deactivated');
+        // Во второй компании он деактивирован и доступа нет; в первой — работает, вход открыт
         expect($this->both->fresh()->isActive())->toBeTrue();
+        $this->actingAs($this->both)->getJson('/api/v1/spaces/SEC')->assertNotFound();
+        $this->actingAs($this->firstAdmin);
+        expect(collect($this->getJson(adminPath().'users')->json('data'))->firstWhere('id', $this->both->id)['status'])->toBe('active');
 
-        $this->actingAs($this->owner);
-        $row = collect($this->getJson(adminPath($this->second).'users')->json('data'))->firstWhere('id', $this->both->id);
-        expect($row['permissions'])->toMatchArray(['deactivate' => true, 'owner_only' => false]);
-        $this->postJson(adminPath($this->second)."users/{$this->both->id}/deactivate")->assertOk();
+        // Убран и из первой — вход закрыт; возврат в любую из компаний снова открывает вход
+        $this->postJson(adminPath()."users/{$this->both->id}/deactivate")->assertOk();
         expect($this->both->fresh()->status)->toBe(UserStatus::Deactivated);
-
-        foreach ([[$this->firstAdmin, company()], [$this->secondAdmin, $this->second]] as [$admin, $company]) {
-            $this->actingAs($admin)->postJson(adminPath($company)."users/{$this->both->id}/reactivate")->assertForbidden();
-        }
-        $this->actingAs($this->owner)->postJson(adminPath()."users/{$this->both->id}/reactivate")->assertOk();
+        $this->actingAs($this->secondAdmin)->postJson(adminPath($this->second)."users/{$this->both->id}/reactivate")->assertOk();
         expect($this->both->fresh()->isActive())->toBeTrue();
+        $this->actingAs($this->both)->getJson('/api/v1/spaces/SEC')->assertOk();
     });
 
-    it('его приглашение повторяет и отзывает только Владелец; в «Пользователях» — только приглашение этой компании', function () {
+    it('его приглашение повторяет и отзывает администратор этой компании; в «Пользователях» — только приглашение этой компании', function () {
         $this->both->forceFill(['status' => UserStatus::Invited, 'password' => null])->save();
         $invitation = Invitation::factory()->create(['company_id' => company()->id, 'user_id' => $this->both->id]);
 
         $this->actingAs($this->firstAdmin);
         $row = collect($this->getJson(adminPath().'users')->assertOk()->json('data'))->firstWhere('id', $this->both->id);
-        expect($row['permissions']['manage_invitation'])->toBeFalse()
+        expect($row['permissions']['manage_invitation'])->toBeTrue()
             ->and($row['invitation']['id'])->toBe($invitation->id);
-        $this->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertForbidden();
 
         // Во второй компании приглашения первой не видно
         $this->actingAs($this->secondAdmin);
@@ -140,14 +137,18 @@ describe('человек с «домами» в двух компаниях', fu
         expect($row['invitation'])->toBeNull()
             ->and(json_encode($this->getJson(adminPath($this->second).'users')->json(), JSON_UNESCAPED_UNICODE))->not->toContain($invitation->id);
 
-        $this->actingAs($this->owner)->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertOk();
+        // Отзыв убирает его только из первой компании: во второй он по-прежнему приглашён
+        $this->actingAs($this->firstAdmin)->postJson(adminPath()."invitations/{$invitation->id}/revoke")->assertOk();
+        expect($this->both->fresh()->status)->toBe(UserStatus::Invited);
+        expect(collect($this->getJson(adminPath().'users')->json('data'))->firstWhere('id', $this->both->id)['status'])->toBe('deactivated');
     });
 
     it('сотрудником одной компании администратор управляет, как раньше', function () {
         $single = member();
 
         $this->actingAs($this->firstAdmin)->postJson(adminPath()."users/{$single->id}/deactivate")->assertOk();
+        expect($single->fresh()->status)->toBe(UserStatus::Deactivated);
         $this->postJson(adminPath()."users/{$single->id}/reactivate")->assertOk();
-        expect(collect($this->getJson(adminPath().'users')->json('data'))->firstWhere('id', $single->id)['permissions']['owner_only'])->toBeFalse();
+        expect($single->fresh()->isActive())->toBeTrue();
     });
 });

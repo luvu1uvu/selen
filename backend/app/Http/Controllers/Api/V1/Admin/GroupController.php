@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Actions\Companies\SetCompanyPermissionsAction;
 use App\Actions\Groups\AddGroupMemberAction;
 use App\Actions\Groups\RemoveGroupMemberAction;
 use App\Actions\Groups\SaveGroupAction;
@@ -9,13 +10,16 @@ use App\Actions\Groups\SetGroupArchivedAction;
 use App\Actions\Spaces\AssignSpaceGroupAction;
 use App\Actions\Spaces\AssignSpaceRoleAction;
 use App\Actions\Spaces\RevokeSpaceGroupAction;
+use App\Enums\Permission;
 use App\Enums\SpaceRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AssignSpaceGroupRequest;
 use App\Http\Requests\Admin\SaveGroupRequest;
 use App\Http\Requests\Admin\StoreGroupMemberRequest;
+use App\Http\Requests\Admin\UpdateCompanyPermissionsRequest;
 use App\Http\Resources\GroupResource;
 use App\Models\Company;
+use App\Models\CompanyPermissionGrant;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
@@ -69,7 +73,7 @@ class GroupController extends Controller
 
     public function restore(Request $request, Company $company, Group $group, SetGroupArchivedAction $action): GroupResource
     {
-        Gate::authorize('archive', $group);
+        Gate::authorize('restore', $group);
 
         return new GroupResource($this->reload($action->handle($request->user(), $group, false)));
     }
@@ -83,7 +87,7 @@ class GroupController extends Controller
 
     public function removeMember(Request $request, Company $company, Group $group, User $user, RemoveGroupMemberAction $action): Response
     {
-        Gate::authorize('update', $group);
+        Gate::authorize('manageMembers', [$group, false]);
 
         $action->handle($request->user(), $group, $user);
 
@@ -111,7 +115,7 @@ class GroupController extends Controller
 
     public function revokeSpace(Request $request, Company $company, Group $group, Space $space, RevokeSpaceGroupAction $action): Response
     {
-        Gate::authorize('update', $group);
+        Gate::authorize('manageSpaces', $group);
 
         $action->handle($request->user(), $space, $group, AssignSpaceRoleAction::VIA);
 
@@ -125,5 +129,37 @@ class GroupController extends Controller
             ->withCount(['members', 'spaceGrants'])
             ->with(['members', 'spaceGrants.space', 'spaceGrants.role'])
             ->findOrFail($group->id);
+    }
+
+    /**
+     * «Права компании» группы (П2c): у «Все сотрудники» — права всех новых сотрудников (решение PM 28.10, п. 7).
+     */
+    public function permissions(Request $request, Company $company, Group $group): JsonResponse
+    {
+        Gate::authorize('viewPermissions', $group);
+
+        return response()->json(['data' => $this->permissionsOf($request->user(), $company, $group)]);
+    }
+
+    public function updatePermissions(UpdateCompanyPermissionsRequest $request, Company $company, Group $group, SetCompanyPermissionsAction $action): JsonResponse
+    {
+        $action->handle($request->user(), $company, $group, $request->permissions());
+
+        return response()->json(['data' => $this->permissionsOf($request->user(), $company, $group)]);
+    }
+
+    /** @return list<array{permission: string, granted: bool, editable: bool}> */
+    private function permissionsOf(User $actor, Company $company, Group $group): array
+    {
+        $granted = CompanyPermissionGrant::query()->inCompany($company)->where('group_id', $group->id)->get()
+            ->map(fn (CompanyPermissionGrant $grant) => $grant->permission)
+            ->all();
+        $editable = SetCompanyPermissionsAction::editableBy($actor);
+
+        return array_map(fn (Permission $permission) => [
+            'permission' => $permission->value,
+            'granted' => in_array($permission, $granted, true),
+            'editable' => ! $group->isArchived() && in_array($permission, $editable, true),
+        ], Permission::grantable());
     }
 }

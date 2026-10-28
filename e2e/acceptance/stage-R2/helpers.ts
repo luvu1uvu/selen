@@ -122,3 +122,49 @@ export const usersTabs = (page: Page) => page.getByRole('navigation', { name: '�
 
 /** Заголовок компании в дереве — область с её названием (только у того, у кого компаний несколько). */
 export const treeCompany = (page: Page, name: string) => tree(page).getByRole('region', { name, exact: true })
+
+/*
+ * «Права 2.0», П2c-1 — гости, деактивация в компании, приглашения, права компании (docs/stages/rights-2.md, «Как
+ * проверить руками (П2c-1…)», ТК-R2.16–R2.27). Данные — E2eSeeder::guestsAndRights и guestsAndRightsCases.
+ */
+export const GUEST_SPACE = 'Гостевое'
+export const GUEST_KEY = 'RGUEST'
+export const SECOND_SPACE = 'Вторая компания: продажи'
+export const THIRD_SPACE = 'Третья компания: склад'
+
+/** Администрирование → (выбор компании, если она задана) → «Пользователи». */
+export async function openCompanyUsers(page: Page, company?: string) {
+  await page.goto('/')
+  const panel = await openAdminPanel(page)
+  if (company) await chooseCompany(page, company)
+  await panel.getByRole('link', { name: 'Пользователи', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Пользователи', level: 1 })).toBeVisible()
+  return panel
+}
+
+/** Кнопка «⋯» в строке пользователя списка «Пользователи». */
+export const userActions = (page: Page, name: string) =>
+  page.getByRole('button', { name: `Действия с пользователем «${name}»` })
+
+/** «Администрирование» в полосе разделов (у кого нет ни одного права в админке — кнопки нет). */
+export const adminRail = (page: Page) =>
+  page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name: 'Администрирование' })
+
+/** Папка «E2E Клиенты» второй компании в дереве: раскрыть, если свёрнута (в ней RSECOND). */
+export async function expandClients(region: Locator) {
+  const folder = region.getByRole('button').filter({ has: region.page().getByText('E2E Клиенты', { exact: true }) })
+  await expect(folder).toBeVisible()
+  if ((await folder.getAttribute('aria-expanded')) !== 'true') await folder.click()
+}
+
+/** Дата «ДД.ММ.ГГГГ» через `days` дней — как бейдж «Гость до …» у пользователя с часовым поясом Москвы. */
+export function moscowDate(days: number) {
+  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeZone: 'Europe/Moscow' }).format(
+    new Date(Date.now() + days * 24 * 3600 * 1000),
+  )
+}
+
+/** То же — для поля даты (ГГГГ-ММ-ДД). */
+export function moscowIsoDate(days: number) {
+  return moscowDate(days).split('.').reverse().join('-')
+}

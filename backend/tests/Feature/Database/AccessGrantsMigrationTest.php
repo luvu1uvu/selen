@@ -134,9 +134,10 @@ it('переносит матрицу случаев без изменения �
         $migration->up();
         expect(AccessSnapshot::beforeCompanies())->toBe($before);
 
-        // Вся цепочка до текущей схемы: права те же и по текущему резолверу
+        // Вся цепочка до текущей схемы: права те же и по текущему резолверу (у тех, кто может войти: личная выдача
+        // деактивированного с П2c прав не даёт — AccessSnapshot::activeUsers)
         companiesMigration()->up();
-        expect(AccessSnapshot::current())->toBe($before);
+        expect(AccessSnapshot::activeUsers(AccessSnapshot::current()))->toBe(AccessSnapshot::activeUsers($before));
     });
 });
 
@@ -146,17 +147,19 @@ it('демо-данные: права после отката к прежней 
     asSchemaOwner(function () {
         $this->seed([DemoSeeder::class, BoardsDemoSeeder::class]);
         $migration = accessGrantsMigration();
-        $after = AccessSnapshot::current();
+        // У тех, кто может войти (AccessSnapshot::activeUsers: деактивированным с П2c личная выдача прав не даёт)
+        $active = fn (array $snapshot) => AccessSnapshot::activeUsers($snapshot);
+        $after = $active(AccessSnapshot::current());
 
         companiesMigration()->down();
-        expect(AccessSnapshot::beforeCompanies())->toBe($after);
+        expect($active(AccessSnapshot::beforeCompanies()))->toBe($after);
         $migration->down();
-        expect(AccessSnapshot::legacy())->toBe($after);
+        expect($active(AccessSnapshot::legacy()))->toBe($after);
 
         $migration->up();
-        expect(AccessSnapshot::beforeCompanies())->toBe($after);
+        expect($active(AccessSnapshot::beforeCompanies()))->toBe($after);
         companiesMigration()->up();
-        expect(AccessSnapshot::current())->toBe($after)
+        expect($active(AccessSnapshot::current()))->toBe($after)
             ->and(count($after['pairs']))->toBeGreaterThan(20);
     });
 });

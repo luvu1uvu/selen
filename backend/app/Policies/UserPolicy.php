@@ -14,10 +14,9 @@ use Illuminate\Auth\Access\Response;
  * проверяют Actions; здесь — только «кто может выполнять действие». Не участник компании — 404.
  *
  * Кем управляет администратор компании: Владельцем — никто (и он сам, кроме передачи владения); администраторами
- * компании — только Владелец; участниками — тот, у кого право компании «управлять пользователями» (администратор
- * компании и Владелец). Деактивация пока — у учётной записи (решение PM 23.10); в компании — П2c. До неё учётной
- * записью человека с «домами» в нескольких компаниях управляет только Владелец: деактивация из админки одной
- * компании отключила бы его и в другой (решение PM 26.10; план, вопрос 3 и пре-мортем 6.1).
+ * компании (и убранными из неё) — только Владелец; участниками и гостями — тот, у кого право компании «управлять
+ * пользователями». Деактивация и возврат — в компании (П2c): человек с «домами» в нескольких компаниях убирается только
+ * из этой, поэтому ограничение «только Владелец» снято. Учётную запись целиком отключает и включает только Владелец.
  */
 class UserPolicy
 {
@@ -49,6 +48,17 @@ class UserPolicy
         return $this->managesOther($actor, $user, $company);
     }
 
+    /**
+     * Передать доступ уходящего преемнику — это выдача доступа к пространствам, групп и прав компании: только Владелец
+     * и администратор компании (права компании выдают только они, В17; ревью П2c-1).
+     */
+    public function transferAccess(User $actor, User $user, Company $company): Response
+    {
+        $response = $this->deactivate($actor, $user, $company);
+
+        return $response->allowed() && ! $company->permissionsOf($actor)->isAdmin() ? Response::deny() : $response;
+    }
+
     public function reactivate(User $actor, User $user, Company $company): Response
     {
         return $this->managesOther($actor, $user, $company);
@@ -60,6 +70,46 @@ class UserPolicy
         return $this->allowCompanyMemberIf($actor, $company, fn () => $actor->isOwner() && $actor->isNot($user));
     }
 
+    /** «Отключить» и «Включить» учётную запись — только Владелец (решение PM 28.10, п. 2); себя — нет. */
+    public function block(User $actor, User $user, Company $company): Response
+    {
+        return $this->allowCompanyMemberIf($actor, $company, fn () => $actor->isOwner() && $actor->isNot($user));
+    }
+
+    /**
+     * Права компании человека («Права компании»): смотреть и менять — Владелец и администратор компании (участник
+     * с правами их не выдаёт, решение PM 23.10, В17). Цель — действующий «дом», не Владелец (у него все права);
+     * администратора компании (и себя) — только Владелец.
+     * Какие именно права может менять автор — CompanyPermissions::editableBy().
+     */
+    public function managePermissions(User $actor, User $user, Company $company): Response
+    {
+        // Права администратора компании (и свои) меняет только Владелец: администраторами управляет он (правило 16)
+        return $this->allowCompanyMemberIf($actor, $company, fn () => $company->permissionsOf($actor)->isAdmin()
+            && ! $user->isOwner()
+            && $company->permissionsOf($user)->isMember()
+            && ($actor->isOwner() || ! $company->permissionsOf($user)->isAssignedAdmin()));
+    }
+
+    /**
+     * Гости компании («Добавить гостя», срок, «Убрать гостя») — право «управлять пользователями» (план, раздел 3).
+     * Цель (для изменения и удаления) — гость этой компании; проверяет Action.
+     */
+    public function manageGuests(User $actor, Company $company): Response
+    {
+        return $this->allowCompany($actor, $company, Permission::CompanyManageUsers);
+    }
+
+    /**
+     * Пространства, где можно выдать доступ приглашённому и гостю: тому, кто приглашает или ведёт гостей (сами
+     * пространства — по праву выдавать доступ в них, GrantableSpaces).
+     */
+    public function viewGrantableSpaces(User $actor, Company $company): Response
+    {
+        return $this->allowCompanyMemberIf($actor, $company, fn () => $company->permissionsOf($actor)->allows(Permission::CompanyInviteUsers)
+            || $company->permissionsOf($actor)->allows(Permission::CompanyManageUsers));
+    }
+
     /** Может ли участник компании менять учётную запись её человека (роль в компании, статус). */
     public function manages(User $actor, User $user, Company $company): bool
     {
@@ -67,19 +117,8 @@ class UserPolicy
             return false;
         }
 
-        // Администратором компании и человеком с «домами» в нескольких компаниях управляет только Владелец
-        return $actor->isOwner() || ! ($company->permissionsOf($user)->isAdmin() || $company->permissionsOf($user)->hasOtherHomes());
-    }
-
-    /**
-     * Подсказка интерфейсу (AdminUserResource): участником с «домами» в нескольких компаниях управляет только Владелец —
-     * у администратора компании действий нет, а почему — объясняет подсказка.
-     */
-    public function onlyOwnerManages(User $actor, User $user, Company $company): bool
-    {
-        return ! $actor->isOwner() && ! $user->isOwner()
-            && $company->permissionsOf($actor)->allows(Permission::CompanyManageUsers)
-            && $company->permissionsOf($user)->hasOtherHomes();
+        // Администратором компании (и убранным из неё) управляет только Владелец
+        return $actor->isOwner() || ! $company->permissionsOf($user)->isAssignedAdmin();
     }
 
     private function managesOther(User $actor, User $user, Company $company): Response

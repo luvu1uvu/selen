@@ -20,6 +20,7 @@ use App\Models\Card;
 use App\Models\Lane;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
+use App\Services\Access\CompanyMembers;
 use App\Services\Cards\CardHistory;
 use App\Services\Cards\CardVisibility;
 use Illuminate\Http\JsonResponse;
@@ -133,7 +134,8 @@ class CardController extends Controller
             ->filter(fn (User $user) => $visibility->canSee($user, $card))
             ->sortBy(fn (User $user) => mb_strtolower($user->name))
             ->values()
-            ->map(fn (User $user) => ['id' => $user->id, 'name' => $user->name]);
+            // Гость — с бейджем (П2c)
+            ->map(fn (User $user) => ['id' => $user->id, 'name' => $user->name, 'guest' => CompanyMembers::guestOf($user, $card->space->company_id) !== null]);
 
         return response()->json(['data' => $users]);
     }

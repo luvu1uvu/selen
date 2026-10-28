@@ -11,6 +11,7 @@ use App\Models\CardType;
 use App\Models\Label;
 use App\Models\Lane;
 use App\Models\User;
+use App\Services\Access\CompanyMembers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Gate;
@@ -107,7 +108,7 @@ class BoardDetailResource extends JsonResource
             'people' => $this->cards->pluck('responsible')->filter()->unique('id')->values()->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => $u->name,
-                'status' => $u->status,
+                'status' => CompanyMembers::statusOf($u, (string) $this->resource->companyId()),
             ]),
         ];
     }

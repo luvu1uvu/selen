@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Enums\Permission;
 use App\Models\Attachment;
 use App\Models\Board;
 use App\Models\BoardColumn;
@@ -30,7 +31,7 @@ use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /** Право смотреть аналитику трудозатрат сотрудников (этап 9). */
+    /** Право смотреть аналитику трудозатрат сотрудников компании (этап 9; по праву компании — П2c). */
     public const VIEW_WORK_TIME_ANALYTICS = 'view-work-time-analytics';
 
     public function register(): void
@@ -72,9 +73,11 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureRateLimiting();
 
-        // Аналитика трудозатрат (этап 9) — только Владельцу (ADR-0017). Маршруты этапа 9 закрываются этой
-        // проверкой: Gate::authorize(AppServiceProvider::VIEW_WORK_TIME_ANALYTICS)
-        Gate::define(self::VIEW_WORK_TIME_ANALYTICS, fn (User $user) => $user->isOwner());
+        // Аналитика трудозатрат (этап 9) — по праву компании «смотреть аналитику трудозатрат» (ADR-0017, «Изменения»;
+        // П2c): у Владельца всегда, остальным — выдано лично, через группу или «Все сотрудники». Маршруты этапа 9
+        // закрываются этой проверкой: Gate::authorize(AppServiceProvider::VIEW_WORK_TIME_ANALYTICS, $company)
+        Gate::define(self::VIEW_WORK_TIME_ANALYTICS, fn (User $user, Company $company) => $company->permissionsOf($user)
+            ->allows(Permission::CompanyViewTimeAnalytics));
     }
 
     /** Сколько ждать до конца лимита — словами: «45 сек.», «12 мин.», «5 ч 20 мин.». */

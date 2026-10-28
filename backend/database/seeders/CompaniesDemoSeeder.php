@@ -6,6 +6,7 @@ use App\Actions\Boards\CreateBoardAction;
 use App\Actions\Cards\CreateCardAction;
 use App\Actions\Cards\MoveCardAction;
 use App\Actions\Companies\CreateCompanyAction;
+use App\Actions\Guests\AddGuestAction;
 use App\Actions\Navigation\CreateFolderAction;
 use App\Actions\Spaces\AddSpaceMemberAction;
 use App\Actions\Spaces\CreateSpaceAction;
@@ -29,8 +30,10 @@ use Illuminate\Database\Seeder;
  *   и администратор компании irina@selen.test (Ирина Морозова);
  * - «Компания 3» — маленькая: одно пространство STOCK «Склад»; её администратор — тоже Ирина (у неё в админке выбор
  *   из двух компаний), сотрудница — nina@selen.test;
- * - oleg@selen.test (Олег Никитин) — «дом» в «Компании 1» и «Компании 2»: в дереве у него заголовки обеих компаний,
- *   деактивировать его может только Владелец (решение PM 26.10).
+ * - oleg@selen.test (Олег Никитин) — «дом» в «Компании 1» и «Компании 2»: в дереве у него заголовки обеих компаний;
+ *   администратор каждой из них убирает его только из своей (деактивация в компании, П2c);
+ * - гости (П2c): boris@selen.test («Компания 1») — гость «Компании 2» в «Поддержке» (Комментатор, без срока);
+ *   vera@selen.test («Компания 1») — гость «Компании 3» в «Складе» (Редактор, срок — 30 дней).
  *
  * Компании создаёт Владелец (CreateCompanyAction — справочники из шаблона), пространства — администратор компании.
  */
@@ -88,7 +91,13 @@ class CompaniesDemoSeeder extends Seeder
             'Приёмка бумаги А4', 'Инвентаризация стеллажа 3', 'Возврат брака поставщику', 'Заказ картриджей',
         ]);
 
+        // Гости (П2c): сотрудники «Компании 1» с личным доступом к пространству чужой компании
+        $guests = app(AddGuestAction::class);
+        $guests->handle($irina, $second, 'boris@selen.test', null, [['space' => $support, 'role' => SpaceRole::Commenter, 'own_cards_only' => false]]);
+        $guests->handle($irina, $third, 'vera@selen.test', now('Europe/Moscow')->addDays(30)->endOfDay()->utc(), [['space' => $stock, 'role' => SpaceRole::Editor, 'own_cards_only' => false]]);
+
         $this->command->info('Компании: «Компания 2» (SALES, SUP; администратор irina@selen.test), «Компания 3» (STOCK; администратор — тоже Ирина).');
+        $this->command->info('Гости: boris@selen.test — в «Поддержке» «Компании 2» без срока, vera@selen.test — в «Складе» «Компании 3» на 30 дней.');
         $this->command->info('oleg@selen.test — сотрудник «Компании 1» и «Компании 2» (два «дома»); пароль у всех тот же.');
     }
 

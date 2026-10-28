@@ -5,14 +5,14 @@ namespace App\Actions\Users;
 use App\Enums\EventType;
 use App\Enums\UserRole;
 use App\Models\User;
-use App\Services\Access\AccessResolver;
 use App\Services\EventLog\EventRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Передача владения (ADR-0017): получатель становится Владельцем, бывший Владелец — администратором своих компаний
- * (ADR-0024). Событие — без компании, «о человеке» — новом Владельце: его видят администраторы компаний, где он «дом»
+ * (ADR-0024); его личный доступ в компаниях, где он не «дом», снимается (FormerOwnerGrants, решение PM 28.10, п. 6).
+ * Событие — без компании, «о человеке» — новом Владельце: его видят администраторы компаний, где он «дом»
  * (решение PM 23.10).
  * Обе строки меняются в одной транзакции (отложенный триггер БД проверяет, что Владелец не пропал).
  * Из интерфейса — Владелец с подтверждением паролем (TransferOwnershipRequest), аварийно — команда
@@ -20,7 +20,10 @@ use Illuminate\Validation\ValidationException;
  */
 class TransferOwnershipAction
 {
-    public function __construct(private readonly EventRecorder $events) {}
+    public function __construct(
+        private readonly EventRecorder $events,
+        private readonly FormerOwnerGrants $formerOwnerGrants,
+    ) {}
 
     /**
      * @param  string  $via  admin_panel | console
@@ -52,7 +55,11 @@ class TransferOwnershipAction
             // Бывший Владелец остаётся администратором — своих компаний (ADR-0024: администраторы — у компаний)
             $from?->forceFill(['role' => UserRole::Member])->save();
             if ($from !== null) {
-                $from->companies()->wherePivot('kind', AccessResolver::HOME)->newPivotQuery()->update(['is_admin' => true, 'updated_at' => now()]);
+                $from->companies()->wherePivotNull('deactivated_at')->newPivotQuery()->update(['is_admin' => true, 'updated_at' => now()]);
+            }
+            // Доступ бывшего Владельца там, где он не сотрудник, снимается — иначе ожил бы молча (решение PM 28.10, п. 6)
+            if ($from !== null) {
+                $this->formerOwnerGrants->revoke($actor, $from);
             }
             $to->forceFill(['role' => UserRole::Owner])->save();
 

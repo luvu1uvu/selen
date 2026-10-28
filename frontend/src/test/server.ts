@@ -56,7 +56,10 @@ export const ALL_USER_PERMISSIONS: AdminUserPermissions = {
   reactivate: true,
   manage_invitation: true,
   transfer_ownership: true,
-  owner_only: false,
+  block: true,
+  transfer_access: true,
+  manage_guest: false,
+  manage_permissions: true,
 }
 
 export const NO_USER_PERMISSIONS: AdminUserPermissions = {
@@ -65,12 +68,21 @@ export const NO_USER_PERMISSIONS: AdminUserPermissions = {
   reactivate: false,
   manage_invitation: false,
   transfer_ownership: false,
-  owner_only: false,
+  block: false,
+  transfer_access: false,
+  manage_guest: false,
+  manage_permissions: false,
 }
 
 /** Пользователь в админском списке (AdminUserResource): по умолчанию — со всеми действиями. */
 export function makeAdminUser(overrides: Partial<AdminUser> = {}): AdminUser {
-  return { ...makeUser(), permissions: ALL_USER_PERMISSIONS, ...overrides }
+  return {
+    ...makeUser(),
+    guest: null,
+    blocked: false,
+    permissions: ALL_USER_PERMISSIONS,
+    ...overrides,
+  }
 }
 
 /** Фабрика пространства (глазами участника) для тестов. */
@@ -131,6 +143,20 @@ export const defaultHandlers = [
   http.get('*/api/v1/cards/:key/comments', () => HttpResponse.json({ data: [], users: {} })),
   http.get('*/api/v1/spaces/:key/members', () => HttpResponse.json({ data: [] })),
   http.get('*/api/v1/spaces/:key/labels', () => HttpResponse.json({ data: [] })),
+  // Передача владения: Владелец ничего не теряет, если тест не задал своё
+  http.get('*/api/v1/admin/companies/:company/users/:user/transfer-impact', () =>
+    HttpResponse.json({ data: { lost_spaces: [], unmanaged_spaces: [] } }),
+  ),
+  // П2c: пространства, где можно выдавать доступ, и права компании — пусто, если тест не задал своё
+  http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
+    HttpResponse.json({ data: [] }),
+  ),
+  http.get('*/api/v1/admin/companies/:company/users/:user/permissions', () =>
+    HttpResponse.json({ data: [] }),
+  ),
+  http.get('*/api/v1/admin/companies/:company/groups/:group/permissions', () =>
+    HttpResponse.json({ data: [] }),
+  ),
 ]
 
 export const server = setupServer(...defaultHandlers)

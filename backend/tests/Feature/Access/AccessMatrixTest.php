@@ -9,6 +9,7 @@ use App\Enums\UserStatus;
 use App\Models\Card;
 use App\Models\Group;
 use App\Models\Label;
+use App\Models\User;
 use App\Services\Access\AccessResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +39,10 @@ use Illuminate\Support\Facades\Storage;
 |
 | Другая компания (ADR-0024): её участник и администратор получают 404 на всех маршрутах (полная проверка изоляции —
 | CompanyIsolationTest).
+|
+| Гость (П2c): личная роль действует как у участника той же роли (Редактор, Комментатор, «только свои»); срок истёк —
+| 404; «Все сотрудники» и группы гостю ничего не дают. Убранный из компании (деактивирован в ней, работает в другой) —
+| 404 на всех маршрутах, его личная роль «спит».
 |
 | Путь — от /api/v1; веб-маршрут, который браузер открывает сам (ссылка на файл /files/{id}, UI-1b), — от корня («/…»).
 | Запросы матрицы — с Accept: application/json: 404 у всех одинаковый JSON (bootstrap/app.php).
@@ -246,6 +251,46 @@ it('участник и администратор другой компании
         ($this->call)($method, $path)
             ->assertNotFound()
             ->assertExactJson(['message' => __('selen.not_found')]);
+    }
+})->with(spaceEndpoints());
+
+it('гость: личная роль — как у участника; истёк срок — 404 с единым телом (П2c)', function (string $method, string $path, string $level) {
+    $home = otherCompany();
+    // Порядок важен: редактор последним — его изменения (исключение участника) не мешают комментатору
+    foreach ([SpaceRole::Commenter, SpaceRole::Editor] as $role) {
+        $guest = User::factory()->inCompany($home)->guestIn(company(), now()->addDay())->create();
+        addToSpace($this->space, $guest, $role);
+        $this->actingAs($guest);
+
+        expectByLevel(($this->call)($method, $path), $level, $role, "гость: {$role->value}");
+    }
+
+    // Срок истёк — доступа нет, как у не участника (проверяется на каждый запрос, без фоновых задач)
+    $this->travel(2)->days();
+    ($this->call)($method, $path)->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
+})->with(spaceEndpoints());
+
+it('гость в режиме «только свои карточки»: чужая карточка — 404 (П2c)', function (string $method, string $path) {
+    $guest = User::factory()->inCompany(otherCompany())->guestIn(company())->create();
+    addToSpace($this->space, $guest, StandardRole::EditorOwnCards);
+    $this->actingAs($guest);
+
+    ($this->call)($method, $path)->assertNotFound();
+})->with(cardEndpoints());
+
+it('гостю «Все сотрудники» и группы доступа не дают; убранный из компании — 404 (П2c)', function (string $method, string $path) {
+    grantGroup($this->space, Group::everyone(company()), SpaceRole::Editor);
+    $guest = User::factory()->inCompany(otherCompany())->guestIn(company())->create();
+    $removed = member();
+    addToSpace($this->space, $removed, SpaceRole::Admin);
+    addToGroup($this->targetGroup, $removed);
+    // Убран из этой компании, но работает в другой: вход открыт, личная роль и группа здесь «спят»
+    $removed->companies()->updateExistingPivot(company()->id, ['deactivated_at' => now()]);
+    $removed->companies()->attach(otherCompany()->id, ['kind' => 'home']);
+
+    foreach ([$guest, $removed] as $user) {
+        $this->actingAs($user);
+        ($this->call)($method, $path)->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
     }
 })->with(spaceEndpoints());
 

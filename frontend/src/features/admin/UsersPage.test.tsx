@@ -75,7 +75,16 @@ describe('Админка пользователей', () => {
       ),
       http.post('*/api/v1/admin/companies/:company/invitations', async ({ request }) => {
         body = await request.json()
-        return HttpResponse.json({ data: {} }, { status: 201 })
+        return HttpResponse.json(
+          {
+            data: {
+              result: 'invited',
+              user: { id: 'u-new', name: 'Борис Новиков' },
+              invitation: null,
+            },
+          },
+          { status: 201 },
+        )
       }),
     )
     renderApp('/admin/users')
@@ -89,7 +98,50 @@ describe('Админка пользователей', () => {
     expect(
       await screen.findByText('Приглашение отправлено на boris@selen.test'),
     ).toBeInTheDocument()
-    expect(body).toEqual({ name: 'Борис Новиков', email: 'boris@selen.test', role: 'admin' })
+    expect(body).toEqual({
+      name: 'Борис Новиков',
+      email: 'boris@selen.test',
+      role: 'admin',
+      spaces: [],
+    })
+  })
+
+  it('существующий сотрудник другой компании — «Сотрудник добавлен»; сразу доступ к пространству (П2c)', async () => {
+    let body: unknown
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/users', () =>
+        HttpResponse.json(page([self(owner)])),
+      ),
+      http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
+        HttpResponse.json({ data: [{ id: 's-dev', key: 'DEV', name: 'Разработка' }] }),
+      ),
+      http.post('*/api/v1/admin/companies/:company/invitations', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json(
+          {
+            data: {
+              result: 'added',
+              user: { id: 'u-oleg', name: 'Олег Никитин' },
+              invitation: null,
+            },
+          },
+          { status: 201 },
+        )
+      }),
+    )
+    renderApp('/admin/users')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Пригласить' }))
+    await userEvent.type(screen.getByLabelText('Имя и фамилия'), 'Олег')
+    await userEvent.type(screen.getByLabelText('Рабочий email'), 'oleg@selen.test')
+    await userEvent.click(await screen.findByRole('button', { name: 'Добавить пространство' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить приглашение' }))
+
+    expect(await screen.findByText('Сотрудник добавлен: Олег Никитин')).toBeInTheDocument()
+    expect(body).toMatchObject({
+      email: 'oleg@selen.test',
+      spaces: [{ space_id: 's-dev', role: 'editor', own_cards_only: false }],
+    })
   })
 
   it('обычный администратор приглашает только участника', async () => {
@@ -155,7 +207,7 @@ describe('Админка пользователей', () => {
     await userEvent.click(
       within(row).getByRole('button', { name: 'Действия с пользователем «Борис»' }),
     )
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать…' }))
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Деактивировать' }),
     )
@@ -242,7 +294,7 @@ describe('Админка пользователей', () => {
     await userEvent.click(
       within(memberRow).getByRole('button', { name: 'Действия с пользователем «Борис»' }),
     )
-    expect(await screen.findByRole('menuitem', { name: 'Деактивировать' })).toBeInTheDocument()
+    expect(await screen.findByRole('menuitem', { name: 'Деактивировать…' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Сделать администратором' })).toBeNull()
     // Передать владение может только Владелец
     expect(screen.queryByRole('button', { name: 'Передать владение' })).toBeNull()

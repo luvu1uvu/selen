@@ -6,6 +6,7 @@ use App\Models\AccessGrant;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
+use App\Services\Access\CompanyMembers;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -33,6 +34,13 @@ class GroupResource extends JsonResource
             'created_at' => $this->created_at->toIso8601ZuluString(),
             'members_count' => $this->whenCounted('members', fn () => $this->membersCount()),
             'spaces_count' => $this->whenCounted('spaceGrants'),
+            // Страница группы: что текущий пользователь может менять (состав и доступ — выдача доступа, П2c)
+            'permissions' => $this->whenLoaded('members', fn () => [
+                'manage_members' => $request->user()?->can('manageMembers', $this->resource) ?? false,
+                'manage_spaces' => $request->user()?->can('manageSpaces', $this->resource) ?? false,
+                // Архив снимает, возврат снова выдаёт её доступ и права (аудит П2c-1, S-2)
+                'archive' => $request->user()?->can($this->resource->isArchived() ? 'restore' : 'archive', $this->resource) ?? false,
+            ]),
             'members' => $this->whenLoaded('members', fn () => $this->members
                 ->sortBy(fn (User $user) => mb_strtolower($user->name))
                 ->values()
@@ -40,7 +48,8 @@ class GroupResource extends JsonResource
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'status' => $user->status,
+                    // Статус — в компании группы (П2c): убранный из неё остаётся в составе с пометкой
+                    'status' => CompanyMembers::statusOf($user, $this->company_id),
                     'added_at' => $this->addedAt($user),
                 ])),
             'spaces' => $this->whenLoaded('spaceGrants', fn () => $this->spaceGrants

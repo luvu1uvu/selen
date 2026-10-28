@@ -79,22 +79,91 @@ export interface Company {
 /** Что текущий администратор может сделать с пользователем (UserPolicy, ADR-0017) — подсказка интерфейсу. */
 export interface AdminUserPermissions {
   update_role: boolean
+  /** Деактивировать и вернуть — в этой компании (П2c). */
   deactivate: boolean
   reactivate: boolean
   /** Повторить или отозвать приглашение пользователя. */
   manage_invitation: boolean
   transfer_ownership: boolean
-  /** Деактивировать и вернуть может только Владелец: у человека «дома» в нескольких компаниях (до П2c). */
-  owner_only: boolean
+  /** Отключить и включить учётную запись — только Владелец (П2c). */
+  block: boolean
+  /** Деактивировать с передачей доступа преемнику — Владелец и администратор компании. */
+  transfer_access: boolean
+  /** Изменить срок и пространства гостя, убрать гостя (право «управлять пользователями»). */
+  manage_guest: boolean
+  /** Вкладка «Права компании» (Владелец и администратор компании). */
+  manage_permissions: boolean
+}
+
+/** Гость компании (П2c): срок (null — без срока) и истёк ли. */
+export interface GuestMembership {
+  expires_at: string | null
+  expired: boolean
 }
 
 /**
- * Пользователь в админке «Пользователи». У Владельца в компании, где он не «дом», время входа и часовой пояс не
- * приходят (null).
+ * Пользователь в админке «Пользователи»: статус — в этой компании (убранный из неё — deactivated). Время входа и часовой
+ * пояс приходят только у действующих сотрудников компании (иначе null).
  */
 export interface AdminUser extends Omit<User, 'timezone'> {
   timezone: string | null
+  /** Гость этой компании; null — сотрудник или Владелец. */
+  guest: GuestMembership | null
+  /** Учётную запись отключил Владелец (вернуть может только он). */
+  blocked: boolean
   permissions: AdminUserPermissions
+}
+
+/** Фильтр «Пользователей» по статусу в компании. */
+export type UserStatusFilter = UserStatus | 'guest'
+
+/** Итог приглашения: invited — ушла ссылка задать пароль; added — существующий сотрудник сразу добавлен (П2c). */
+export interface InviteResult {
+  result: 'invited' | 'added'
+  user: UserRef
+  invitation: Invitation | null
+}
+
+/** Пространство, где можно выдать доступ приглашённому и гостю. */
+export interface GrantableSpace {
+  id: string
+  key: string
+  name: string
+}
+
+/** Доступ к пространству в приглашении и у гостя. */
+export interface SpaceGrantInput {
+  space_id: string
+  role: SpaceRole
+  own_cards_only?: boolean
+}
+
+/** Право компании у человека (вкладка «Права компании», П2c). */
+export interface UserCompanyPermission {
+  permission: CompanyPermission
+  /** Выдано лично. */
+  personal: boolean
+  /** Через какие группы. */
+  groups: UserRef[]
+  /** Есть у администратора компании по умолчанию. */
+  by_admin_role: boolean
+  /** Итог: право есть. */
+  effective: boolean
+  /** Может ли текущий пользователь менять галочку. */
+  editable: boolean
+}
+
+/** Право компании у группы. */
+export interface GroupCompanyPermission {
+  permission: CompanyPermission
+  granted: boolean
+  editable: boolean
+}
+
+/** Что потеряет Владелец при передаче владения (П2c). */
+export interface TransferImpact {
+  lost_spaces: { id: string; key: string; name: string }[]
+  unmanaged_spaces: { id: string; key: string; name: string }[]
 }
 
 export interface Invitation {
@@ -461,7 +530,8 @@ export interface CardTransition {
 /** Источник доступа через группу у человека в пространстве. */
 export interface PersonGroupSource {
   id: string
-  name: string
+  /** null — смотрит гость: группы компании-хозяина без названий (решение PM 28.10). */
+  name: string | null
   role: SpaceRole
   own_cards_only: boolean
 }
@@ -471,7 +541,11 @@ export interface PersonGroupSource {
  * Пользователю только с режимом «только свои карточки» источники не отдаются: есть только user.
  */
 export interface SpacePerson {
-  user: { id: string; name: string; email: string; status: UserStatus }
+  /**
+   * status — в компании пространства; guest — гость компании (бейдж, П2c). email — null, когда смотрит гость (людей
+   * компании-хозяина он видит только по имени, решение PM 28.10).
+   */
+  user: { id: string; name: string; email: string | null; status: UserStatus; guest: boolean }
   /** Самая сильная роль по всем источникам (для показа). */
   role?: SpaceRole
   /** Личное участие; null — доступ только через группы. */
@@ -491,11 +565,13 @@ export type SystemGroup = 'everyone'
 export interface SpaceGroupGrant {
   group: {
     id: string
-    name: string
+    /** null — смотрит гость: группы компании-хозяина без названий (решение PM 28.10). */
+    name: string | null
     description: string | null
     system: SystemGroup | null
     archived_at: string | null
-    members_count: number
+    /** null — смотрит гость (численность компании-хозяина ему не показываем, LATER-139). */
+    members_count: number | null
   }
   role: SpaceRole
   own_cards_only: boolean
@@ -521,6 +597,8 @@ export interface Group {
   created_at: string
   members_count: number
   spaces_count: number
+  /** Страница группы: можно ли менять состав и доступ к пространствам (П2c: это выдача доступа). */
+  permissions?: { manage_members: boolean; manage_spaces: boolean; archive: boolean }
   members?: (DirectoryUser & { added_at: string })[]
   spaces?: {
     space: { id: string; key: string; name: string; archived_at: string | null }
@@ -529,11 +607,20 @@ export interface Group {
   }[]
 }
 
-export type AccessInactiveReason = 'group_archived' | 'user_deactivated' | 'user_invited'
+export type AccessInactiveReason =
+  'group_archived' | 'user_deactivated' | 'user_invited' | 'guest_expired'
 
 /** Админка → пользователь: к каким пространствам доступ и почему. */
 export interface UserAccess {
-  user: { id: string; name: string; email: string; role: UserRole; status: UserStatus }
+  user: {
+    id: string
+    name: string
+    email: string
+    role: UserRole
+    status: UserStatus
+    /** Гость этой компании; null — сотрудник или Владелец. */
+    guest: GuestMembership | null
+  }
   groups: { id: string; name: string; archived_at: string | null }[]
   spaces: {
     space: { id: string; key: string; name: string; archived_at: string | null }

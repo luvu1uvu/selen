@@ -7,7 +7,7 @@ namespace App\Enums;
  *
  * Права сущности (scope = entity) входят в роли: роль — набор этих прав и область карточек (CardScope).
  * Права компании (scope = company) в роли не входят: с П2b-1 их даёт членство (Владелец — все, администратор компании —
- * companyAdminDefaults()), выдача лично или группе компании — с П2c.
+ * companyAdminDefaults()), с П2c — ещё и выдача лично или группе компании (grantable(); ownerGranted() — только Владелец).
  * Политики проверяют права отсюда, а не названия ролей (CLAUDE.md, правило 11).
  *
  * Правила:
@@ -111,13 +111,14 @@ enum Permission: string
             self::SpaceViewSettings, self::FieldRead, self::FieldUpdate, self::FieldDelete => 'этап 5',
             self::TimeViewOthers, self::TimeEditOthers => 'этап 6',
             self::AutomationView, self::AutomationManage => 'этап 10',
-            // Админка компании (П2b-1): у Владельца и администратора компании по умолчанию; выдача — с П2c
+            // Админка компании (П2b-1): у Владельца и администратора компании по умолчанию; выдача лично и группам — с П2c
             self::CompanyInviteUsers, self::CompanyManageUsers, self::CompanyManageGroups,
             self::CompanyManageDictionaries, self::CompanyManageStructure, self::CompanyManageAccess,
             self::CompanyViewEventLog, self::CompanyManageTrash => 'П2b-1',
             self::CompanyManageRoles => 'П2e',
             self::CompanyDeleteUsers => 'LATER-105',
-            default => 'П2c',
+            // Аналитика трудозатрат (этап 9): гейт AppServiceProvider::VIEW_WORK_TIME_ANALYTICS — по этому праву с П2c
+            self::CompanyViewTimeAnalytics => 'П2c',
         };
     }
 
@@ -130,10 +131,43 @@ enum Permission: string
     public static function companyAdminDefaults(): array
     {
         return array_values(array_filter(
-            self::cases(),
-            fn (self $permission) => $permission->scope() === 'company'
-                && $permission !== self::CompanyDeleteUsers
-                && $permission !== self::CompanyViewTimeAnalytics,
+            self::companyScope(),
+            fn (self $permission) => ! in_array($permission, self::ownerGranted(), true),
+        ));
+    }
+
+    /**
+     * Все права компании (scope = company) — у Владельца.
+     *
+     * @return list<self>
+     */
+    public static function companyScope(): array
+    {
+        return array_values(array_filter(self::cases(), fn (self $permission) => $permission->scope() === 'company'));
+    }
+
+    /**
+     * Права компании, которые выдаёт только Владелец (решение PM 23.10, В17): у администратора компании их нет
+     * по умолчанию, и выдать их он не может.
+     *
+     * @return list<self>
+     */
+    public static function ownerGranted(): array
+    {
+        return [self::CompanyDeleteUsers, self::CompanyViewTimeAnalytics];
+    }
+
+    /**
+     * Права компании, которые можно выдать человеку или группе («Права компании», П2c): только уже действующие —
+     * «управлять ролями» появится с пользовательскими ролями (П2e), «удалять пользователей» — с удалением (LATER-105).
+     *
+     * @return list<self>
+     */
+    public static function grantable(): array
+    {
+        return array_values(array_filter(
+            self::companyScope(),
+            fn (self $permission) => in_array($permission->since(), ['П2b-1', 'П2c'], true),
         ));
     }
 

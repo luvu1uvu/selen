@@ -5,11 +5,12 @@ namespace App\Actions\Invitations;
 use App\Actions\Users\UserLock;
 use App\Enums\EventType;
 use App\Enums\InvitationState;
-use App\Enums\UserStatus;
 use App\Models\Company;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Notifications\InvitationNotification;
+use App\Services\Access\CompanyMemberships;
+use App\Services\Auth\AccountStatus;
 use App\Services\EventLog\EventRecorder;
 use App\Services\Invitations\InvitationIssuer;
 use Illuminate\Support\Facades\Date;
@@ -28,6 +29,8 @@ class ResendInvitationAction
         private readonly EventRecorder $events,
         private readonly InvitationIssuer $issuer,
         private readonly UserLock $lock,
+        private readonly CompanyMemberships $memberships,
+        private readonly AccountStatus $accountStatus,
     ) {}
 
     public function handle(User $actor, Invitation $previous, Company $company): Invitation
@@ -39,7 +42,11 @@ class ResendInvitationAction
             $previous = Invitation::query()->lockForUpdate()->findOrFail($previous->id);
             $user = $this->lock->lock($actor, $authorized, $company);
 
-            $this->ensureCanResend($previous, $user);
+            $this->ensureCanResend($previous, $user, $company);
+            // Отключённому Владельцем приглашение не поможет — сначала его должен включить Владелец (аудит П2c-1, S-5)
+            if ($user->isBlocked()) {
+                throw ValidationException::withMessages(['invitation' => __('selen.users.blocked')]);
+            }
             $previousState = $previous->state();
 
             $issued = $this->issuer->issue($company, $user, $actor);
@@ -49,9 +56,9 @@ class ResendInvitationAction
                 'revoked_at' => $previous->revoked_at ?? Date::now(),
             ])->save();
 
-            if ($user->status !== UserStatus::Invited) {
-                $user->forceFill(['status' => UserStatus::Invited, 'deactivated_at' => null])->save();
-            }
+            // Отозванное приглашение: человек снова «дом» этой компании, учётная запись — invited (AccountStatus)
+            $this->memberships->reactivateHome($company, $user);
+            $this->accountStatus->sync($user);
 
             $this->events->record(EventType::InvitationResent, $actor, $issued->invitation, [
                 'user_id' => $user->id,
@@ -68,8 +75,10 @@ class ResendInvitationAction
         return $issued->invitation;
     }
 
-    private function ensureCanResend(Invitation $invitation, User $user): void
+    private function ensureCanResend(Invitation $invitation, User $user, Company $company): void
     {
+        // Последнее приглашение — этой компании (аудит П2b-2, S-4)
+        Invitation::rememberLatestIn($company, [$user]);
         $isLatest = $user->latestInvitation?->is($invitation) ?? false;
 
         if (! $isLatest || $user->hasActivated() || $invitation->state() === InvitationState::Accepted) {

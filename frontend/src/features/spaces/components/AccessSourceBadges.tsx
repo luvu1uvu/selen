@@ -23,7 +23,11 @@ export function AccessSourceBadges({ person }: { person: SpacePerson }) {
       {(person.groups ?? []).map((group) => (
         <li key={group.id}>
           <Badge variant="outline">
-            {t('members.sources.group', { group: group.name, role: t(`roles.${group.role}`) })}
+            {/* Гостю группы компании-хозяина — без названий (решение PM 28.10) */}
+            {t('members.sources.group', {
+              group: group.name ?? t('members.hiddenGroup'),
+              role: t(`roles.${group.role}`),
+            })}
             {group.own_cards_only && ` · ${t('members.ownCardsOnly')}`}
           </Badge>
         </li>

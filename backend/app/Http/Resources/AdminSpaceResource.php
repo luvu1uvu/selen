@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Space;
 use App\Models\User;
+use App\Services\Access\CompanyMembers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -39,7 +40,8 @@ class AdminSpaceResource extends JsonResource
             'admins' => $admins->map(fn (User $admin) => [
                 'id' => $admin->id,
                 'name' => $admin->name,
-                'status' => $admin->status,
+                // Статус — в компании пространства (П2c)
+                'status' => CompanyMembers::statusOf($admin, $this->company_id),
             ])->values(),
             'members_count' => (int) $this->getAttribute('personal_grants_count'),
             'groups_count' => (int) $this->getAttribute('group_grants_count'),

@@ -13,7 +13,7 @@ class AssignSpaceGroupRequest extends FormRequest
 {
     public function authorize(): Response
     {
-        return Gate::inspect('update', $this->route('group'));
+        return Gate::inspect('manageSpaces', $this->route('group'));
     }
 
     /**

@@ -17,6 +17,7 @@ import { Checkbox } from '@/shared/ui/checkbox'
 import { Label } from '@/shared/ui/label'
 import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { CompanyPermissionsSection } from './components/CompanyPermissionsSection'
 import { GroupDialog } from './components/GroupDialog'
 import { UserStatusBadge } from './components/UserStatusBadge'
 import {
@@ -64,6 +65,9 @@ export function GroupPage() {
   const group = groupQuery.data
   if (!group) return <p className="text-muted-foreground text-sm">{tc('states.loading')}</p>
   const editable = !group.archived_at
+  // Состав и доступ группы — выдача доступа: с одним правом «управлять группами» их не поменять (П2c)
+  const editableMembers = editable && (group.permissions?.manage_members ?? true)
+  const editableSpaces = editable && (group.permissions?.manage_spaces ?? true)
   // Встроенная «Все сотрудники»: состав вычисляется, группу нельзя изменить или архивировать —
   // только выдавать пространствам (без роли администратора)
   const isSystem = group.system !== null
@@ -99,18 +103,21 @@ export function GroupPage() {
                   {t('groups.edit')}
                 </Button>
               )}
-              <Button
-                variant="outline"
-                disabled={archive.isPending}
-                onClick={() =>
-                  run(
-                    () => archive.mutateAsync({ id: group.id, archived: editable }),
-                    editable ? t('groups.toasts.archived') : t('groups.toasts.restored'),
-                  )
-                }
-              >
-                {editable ? t('groups.archive') : t('groups.restore')}
-              </Button>
+              {/* Архив снимает доступ и права группы, возврат — снова выдаёт: не каждому, кто ведёт группы (П2c) */}
+              {(group.permissions?.archive ?? true) && (
+                <Button
+                  variant="outline"
+                  disabled={archive.isPending}
+                  onClick={() =>
+                    run(
+                      () => archive.mutateAsync({ id: group.id, archived: editable }),
+                      editable ? t('groups.toasts.archived') : t('groups.toasts.restored'),
+                    )
+                  }
+                >
+                  {editable ? t('groups.archive') : t('groups.restore')}
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -123,14 +130,14 @@ export function GroupPage() {
         {isSystem && (
           <p className="text-muted-foreground max-w-2xl text-sm">{t('groups.members.system')}</p>
         )}
-        {editable && !isSystem && <AddMemberForm group={group} />}
+        {editableMembers && !isSystem && <AddMemberForm group={group} />}
         {!isSystem && (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>{t('groups.members.name')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('groups.members.added')}</TableHead>
-                {editable && (
+                {editableMembers && (
                   <TableHead className="w-28">
                     <span className="sr-only">{t('groups.members.actions')}</span>
                   </TableHead>
@@ -159,7 +166,7 @@ export function GroupPage() {
                   <TableCell className="hidden md:table-cell">
                     <AddedAt value={member.added_at} />
                   </TableCell>
-                  {editable && (
+                  {editableMembers && (
                     <TableCell>
                       <Button
                         variant="ghost"
@@ -187,13 +194,15 @@ export function GroupPage() {
           </h2>
           <p className="text-muted-foreground text-sm">{t('groups.spaces.description')}</p>
         </div>
-        {editable && <SpaceAccessForm group={group} />}
+        {editableSpaces && <SpaceAccessForm group={group} />}
         <SpaceAccessTable
           group={group}
-          editable={editable}
+          editable={editableSpaces}
           onRevoke={(id, name) => setConfirm({ kind: 'space', id, name })}
         />
       </section>
+
+      <CompanyPermissionsSection groupId={group.id} />
 
       <GroupDialog group={editing} onClose={() => setEditing(null)} />
       <ConfirmDialog

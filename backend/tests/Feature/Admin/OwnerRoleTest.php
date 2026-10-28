@@ -161,13 +161,15 @@ it('список пользователей подсказывает интер�
         ->keyBy('id')->map(fn (array $row) => $row['permissions']);
 
     $asOwner = $rows($this->owner);
-    expect($asOwner[$member->id])->toBe(['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true, 'owner_only' => false])
-        ->and($asOwner[$this->admin->id])->toBe(['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true, 'owner_only' => false])
-        ->and($asOwner[$this->owner->id])->toBe(['update_role' => false, 'deactivate' => false, 'reactivate' => false, 'manage_invitation' => false, 'transfer_ownership' => false, 'owner_only' => false]);
+    $all = ['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true, 'block' => true, 'transfer_access' => true, 'manage_guest' => false, 'manage_permissions' => true];
+    expect($asOwner[$member->id])->toBe($all)
+        ->and($asOwner[$this->admin->id])->toBe($all)
+        ->and($asOwner[$this->owner->id])->each->toBeFalse();
 
     $asAdmin = $rows($this->admin);
-    expect($asAdmin[$member->id])->toBe(['update_role' => false, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => false, 'owner_only' => false])
+    expect($asAdmin[$member->id])->toBe(['update_role' => false, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => false, 'block' => false, 'transfer_access' => true, 'manage_guest' => false, 'manage_permissions' => true])
         ->and($asAdmin[$this->owner->id])->each->toBeFalse()
+        // Себе и другим администраторам — ничего, в том числе права компании (ими управляет Владелец)
         ->and($asAdmin[$this->admin->id])->each->toBeFalse();
 });
 
@@ -183,10 +185,12 @@ it('приглашение администратора ведёт только 
         ->assertJsonPath('data.0.can_revoke', true);
 });
 
-it('аналитика трудозатрат (этап 9) — только Владельцу', function () {
-    expect(Gate::forUser($this->owner)->allows(AppServiceProvider::VIEW_WORK_TIME_ANALYTICS))->toBeTrue()
-        ->and(Gate::forUser($this->admin)->allows(AppServiceProvider::VIEW_WORK_TIME_ANALYTICS))->toBeFalse()
-        ->and(Gate::forUser(member())->allows(AppServiceProvider::VIEW_WORK_TIME_ANALYTICS))->toBeFalse();
+it('аналитика трудозатрат (этап 9) — по праву компании: у Владельца всегда, администратору по умолчанию нет (ADR-0017, П2c)', function () {
+    $gate = fn (User $user) => Gate::forUser($user)->allows(AppServiceProvider::VIEW_WORK_TIME_ANALYTICS, company());
+
+    expect($gate($this->owner))->toBeTrue()
+        ->and($gate($this->admin))->toBeFalse()
+        ->and($gate(member()))->toBeFalse();
 });
 
 describe('ограничения БД (страховка)', function () {

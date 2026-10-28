@@ -6,20 +6,28 @@ import type {
   CardType,
   Collection,
   Company,
+  CompanyPermission,
   DeactivationImpact,
   EventLogEntry,
+  GrantableSpace,
   Group,
+  GroupCompanyPermission,
   Invitation,
+  InviteResult,
   Paginated,
   Resource,
+  SpaceGrantInput,
   SpaceRole,
+  TransferImpact,
   TrashedCard,
   UserAccess,
-  UserStatus,
+  UserCompanyPermission,
+  UserStatusFilter,
 } from '@/shared/types/api'
 
 export interface UserFilters {
-  status?: UserStatus
+  /** Статус в компании; guest — гости (П2c). */
+  status?: UserStatusFilter
   search?: string
   page?: number
 }
@@ -65,9 +73,27 @@ export async function changeUserRole(
   return data.data
 }
 
-export async function deactivateUser(company: string, userId: string): Promise<AdminUser> {
+/** Деактивировать в компании; successorId — кому передать доступ (П2c). */
+export async function deactivateUser(
+  company: string,
+  userId: string,
+  successorId?: string | null,
+): Promise<AdminUser> {
   const { data } = await api.post<Resource<AdminUser>>(
     `/admin/companies/${company}/users/${userId}/deactivate`,
+    successorId ? { successor_id: successorId } : {},
+  )
+  return data.data
+}
+
+/** Отключить или включить учётную запись — только Владелец (П2c). */
+export async function setUserBlocked(
+  company: string,
+  userId: string,
+  blocked: boolean,
+): Promise<AdminUser> {
+  const { data } = await api.post<Resource<AdminUser>>(
+    `/admin/companies/${company}/users/${userId}/${blocked ? 'block' : 'unblock'}`,
   )
   return data.data
 }
@@ -108,9 +134,10 @@ export async function inviteUser(
     name: string
     email: string
     role: AssignableRole
+    spaces?: SpaceGrantInput[]
   },
-): Promise<Invitation> {
-  const { data } = await api.post<Resource<Invitation>>(
+): Promise<InviteResult> {
+  const { data } = await api.post<Resource<InviteResult>>(
     `/admin/companies/${company}/invitations`,
     payload,
   )
@@ -252,12 +279,106 @@ export async function fetchUserAccess(company: string, userId: string): Promise<
 }
 
 /** Пространства, которые после деактивации останутся без личного администратора. */
+/** account — после отключения учётной записи Владельцем: по всем компаниям человека (П2c). */
 export async function fetchDeactivationImpact(
   company: string,
   userId: string,
+  account = false,
 ): Promise<DeactivationImpact> {
   const { data } = await api.get<Resource<DeactivationImpact>>(
     `/admin/companies/${company}/users/${userId}/deactivation-impact`,
+    { params: account ? { account: 1 } : {} },
+  )
+  return data.data
+}
+
+export async function fetchTransferImpact(
+  company: string,
+  userId: string,
+): Promise<TransferImpact> {
+  const { data } = await api.get<Resource<TransferImpact>>(
+    `/admin/companies/${company}/users/${userId}/transfer-impact`,
+  )
+  return data.data
+}
+
+/** Пространства, где можно выдать доступ приглашённому и гостю (П2c). */
+export async function fetchGrantableSpaces(company: string): Promise<GrantableSpace[]> {
+  const { data } = await api.get<Collection<GrantableSpace>>(
+    `/admin/companies/${company}/grantable-spaces`,
+  )
+  return data.data
+}
+
+/** Гости компании (П2c): expires_on — день (YYYY-MM-DD) или null — без срока. */
+export async function addGuest(
+  company: string,
+  payload: { email: string; expires_on: string | null; spaces: SpaceGrantInput[] },
+): Promise<AdminUser> {
+  const { data } = await api.post<Resource<AdminUser>>(
+    `/admin/companies/${company}/guests`,
+    payload,
+  )
+  return data.data
+}
+
+export async function updateGuest(
+  company: string,
+  userId: string,
+  payload: { expires_on: string | null; spaces: SpaceGrantInput[] },
+): Promise<AdminUser> {
+  const { data } = await api.put<Resource<AdminUser>>(
+    `/admin/companies/${company}/guests/${userId}`,
+    payload,
+  )
+  return data.data
+}
+
+export async function removeGuest(company: string, userId: string): Promise<void> {
+  await api.delete(`/admin/companies/${company}/guests/${userId}`)
+}
+
+/** «Права компании» человека и группы (П2c). */
+export async function fetchUserPermissions(
+  company: string,
+  userId: string,
+): Promise<UserCompanyPermission[]> {
+  const { data } = await api.get<Collection<UserCompanyPermission>>(
+    `/admin/companies/${company}/users/${userId}/permissions`,
+  )
+  return data.data
+}
+
+export async function saveUserPermissions(
+  company: string,
+  userId: string,
+  permissions: CompanyPermission[],
+): Promise<UserCompanyPermission[]> {
+  const { data } = await api.put<Collection<UserCompanyPermission>>(
+    `/admin/companies/${company}/users/${userId}/permissions`,
+    { permissions },
+  )
+  return data.data
+}
+
+export async function fetchGroupPermissions(
+  company: string,
+  groupId: string,
+): Promise<GroupCompanyPermission[]> {
+  const { data } = await api.get<Collection<GroupCompanyPermission>>(
+    `/admin/companies/${company}/groups/${groupId}/permissions`,
+  )
+  return data.data
+}
+
+export async function saveGroupPermissions(
+  company: string,
+  groupId: string,
+  permissions: CompanyPermission[],
+): Promise<GroupCompanyPermission[]> {
+  const { data } = await api.put<Collection<GroupCompanyPermission>>(
+    `/admin/companies/${company}/groups/${groupId}/permissions`,
+    { permissions },
   )
   return data.data
 }

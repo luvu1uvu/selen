@@ -10,6 +10,12 @@ export function formatDateTime(value: string | null | undefined, timeZone?: stri
   }).format(new Date(value))
 }
 
+/** Только дата: «15.11.2026» (срок гостя и т. п.). */
+export function formatDate(value: string | null | undefined, timeZone?: string): string {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeZone }).format(new Date(value))
+}
+
 const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
   ['month', 30 * 24 * 3600],

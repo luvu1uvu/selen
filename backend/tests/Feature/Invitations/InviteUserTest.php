@@ -21,12 +21,13 @@ it('создаёт приглашённого пользователя, приг
         'role' => 'member',
     ])
         ->assertCreated()
-        ->assertJsonPath('data.email', 'boris@selen.test')
-        ->assertJsonPath('data.name', 'Борис Новиков')
-        ->assertJsonPath('data.state', 'pending')
-        ->assertJsonPath('data.invited_by.id', $admin->id)
-        ->assertJsonPath('data.can_revoke', true)
-        ->assertJsonMissingPath('data.token_hash');
+        ->assertJsonPath('data.result', 'invited')
+        ->assertJsonPath('data.invitation.email', 'boris@selen.test')
+        ->assertJsonPath('data.invitation.name', 'Борис Новиков')
+        ->assertJsonPath('data.invitation.state', 'pending')
+        ->assertJsonPath('data.invitation.invited_by.id', $admin->id)
+        ->assertJsonPath('data.invitation.can_revoke', true)
+        ->assertJsonMissingPath('data.invitation.token_hash');
 
     $user = User::query()->where('email', 'boris@selen.test')->sole();
     expect($user)
@@ -65,10 +66,13 @@ it('формирует письмо-приглашение на русском �
         $mail = $n->toMail($user);
         $rendered = (string) $mail->render();
 
-        return $mail->subject === 'Приглашение в Selen'
+        // Одно письмо для всех, без названия компании (решение PM 28.10, п. 3)
+        return $mail->subject === 'Доступ в Selen'
             && $mail->actionUrl === 'http://localhost/invitations/'.$n->token
             && str_contains($rendered, 'Здравствуйте, Борис!')
-            && ! str_contains(mb_strtolower($rendered), 'ваш пароль');
+            && str_contains($rendered, 'Вам открыт доступ в Selen')
+            && ! str_contains(mb_strtolower($rendered), 'ваш пароль')
+            && ! str_contains($rendered, 'Компания');
     });
 });
 
@@ -78,18 +82,15 @@ it('отправляет письмо через очередь', function () {
         ->toBeInstanceOf(ShouldBeEncrypted::class);
 });
 
-it('не приглашает существующий email: один ответ — и для своей компании, и для другой (решение PM 26.10)', function () {
+it('email своего сотрудника — «уже работает в компании», деактивированного здесь — «верните его»; писем нет', function () {
     member(['email' => 'boris@selen.test']);
-    member(['email' => 'vera@selen.test'], otherCompany(['name' => 'Компания 2']));
+    User::factory()->deactivated()->create(['email' => 'gone@selen.test']);
     $this->actingAs(admin());
 
-    $answers = collect(['BORIS@selen.test', 'vera@selen.test'])->map(fn (string $email) => $this->postJson(adminPath().'invitations', [
-        'name' => 'Кто-то', 'email' => $email, 'role' => 'member',
-    ])->assertUnprocessable()->json());
-
-    expect($answers[0])->toBe($answers[1])
-        ->and($answers[0]['errors']['email'][0])->toBe('Этот email уже используется в Selen.')
-        ->and(json_encode($answers[0], JSON_UNESCAPED_UNICODE))->not->toContain('компан');
+    $this->postJson(adminPath().'invitations', ['name' => 'Кто-то', 'email' => 'BORIS@selen.test', 'role' => 'member'])
+        ->assertUnprocessable()->assertJsonValidationErrors(['email' => __('selen.invitations.already_member')]);
+    $this->postJson(adminPath().'invitations', ['name' => 'Кто-то', 'email' => 'gone@selen.test', 'role' => 'member'])
+        ->assertUnprocessable()->assertJsonValidationErrors(['email' => __('selen.invitations.deactivated_here')]);
     Notification::assertNothingSent();
 });
 

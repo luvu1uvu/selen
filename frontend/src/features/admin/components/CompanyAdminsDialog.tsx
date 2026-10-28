@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useCurrentUser } from '@/features/auth/queries'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { getErrorMessage } from '@/shared/api/errors'
+import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import type { DirectoryUser } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -35,6 +36,10 @@ export function CompanyAdminsDialog({
   const company = useCompanies().data?.find((item) => item.id === companyId)
   const setAdmin = useSetCompanyAdmin()
   const [user, setUser] = useState<DirectoryUser | null>(null)
+  // «Снять» — с подтверждением (решение PM 26.10, п. 2)
+  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null)
+  // Имя в окне подтверждения остаётся, пока окно закрывается
+  const [removingOpen, setRemovingOpen] = useState(false)
 
   const run = async (userId: string, admin: boolean, success: string) => {
     if (!companyId) return
@@ -90,11 +95,12 @@ export function CompanyAdminsDialog({
                     variant="outline"
                     size="sm"
                     disabled={setAdmin.isPending}
-                    onClick={() =>
-                      run(admin.id, false, t('companies.admins.removed', { name: admin.name }))
-                    }
+                    onClick={() => {
+                      setRemoving({ id: admin.id, name: admin.name })
+                      setRemovingOpen(true)
+                    }}
                   >
-                    {t('companies.admins.remove')}
+                    {t('companies.admins.removeEllipsis')}
                   </Button>
                 </li>
               ))}
@@ -132,6 +138,23 @@ export function CompanyAdminsDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ConfirmDialog
+        open={removingOpen}
+        onOpenChange={setRemovingOpen}
+        pending={setAdmin.isPending}
+        onConfirm={async () => {
+          if (removing) {
+            await run(removing.id, false, t('companies.admins.removed', { name: removing.name }))
+          }
+          setRemovingOpen(false)
+        }}
+        title={t('companies.admins.removeTitle')}
+        description={t('companies.admins.removeText', {
+          name: removing?.name ?? '',
+          company: company?.name ?? '',
+        })}
+        confirmLabel={t('companies.admins.remove')}
+      />
     </Dialog>
   )
 }

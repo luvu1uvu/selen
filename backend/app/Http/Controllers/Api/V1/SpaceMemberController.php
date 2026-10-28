@@ -25,8 +25,8 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * Люди с доступом к пространству — лично и через группы (ADR-0012). Смотреть могут все, у кого есть доступ,
- * управлять личным участием — администраторы пространства. Деактивированные с личным участием остаются
- * в списке (ради истории), войти они не могут.
+ * управлять личным участием — администраторы пространства. Деактивированные и убранные из компании (П2c) с личным
+ * участием остаются в списке (ради истории), доступа у них нет.
  */
 class SpaceMemberController extends Controller
 {
@@ -35,6 +35,11 @@ class SpaceMemberController extends Controller
         Gate::authorize('view', $space);
 
         $accesses = $resolver->usersWithAccess($space);
+        // Убранные из компании и гости с истёкшим сроком с личным участием остаются в списке без доступа (П2c), как
+        // деактивированные
+        foreach ($resolver->inactivePersonalUserIds($space) as $id) {
+            $accesses[$id] ??= new SpaceAccess;
+        }
         $users = User::query()->whereIn('id', $accesses->keys())->get()->keyBy('id');
 
         $people = collect($this->people($request, $space, $accesses, $users))
@@ -113,6 +118,7 @@ class SpaceMemberController extends Controller
             'personal' => $personal->get($userId),
             'groups' => $groups,
             'show_sources' => $showSources,
+            'space_company_id' => $space->company_id,
         ])->values()->all();
     }
 }

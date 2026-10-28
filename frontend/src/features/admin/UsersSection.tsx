@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next'
-import { NavLink, Outlet } from 'react-router'
+import { Navigate, NavLink, Outlet, useMatch } from 'react-router'
 import { MailPlus, Users, UsersRound } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import type { CompanyPermission } from '@/shared/types/api'
-import { hasCompanyPermission, useAdminCompany, useAdminUrl } from './company'
+import { firstAdminPath, hasCompanyPermission, useAdminCompany, useAdminUrl } from './company'
 
 /**
  * Вкладки раздела «Пользователи» — как в Kaiten (LATER-114): значок над подписью, активная подчёркнута. Каждая вкладка —
@@ -26,6 +26,11 @@ export function UsersSection() {
   const company = useAdminCompany()
   const url = useAdminUrl()
   const tabs = USERS_TABS.filter((tab) => hasCompanyPermission(company, tab.permission))
+  // Вкладка без права (например, «Пользователи» у того, кому выдано только «приглашать», П2c) — на первую доступную
+  const tab = useMatch('/admin/c/:companyId/:tab')?.params.tab
+  const allowed = tabs.some((item) => item.path === tab)
+  const first = firstAdminPath(company, ['users', 'groups', 'invitations'])
+  if (company && !allowed && first) return <Navigate to={url(first)} replace />
 
   return (
     <div className="grid gap-6">

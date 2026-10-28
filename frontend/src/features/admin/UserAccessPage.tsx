@@ -7,12 +7,15 @@ import type { UserAccess } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { useAdminUrl } from './company'
+import { CompanyPermissionsSection } from './components/CompanyPermissionsSection'
+import { GuestBadge } from './components/GuestBadge'
 import { UserStatusBadge } from './components/UserStatusBadge'
 import { useUserAccess } from './queries'
 
 /**
  * Админка → пользователь: к каким пространствам у него доступ и почему — по каждому источнику
- * (лично, через группы), включая недействующие. Главный инструмент разбора «почему видит / не видит».
+ * (лично, через группы), включая недействующие. Главный инструмент разбора «почему видит / не видит». Ниже —
+ * «Права компании» (П2c; Владельцу и администратору компании).
  */
 export function UserAccessPage() {
   const { t } = useTranslation('admin')
@@ -48,6 +51,7 @@ export function UserAccessPage() {
               {tc('roles.owner')}
             </Badge>
           )}
+          {access.user.guest && <GuestBadge guest={access.user.guest} />}
           <UserStatusBadge user={access.user} />
         </h1>
         <p className="text-muted-foreground text-sm">{access.user.email}</p>
@@ -86,6 +90,11 @@ export function UserAccessPage() {
         <p className="text-muted-foreground max-w-2xl text-sm">{t('access.rule')}</p>
         <SpacesTable access={access} />
       </section>
+
+      {/* Владельцу права не выдаются, гостю — тоже (у него только выданные пространства, решение PM 23.10) */}
+      {!isOwner(access.user) && !access.user.guest && (
+        <CompanyPermissionsSection userId={access.user.id} />
+      )}
     </div>
   )
 }

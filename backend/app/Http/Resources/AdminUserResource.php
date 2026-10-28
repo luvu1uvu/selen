@@ -2,15 +2,17 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\UserStatus;
 use App\Models\Company;
 use App\Models\Invitation;
 use App\Models\User;
-use App\Services\Access\AccessResolver;
+use App\Services\Access\CompanyMembers;
 use Illuminate\Http\Request;
 
 /**
- * Пользователь в админке «Пользователи»: плюс подсказки интерфейсу, какие действия доступны текущему
- * администратору (UserPolicy, ADR-0017). Реальную проверку всегда делает сервер.
+ * Пользователь в админке «Пользователи»: статус в этой компании, гость со сроком, отключён ли Владельцем (П2c), плюс
+ * подсказки интерфейсу, какие действия доступны текущему администратору (UserPolicy, ADR-0017). Реальную проверку
+ * всегда делает сервер.
  *
  * @mixin User
  */
@@ -31,22 +33,37 @@ class AdminUserResource extends UserResource
         $user = $this->resource;
 
         $account = $this->account($company->roleOf($user));
-        // Владелец — участник всех компаний (строка «Владелец»), но время его входов и часовой пояс — только компаниям,
-        // где он «дом» (аудит П2b-2, S-3: минимум ПДн)
-        if ($user->isOwner() && ! app(AccessResolver::class)->isHome($user, $company)) {
+        // Статус — в этой компании (П2c): убранный из неё — «Деактивирован», даже если работает в другой
+        $account['status'] = CompanyMembers::statusOf($user, $company->id);
+        $account['deactivated_at'] = CompanyMembers::deactivatedAt($user, $company->id)?->toIso8601ZuluString();
+        $guest = CompanyMembers::guestOf($user, $company->id);
+        // Время входов и часовой пояс — только действующим сотрудникам компании (минимум ПДн, аудит П2b-2, S-3): Владелец
+        // вне его «домов», гость и убранный из компании по ним выдали бы, что человек работает где-то ещё
+        if (($user->isOwner() || $account['status'] === UserStatus::Deactivated || $guest !== null)
+            && ! CompanyMembers::isActiveHome($user, $company->id)) {
             $account = ['last_login_at' => null, 'timezone' => null] + $account;
         }
 
         return $account + [
+            // Гость компании: срок (null — без срока), истёк ли (П2c)
+            'guest' => $guest === null ? null : [
+                'expires_at' => $guest['expires_at']?->toIso8601ZuluString(),
+                'expired' => $guest['expired'],
+            ],
+            // Учётную запись отключил Владелец (вернуть может только он)
+            'blocked' => $user->isBlocked(),
             'permissions' => [
-                'update_role' => $actor->can('updateRole', [$user, $company]),
-                'deactivate' => $actor->can('deactivate', [$user, $company]),
-                'reactivate' => $actor->can('reactivate', [$user, $company]),
+                'update_role' => $guest === null && $actor->can('updateRole', [$user, $company]),
+                'deactivate' => $guest === null && $actor->can('deactivate', [$user, $company]),
+                'reactivate' => $guest === null && $actor->can('reactivate', [$user, $company]),
                 // Повторить или отозвать приглашение пользователя (InvitationPolicy::manages)
-                'manage_invitation' => $actor->can('manages', [Invitation::class, $user, $company]),
-                'transfer_ownership' => $actor->can('transferOwnership', [$user, $company]),
-                // Деактивировать и вернуть может только Владелец: у человека «дома» в нескольких компаниях (до П2c)
-                'owner_only' => $actor->can('onlyOwnerManages', [$user, $company]),
+                'manage_invitation' => $guest === null && $actor->can('manages', [Invitation::class, $user, $company]),
+                'transfer_ownership' => $guest === null && $actor->can('transferOwnership', [$user, $company]),
+                'block' => $guest === null && $actor->can('block', [$user, $company]),
+                // Деактивация с передачей доступа преемнику — Владелец и администратор компании
+                'transfer_access' => $guest === null && $actor->can('transferAccess', [$user, $company]),
+                'manage_guest' => $guest !== null && $actor->can('manageGuests', [User::class, $company]),
+                'manage_permissions' => $guest === null && $actor->can('managePermissions', [$user, $company]),
             ],
         ];
     }

@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router'
-import { adminUrl, defaultAdminCompany } from '@/features/admin/company'
+import {
+  adminUrl,
+  defaultAdminCompany,
+  firstAdminPath,
+  useAdminCompany,
+} from '@/features/admin/company'
 import { useCurrentUser } from '@/features/auth/queries'
 import { appReturnPath, fileReturnPath, openServerPage } from '@/shared/lib/browser'
 import { NotFoundState } from '@/shared/components/NotFoundState'
-import { isSystemAdmin } from '@/shared/lib/roles'
+import { hasAdminAccess } from '@/features/admin/company'
 import { Button } from '@/shared/ui/button'
 
 function FullPageLoader() {
@@ -101,11 +106,14 @@ export function RequireGuest() {
   return <Outlet />
 }
 
-/** Только для администраторов. Проверка на клиенте — для удобства; доступ проверяет API. */
+/**
+ * Только для тех, у кого есть права компании (администратор, Владелец, участник с выданными правами — П2c). Проверка
+ * на клиенте — для удобства; доступ проверяет API.
+ */
 export function RequireAdmin() {
   const { data: user } = useCurrentUser()
 
-  if (!isSystemAdmin(user)) return <Navigate to="/" replace />
+  if (!hasAdminAccess(user)) return <Navigate to="/" replace />
   return <Outlet />
 }
 
@@ -121,6 +129,13 @@ const ADMIN_SECTIONS = [
   'trash',
   'events',
 ]
+
+/** /admin/c/{компания} без раздела — первая страница, на которую есть право компании (П2c). */
+export function AdminCompanyIndex() {
+  const company = useAdminCompany()
+  const path = firstAdminPath(company)
+  return path ? <Navigate to={path} replace /> : <AdminNotFound />
+}
 
 /** Нет такой страницы админки (в том числе чужая компания или неизвестный раздел) — на месте страницы. */
 export function AdminNotFound() {
@@ -139,7 +154,9 @@ export function AdminRedirect() {
   const { search } = useLocation()
   const company = defaultAdminCompany(user)
 
-  if (!company) return <Navigate to="/" replace />
+  // Без раздела — первая страница, на которую есть право (П2c: у участника может быть только «журнал»)
+  const first = firstAdminPath(company)
+  if (!company || !first) return <Navigate to="/" replace />
   if (rest !== '' && !ADMIN_SECTIONS.includes(rest.split('/')[0])) return <AdminNotFound />
-  return <Navigate to={adminUrl(company.id, rest || 'users') + search} replace />
+  return <Navigate to={adminUrl(company.id, rest || first) + search} replace />
 }
