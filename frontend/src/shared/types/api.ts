@@ -35,6 +35,8 @@ export interface User {
   /** Тема оформления — только у текущего пользователя (`/auth/me`, вход, профиль); в админских списках её нет. */
   theme?: Theme
   last_login_at: string | null
+  /** «Последняя активность» (П2c-2): время запроса с точностью до нескольких минут. */
+  last_seen_at: string | null
   deactivated_at: string | null
   created_at: string
   /** Последнее приглашение пользователя — только в админских ответах. */
@@ -98,6 +100,17 @@ export interface AdminUserPermissions {
   manage_guest: boolean
   /** Вкладка «Права компании» (Владелец и администратор компании). */
   manage_permissions: boolean
+  /** «Завершить все сеансы» (П2c-2). */
+  terminate_sessions: boolean
+  /** Сменить email (П2c-2): у сотрудника нескольких компаний — только Владелец. */
+  change_email: boolean
+}
+
+/** Новый email, который ждёт подтверждения по ссылке из письма (П2c-2, LATER-9). */
+export interface PendingEmailChange {
+  email: string
+  expires_at: string
+  expired: boolean
 }
 
 /** Гость компании (П2c): срок (null — без срока) и истёк ли. */
@@ -116,8 +129,13 @@ export interface AdminUser extends Omit<User, 'timezone'> {
   guest: GuestMembership | null
   /** Учётную запись отключил Владелец (вернуть может только он). */
   blocked: boolean
+  /** Новый email ждёт подтверждения — только тем, кто может менять email. */
+  email_change: PendingEmailChange | null
   permissions: AdminUserPermissions
 }
+
+/** Сортировка «Пользователей»: по имени или по «последней активности» (-last_seen — сначала недавние). */
+export type UserSort = 'name' | 'last_seen' | '-last_seen'
 
 /** Фильтр «Пользователей» по статусу в компании. */
 export type UserStatusFilter = UserStatus | 'guest'

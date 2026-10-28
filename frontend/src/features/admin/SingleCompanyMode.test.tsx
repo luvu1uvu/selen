@@ -129,7 +129,10 @@ describe('Режим «одна компания»', () => {
       await screen.findByRole('menuitem', { name: 'Отключить учётную запись…' }),
     )
     dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('Борис не сможет войти, все сеансы завершатся.')
+    // Тексты U-2 (UX-ревью «Одна компания на копию», решение PM 28.10)
+    expect(dialog).toHaveTextContent(
+      'Борис не сможет войти, все сеансы завершатся — как при деактивации, но включить учётную запись можете только вы',
+    )
     expect(dialog).not.toHaveTextContent(/компани[июй] сохранится|ни в одну компанию/)
   })
 
@@ -172,7 +175,7 @@ describe('Режим «одна компания»', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'видит всех сотрудников, пространства и группы компании; деактивирует и возвращает участников',
+        'видит всех сотрудников, пространства и группы компании; деактивирует и возвращает сотрудников, меняет их email и завершает сеансы',
       ),
     ).toBeInTheDocument()
     expect(screen.getByRole('main')).not.toHaveTextContent(/гост/i)

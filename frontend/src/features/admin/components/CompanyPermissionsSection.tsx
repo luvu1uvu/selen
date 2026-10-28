@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useCurrentUser } from '@/features/auth/queries'
 import { getErrorMessage, getErrorStatus } from '@/shared/api/errors'
+import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { companyModeContext } from '@/shared/lib/roles'
 import type {
   CompanyPermission,
@@ -37,8 +39,13 @@ function permissionKey(permission: CompanyPermission) {
 
 type Row = {
   permission: CompanyPermission
+  /** Отмечено: выдано лично (группе) или есть у администратора компании. */
   checked: boolean
+  /** Выдано лично (группе) — то, что уходит на сервер при сохранении. */
+  granted: boolean
   editable: boolean
+  /** Есть у администратора компании по умолчанию: галочка отмечена и недоступна (П2c-2). */
+  byAdmin: boolean
   /** Откуда право, кроме галочки: администратор компании, группы. */
   note: string | null
 }
@@ -48,9 +55,13 @@ type Row = {
  * ещё есть: роль администратора, группы), у группы — её права; у «Все сотрудники» — права всех новых сотрудников
  * (решение PM 28.10, п. 7). Галочку «удалять пользователей» и «аналитика трудозатрат» меняет только Владелец —
  * у администратора она недоступна, с подсказкой. В копии с одной компанией (ADR-0026) подписи — без гостей.
+ * П2c-2 (решения PM по отчёту П2c-1, п. 3 и 4): права администратора компании у него — отмеченные недоступные галочки
+ * с подсказкой; любое право группе «Все сотрудники» — после подтверждения.
  */
 export function CompanyPermissionsSection(
-  props: { userId: string; groupId?: never } | { groupId: string; userId?: never },
+  props:
+    | { userId: string; groupId?: never; everyone?: never }
+    | { groupId: string; userId?: never; everyone?: boolean },
 ) {
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
@@ -62,13 +73,17 @@ export function CompanyPermissionsSection(
   const saveGroup = useSaveGroupPermissions(props.groupId ?? '')
   const save = props.userId !== undefined ? saveUser : saveGroup
   const query = props.userId !== undefined ? userQuery : groupQuery
+  const [toEveryone, setToEveryone] = useState<CompanyPermission | null>(null)
 
   const rows: Row[] =
     props.userId !== undefined
       ? (userQuery.data ?? []).map((row: UserCompanyPermission) => ({
           permission: row.permission,
-          checked: row.personal,
-          editable: row.editable,
+          checked: row.personal || row.by_admin_role,
+          granted: row.personal,
+          // Право администратора компании галочкой не снять и не добавить — оно у него уже есть
+          editable: row.editable && !row.by_admin_role,
+          byAdmin: row.by_admin_role,
           note:
             [
               row.by_admin_role ? t('permissions.byAdmin') : null,
@@ -82,19 +97,31 @@ export function CompanyPermissionsSection(
       : (groupQuery.data ?? []).map((row: GroupCompanyPermission) => ({
           permission: row.permission,
           checked: row.granted,
+          granted: row.granted,
           editable: row.editable,
+          byAdmin: false,
           note: null,
         }))
+
+  const name = (permission: CompanyPermission) =>
+    t(`permissions.names.${permissionKey(permission)}`, { context })
 
   const toggle = async (permission: CompanyPermission, checked: boolean) => {
     // Пока сохраняется прошлый щелчок, новый ждёт; галочки не отключаем — иначе браузер снимет фокус с нажатой
     if (save.isPending) return
-    // Только права, которые автор может менять: выданное Владельцем остаётся как есть (сервер его не трогает)
+    // Право всем сотрудникам компании (и будущим) — только после подтверждения (решение PM по отчёту П2c-1, п. 3)
+    if (props.everyone && checked && toEveryone === null) {
+      setToEveryone(permission)
+      return
+    }
+    // Только права, которые автор может менять: выданное Владельцем остаётся как есть (сервер его не трогает); у
+    // администратора компании — и выданное лично право из его набора (галочка недоступна, но выдача остаётся)
     const next = rows
-      .filter((row) => row.editable && (row.permission === permission ? checked : row.checked))
+      .filter((row) => row.editable && (row.permission === permission ? checked : row.granted))
       .map((row) => row.permission)
+    const keep = rows.filter((row) => row.byAdmin && row.granted).map((row) => row.permission)
     try {
-      await save.mutateAsync(next)
+      await save.mutateAsync([...next, ...keep])
       toast.success(t('permissions.saved'))
     } catch (error) {
       toast.error(getErrorMessage(error, tc('errors.generic')))
@@ -111,7 +138,9 @@ export function CompanyPermissionsSection(
         {t('permissions.title')}
       </h2>
       <p className="text-muted-foreground max-w-2xl text-sm">
-        {props.userId !== undefined ? t('permissions.userHint') : t('permissions.groupHint')}
+        {props.userId !== undefined
+          ? t('permissions.userHint', { context })
+          : t('permissions.groupHint')}
       </p>
       {query.isError && <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>}
       <ul className="grid max-w-2xl gap-2">
@@ -147,16 +176,18 @@ export function CompanyPermissionsSection(
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {OWNER_GRANTED.includes(row.permission)
-                      ? t('permissions.ownerOnly')
-                      : t('permissions.readOnly')}
+                    {row.byAdmin
+                      ? t('permissions.adminHas')
+                      : OWNER_GRANTED.includes(row.permission)
+                        ? t('permissions.ownerOnly')
+                        : t('permissions.readOnly')}
                   </TooltipContent>
                 </Tooltip>
               )}
               <div className="grid gap-0.5 text-sm">
                 {/* Точка — разделитель ключей i18next: в ключе перевода — «_», как у типов событий */}
                 <label id={`${id}-label`} htmlFor={id}>
-                  {t(`permissions.names.${permissionKey(row.permission)}`, { context })}
+                  {name(row.permission)}
                 </label>
                 {/* Что открывает право — выдают осознанно (решение PM 28.10 по аудиту П2c-1); описание галочки */}
                 <span id={`${id}-hint`} className="text-muted-foreground text-xs">
@@ -168,6 +199,21 @@ export function CompanyPermissionsSection(
           )
         })}
       </ul>
+      <ConfirmDialog
+        open={toEveryone !== null}
+        onOpenChange={(open) => !open && setToEveryone(null)}
+        pending={save.isPending}
+        confirmVariant="default"
+        title={t('permissions.everyoneConfirm.title')}
+        description={t('permissions.everyoneConfirm.text', {
+          permission: toEveryone ? name(toEveryone) : '',
+        })}
+        confirmLabel={t('permissions.everyoneConfirm.confirm')}
+        onConfirm={async () => {
+          if (toEveryone) await toggle(toEveryone, true)
+          setToEveryone(null)
+        }}
+      />
     </section>
   )
 }

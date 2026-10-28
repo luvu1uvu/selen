@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
-import { KeyRound } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAdminUrl } from '@/features/admin/company'
 import { useCurrentUser } from '@/features/auth/queries'
@@ -9,9 +9,9 @@ import { getErrorMessage } from '@/shared/api/errors'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { Pagination } from '@/shared/components/Pagination'
-import { formatDateTime } from '@/shared/lib/dates'
+import { formatDate, formatDateTime } from '@/shared/lib/dates'
 import { isMultiCompany, isOwner } from '@/shared/lib/roles'
-import type { AdminUser, UserStatusFilter } from '@/shared/types/api'
+import type { AdminUser, UserSort, UserStatusFilter } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
@@ -20,20 +20,35 @@ import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import {
+  useCancelEmailChange,
   useChangeRole,
   useReactivateUser,
   useRemoveGuest,
   useSetUserBlocked,
   useResendInvitation,
   useRevokeInvitation,
+  useTerminateSessions,
   useUsers,
 } from '../queries'
+import { ChangeEmailDialog } from './ChangeEmailDialog'
 import { DeactivateUserDialog } from './DeactivateUserDialog'
 import { GuestBadge } from './GuestBadge'
 import { GuestDialog } from './GuestDialog'
 import { UserStatusBadge } from './UserStatusBadge'
 
-type Confirm = { kind: 'revoke' | 'removeGuest'; user: AdminUser } | null
+type Confirm = { kind: 'revoke' | 'removeGuest' | 'terminate'; user: AdminUser } | null
+
+/** Щелчок по заголовку «Последняя активность»: по имени → сначала недавние → сначала давние → по имени. */
+const NEXT_SORT: Record<UserSort, UserSort> = {
+  name: '-last_seen',
+  '-last_seen': 'last_seen',
+  last_seen: 'name',
+}
+const SORT_HINT: Record<UserSort, 'toNewest' | 'toOldest' | 'toName'> = {
+  name: 'toNewest',
+  '-last_seen': 'toOldest',
+  last_seen: 'toName',
+}
 
 export function UsersTable() {
   const { t } = useTranslation('admin')
@@ -43,21 +58,30 @@ export function UsersTable() {
   const url = useAdminUrl()
   const [status, setStatus] = useState<UserStatusFilter | ''>('')
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<UserSort>('name')
   const [page, setPage] = useState(1)
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [toDeactivate, setToDeactivate] = useState<AdminUser | null>(null)
   const [toBlock, setToBlock] = useState<AdminUser | null>(null)
+  const [toChangeEmail, setToChangeEmail] = useState<AdminUser | null>(null)
   // Гость окна остаётся, пока окно закрывается (иначе на время анимации заголовок стал бы «Добавить гостя»)
   const [guest, setGuest] = useState<AdminUser | null>(null)
   const [guestOpen, setGuestOpen] = useState(false)
 
-  const usersQuery = useUsers({ status: status || undefined, search: search || undefined, page })
+  const usersQuery = useUsers({
+    status: status || undefined,
+    search: search || undefined,
+    sort: sort === 'name' ? undefined : sort,
+    page,
+  })
   const changeRole = useChangeRole()
   const reactivate = useReactivateUser()
   const resend = useResendInvitation()
   const revoke = useRevokeInvitation()
   const block = useSetUserBlocked()
   const removeGuest = useRemoveGuest()
+  const terminate = useTerminateSessions()
+  const cancelEmailChange = useCancelEmailChange()
 
   const run = async (action: () => Promise<unknown>, successMessage: string) => {
     try {
@@ -73,6 +97,9 @@ export function UsersTable() {
     if (confirm.kind === 'removeGuest') {
       const userId = confirm.user.id
       await run(() => removeGuest.mutateAsync(userId), t('guests.removed'))
+    } else if (confirm.kind === 'terminate') {
+      const userId = confirm.user.id
+      await run(() => terminate.mutateAsync(userId), t('users.toasts.sessionsTerminated'))
     } else if (confirm.user.invitation) {
       const invitationId = confirm.user.invitation.id
       await run(() => revoke.mutateAsync(invitationId), t('users.toasts.invitationRevoked'))
@@ -120,7 +147,41 @@ export function UsersTable() {
             <TableHead className="hidden md:table-cell">{t('users.columns.email')}</TableHead>
             <TableHead>{t('users.columns.role')}</TableHead>
             <TableHead>{t('users.columns.status')}</TableHead>
-            <TableHead className="hidden lg:table-cell">{t('users.columns.lastLogin')}</TableHead>
+            {/* «Последняя активность» (П2c-2) — с сортировкой: щелчок по заголовку меняет порядок */}
+            <TableHead
+              className="hidden lg:table-cell"
+              aria-sort={
+                sort === '-last_seen'
+                  ? 'descending'
+                  : sort === 'last_seen'
+                    ? 'ascending'
+                    : undefined
+              }
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 h-8 px-2"
+                    onClick={() => {
+                      setSort(NEXT_SORT[sort])
+                      setPage(1)
+                    }}
+                  >
+                    {t('users.columns.lastSeen')}
+                    {sort === '-last_seen' ? (
+                      <ArrowDown aria-hidden />
+                    ) : sort === 'last_seen' ? (
+                      <ArrowUp aria-hidden />
+                    ) : (
+                      <ArrowUpDown aria-hidden className="text-muted-foreground" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t(`users.sort.${SORT_HINT[sort]}`)}</TooltipContent>
+              </Tooltip>
+            </TableHead>
             <TableHead className="w-12">
               <span className="sr-only">{t('users.columns.actions')}</span>
             </TableHead>
@@ -159,6 +220,10 @@ export function UsersTable() {
             const canBlock = can.block && !user.blocked && user.status !== 'invited'
             const canUnblock = can.block && user.blocked
             const canManageGuest = can.manage_guest && user.guest !== null
+            // Завершить сеансы — у того, кто может войти; email — у того, кто уже принял приглашение (П2c-2)
+            const canTerminate = can.terminate_sessions && user.status === 'active'
+            const canChangeEmail = can.change_email && user.status !== 'invited'
+            const canCancelEmailChange = can.change_email && user.email_change !== null
             const hasActions =
               canChangeRole ||
               hasPendingInvitation ||
@@ -167,7 +232,10 @@ export function UsersTable() {
               canDeactivate ||
               canBlock ||
               canUnblock ||
-              canManageGuest
+              canManageGuest ||
+              canTerminate ||
+              canChangeEmail ||
+              canCancelEmailChange
 
             return (
               <TableRow key={user.id}>
@@ -184,7 +252,10 @@ export function UsersTable() {
                   </div>
                   <div className="text-muted-foreground text-xs md:hidden">{user.email}</div>
                 </TableCell>
-                <TableCell className="hidden md:table-cell">{user.email}</TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {user.email}
+                  {user.email_change && <PendingEmail change={user.email_change} />}
+                </TableCell>
                 <TableCell>
                   {isOwner(user) ? (
                     <Badge variant="secondary" title={t('users.badges.ownerHint')}>
@@ -200,7 +271,8 @@ export function UsersTable() {
                   <UserStatusBadge user={user} />
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
-                  {formatDateTime(user.last_login_at, me?.timezone)}
+                  {/* До П2c-2 активность не писалась — тогда последний вход */}
+                  {formatDateTime(user.last_seen_at ?? user.last_login_at, me?.timezone)}
                 </TableCell>
                 <TableCell>
                   {isMe || !hasActions ? (
@@ -271,6 +343,30 @@ export function UsersTable() {
                               })}
                             >
                               {t('guests.edit')}
+                            </DropdownMenuItem>
+                          )}
+                          {canChangeEmail && (
+                            <DropdownMenuItem onSelect={dialog(() => setToChangeEmail(user))}>
+                              {t('users.actions.changeEmailEllipsis')}
+                            </DropdownMenuItem>
+                          )}
+                          {canCancelEmailChange && (
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                run(
+                                  () => cancelEmailChange.mutateAsync(user.id),
+                                  t('users.toasts.emailChangeCancelled'),
+                                )
+                              }
+                            >
+                              {t('users.actions.cancelEmailChange')}
+                            </DropdownMenuItem>
+                          )}
+                          {canTerminate && (
+                            <DropdownMenuItem
+                              onSelect={dialog(() => setConfirm({ kind: 'terminate', user }))}
+                            >
+                              {t('users.actions.terminateSessionsEllipsis')}
                             </DropdownMenuItem>
                           )}
                           {canUnblock && (
@@ -349,23 +445,60 @@ export function UsersTable() {
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
-        pending={revoke.isPending || removeGuest.isPending}
+        pending={revoke.isPending || removeGuest.isPending || terminate.isPending}
         onConfirm={onConfirm}
         title={
-          confirm?.kind === 'removeGuest' ? t('guests.removeTitle') : t('users.confirm.revokeTitle')
+          confirm?.kind === 'removeGuest'
+            ? t('guests.removeTitle')
+            : confirm?.kind === 'terminate'
+              ? t('users.confirm.terminateTitle')
+              : t('users.confirm.revokeTitle')
         }
         description={
           confirm?.kind === 'removeGuest'
             ? t('guests.removeText', { name: confirm.user.name })
-            : t('users.confirm.revokeText', { email: confirm?.user.email ?? '' })
+            : confirm?.kind === 'terminate'
+              ? t('users.confirm.terminateText', { name: confirm.user.name })
+              : t('users.confirm.revokeText', { email: confirm?.user.email ?? '' })
         }
         confirmLabel={
-          confirm?.kind === 'removeGuest' ? t('guests.remove') : t('users.actions.revokeInvitation')
+          confirm?.kind === 'removeGuest'
+            ? t('guests.remove')
+            : confirm?.kind === 'terminate'
+              ? t('users.actions.terminateSessions')
+              : t('users.actions.revokeInvitation')
         }
       />
       <DeactivateUserDialog user={toDeactivate} onClose={() => setToDeactivate(null)} />
       <DeactivateUserDialog user={toBlock} account onClose={() => setToBlock(null)} />
+      <ChangeEmailDialog user={toChangeEmail} onClose={() => setToChangeEmail(null)} />
       <GuestDialog open={guestOpen} guest={guest} onClose={() => setGuestOpen(false)} />
     </div>
+  )
+}
+
+/** Новый email ждёт подтверждения (П2c-2): адрес и до какого времени действует ссылка — в подсказке по фокусу. */
+function PendingEmail({ change }: { change: NonNullable<AdminUser['email_change']> }) {
+  const { t } = useTranslation('admin')
+  const { data: me } = useCurrentUser()
+  const date = formatDate(change.expires_at, me?.timezone)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className="text-muted-foreground block w-fit text-xs">
+          {change.expired
+            ? t('users.emailChange.pendingExpired', { email: change.email })
+            : t('users.emailChange.pending', { email: change.email })}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">
+        {change.expired
+          ? t('users.emailChange.pendingExpiredHint', { date })
+          : t('users.emailChange.pendingHint', {
+              date: formatDateTime(change.expires_at, me?.timezone),
+            })}
+      </TooltipContent>
+    </Tooltip>
   )
 }

@@ -1,5 +1,6 @@
 import { type RouteObject } from 'react-router'
 import { AdminCompanyLayout } from '@/features/admin/AdminCompanyLayout'
+import { EmailChangePage } from '@/features/auth/pages/EmailChangePage'
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage'
@@ -39,7 +40,7 @@ const spacePage = async () => ({
 const canvas: RouteHandle = { canvas: true }
 
 /**
- * Карта маршрутов SPA. Ссылки из писем (приглашение, сброс пароля) и адрес «файл не найден» формирует backend —
+ * Карта маршрутов SPA. Ссылки из писем (приглашение, сброс пароля, новый email) и адрес «файл не найден» формирует backend —
  * при изменении путей здесь обновите config/selen.php → frontend_paths.
  *
  * Непойманная ошибка — экран RouteError, а не белый экран: внутри каркаса — на месте страницы
@@ -60,6 +61,8 @@ export const routes: RouteObject[] = [
       // Доступны и гостям, и вошедшим (страница сама предупредит о текущей сессии)
       { path: '/reset-password/:token', element: <ResetPasswordPage /> },
       { path: '/invitations/:token', element: <AcceptInvitationPage /> },
+      // Подтверждение нового email (смена администратором, П2c-2)
+      { path: '/email-change/:token', element: <EmailChangePage /> },
     ],
   },
   {

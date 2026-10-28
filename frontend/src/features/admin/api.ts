@@ -22,6 +22,8 @@ import type {
   TrashedCard,
   UserAccess,
   UserCompanyPermission,
+  UserRef,
+  UserSort,
   UserStatusFilter,
 } from '@/shared/types/api'
 
@@ -29,11 +31,14 @@ export interface UserFilters {
   /** Статус в компании; guest — гости (П2c). */
   status?: UserStatusFilter
   search?: string
+  sort?: UserSort
   page?: number
 }
 
 export interface EventFilters {
   event_type?: string
+  /** Человек — автор или объект события (П2c-2). */
+  user_id?: string
   page?: number
 }
 
@@ -105,6 +110,31 @@ export async function reactivateUser(company: string, userId: string): Promise<A
   return data.data
 }
 
+/** «Завершить все сеансы» человека (П2c-2). */
+export async function terminateSessions(company: string, userId: string): Promise<void> {
+  await api.post(`/admin/companies/${company}/users/${userId}/terminate-sessions`)
+}
+
+/** Сменить email (П2c-2, LATER-9): письмо со ссылкой на новый адрес, email меняется после перехода по ней. */
+export async function requestEmailChange(
+  company: string,
+  userId: string,
+  email: string,
+): Promise<AdminUser> {
+  const { data } = await api.post<Resource<AdminUser>>(
+    `/admin/companies/${company}/users/${userId}/email-change`,
+    { email },
+  )
+  return data.data
+}
+
+export async function cancelEmailChange(company: string, userId: string): Promise<AdminUser> {
+  const { data } = await api.delete<Resource<AdminUser>>(
+    `/admin/companies/${company}/users/${userId}/email-change`,
+  )
+  return data.data
+}
+
 /** Передача владения (только Владелец, с паролем). Ответ — новый Владелец. */
 export async function transferOwnership(
   company: string,
@@ -166,6 +196,12 @@ export async function fetchEvents(
     params: filters,
   })
   return data
+}
+
+/** Люди компании для фильтра журнала по человеку (П2c-2): только имена. */
+export async function fetchEventPeople(company: string): Promise<UserRef[]> {
+  const { data } = await api.get<Collection<UserRef>>(`/admin/companies/${company}/events/people`)
+  return data.data
 }
 
 /** Корзина карточек (ADR-0015): новые удалённые сверху. */
