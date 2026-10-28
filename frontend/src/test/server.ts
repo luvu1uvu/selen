@@ -45,6 +45,8 @@ export function makeUser(overrides: Partial<User> = {}): User {
       role === 'member'
         ? []
         : [{ id: TEST_COMPANY_ID, name: null, permissions: COMPANY_ADMIN_PERMISSIONS }],
+    // Тесты — в режиме «несколько компаний», как backend (ADR-0026); режим «одна компания» — SingleCompanyMode.test
+    multi_company: true,
     ...overrides,
   }
 }

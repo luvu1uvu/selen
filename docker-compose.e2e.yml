@@ -46,6 +46,10 @@ services:
         GID: ${HOST_GID:-1000}
     image: selen-php:dev
     env_file: ./docker/e2e/e2e.env
+    environment:
+      # Режим копии (ADR-0026): E2E — «несколько компаний»; второй прогон scripts/e2e.sh (тесты с тегом
+      # @single-company) пересоздаёт php с E2E_MULTI_COMPANY=false
+      SELEN_MULTI_COMPANY: ${E2E_MULTI_COMPANY:-true}
     volumes:
       - ./backend:/var/www/backend
       # Пустой .env поверх dev-файла: всё окружение берётся только из docker/e2e/e2e.env

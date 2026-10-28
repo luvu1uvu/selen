@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAdminCompanyId } from '@/features/admin/company'
+import { useCurrentUser } from '@/features/auth/queries'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { getErrorMessage } from '@/shared/api/errors'
+import { companyModeContext } from '@/shared/lib/roles'
 import type { DirectoryUser, User } from '@/shared/types/api'
 import { Alert } from '@/shared/ui/alert'
 import { Button } from '@/shared/ui/button'
@@ -24,7 +26,7 @@ import { AssignSpaceRoleDialog } from './AssignSpaceRoleDialog'
  * Деактивация в компании (П2c) и отключение учётной записи Владельцем (account). Никогда не блокируется (решение PM
  * этапа 3), но заранее предупреждает о пространствах, где человек — последний личный администратор (при отключении —
  * во всех его компаниях), и даёт назначить замену. При деактивации — по желанию передать доступ преемнику (аудит
- * Kaiten «Заменить», решение PM 28.10, п. 5).
+ * Kaiten «Заменить», решение PM 28.10, п. 5). В копии с одной компанией (ADR-0026) тексты — без других компаний.
  */
 export function DeactivateUserDialog({
   user,
@@ -37,6 +39,8 @@ export function DeactivateUserDialog({
   onClose: () => void
 }) {
   const company = useAdminCompanyId()
+  const { data: me } = useCurrentUser()
+  const context = companyModeContext(me)
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
   const impact = useDeactivationImpact(user?.id ?? null, account)
@@ -77,12 +81,14 @@ export function DeactivateUserDialog({
         <DialogContent closeLabel={tc('actions.close')}>
           <DialogHeader>
             <DialogTitle>
-              {account ? t('users.confirm.blockTitle') : t('users.confirm.deactivateTitle')}
+              {account
+                ? t('users.confirm.blockTitle')
+                : t('users.confirm.deactivateTitle', { context })}
             </DialogTitle>
             <DialogDescription>
               {account
-                ? t('users.confirm.blockText', { name: user?.name ?? '' })
-                : t('users.confirm.deactivateText', { name: user?.name ?? '' })}
+                ? t('users.confirm.blockText', { name: user?.name ?? '', context })
+                : t('users.confirm.deactivateText', { name: user?.name ?? '', context })}
             </DialogDescription>
           </DialogHeader>
           {!account && user?.permissions?.transfer_access && (
@@ -109,7 +115,11 @@ export function DeactivateUserDialog({
                 {t('users.lastAdmin.title', { count: spaces.length })}
               </div>
               <div>
-                <p>{account ? t('users.lastAdmin.accountText') : t('users.lastAdmin.text')}</p>
+                <p>
+                  {account
+                    ? t('users.lastAdmin.accountText', { context })
+                    : t('users.lastAdmin.text')}
+                </p>
                 <ul className="mt-2 grid gap-1">
                   {spaces.map((space) => (
                     <li

@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useCurrentUser } from '@/features/auth/queries'
 import { Pagination } from '@/shared/components/Pagination'
 import { formatDateTime } from '@/shared/lib/dates'
+import { isMultiCompany } from '@/shared/lib/roles'
 import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import { EVENT_TYPES, eventTypeKey } from './eventTypes'
+import { EVENT_TYPES, eventTypeKey, MULTI_COMPANY_EVENT_TYPES } from './eventTypes'
 import { useEvents } from './queries'
 
 export function EventLogPage() {
@@ -17,6 +18,9 @@ export function EventLogPage() {
   const eventsQuery = useEvents({ event_type: eventType || undefined, page })
 
   const label = (type: string) => t(eventTypeKey(type) as never, { defaultValue: type })
+  const types = isMultiCompany(me)
+    ? EVENT_TYPES
+    : EVENT_TYPES.filter((type) => !MULTI_COMPANY_EVENT_TYPES.has(type))
 
   return (
     <div className="grid gap-6">
@@ -34,7 +38,7 @@ export function EventLogPage() {
         className="sm:w-72"
       >
         <option value="">{t('events.allTypes')}</option>
-        {EVENT_TYPES.map((type) => (
+        {types.map((type) => (
           <option key={type} value={type}>
             {label(type)}
           </option>

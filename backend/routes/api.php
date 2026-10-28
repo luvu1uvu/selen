@@ -188,9 +188,12 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
     Route::get('spaces/{space:key}/card-types', [CardTypeController::class, 'index'])->name('card-types.index');
 
     // --- Компании: список, создание из шаблона, переименование — только Владелец (ADR-0024) ----
-    Route::get('admin/companies', [CompanyController::class, 'index'])->name('admin.companies.index');
-    Route::post('admin/companies', [CompanyController::class, 'store'])->name('admin.companies.store');
-    Route::patch('admin/companies/{company}', [CompanyController::class, 'update'])->name('admin.companies.update');
+    // Только в копии с несколькими компаниями (ADR-0026): в режиме «одна компания» — 404
+    Route::middleware('multi-company')->group(function () {
+        Route::get('admin/companies', [CompanyController::class, 'index'])->name('admin.companies.index');
+        Route::post('admin/companies', [CompanyController::class, 'store'])->name('admin.companies.store');
+        Route::patch('admin/companies/{company}', [CompanyController::class, 'update'])->name('admin.companies.update');
+    });
 
     // --- Администрирование компании (доступ проверяют Policies, ADR-0024) ----
     // Вложенные объекты ищутся только среди объектов компании из адреса (scoped binding: Company, Group, Space —
@@ -214,10 +217,13 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
         Route::get('users/{user}/permissions', [UserAccessController::class, 'permissions'])->name('users.permissions');
         Route::put('users/{user}/permissions', [UserAccessController::class, 'updatePermissions'])->name('users.permissions.update');
 
-        // Гости компании (П2c); добавление — с лимитом приглашений (письмо, перебор email)
-        Route::post('guests', [GuestController::class, 'store'])->middleware('throttle:invitations-send')->name('guests.store');
-        Route::put('guests/{user}', [GuestController::class, 'update'])->name('guests.update');
-        Route::delete('guests/{user}', [GuestController::class, 'destroy'])->name('guests.destroy');
+        // Гости компании (П2c) — только в копии с несколькими компаниями (ADR-0026: гость — сотрудник другой
+        // компании); добавление — с лимитом приглашений (письмо, перебор email)
+        Route::middleware('multi-company')->group(function () {
+            Route::post('guests', [GuestController::class, 'store'])->middleware('throttle:invitations-send')->name('guests.store');
+            Route::put('guests/{user}', [GuestController::class, 'update'])->name('guests.update');
+            Route::delete('guests/{user}', [GuestController::class, 'destroy'])->name('guests.destroy');
+        });
         // Пространства, где автор может выдать доступ приглашённому и гостю
         Route::get('grantable-spaces', [InvitationController::class, 'spaces'])->name('grantable-spaces');
 

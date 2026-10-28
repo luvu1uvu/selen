@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate } from 'react-router'
+import { AdminNotFound } from '@/app/guards'
 import { useCurrentUser } from '@/features/auth/queries'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
-import { isOwner } from '@/shared/lib/roles'
+import { isMultiCompany, isOwner } from '@/shared/lib/roles'
 import type { Company } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu'
@@ -16,17 +17,20 @@ import { useCompanies } from './queries'
 /**
  * Администрирование → «Компании» — экран Владельца (ADR-0024, LATER-11): список компаний с людьми и администраторами,
  * создание (справочники — из шаблона: «Все сотрудники» и четыре типа карточек), переименование, администраторы
- * компании. Компании не удаляются и не архивируются.
+ * компании. Компании не удаляются и не архивируются. В копии с одной компанией (ADR-0026) экрана нет — «Страница не
+ * найдена», как и в API (404).
  */
 export function CompaniesPage() {
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
   const { data: me } = useCurrentUser()
   const owner = isOwner(me)
-  const companiesQuery = useCompanies(owner)
+  const multi = isMultiCompany(me)
+  const companiesQuery = useCompanies(owner && multi)
   const [editing, setEditing] = useState<Company | 'new' | null>(null)
   const [adminsOf, setAdminsOf] = useState<string | null>(null)
 
+  if (!multi) return <AdminNotFound />
   if (!owner) return <Navigate to="/" replace />
 
   const companies = companiesQuery.data ?? []

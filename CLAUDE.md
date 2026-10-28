@@ -195,6 +195,13 @@ docs/                    architecture.md, runbook.md, adr/, stages/, ui-referenc
     `useAdminUrl()`), ключи кеша админки — `['admin', компания, …]`; пункты меню — по правам компании из `/auth/me`
     («Администрирование» — `hasAdminAccess`, первая доступная страница — `firstAdminPath`); ссылки внутри админки —
     только через `useAdminUrl()`, не `/admin/…` напрямую.
+17. **Режим копии (ADR-0026): одна команда — одна копия Selen.** По умолчанию `SELEN_MULTI_COMPANY=false` («одна
+    компания»): «Компании» Владельца и гости — 404 (middleware `multi-company`; список — `MULTI_COMPANY_ROUTES`
+    в `AdminAccessMatrixTest`), вторую компанию не создать (`CreateCompanyAction`). Модель компаний, права и изоляция от
+    режима не зависят — режим только убирает лишнее. Тесты и E2E — в режиме «несколько компаний»; режим «одна компания» —
+    `config(['selen.multi_company' => false])` в Pest, `multi_company: false` в Vitest, тег `@single-company` в E2E
+    (второй прогон `scripts/e2e.sh`). Frontend — `isMultiCompany(user)` (режим — из `/auth/me`, не из сборки); текст,
+    который при одной компании звучит иначе, — ключ `…_single` (`companyModeContext`).
 
 ### Frontend
 1. **Все строки интерфейса — через i18n** (`frontend/src/shared/i18n/locales/ru/*.json`). Литералы

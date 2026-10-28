@@ -16,6 +16,24 @@ export function isOwner(user: WithRole): boolean {
 }
 
 /**
+ * Режим копии Selen (ADR-0026): несколько компаний — экран «Компании» у Владельца и гости компании; одна компания
+ * (по умолчанию) — их нет нигде. Режим сообщает API (`/auth/me`), а не сборка.
+ */
+export function isMultiCompany(user: Pick<User, 'multi_company'> | null | undefined): boolean {
+  return user?.multi_company === true
+}
+
+/**
+ * Контекст i18next для текстов, которые в режиме «одна компания» звучат иначе (без других компаний и гостей): ключ
+ * `…_single`, если он есть, иначе обычный.
+ */
+export function companyModeContext(
+  user: Pick<User, 'multi_company'> | null | undefined,
+): 'single' | undefined {
+  return isMultiCompany(user) ? undefined : 'single'
+}
+
+/**
  * Компании, которыми текущий пользователь управляет (Владелец — всеми), по дате создания — адреса админки
  * /admin/c/{id}/… и API admin/companies/{id}/… (ADR-0024). Названия — только если их несколько.
  */

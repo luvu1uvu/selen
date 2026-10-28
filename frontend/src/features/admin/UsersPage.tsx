@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCurrentUser } from '@/features/auth/queries'
-import { isOwner } from '@/shared/lib/roles'
+import { companyModeContext, isMultiCompany, isOwner } from '@/shared/lib/roles'
 import { Button } from '@/shared/ui/button'
 import { GuestDialog } from './components/GuestDialog'
 import { InvitationsTable } from './components/InvitationsTable'
@@ -11,8 +11,8 @@ import { UsersTable } from './components/UsersTable'
 import { hasCompanyPermission, useAdminCompany } from './company'
 
 /**
- * Вкладка «Пользователи» раздела «Пользователи»: люди и гости компании, приглашение, гость (П2c), передача владения
- * (Владелец).
+ * Вкладка «Пользователи» раздела «Пользователи»: люди и гости компании, приглашение, гость (П2c; только в копии
+ * с несколькими компаниями, ADR-0026), передача владения (Владелец).
  */
 export function UsersPage() {
   const { t } = useTranslation('admin')
@@ -23,11 +23,14 @@ export function UsersPage() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <p className="text-muted-foreground max-w-2xl min-w-0 text-sm">{t('users.description')}</p>
-        {/* Кнопки — одним рядом (у Владельца их три): рядом с пояснением — с 1024 px, уже — под ним (UX-ревью П2c-1, U-7) */}
+        <p className="text-muted-foreground max-w-2xl min-w-0 text-sm lg:pt-2">
+          {t('users.description', { context: companyModeContext(me) })}
+        </p>
+        {/* Кнопки — одним рядом: рядом с пояснением — с 1024 px, уже — под ним (UX-ревью П2c-1, U-7); первая строка
+            пояснения — по центру кнопок (lg:pt-2, UX-ревью «Одна компания на копию», U-1) */}
         <div className="flex shrink-0 flex-wrap gap-2">
           {isOwner(me) && <TransferOwnershipDialog />}
-          {hasCompanyPermission(company, 'company.manage_users') && (
+          {isMultiCompany(me) && hasCompanyPermission(company, 'company.manage_users') && (
             <Button variant="outline" onClick={() => setAddingGuest(true)}>
               {t('guests.addButton')}
             </Button>
@@ -36,7 +39,9 @@ export function UsersPage() {
         </div>
       </div>
       <UsersTable />
-      <GuestDialog open={addingGuest} guest={null} onClose={() => setAddingGuest(false)} />
+      {isMultiCompany(me) && (
+        <GuestDialog open={addingGuest} guest={null} onClose={() => setAddingGuest(false)} />
+      )}
     </div>
   )
 }
@@ -48,7 +53,7 @@ export function InvitationsPage() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-        <p className="text-muted-foreground text-sm">{t('invitations.description')}</p>
+        <p className="text-muted-foreground text-sm lg:pt-2">{t('invitations.description')}</p>
         <InviteUserDialog />
       </div>
       <InvitationsTable />

@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\Route;
 | права (routePermissions) и как участник на остальных; гость компании — 404 (админки компании для него нет), как
 | человек другой компании. Цели П2c — гость, отключённый Владельцем.
 | Новый админский маршрут без строки здесь роняет тест «все админские маршруты есть в матрице».
+| Матрица идёт в режиме «несколько компаний» (phpunit.xml); в режиме «одна компания» (ADR-0026) «Компании» и гости —
+| 404 всем, остальное — как здесь (тест режима ниже).
 */
 
 /**
@@ -152,6 +154,16 @@ const ADMIN_PLACEHOLDERS = [
     '{deactivated-member}' => '{user}', '{deactivated-admin}' => '{user}', '{guest}' => '{user}', '{blocked-member}' => '{user}',
     '{invitation-member}' => '{invitation}', '{invitation-admin}' => '{invitation}',
     '{folder}' => '{node}', '{trashed-card}' => '{key}', '{card-type}' => '{cardType}',
+];
+
+/** Маршруты только копии с несколькими компаниями (ADR-0026, middleware multi-company): в режиме «одна компания» — 404. */
+const MULTI_COMPANY_ROUTES = [
+    'GET admin/companies',
+    'POST admin/companies',
+    'PATCH admin/companies/{company}',
+    'POST admin/companies/{company}/guests',
+    'PUT admin/companies/{company}/guests/{user}',
+    'DELETE admin/companies/{company}/guests/{user}',
 ];
 
 beforeEach(function () {
@@ -315,6 +327,30 @@ it('все админские маршруты есть в матрице дос
     foreach ($routes as $route) {
         expect($covered)->toContain($route);
     }
+});
+
+it('режим «одна компания»: «Компании» и гости — 404 всем, даже Владельцу; остальные маршруты — как в матрице', function (string $method, string $path, bool $owner, bool $admin, bool $member, array $body, string $role) {
+    config(['selen.multi_company' => false]);
+    $expected = in_array($method.' '.strtr($path, ADMIN_PLACEHOLDERS), MULTI_COMPANY_ROUTES, true)
+        ? null
+        : ['owner' => $owner, 'admin' => $admin, 'member' => $member][$role];
+
+    $response = $this->actingAs($this->actors[$role])->json($method, '/api/v1/'.strtr($path, $this->objects), matrixBody($body, $this->objects));
+
+    expectAdminAnswer($response, $expected);
+})->with(adminEndpoints())->with(['owner', 'admin', 'member']);
+
+it('маршруты только режима «несколько компаний» — «Компании» и гости (новый такой маршрут — в MULTI_COMPANY_ROUTES)', function () {
+    $routes = collect(Route::getRoutes()->getRoutes())
+        ->filter(fn ($route) => in_array('multi-company', $route->gatherMiddleware(), true))
+        ->flatMap(fn ($route) => collect($route->methods())
+            ->reject(fn ($method) => $method === 'HEAD')
+            ->map(fn ($method) => $method.' '.str_replace('api/v1/', '', $route->uri())))
+        ->sort()
+        ->values()
+        ->all();
+
+    expect($routes)->toBe(collect(MULTI_COMPANY_ROUTES)->sort()->values()->all());
 });
 
 it('справочники людей и групп компании открыты администратору её пространства без роли в компании', function () {

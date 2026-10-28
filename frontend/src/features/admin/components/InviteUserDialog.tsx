@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { useCurrentUser } from '@/features/auth/queries'
 import { emailSchema } from '@/features/auth/schemas'
 import { applyValidationErrors, getErrorBody, getErrorMessage } from '@/shared/api/errors'
-import { adminCompanies, isOwner } from '@/shared/lib/roles'
+import { adminCompanies, companyModeContext, isOwner } from '@/shared/lib/roles'
 import type { SpaceGrantInput } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import {
@@ -114,7 +114,9 @@ export function InviteUserDialog() {
       <DialogContent closeLabel={tc('actions.close')} className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('invite.title')}</DialogTitle>
-          <DialogDescription>{t('invite.description')}</DialogDescription>
+          <DialogDescription>
+            {t('invite.description', { context: companyModeContext(me) })}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-4" noValidate>
           {companies.length > 1 && (

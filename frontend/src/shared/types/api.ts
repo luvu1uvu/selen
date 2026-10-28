@@ -41,6 +41,11 @@ export interface User {
   invitation?: InvitationSummary | null
   /** Компании, которыми управляет текущий пользователь (только `/auth/me` и вход), — адреса и меню админки. */
   admin_companies?: AdminCompany[]
+  /**
+   * Режим копии (только `/auth/me` и вход, ADR-0026): true — несколько компаний, «Компании» Владельца и гости; false —
+   * одна компания, их в интерфейсе нет.
+   */
+  multi_company?: boolean
 }
 
 /** Право компании (App\Enums\Permission, область company, ADR-0024). */

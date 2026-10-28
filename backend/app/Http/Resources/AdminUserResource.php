@@ -62,7 +62,8 @@ class AdminUserResource extends UserResource
                 'block' => $guest === null && $actor->can('block', [$user, $company]),
                 // Деактивация с передачей доступа преемнику — Владелец и администратор компании
                 'transfer_access' => $guest === null && $actor->can('transferAccess', [$user, $company]),
-                'manage_guest' => $guest !== null && $actor->can('manageGuests', [User::class, $company]),
+                // Гостей ведут только в копии с несколькими компаниями (ADR-0026): иначе их маршруты — 404
+                'manage_guest' => $guest !== null && config('selen.multi_company') && $actor->can('manageGuests', [User::class, $company]),
                 'manage_permissions' => $guest === null && $actor->can('managePermissions', [$user, $company]),
             ],
         ];

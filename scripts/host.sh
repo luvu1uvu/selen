@@ -67,12 +67,21 @@ funnel_on() {
   [[ -n "$serve" ]] && jq -e '.AllowFunnel // {} | length > 0' <<< "$serve" > /dev/null 2>&1
 }
 
+# Режим «одна компания», а в базе стенда компаний несколько (ADR-0026): текст предупреждения или пусто. Стенд не
+# запущен — проверки нет (об этом скажет make host-status). Только строка предупреждения: текст исключения artisan (база
+# недоступна — адрес, роль, SQL) в «ВНИМАНИЕ» и уведомления не попадает (аудит, S-1)
+company_mode_warning() {
+  { with_timeout 30 docker compose --project-directory "$ROOT_DIR" -f "$ROOT_DIR/docker-compose.pm.yml" \
+    exec -T php php artisan app:company-mode --warning 2> /dev/null || true; } | { grep '^Режим «одна компания»' || true; }
+}
+
 # Предупреждения (ВНИМАНИЕ) — общие для уведомлений задания (каждый час) и make host-status
 warnings() {
   local failures last_ok port
   for port in $(open_ports); do
     echo "Порт $port открыт в сеть (не только 127.0.0.1) — привяжите его к 127.0.0.1 в compose-файле (ADR-0018)"
   done
+  company_mode_warning
   if funnel_on; then
     echo "Включён Tailscale Funnel — стенд открыт в интернет! Выключить: $(tailscale_bin) funnel reset"
   fi

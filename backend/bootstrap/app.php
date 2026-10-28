@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\FileController;
+use App\Http\Middleware\EnsureMultiCompany;
 use App\Http\Middleware\EnsureSessionUserMatches;
 use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Foundation\Application;
@@ -25,6 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Запрос вкладки не от имени пользователя сессии (вошли в соседней вкладке) или без X-Selen-User — 409, не
         // выполняется. Middleware tab-user — на маршрутах вошедших (routes/api.php); до троттлинга и привязки моделей
         $middleware->prependToPriorityList(ThrottleRequests::class, EnsureSessionUserMatches::class);
+        // Маршрут только копии с несколькими компаниями — 404 до троттлинга: в режиме «одна компания» запрос к гостям
+        // не расходует лимит приглашений и не получает 429 вместо 404 (ADR-0026)
+        $middleware->prependToPriorityList(ThrottleRequests::class, EnsureMultiCompany::class);
         // Деактивированный с уцелевшей сессией — 401 до привязки моделей: иначе по 404/401 он отличил бы
         // существующий ключ пространства от несуществующего (ADR-0002, «второй рубеж»)
         $middleware->prependToPriorityList(SubstituteBindings::class, EnsureUserIsActive::class);
@@ -33,6 +37,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'tab-user' => EnsureSessionUserMatches::class,
+            // Только копия с несколькими компаниями (ADR-0026): иначе — 404
+            'multi-company' => EnsureMultiCompany::class,
         ]);
         // API без редиректов на страницу входа: гость получает 401 JSON. Ссылка на файл (/files/{id}, UI-1b) — на вход
         // с возвратом к файлу: страница входа принимает только next вида /files/<id>
