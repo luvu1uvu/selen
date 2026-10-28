@@ -104,7 +104,8 @@ use Illuminate\Support\Facades\DB;
  * администратор двух компаний и человек с двумя «домами» — см. moreCompanies(). П2c-1 — гости, деактивация в компании,
  * права компании: пространство RGUEST и люди e2e-guest*, e2e-partly, e2e-rights — см. guestsAndRights(); для автотестов
  * ТК-R2.16–R2.22 ещё RLEAVE, RKEEP, e2e-leaver, e2e-successor, e2e-blocked, e2e-invitee — см. guestsAndRightsCases().
- * П2c-2 — «Завершить все сеансы» и смена email: e2e-sessions, e2e-email, e2e-email-confirm — см. sessionsAndEmail().
+ * П2c-2 — «Завершить все сеансы», смена email и «последняя активность»: e2e-sessions, e2e-email, e2e-email-confirm,
+ * e2e-email-cancel; время активности у e2e-lead, e2e-roles, e2e-candidate — см. sessionsAndEmail().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  * Приёмка пачки UX-3 (acceptance/stage-ux3): пространство UXC «Пачка UX-3» — см. uxBatch3().
  */
@@ -618,6 +619,9 @@ class E2eSeeder extends Seeder
     /** Токен ссылки подтверждения нового email у «E2E Подтверждение email» (письма в E2E уходят в лог, не в почту). */
     public const EMAIL_CHANGE_TOKEN = 'e2eEmailChangeToken0000000000000000000000000000000000000000000001';
 
+    /** Токен ссылки у «E2E Email к отмене»: ТК-R2.38 отменяет запрос и проверяет, что ссылка больше не работает. */
+    public const EMAIL_CANCEL_TOKEN = 'e2eEmailChangeToken0000000000000000000000000000000000000000000002';
+
     /**
      * «Права 2.0», П2c-2 (acceptance/stage-R2): свои люди «Компании 1» — тест-кейсы завершают их сеансы и меняют email,
      * не задевая сохранённые входы других тестов.
@@ -628,6 +632,13 @@ class E2eSeeder extends Seeder
      * - «E2E Подтверждение email» (e2e-email-confirm@) — не входит: смена на e2e-email-confirmed@ уже запрошена
      *   администратором, ссылка из письма — /email-change/{EMAIL_CHANGE_TOKEN}; тест-кейс подтверждает адрес паролем
      *   учётной записи (UserFactory::PASSWORD).
+     * - «E2E Email к отмене» (e2e-email-cancel@) — не входит: смена на e2e-email-cancel-new@ уже запрошена, ссылка —
+     *   /email-change/{EMAIL_CANCEL_TOKEN}; ТК-R2.38 отменяет запрос и проверяет, что ссылка перестала работать (токен
+     *   запроса, отправленного из окна, автотест не узнает — письма в E2E уходят в лог).
+     * - «Последняя активность» (ТК-R2.35): у трёх людей, которые не входят в систему и больше нигде по ней не
+     *   проверяются, — время в прошлом, чтобы был известен порядок сортировки: «E2E Руководитель» — вчера, «E2E Участник
+     *   ролей» — 9 дней назад, «E2E Кандидат» — 30 дней назад. У вошедших в систему время — сегодняшнее, у остальных —
+     *   «—».
      */
     private function sessionsAndEmail(User $admin): void
     {
@@ -641,6 +652,23 @@ class E2eSeeder extends Seeder
             'requested_by_id' => $admin->id,
             'expires_at' => now()->addHours((int) config('selen.email_change.ttl_hours')),
         ]);
+        $cancel = User::factory()->create(['name' => 'E2E Email к отмене', 'email' => 'e2e-email-cancel@selen.test']);
+        EmailChangeRequest::query()->create([
+            'user_id' => $cancel->id,
+            'new_email' => 'e2e-email-cancel-new@selen.test',
+            'token_hash' => EmailChangeRequest::hashToken(self::EMAIL_CANCEL_TOKEN),
+            'requested_by_id' => $admin->id,
+            'expires_at' => now()->addHours((int) config('selen.email_change.ttl_hours')),
+        ]);
+
+        $minutesAgo = [
+            'e2e-lead@selen.test' => 60 * 26,
+            'e2e-roles@selen.test' => 60 * 24 * 9,
+            'e2e-candidate@selen.test' => 60 * 24 * 30,
+        ];
+        foreach ($minutesAgo as $email => $minutes) {
+            DB::table('users')->where('email', $email)->update(['last_seen_at' => now()->subMinutes($minutes)]);
+        }
     }
 
     /**
