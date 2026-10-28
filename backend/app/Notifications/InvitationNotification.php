@@ -43,6 +43,7 @@ class InvitationNotification extends Notification implements ShouldBeEncrypted, 
             ->subject(__('mail.invitation.subject', ['app' => config('app.name')]))
             ->greeting(__('mail.greeting', ['name' => $notifiable->name]))
             ->line(__('mail.invitation.intro', ['app' => config('app.name')]))
+            ->line(__('mail.invitation.set_password'))
             ->action(__('mail.invitation.action'), $url)
             ->line(__('mail.invitation.expires', [
                 'date' => $this->invitation->expires_at->setTimezone($notifiable->timezone)->format('d.m.Y H:i'),

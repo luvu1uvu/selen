@@ -47,6 +47,23 @@ class GroupPolicy
     }
 
     /**
+     * Права компании группы (П2c): смотреть и менять — Владелец и администратор компании (участник с правами их не
+     * выдаёт, решение PM 23.10, В17), в том числе у «Все сотрудники» — так задаются права для всех новых сотрудников
+     * (решение PM 28.10, п. 7). Группа в архиве — только смотреть.
+     */
+    public function viewPermissions(User $actor, Group $group): Response
+    {
+        return $this->allowCompanyMemberIf($actor, $group->company, fn () => $group->company->permissionsOf($actor)->isAdmin());
+    }
+
+    public function managePermissions(User $actor, Group $group): Response
+    {
+        $response = $this->viewPermissions($actor, $group);
+
+        return $response->allowed() && $group->isArchived() ? Response::deny(__('selen.groups.archived')) : $response;
+    }
+
+    /**
      * Справочник активных групп компании для выдачи доступа — как справочник людей (UserPolicy::viewDirectory).
      */
     public function viewDirectory(User $actor, Company $company): Response

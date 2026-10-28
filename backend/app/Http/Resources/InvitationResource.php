@@ -10,7 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Приглашение для админки. Ожидает загруженные связи user.latestInvitation и invitedBy.
+ * Приглашение для админки. Ожидает загруженные связи user и invitedBy и последнее приглашение человека в эту компанию
+ * (Invitation::rememberLatestIn — аудит П2b-2, S-4).
  *
  * @mixin Invitation
  */

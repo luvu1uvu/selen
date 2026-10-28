@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\UserStatus;
 use App\Models\Company;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -29,7 +30,9 @@ class CompanyResource extends JsonResource
             'created_at' => $this->created_at->toIso8601ZuluString(),
             'people_count' => (int) $this->resource->getAttribute('people_count'),
             'admins' => collect($admins)
-                ->map(fn (User $admin) => ['id' => $admin->id, 'name' => $admin->name, 'email' => $admin->email, 'status' => $admin->status])
+                // Убранный из компании администратор — с пометкой «деактивирован» (П2c)
+                ->map(fn (User $admin) => ['id' => $admin->id, 'name' => $admin->name, 'email' => $admin->email,
+                    'status' => $admin->getAttribute('member_deactivated_at') === null ? $admin->status : UserStatus::Deactivated])
                 ->values()
                 ->all(),
         ];

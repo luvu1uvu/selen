@@ -6,6 +6,7 @@ use App\Models\AccessGrant;
 use App\Models\Group;
 use App\Models\User;
 use App\Services\Access\AccessSource;
+use App\Services\Access\CompanyMembers;
 use App\Services\Access\SpaceAccess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -18,7 +19,7 @@ use Illuminate\Support\Collection;
  * Зрителю, у которого все источники с режимом «только свои карточки» (подрядчик), отдаётся только
  * сам пользователь: ни ролей, ни названий групп (поправка PM к этапу 3).
  *
- * @property array{user: User, access: SpaceAccess, personal: AccessGrant|null, groups: Collection<string, Group>, show_sources: bool} $resource
+ * @property array{user: User, access: SpaceAccess, personal: AccessGrant|null, groups: Collection<string, Group>, show_sources: bool, space_company_id: string} $resource
  */
 class SpacePersonResource extends JsonResource
 {
@@ -37,7 +38,9 @@ class SpacePersonResource extends JsonResource
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'status' => $user->status,
+                // Статус — в компании пространства; гость — с бейджем (П2c)
+                'status' => CompanyMembers::statusOf($user, $this->resource['space_company_id']),
+                'guest' => CompanyMembers::guestOf($user, $this->resource['space_company_id']) !== null,
             ],
         ];
 

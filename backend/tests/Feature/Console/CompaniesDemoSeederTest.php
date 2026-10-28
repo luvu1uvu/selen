@@ -44,7 +44,7 @@ it('три компании со своими пространствами; ад
         ->assertJsonPath('data.admin_companies.*.name', ['Компания 1', 'Компания 2', 'Компания 3']);
 });
 
-it('у Олега два «дома»: в дереве заголовки обеих компаний; деактивирует его только Владелец', function () {
+it('у Олега два «дома»: в дереве заголовки обеих компаний; администратор «Компании 1» убирает его только из неё', function () {
     $oleg = ($this->user)('oleg');
     $trees = $this->actingAs($oleg)->getJson('/api/v1/navigation')->assertOk()->json('data');
 
@@ -52,7 +52,11 @@ it('у Олега два «дома»: в дереве заголовки обе
         ->and(treeSpaceKeys($trees[0]['items']))->toBe(['DEV'])
         ->and(flatTree($trees[1]['items']))->toBe(['[Клиентский отдел]', '  SALES', '  SUP']);
 
-    $this->actingAs(($this->user)('admin'))->postJson(adminPath()."users/{$oleg->id}/deactivate")->assertForbidden();
+    // Деактивация в компании (П2c): во «Компании 2» Олег работает дальше
+    $this->actingAs(($this->user)('admin'))->postJson(adminPath()."users/{$oleg->id}/deactivate")->assertOk();
+    $trees = $this->actingAs($oleg->fresh())->getJson('/api/v1/navigation')->assertOk()->json('data');
+    expect($trees)->toHaveCount(1)
+        ->and(flatTree($trees[0]['items']))->toBe(['[Клиентский отдел]', '  SALES', '  SUP']);
 });
 
 it('у сотрудников одной компании названий компаний нет: дерево — одно, без названия', function () {

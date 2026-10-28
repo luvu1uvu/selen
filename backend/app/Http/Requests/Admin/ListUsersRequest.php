@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Enums\UserStatus;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
@@ -22,7 +21,8 @@ class ListUsersRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['nullable', Rule::enum(UserStatus::class)],
+            // Статус в компании (AccessResolver::companyPeopleIdsIn): active | invited | deactivated | guest
+            'status' => ['nullable', Rule::in(['active', 'invited', 'deactivated', 'guest'])],
             'search' => ['nullable', 'string', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],
         ];

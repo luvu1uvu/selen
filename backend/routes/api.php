@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Admin\CardTypeController as AdminCardTypeControl
 use App\Http\Controllers\Api\V1\Admin\CompanyController;
 use App\Http\Controllers\Api\V1\Admin\EventLogController;
 use App\Http\Controllers\Api\V1\Admin\GroupController as AdminGroupController;
+use App\Http\Controllers\Api\V1\Admin\GuestController;
 use App\Http\Controllers\Api\V1\Admin\InvitationController;
 use App\Http\Controllers\Api\V1\Admin\LabelController as AdminLabelController;
 use App\Http\Controllers\Api\V1\Admin\NavigationController as AdminNavigationController;
@@ -203,8 +204,22 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
         Route::post('users/{user}/transfer-ownership', [UserController::class, 'transferOwnership'])
             ->middleware('throttle:password-change')
             ->name('users.transfer-ownership');
+        Route::get('users/{user}/transfer-impact', [UserController::class, 'transferImpact'])->name('users.transfer-impact');
+        // Отключить и включить учётную запись — только Владелец (П2c)
+        Route::post('users/{user}/block', [UserController::class, 'block'])->name('users.block');
+        Route::post('users/{user}/unblock', [UserController::class, 'unblock'])->name('users.unblock');
         Route::get('users/{user}/access', [UserAccessController::class, 'access'])->name('users.access');
         Route::get('users/{user}/deactivation-impact', [UserAccessController::class, 'deactivationImpact'])->name('users.deactivation-impact');
+        // Права компании человека и группы — галочки (П2c)
+        Route::get('users/{user}/permissions', [UserAccessController::class, 'permissions'])->name('users.permissions');
+        Route::put('users/{user}/permissions', [UserAccessController::class, 'updatePermissions'])->name('users.permissions.update');
+
+        // Гости компании (П2c); добавление — с лимитом приглашений (письмо, перебор email)
+        Route::post('guests', [GuestController::class, 'store'])->middleware('throttle:invitations-send')->name('guests.store');
+        Route::put('guests/{user}', [GuestController::class, 'update'])->name('guests.update');
+        Route::delete('guests/{user}', [GuestController::class, 'destroy'])->name('guests.destroy');
+        // Пространства, где автор может выдать доступ приглашённому и гостю
+        Route::get('grantable-spaces', [InvitationController::class, 'spaces'])->name('grantable-spaces');
 
         Route::get('groups', [AdminGroupController::class, 'index'])->name('groups.index');
         Route::post('groups', [AdminGroupController::class, 'store'])->name('groups.store');
@@ -216,6 +231,8 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user'])->group(function () {
         Route::delete('groups/{group}/members/{user}', [AdminGroupController::class, 'removeMember'])->name('groups.members.destroy');
         Route::put('groups/{group}/spaces/{space}', [AdminGroupController::class, 'assignSpace'])->name('groups.spaces.assign');
         Route::delete('groups/{group}/spaces/{space}', [AdminGroupController::class, 'revokeSpace'])->name('groups.spaces.revoke');
+        Route::get('groups/{group}/permissions', [AdminGroupController::class, 'permissions'])->name('groups.permissions');
+        Route::put('groups/{group}/permissions', [AdminGroupController::class, 'updatePermissions'])->name('groups.permissions.update');
 
         Route::get('invitations', [InvitationController::class, 'index'])->name('invitations.index');
         // Отправка приглашений — с лимитом на приглашающего (решение PM 26.10)

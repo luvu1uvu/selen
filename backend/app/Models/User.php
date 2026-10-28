@@ -32,6 +32,7 @@ use Illuminate\Support\Carbon;
  * @property Theme $theme
  * @property Carbon|null $last_login_at
  * @property Carbon|null $deactivated_at
+ * @property Carbon|null $blocked_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Invitation|null $latestInvitation
@@ -67,6 +68,7 @@ class User extends Authenticatable
             'theme' => Theme::class,
             'last_login_at' => 'datetime',
             'deactivated_at' => 'datetime',
+            'blocked_at' => 'datetime',
         ];
     }
 
@@ -127,15 +129,22 @@ class User extends Authenticatable
     }
 
     /**
-     * Компании, где пользователь — «дом» (членство, ADR-0024; права в компании — только Company::permissionsOf()).
+     * Компании, где пользователь — «дом» (членство, ADR-0024; убранный из компании — с deactivated_at; права в компании —
+     * только Company::permissionsOf()).
      *
      * @return BelongsToMany<Company, $this>
      */
     public function companies(): BelongsToMany
     {
-        return $this->belongsToMany(Company::class, 'company_members')->withPivot(['kind', 'is_admin'])
+        return $this->belongsToMany(Company::class, 'company_members')->withPivot(['kind', 'is_admin', 'deactivated_at'])
             ->wherePivot('kind', AccessResolver::HOME)
             ->withTimestamps();
+    }
+
+    /** Учётную запись отключил Владелец (П2c): вход закрыт, вернуть может только он. */
+    public function isBlocked(): bool
+    {
+        return $this->blocked_at !== null;
     }
 
     /**

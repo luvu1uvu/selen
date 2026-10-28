@@ -243,6 +243,30 @@ final class AccessSnapshot
     }
 
     /**
+     * Снимок без деактивированных (П2c): до П2c личная выдача деактивированного давала права (войти он всё равно не
+     * мог), с деактивацией в компании — не даёт ничего. Сравнение «до/после» через миграцию П2c-1 — по тем, кто может
+     * войти; у них права не меняются.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    public static function activeUsers(array $snapshot): array
+    {
+        $deactivated = DB::table('users')->where('status', 'deactivated')->pluck('id')->flip();
+        $snapshot['pairs'] = array_filter(
+            $snapshot['pairs'],
+            fn (string $key) => ! $deactivated->has(explode(':', $key)[1]),
+            ARRAY_FILTER_USE_KEY,
+        );
+        $snapshot['manage_access_anywhere'] = array_values(array_filter(
+            $snapshot['manage_access_anywhere'],
+            fn (string $id) => ! $deactivated->has($id),
+        ));
+
+        return $snapshot;
+    }
+
+    /**
      * @param  array<string, array<string, mixed>>  $pairs
      * @param  list<array{string, string}>  $admins
      * @param  list<string>  $openToEveryone

@@ -12,9 +12,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * Текущий пользователь (/auth/me, вход, профиль). role — для интерфейса (ADR-0024): owner; admin — администратор хотя
- * бы одной компании; иначе member. admin_companies — компании, которыми он управляет (Владелец — всеми), по дате
- * создания: адреса админки /admin/c/{id}, права компании — пункты меню (frontend — adminCompanies). Название — только
- * если их несколько (выбор компании): у кого компания одна, названий компаний нигде нет (решение PM 23.10, вопрос 5).
+ * бы одной компании; иначе member. admin_companies — компании, где у него есть права компании (Владелец — все;
+ * администратор компании; с П2c — и участник, которому права выданы лично или через группу), по дате создания: адреса
+ * админки /admin/c/{id}, права компании — пункты меню (frontend — adminCompanies). Название — только если их несколько
+ * (выбор компании): у кого компания одна, названий компаний нигде нет (решение PM 23.10, вопрос 5).
  *
  * @mixin User
  */
@@ -32,7 +33,7 @@ class UserResource extends JsonResource
 
         return $this->account(match (true) {
             $this->resource->isOwner() => UserRole::Owner->value,
-            $companies->isNotEmpty() => CompanyRole::Admin->value,
+            $companies->contains(fn (Company $company) => $company->permissionsOf($this->resource)->isAdmin()) => CompanyRole::Admin->value,
             default => CompanyRole::Member->value,
         }) + [
             // Только у текущего пользователя: тема — его личная настройка вида, в админских списках её нет (ADR-0025)

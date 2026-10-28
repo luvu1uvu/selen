@@ -47,7 +47,7 @@ class SpaceAdminGuard
      *
      * @return Collection<int, Space>
      */
-    public function lastAdminSpaces(User $user, Company $company): Collection
+    public function lastAdminSpaces(User $user, ?Company $company): Collection
     {
         return $this->resolver->lastManagerSpaces($user, $company);
     }

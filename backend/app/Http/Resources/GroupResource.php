@@ -6,6 +6,7 @@ use App\Models\AccessGrant;
 use App\Models\Group;
 use App\Models\Space;
 use App\Models\User;
+use App\Services\Access\CompanyMembers;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -40,7 +41,8 @@ class GroupResource extends JsonResource
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'status' => $user->status,
+                    // Статус — в компании группы (П2c): убранный из неё остаётся в составе с пометкой
+                    'status' => CompanyMembers::statusOf($user, $this->company_id),
                     'added_at' => $this->addedAt($user),
                 ])),
             'spaces' => $this->whenLoaded('spaceGrants', fn () => $this->spaceGrants

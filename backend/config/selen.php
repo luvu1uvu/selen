@@ -15,6 +15,8 @@ return [
     // Пути SPA, на которые ведут ссылки из писем. Должны совпадать с frontend/src/app/routes.tsx.
     'frontend_paths' => [
         'invitation' => '/invitations/{token}',
+        // Письмо «Вам открыт доступ» существующему сотруднику и гостю (П2c)
+        'login' => '/login',
         'password_reset' => '/reset-password/{token}?email={email}',
         // Ссылка на файл (/files/{id}): нет такого или нет доступа — одна страница Selen (UI-1b, решение PM 22.10)
         'file_not_found' => '/file-not-found',

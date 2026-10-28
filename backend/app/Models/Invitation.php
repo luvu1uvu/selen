@@ -51,6 +51,26 @@ class Invitation extends Model implements HasCompany
     }
 
     /** sha256 от токена из ссылки. В БД хранится только хеш. */
+    /**
+     * Последнее приглашение каждого из людей — в эту компанию (аудит П2b-2, S-4): Владелец и человек с «домами»
+     * в нескольких компаниях видны в нескольких компаниях, приглашение другой компании здесь не учитывается.
+     * Ставит связь latestInvitation каждому (её читают InvitationResource и AdminUserResource).
+     *
+     * @param  iterable<User>  $users
+     */
+    public static function rememberLatestIn(Company $company, iterable $users): void
+    {
+        $users = collect($users);
+        $latest = self::query()
+            ->whereIn('id', self::query()->inCompany($company)->whereIn('user_id', $users->pluck('id'))->groupBy('user_id')->selectRaw('max(id)'))
+            ->get()
+            ->keyBy('user_id');
+
+        foreach ($users as $user) {
+            $user->setRelation('latestInvitation', $latest->get($user->id));
+        }
+    }
+
     public static function hashToken(#[\SensitiveParameter] string $token): string
     {
         return hash('sha256', $token);

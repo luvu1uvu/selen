@@ -10,9 +10,10 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
- * Ссылка на человека в теле запроса — только на «дом» этой компании (ADR-0024: правило «в этой компании» вместо
- * голого exists). Человек другой компании неотличим от несуществующего: то же сообщение, что у exists.
- * withOwner — ещё и Владелец (личная выдача доступа: он участник всех компаний); состав групп — только «дома».
+ * Ссылка на человека в теле запроса — только на действующий «дом» этой компании (ADR-0024: правило «в этой компании»
+ * вместо голого exists). Человек другой компании, гость и убранный из компании неотличимы от несуществующего: то же
+ * сообщение, что у exists. withOwner — ещё и Владелец (личная выдача доступа: он участник всех компаний); состав групп —
+ * только «дома»; гостей добавляют только из админки (П2c).
  */
 class CompanyMember implements ValidationRule
 {
@@ -27,7 +28,7 @@ class CompanyMember implements ValidationRule
         $resolver = app(AccessResolver::class);
         $exists = is_string($value) && User::query()
             ->whereKey($value)
-            ->whereIn('id', $this->withOwner ? $resolver->companyPeopleIds($this->company) : $resolver->companyMemberIds($this->company))
+            ->whereIn('id', $this->withOwner ? $resolver->assignablePeopleIds($this->company) : $resolver->companyMemberIds($this->company))
             ->when($this->notDeactivated, fn ($q) => $q->where('status', '!=', UserStatus::Deactivated))
             ->exists();
 

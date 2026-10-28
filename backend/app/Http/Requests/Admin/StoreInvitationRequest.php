@@ -3,14 +3,23 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\CompanyRole;
+use App\Enums\SpaceRole;
+use App\Http\Requests\Admin\Concerns\ValidatesSpaceGrants;
 use App\Models\Invitation;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
+/**
+ * Приглашение в компанию: имя, email, роль в компании и сразу — доступ к пространствам (П2c). Email существующей
+ * учётной записи — не ошибка: она сразу получает «дом» (InviteUserAction, В8).
+ */
 class StoreInvitationRequest extends FormRequest
 {
+    use ValidatesSpaceGrants;
+
     public function authorize(): Response
     {
         // Роль admin в приглашении — только Владелец (ADR-0017); неверная роль — 422 из правил ниже.
@@ -32,19 +41,16 @@ class StoreInvitationRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
+            'email' => ['required', 'string', 'email', 'max:255'],
             // Владелец не приглашается — только передача владения
             'role' => ['required', Rule::enum(CompanyRole::class)],
+            ...$this->spaceGrantRules(SpaceRole::cases()),
         ];
     }
 
-    /**
-     * @return array<string, string>
-     */
-    public function messages(): array
+    /** @return list<callable(Validator): void> */
+    public function after(): array
     {
-        return [
-            'email.unique' => __('selen.invitations.email_taken'),
-        ];
+        return [fn (Validator $validator) => $validator->errors()->isEmpty() ? $this->validateSpaceGrants($validator) : null];
     }
 }

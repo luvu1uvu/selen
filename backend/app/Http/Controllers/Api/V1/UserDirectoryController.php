@@ -12,16 +12,16 @@ use App\Services\Access\AccessResolver;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
- * Поиск сотрудников компании для добавления в пространство или группу (без деактивированных): её «дома» и Владелец —
- * участник всех компаний, ему можно выдать доступ (ADR-0024); для состава группы (homes) — только «дома». Сотрудники
- * других компаний не попадают в ответ.
+ * Поиск сотрудников компании для добавления в пространство или группу (без деактивированных): её действующие «дома»
+ * и Владелец — участник всех компаний, ему можно выдать доступ (ADR-0024); для состава группы (homes) — только «дома».
+ * Сотрудники других компаний и гости (их добавляют только из админки, П2c) не попадают в ответ.
  */
 class UserDirectoryController extends Controller
 {
     public function __invoke(ListUserDirectoryRequest $request, Company $company, AccessResolver $resolver): AnonymousResourceCollection
     {
         $users = User::query()
-            ->whereIn('id', $request->boolean('homes') ? $resolver->companyMemberIds($company) : $resolver->companyPeopleIds($company))
+            ->whereIn('id', $request->boolean('homes') ? $resolver->companyMemberIds($company) : $resolver->assignablePeopleIds($company))
             ->where('status', '!=', UserStatus::Deactivated)
             ->when($request->validated('search'), function ($q, $search) {
                 $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%';

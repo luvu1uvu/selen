@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Comment;
 use App\Models\User;
+use App\Services\Access\CompanyMembers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,7 +26,8 @@ class CommentResource extends JsonResource
 
         return [
             'id' => $this->id,
-            'author' => ['id' => $this->author->id, 'name' => $this->author->name, 'status' => $this->author->status],
+            // Статус — в компании пространства карточки (П2c)
+            'author' => ['id' => $this->author->id, 'name' => $this->author->name, 'status' => CompanyMembers::statusOf($this->author, $this->card->space->company_id)],
             'body' => $this->isDeleted() ? null : $this->body,
             'created_at' => $this->created_at->format('Y-m-d\TH:i:s.u\Z'),
             'edited_at' => $this->edited_at?->toIso8601ZuluString(),

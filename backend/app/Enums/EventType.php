@@ -24,14 +24,30 @@ enum EventType: string
     // в журнал не пишется)
     case CompanyCreated = 'company.created';
     case CompanyRenamed = 'company.renamed';
+    // Права компании человеку или группе (П2c; subject — пользователь или группа, событие компании):
+    // {permission, user_id | group_id}
+    case CompanyPermissionGranted = 'company.permission_granted';
+    case CompanyPermissionRevoked = 'company.permission_revoked';
 
     // Пользователи
     case UserCreated = 'user.created';
     case UserInvited = 'user.invited';
     case UserProfileUpdated = 'user.profile_updated';
     case UserRoleChanged = 'user.role_changed';
+    // Деактивация и возврат — в компании (П2c: событие компании; вход закрывается, когда не осталось «дома»)
     case UserDeactivated = 'user.deactivated';
     case UserReactivated = 'user.reactivated';
+    // Учётную запись отключил и включил Владелец (П2c): без компании, «о человеке» — видно во всех его компаниях
+    case UserBlocked = 'user.blocked';
+    case UserUnblocked = 'user.unblocked';
+    // Существующая учётная запись получила «дом» в компании по приглашению (П2c, В8): {role}
+    case UserAddedToCompany = 'user.added_to_company';
+    // Гость компании (П2c): {expires_at} — добавлен, изменён срок, убран
+    case GuestAdded = 'user.guest_added';
+    case GuestUpdated = 'user.guest_updated';
+    case GuestRemoved = 'user.guest_removed';
+    // Доступ деактивированного передан преемнику (П2c, решение PM 28.10, п. 5): {to_user_id}
+    case UserAccessTransferred = 'user.access_transferred';
     // {from_user_id (null — Владельца не было), to_user_id, via: admin_panel | console | migration}, ADR-0017
     case UserOwnershipTransferred = 'user.ownership_transferred';
 
