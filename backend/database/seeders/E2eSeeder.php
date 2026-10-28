@@ -34,13 +34,16 @@ use App\Actions\Spaces\SetSpaceMemberRestrictionAction;
 use App\Actions\Users\DeactivateUserAction;
 use App\Enums\BoardTemplate;
 use App\Enums\ColumnCategory;
+use App\Enums\EventType;
 use App\Enums\Permission;
 use App\Enums\SpaceRole;
 use App\Enums\Theme;
+use App\Models\AuthAuditEntry;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Company;
 use App\Models\EmailChangeRequest;
+use App\Models\EventLogEntry;
 use App\Models\Lane;
 use App\Models\NavNode;
 use App\Models\Space;
@@ -105,7 +108,8 @@ use Illuminate\Support\Facades\DB;
  * права компании: пространство RGUEST и люди e2e-guest*, e2e-partly, e2e-rights — см. guestsAndRights(); для автотестов
  * ТК-R2.16–R2.22 ещё RLEAVE, RKEEP, e2e-leaver, e2e-successor, e2e-blocked, e2e-invitee — см. guestsAndRightsCases().
  * П2c-2 — «Завершить все сеансы», смена email и «последняя активность»: e2e-sessions, e2e-email, e2e-email-confirm,
- * e2e-email-cancel; время активности у e2e-lead, e2e-roles, e2e-candidate — см. sessionsAndEmail().
+ * e2e-email-cancel; время активности у e2e-lead, e2e-roles, e2e-candidate — см. sessionsAndEmail(); неудачная попытка
+ * входа e2e-owner с известными IP и браузером (журнал, ТК-R2.40) — см. failedLogin().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  * Приёмка пачки UX-3 (acceptance/stage-ux3): пространство UXC «Пачка UX-3» — см. uxBatch3().
  */
@@ -315,6 +319,7 @@ class E2eSeeder extends Seeder
 
         // Приёмка «Права 2.0», П2c-2 — сеансы, смена email (acceptance/stage-R2)
         $this->sessionsAndEmail($admin);
+        $this->failedLogin($owner);
 
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
@@ -640,6 +645,45 @@ class E2eSeeder extends Seeder
      *   ролей» — 9 дней назад, «E2E Кандидат» — 30 дней назад. У вошедших в систему время — сегодняшнее, у остальных —
      *   «—».
      */
+    /** IP и браузер неудачной попытки входа e2e-owner (ТК-R2.40): адрес из диапазона для документации (RFC 5737). */
+    public const FAILED_LOGIN_IP = '203.0.113.40';
+
+    public const FAILED_LOGIN_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+    /**
+     * «Права 2.0», П2c-2 (ТК-R2.40, acceptance/stage-R2): неудачная попытка входа e2e-owner (неверный пароль) с известными
+     * IP и браузером — журнал показывает у неё «Без входа», IP и браузер коротко («Chrome 131 · macOS»), полную строку —
+     * в подсказке. Вход через форму в автотестах запрещён и для неудачной попытки (лимит входов на IP), поэтому попытка —
+     * из данных.
+     *
+     * Строка event_log — напрямую, с meta.source = http: так событие записал бы настоящий неудачный вход по HTTP
+     * (LoginAction); EventRecorder в консоли пишет source=console (журнал показал бы «Система», а не «Без входа»), а
+     * строку auth_audit пишет только в HTTP-запросе. Правило 6 CLAUDE.md (журнал — только через EventRecorder) касается
+     * кода приложения, здесь только данные E2E для ТК-R2.40. Рядом — строка auth_audit с её id.
+     */
+    private function failedLogin(User $owner): void
+    {
+        $entry = EventLogEntry::query()->create([
+            'company_id' => null,
+            'occurred_at' => now(),
+            'event_type' => EventType::LoginFailed->value,
+            'actor_id' => null,
+            'subject_type' => $owner->getMorphClass(),
+            'subject_id' => $owner->id,
+            'payload' => ['reason' => 'invalid_credentials'],
+            'meta' => ['source' => 'http'],
+        ]);
+        AuthAuditEntry::query()->create([
+            'occurred_at' => $entry->occurred_at,
+            'event_log_id' => $entry->id,
+            'event_type' => $entry->event_type,
+            'user_id' => $owner->id,
+            'email_attempted' => null,
+            'ip' => self::FAILED_LOGIN_IP,
+            'user_agent' => self::FAILED_LOGIN_USER_AGENT,
+        ]);
+    }
+
     private function sessionsAndEmail(User $admin): void
     {
         User::factory()->create(['name' => 'E2E Сеансы', 'email' => 'e2e-sessions@selen.test']);
