@@ -9,7 +9,7 @@ import { getErrorMessage } from '@/shared/api/errors'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { Pagination } from '@/shared/components/Pagination'
-import { formatDate, formatDateTime } from '@/shared/lib/dates'
+import { formatDateTime } from '@/shared/lib/dates'
 import { isOwner } from '@/shared/lib/roles'
 import type { AdminUser, UserStatusFilter } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
@@ -29,6 +29,7 @@ import {
   useUsers,
 } from '../queries'
 import { DeactivateUserDialog } from './DeactivateUserDialog'
+import { GuestBadge } from './GuestBadge'
 import { GuestDialog } from './GuestDialog'
 import { UserStatusBadge } from './UserStatusBadge'
 
@@ -189,16 +190,7 @@ export function UsersTable() {
                       {tc('roles.owner')}
                     </Badge>
                   ) : user.guest ? (
-                    // Гость компании: срок — по желанию; истёк — доступа нет, срок можно продлить (П2c)
-                    <Badge variant={user.guest.expired ? 'warning' : 'outline'}>
-                      {user.guest.expired
-                        ? t('users.badges.guestExpired')
-                        : user.guest.expires_at
-                          ? t('users.badges.guestUntil', {
-                              date: formatDate(user.guest.expires_at, me?.timezone),
-                            })
-                          : t('users.badges.guest')}
-                    </Badge>
+                    <GuestBadge guest={user.guest} />
                   ) : (
                     tc(`roles.${user.role}`)
                   )}
@@ -313,7 +305,7 @@ export function UsersTable() {
                               variant="destructive"
                               onSelect={dialog(() => setConfirm({ kind: 'removeGuest', user }))}
                             >
-                              {t('guests.remove')}
+                              {t('guests.removeEllipsis')}
                             </DropdownMenuItem>
                           )}
                           {canDeactivate && (
@@ -321,7 +313,7 @@ export function UsersTable() {
                               variant="destructive"
                               onSelect={dialog(() => setToDeactivate(user))}
                             >
-                              {t('users.actions.deactivate')}
+                              {t('users.actions.deactivateEllipsis')}
                             </DropdownMenuItem>
                           )}
                           {canBlock && (

@@ -8,6 +8,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { useAdminUrl } from './company'
 import { CompanyPermissionsSection } from './components/CompanyPermissionsSection'
+import { GuestBadge } from './components/GuestBadge'
 import { UserStatusBadge } from './components/UserStatusBadge'
 import { useUserAccess } from './queries'
 
@@ -50,6 +51,7 @@ export function UserAccessPage() {
               {tc('roles.owner')}
             </Badge>
           )}
+          {access.user.guest && <GuestBadge guest={access.user.guest} />}
           <UserStatusBadge user={access.user} />
         </h1>
         <p className="text-muted-foreground text-sm">{access.user.email}</p>
@@ -89,7 +91,10 @@ export function UserAccessPage() {
         <SpacesTable access={access} />
       </section>
 
-      {!isOwner(access.user) && <CompanyPermissionsSection userId={access.user.id} />}
+      {/* Владельцу права не выдаются, гостю — тоже (у него только выданные пространства, решение PM 23.10) */}
+      {!isOwner(access.user) && !access.user.guest && (
+        <CompanyPermissionsSection userId={access.user.id} />
+      )}
     </div>
   )
 }

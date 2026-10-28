@@ -113,7 +113,12 @@ export function TransferOwnershipDialog() {
               invalid={!!errors.user_id}
             />
           </FormField>
-          {lost.length > 0 && (
+          {/* Пока проверяем, что потеряет Владелец, — строка на месте предупреждения и передать нельзя (как в окне
+              деактивации) */}
+          {impact.isFetching && (
+            <p className="text-muted-foreground text-sm">{t('users.transfer.checking')}</p>
+          )}
+          {!impact.isFetching && lost.length > 0 && (
             <Alert variant="warning" className="grid gap-2">
               <div className="flex items-center gap-2 font-medium">
                 <TriangleAlert className="size-4 shrink-0" />
@@ -149,7 +154,11 @@ export function TransferOwnershipDialog() {
             <Button type="button" variant="outline" onClick={() => close(false)}>
               {tc('actions.cancel')}
             </Button>
-            <Button type="submit" variant="destructive" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={isSubmitting || impact.isFetching}
+            >
               {t('users.transfer.submit')}
             </Button>
           </DialogFooter>

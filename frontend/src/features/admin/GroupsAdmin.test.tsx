@@ -223,6 +223,7 @@ describe('Админка: доступ пользователя', () => {
         email: 'olga@selen.test',
         role: 'member',
         status: 'active',
+        guest: null,
       },
       groups: [
         { id: 'g-1', name: 'Analysts', archived_at: null },
@@ -337,7 +338,7 @@ describe('Админка: деактивация последнего админ
     await userEvent.click(
       within(row).getByRole('button', { name: 'Действия с пользователем «Анна»' }),
     )
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать…' }))
 
     expect(
       await screen.findByText('1 пространство останется без администратора'),

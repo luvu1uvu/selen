@@ -145,6 +145,10 @@ it('гость в «Пользователях» — с бейджем и сро
         ->and($guests->first()['guest'])->toBe(['expires_at' => null, 'expired' => false])
         ->and($guests->first()['permissions']['manage_guest'])->toBeTrue()
         ->and($guests->first()['permissions']['deactivate'])->toBeFalse();
+    // Страница человека — та же пометка, что в списке; у сотрудника — null
+    expect($this->getJson(adminPath()."users/{$this->employee->id}/access")->assertOk()->json('data.user.guest'))
+        ->toBe(['expires_at' => null, 'expired' => false])
+        ->and($this->getJson(adminPath()."users/{$this->admin->id}/access")->assertOk()->json('data.user.guest'))->toBeNull();
 
     addToSpace($this->dev, $this->admin, SpaceRole::Admin);
     $person = collect($this->getJson('/api/v1/spaces/DEV/members')->assertOk()->json('data'))->firstWhere('user.id', $this->employee->id);

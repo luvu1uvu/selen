@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { UserAccess, UserCompanyPermission } from '@/shared/types/api'
@@ -30,7 +30,14 @@ function permission(
 }
 
 const dinaAccess: UserAccess = {
-  user: { id: 'u-dina', name: 'Дина', email: 'dina@selen.test', role: 'member', status: 'active' },
+  user: {
+    id: 'u-dina',
+    name: 'Дина',
+    email: 'dina@selen.test',
+    role: 'member',
+    status: 'active',
+    guest: null,
+  },
   groups: [],
   spaces: [],
 }
@@ -118,6 +125,7 @@ describe('Окно гостя', () => {
               email: 'g@selen.test',
               role: 'member',
               status: 'active',
+              guest: { expires_at: null, expired: false },
             },
             groups: [],
             spaces: ['s-dev', 's-old'].map((id) => ({
@@ -161,6 +169,120 @@ describe('Окно гостя', () => {
         spaces: [{ space_id: 's-dev', role: 'commenter', own_cards_only: false }],
       }),
     )
+  })
+})
+
+describe('Окно гостя: загрузка, пустые строки и фокус (UX-ревью П2c-1)', () => {
+  const spacesList = [
+    { id: 's-dev', key: 'DEV', name: 'Разработка' },
+    { id: 's-ops', key: 'OPS', name: 'Эксплуатация' },
+  ]
+
+  it('пока доступ гостя грузится — «Загрузка…», а не «нет доступа»; потом фокус на его пространстве', async () => {
+    signedInAs(makeUser({ id: 'admin-1' }))
+    let release = () => {}
+    const loaded = new Promise<void>((resolve) => (release = resolve))
+    const guest = makeAdminUser({
+      id: 'u-guest',
+      name: 'Олег Гость',
+      guest: { expires_at: null, expired: false },
+      permissions: { ...makeAdminUser().permissions, manage_guest: true },
+    })
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/users', () => HttpResponse.json(page([guest]))),
+      http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
+        HttpResponse.json({ data: spacesList }),
+      ),
+      http.get('*/api/v1/admin/companies/:company/users/:user/access', async () => {
+        await loaded
+        return HttpResponse.json({
+          data: {
+            user: { ...dinaAccess.user, id: 'u-guest', guest: guest.guest },
+            groups: [],
+            spaces: [
+              {
+                space: { id: 's-ops', key: 'OPS', name: 'Эксплуатация', archived_at: null },
+                has_access: true,
+                role: 'commenter',
+                sees_all_cards: true,
+                sources: [
+                  {
+                    type: 'personal',
+                    group: null,
+                    role: 'commenter',
+                    own_cards_only: false,
+                    inactive_reason: null,
+                  },
+                ],
+              },
+            ],
+          },
+        })
+      }),
+    )
+    renderApp(`/admin/c/${TEST_COMPANY_ID}/users`)
+
+    await userEvent.click(await screen.findByRole('button', { name: /Действия с пользователем/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Изменить доступ гостя…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Доступ гостя «Олег Гость»' })
+    expect(within(dialog).getByText('Загрузка…')).toBeInTheDocument()
+    expect(within(dialog).queryByText(/доступа нет|можно выдать потом/)).toBeNull()
+
+    release()
+    const space = await within(dialog).findByRole('combobox', { name: 'Пространство' })
+    expect(space).toHaveValue('s-ops')
+    await waitFor(() => expect(space).toHaveFocus())
+    expect(within(dialog).queryByText('Загрузка…')).toBeNull()
+  })
+
+  it('новый гость: строки обязательны; «Добавить пространство» — фокус на её поле, × — на «Добавить пространство»', async () => {
+    signedInAs(makeUser({ id: 'admin-1' }))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/users', () => HttpResponse.json(page([]))),
+      http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
+        HttpResponse.json({ data: spacesList }),
+      ),
+    )
+    renderApp(`/admin/c/${TEST_COMPANY_ID}/users`)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Добавить гостя' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Добавить гостя' })
+    expect(
+      await within(dialog).findByText(
+        'Выберите хотя бы одно пространство — гость видит только их.',
+      ),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(within(dialog).getByLabelText('Email сотрудника')).toHaveFocus())
+
+    const add = within(dialog).getByRole('button', { name: 'Добавить пространство' })
+    await userEvent.click(add)
+    await waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: 'Пространство' })).toHaveFocus(),
+    )
+    // Роль и × строки названы её пространством
+    expect(
+      within(dialog).getByRole('combobox', { name: 'Роль в «Разработка (DEV)»' }),
+    ).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Убрать «Разработка (DEV)»' }))
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Добавить пространство' })).toHaveFocus(),
+    )
+  })
+
+  it('выдавать доступ негде — «Добавить» недоступна, подсказки «выберите пространство» нет', async () => {
+    signedInAs(makeUser({ id: 'admin-1' }))
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/users', () => HttpResponse.json(page([]))),
+    )
+    renderApp(`/admin/c/${TEST_COMPANY_ID}/users`)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Добавить гостя' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Добавить гостя' })
+    expect(
+      await within(dialog).findByText('Нет пространств, где вы можете выдавать доступ.'),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Добавить' })).toBeDisabled()
+    expect(within(dialog).queryByText(/Выберите хотя бы одно/)).toBeNull()
   })
 })
 

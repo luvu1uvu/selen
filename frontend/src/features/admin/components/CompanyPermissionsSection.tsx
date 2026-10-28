@@ -83,6 +83,8 @@ export function CompanyPermissionsSection(
         }))
 
   const toggle = async (permission: CompanyPermission, checked: boolean) => {
+    // Пока сохраняется прошлый щелчок, новый ждёт; галочки не отключаем — иначе браузер снимет фокус с нажатой
+    if (save.isPending) return
     // Только права, которые автор может менять: выданное Владельцем остаётся как есть (сервер его не трогает)
     const next = rows
       .filter((row) => row.editable && (row.permission === permission ? checked : row.checked))
@@ -108,7 +110,7 @@ export function CompanyPermissionsSection(
         {props.userId !== undefined ? t('permissions.userHint') : t('permissions.groupHint')}
       </p>
       {query.isError && <p className="text-destructive text-sm">{tc('errors.loadFailed')}</p>}
-      <ul className="grid gap-2">
+      <ul className="grid max-w-2xl gap-2">
         {rows.map((row) => {
           const id = `permission-${row.permission}`
           const box = (
@@ -116,7 +118,8 @@ export function CompanyPermissionsSection(
               id={id}
               aria-describedby={`${id}-hint`}
               checked={row.checked}
-              disabled={!row.editable || save.isPending}
+              disabled={!row.editable}
+              className="mt-0.5"
               onCheckedChange={(checked) => toggle(row.permission, checked === true)}
             />
           )
@@ -125,10 +128,17 @@ export function CompanyPermissionsSection(
               {row.editable ? (
                 box
               ) : (
-                // Подсказка к недоступной галочке — на обёртке, которая получает фокус (правило 8)
+                // Подсказка к недоступной галочке — на обёртке, которая получает фокус (правило 8); у обёртки — имя
+                // права, иначе диктор назовёт только подсказку
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span tabIndex={0} className="inline-flex">
+                    <span
+                      tabIndex={0}
+                      role="group"
+                      aria-labelledby={`${id}-label`}
+                      aria-describedby={`${id}-hint`}
+                      className="inline-flex"
+                    >
                       {box}
                     </span>
                   </TooltipTrigger>
@@ -141,7 +151,7 @@ export function CompanyPermissionsSection(
               )}
               <div className="grid gap-0.5 text-sm">
                 {/* Точка — разделитель ключей i18next: в ключе перевода — «_», как у типов событий */}
-                <label htmlFor={id}>
+                <label id={`${id}-label`} htmlFor={id}>
                   {t(`permissions.names.${permissionKey(row.permission)}`)}
                 </label>
                 {/* Что открывает право — выдают осознанно (решение PM 28.10 по аудиту П2c-1); описание галочки */}

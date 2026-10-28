@@ -52,6 +52,8 @@ class UserAccessController extends Controller
             ], $entry['sources']),
         ]);
 
+        $guest = CompanyMembers::guestOf($user, $company->id);
+
         return response()->json(['data' => [
             'user' => [
                 'id' => $user->id,
@@ -59,6 +61,11 @@ class UserAccessController extends Controller
                 'email' => $user->email,
                 'role' => $company->roleOf($user),
                 'status' => CompanyMembers::statusOf($user, $company->id),
+                // Гость компании — пометка в шапке страницы, как в списке (UX-ревью П2c-1, U-11)
+                'guest' => $guest === null ? null : [
+                    'expires_at' => $guest['expires_at']?->toIso8601ZuluString(),
+                    'expired' => $guest['expired'],
+                ],
             ],
             'groups' => $groups->map(fn (Group $group) => [
                 'id' => $group->id,

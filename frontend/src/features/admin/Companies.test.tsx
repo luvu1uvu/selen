@@ -150,6 +150,12 @@ describe('Админка нескольких компаний', () => {
     // Фокус — в поиске, а не на «Снять» (U-2 UX-ревью)
     await waitFor(() => expect(within(dialog).getByPlaceholderText(/Поиск/)).toHaveFocus())
     await userEvent.click(await within(dialog).findByRole('button', { name: /Вера Нова/ }))
+    // Выбрали — фокус на «Изменить выбор», очистили — в поиске (UX-ревью П2c-1, U-2)
+    const clear = within(dialog).getByRole('button', { name: 'Изменить выбор' })
+    await waitFor(() => expect(clear).toHaveFocus())
+    await userEvent.click(clear)
+    await waitFor(() => expect(within(dialog).getByPlaceholderText(/Поиск/)).toHaveFocus())
+    await userEvent.click(await within(dialog).findByRole('button', { name: /Вера Нова/ }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Назначить' }))
 
     expect(await screen.findByText('Вера Нова — администратор компании')).toBeInTheDocument()
@@ -312,8 +318,8 @@ describe('Админка нескольких компаний', () => {
     expect(
       await screen.findByRole('menuitem', { name: 'Изменить доступ гостя…' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'Убрать гостя' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Деактивировать' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'Убрать гостя…' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Деактивировать…' })).toBeNull()
     await userEvent.keyboard('{Escape}')
 
     const blocked = screen.getByText('Пётр Отключённый').closest('tr')!

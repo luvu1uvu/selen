@@ -125,10 +125,7 @@ export function CreateSpaceDialog({
           <Button>{t('spaces.create')}</Button>
         </DialogTrigger>
       )}
-      <DialogContent
-        closeLabel={tc('actions.close')}
-        className="max-h-[calc(100svh-2rem)] overflow-y-auto"
-      >
+      <DialogContent closeLabel={tc('actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('spaces.form.title')}</DialogTitle>
           <DialogDescription>

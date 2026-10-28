@@ -22,9 +22,10 @@ export function UsersPage() {
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-        <p className="text-muted-foreground text-sm">{t('users.description')}</p>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <p className="text-muted-foreground max-w-2xl min-w-0 text-sm">{t('users.description')}</p>
+        {/* Кнопки — одним рядом (у Владельца их три): рядом с пояснением — с 1024 px, уже — под ним (UX-ревью П2c-1, U-7) */}
+        <div className="flex shrink-0 flex-wrap gap-2">
           {isOwner(me) && <TransferOwnershipDialog />}
           {hasCompanyPermission(company, 'company.manage_users') && (
             <Button variant="outline" onClick={() => setAddingGuest(true)}>
@@ -46,7 +47,7 @@ export function InvitationsPage() {
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <p className="text-muted-foreground text-sm">{t('invitations.description')}</p>
         <InviteUserDialog />
       </div>

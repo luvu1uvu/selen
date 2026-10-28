@@ -207,7 +207,7 @@ describe('Админка пользователей', () => {
     await userEvent.click(
       within(row).getByRole('button', { name: 'Действия с пользователем «Борис»' }),
     )
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Деактивировать…' }))
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Деактивировать' }),
     )
@@ -294,7 +294,7 @@ describe('Админка пользователей', () => {
     await userEvent.click(
       within(memberRow).getByRole('button', { name: 'Действия с пользователем «Борис»' }),
     )
-    expect(await screen.findByRole('menuitem', { name: 'Деактивировать' })).toBeInTheDocument()
+    expect(await screen.findByRole('menuitem', { name: 'Деактивировать…' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Сделать администратором' })).toBeNull()
     // Передать владение может только Владелец
     expect(screen.queryByRole('button', { name: 'Передать владение' })).toBeNull()

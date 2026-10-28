@@ -143,6 +143,20 @@ export const defaultHandlers = [
   http.get('*/api/v1/cards/:key/comments', () => HttpResponse.json({ data: [], users: {} })),
   http.get('*/api/v1/spaces/:key/members', () => HttpResponse.json({ data: [] })),
   http.get('*/api/v1/spaces/:key/labels', () => HttpResponse.json({ data: [] })),
+  // Передача владения: Владелец ничего не теряет, если тест не задал своё
+  http.get('*/api/v1/admin/companies/:company/users/:user/transfer-impact', () =>
+    HttpResponse.json({ data: { lost_spaces: [], unmanaged_spaces: [] } }),
+  ),
+  // П2c: пространства, где можно выдавать доступ, и права компании — пусто, если тест не задал своё
+  http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
+    HttpResponse.json({ data: [] }),
+  ),
+  http.get('*/api/v1/admin/companies/:company/users/:user/permissions', () =>
+    HttpResponse.json({ data: [] }),
+  ),
+  http.get('*/api/v1/admin/companies/:company/groups/:group/permissions', () =>
+    HttpResponse.json({ data: [] }),
+  ),
 ]
 
 export const server = setupServer(...defaultHandlers)

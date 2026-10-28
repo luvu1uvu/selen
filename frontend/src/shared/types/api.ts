@@ -612,7 +612,15 @@ export type AccessInactiveReason =
 
 /** Админка → пользователь: к каким пространствам доступ и почему. */
 export interface UserAccess {
-  user: { id: string; name: string; email: string; role: UserRole; status: UserStatus }
+  user: {
+    id: string
+    name: string
+    email: string
+    role: UserRole
+    status: UserStatus
+    /** Гость этой компании; null — сотрудник или Владелец. */
+    guest: GuestMembership | null
+  }
   groups: { id: string; name: string; archived_at: string | null }[]
   spaces: {
     space: { id: string; key: string; name: string; archived_at: string | null }
