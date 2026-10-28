@@ -17,6 +17,11 @@ arch('выдачи доступа: читает для прав точка пр�
         'App\Models',
         'App\Http\Resources',
         'App\Http\Controllers\Api\V1\SpaceGroupController',
+        // П2c: выдачи при передаче доступа уходящего, «спящие» выдачи бывшего Владельца, гости (их выдачи снимает
+        // «Убрать гостя») — меняют выдачи, права не вычисляют
+        'App\Actions\Users\AccessTransfer',
+        'App\Actions\Users\FormerOwnerGrants',
+        'App\Actions\Guests',
         // Данные для тестов и демо — в обход Actions, как и раньше
         'Database\Factories',
         'Database\Seeders',
@@ -45,7 +50,7 @@ it('таблицы прав в запросах — только в точке �
         // Только строки кода (в том числе с псевдонимами и сырым SQL): упоминание в комментарии — не чтение
         foreach (token_get_all((string) file_get_contents($path)) as $token) {
             if (! is_array($token) || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
-                || preg_match('/\b(access_grants|role_permissions|roles|group_members|company_members)\b/', $token[1], $table) !== 1) {
+                || preg_match('/\b(access_grants|role_permissions|roles|group_members|company_members|company_permission_grants)\b/', $token[1], $table) !== 1) {
                 continue;
             }
             $permitted = $table[1] !== 'role_permissions'

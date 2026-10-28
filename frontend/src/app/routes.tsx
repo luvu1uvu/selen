@@ -1,4 +1,4 @@
-import { Navigate, type RouteObject } from 'react-router'
+import { type RouteObject } from 'react-router'
 import { AdminCompanyLayout } from '@/features/admin/AdminCompanyLayout'
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
@@ -8,7 +8,14 @@ import { ProfilePage } from '@/features/profile/ProfilePage'
 import { FileNotFoundPage } from '@/pages/FileNotFoundPage'
 import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import { AdminNotFound, AdminRedirect, RequireAdmin, RequireAuth, RequireGuest } from './guards'
+import {
+  AdminCompanyIndex,
+  AdminNotFound,
+  AdminRedirect,
+  RequireAdmin,
+  RequireAuth,
+  RequireGuest,
+} from './guards'
 import { RouteError } from './RouteError'
 import { RouteLoading } from './RouteLoading'
 import { AppLayout } from './layouts/AppLayout'
@@ -94,7 +101,8 @@ export const routes: RouteObject[] = [
                     path: '/admin/c/:companyId',
                     element: <AdminCompanyLayout />,
                     children: [
-                      { index: true, element: <Navigate to="users" replace /> },
+                      // Без раздела — первая доступная страница по правам компании (П2c)
+                      { index: true, element: <AdminCompanyIndex /> },
                       {
                         // «Пользователи» — вкладки как в Kaiten: пользователи, группы, приглашения
                         lazy: async () => ({

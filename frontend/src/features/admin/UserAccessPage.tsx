@@ -7,12 +7,14 @@ import type { UserAccess } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { useAdminUrl } from './company'
+import { CompanyPermissionsSection } from './components/CompanyPermissionsSection'
 import { UserStatusBadge } from './components/UserStatusBadge'
 import { useUserAccess } from './queries'
 
 /**
  * Админка → пользователь: к каким пространствам у него доступ и почему — по каждому источнику
- * (лично, через группы), включая недействующие. Главный инструмент разбора «почему видит / не видит».
+ * (лично, через группы), включая недействующие. Главный инструмент разбора «почему видит / не видит». Ниже —
+ * «Права компании» (П2c; Владельцу и администратору компании).
  */
 export function UserAccessPage() {
   const { t } = useTranslation('admin')
@@ -86,6 +88,8 @@ export function UserAccessPage() {
         <p className="text-muted-foreground max-w-2xl text-sm">{t('access.rule')}</p>
         <SpacesTable access={access} />
       </section>
+
+      {!isOwner(access.user) && <CompanyPermissionsSection userId={access.user.id} />}
     </div>
   )
 }

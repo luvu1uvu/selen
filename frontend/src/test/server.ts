@@ -56,7 +56,9 @@ export const ALL_USER_PERMISSIONS: AdminUserPermissions = {
   reactivate: true,
   manage_invitation: true,
   transfer_ownership: true,
-  owner_only: false,
+  block: true,
+  manage_guest: false,
+  manage_permissions: true,
 }
 
 export const NO_USER_PERMISSIONS: AdminUserPermissions = {
@@ -65,12 +67,20 @@ export const NO_USER_PERMISSIONS: AdminUserPermissions = {
   reactivate: false,
   manage_invitation: false,
   transfer_ownership: false,
-  owner_only: false,
+  block: false,
+  manage_guest: false,
+  manage_permissions: false,
 }
 
 /** Пользователь в админском списке (AdminUserResource): по умолчанию — со всеми действиями. */
 export function makeAdminUser(overrides: Partial<AdminUser> = {}): AdminUser {
-  return { ...makeUser(), permissions: ALL_USER_PERMISSIONS, ...overrides }
+  return {
+    ...makeUser(),
+    guest: null,
+    blocked: false,
+    permissions: ALL_USER_PERMISSIONS,
+    ...overrides,
+  }
 }
 
 /** Фабрика пространства (глазами участника) для тестов. */

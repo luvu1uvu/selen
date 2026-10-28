@@ -15,13 +15,19 @@ const personal = (role: SpaceRole, ownCardsOnly = false) => ({
 
 const members: SpacePerson[] = [
   {
-    user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active' },
+    user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active', guest: false },
     role: 'admin',
     personal: personal('admin'),
     groups: [],
   },
   {
-    user: { id: 'u-2', name: 'Борис', email: 'boris@selen.test', status: 'deactivated' },
+    user: {
+      id: 'u-2',
+      name: 'Борис',
+      email: 'boris@selen.test',
+      status: 'deactivated',
+      guest: false,
+    },
     role: 'editor',
     personal: personal('editor'),
     groups: [],

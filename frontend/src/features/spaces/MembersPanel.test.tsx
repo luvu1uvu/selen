@@ -9,19 +9,19 @@ const me = makeUser({ id: 'me', name: 'Анна', role: 'member' })
 
 const people: SpacePerson[] = [
   {
-    user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active' },
+    user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active', guest: false },
     role: 'admin',
     personal: { role: 'admin', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
     groups: [],
   },
   {
-    user: { id: 'u-olga', name: 'Ольга', email: 'olga@selen.test', status: 'active' },
+    user: { id: 'u-olga', name: 'Ольга', email: 'olga@selen.test', status: 'active', guest: false },
     role: 'editor',
     personal: { role: 'editor', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
     groups: [{ id: 'g-an', name: 'Analysts', role: 'commenter', own_cards_only: false }],
   },
   {
-    user: { id: 'u-petr', name: 'Пётр', email: 'petr@selen.test', status: 'active' },
+    user: { id: 'u-petr', name: 'Пётр', email: 'petr@selen.test', status: 'active', guest: false },
     role: 'editor',
     personal: null,
     groups: [{ id: 'g-co', name: 'Contractors', role: 'editor', own_cards_only: true }],

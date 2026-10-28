@@ -79,22 +79,89 @@ export interface Company {
 /** Что текущий администратор может сделать с пользователем (UserPolicy, ADR-0017) — подсказка интерфейсу. */
 export interface AdminUserPermissions {
   update_role: boolean
+  /** Деактивировать и вернуть — в этой компании (П2c). */
   deactivate: boolean
   reactivate: boolean
   /** Повторить или отозвать приглашение пользователя. */
   manage_invitation: boolean
   transfer_ownership: boolean
-  /** Деактивировать и вернуть может только Владелец: у человека «дома» в нескольких компаниях (до П2c). */
-  owner_only: boolean
+  /** Отключить и включить учётную запись — только Владелец (П2c). */
+  block: boolean
+  /** Изменить срок и пространства гостя, убрать гостя (право «управлять пользователями»). */
+  manage_guest: boolean
+  /** Вкладка «Права компании» (Владелец и администратор компании). */
+  manage_permissions: boolean
+}
+
+/** Гость компании (П2c): срок (null — без срока) и истёк ли. */
+export interface GuestMembership {
+  expires_at: string | null
+  expired: boolean
 }
 
 /**
- * Пользователь в админке «Пользователи». У Владельца в компании, где он не «дом», время входа и часовой пояс не
- * приходят (null).
+ * Пользователь в админке «Пользователи»: статус — в этой компании (убранный из неё — deactivated). Время входа и часовой
+ * пояс приходят только у действующих сотрудников компании (иначе null).
  */
 export interface AdminUser extends Omit<User, 'timezone'> {
   timezone: string | null
+  /** Гость этой компании; null — сотрудник или Владелец. */
+  guest: GuestMembership | null
+  /** Учётную запись отключил Владелец (вернуть может только он). */
+  blocked: boolean
   permissions: AdminUserPermissions
+}
+
+/** Фильтр «Пользователей» по статусу в компании. */
+export type UserStatusFilter = UserStatus | 'guest'
+
+/** Итог приглашения: invited — ушла ссылка задать пароль; added — существующий сотрудник сразу добавлен (П2c). */
+export interface InviteResult {
+  result: 'invited' | 'added'
+  user: UserRef
+  invitation: Invitation | null
+}
+
+/** Пространство, где можно выдать доступ приглашённому и гостю. */
+export interface GrantableSpace {
+  id: string
+  key: string
+  name: string
+}
+
+/** Доступ к пространству в приглашении и у гостя. */
+export interface SpaceGrantInput {
+  space_id: string
+  role: SpaceRole
+  own_cards_only?: boolean
+}
+
+/** Право компании у человека (вкладка «Права компании», П2c). */
+export interface UserCompanyPermission {
+  permission: CompanyPermission
+  /** Выдано лично. */
+  personal: boolean
+  /** Через какие группы. */
+  groups: UserRef[]
+  /** Есть у администратора компании по умолчанию. */
+  by_admin_role: boolean
+  /** Итог: право есть. */
+  effective: boolean
+  /** Может ли текущий пользователь менять галочку. */
+  editable: boolean
+}
+
+/** Право компании у группы. */
+export interface GroupCompanyPermission {
+  permission: CompanyPermission
+  granted: boolean
+  editable: boolean
+}
+
+/** Что потеряет Владелец при передаче владения (П2c). */
+export interface TransferImpact {
+  lost_spaces: { id: string; key: string; name: string }[]
+  unmanaged_spaces: { id: string; key: string; name: string }[]
 }
 
 export interface Invitation {
@@ -471,7 +538,8 @@ export interface PersonGroupSource {
  * Пользователю только с режимом «только свои карточки» источники не отдаются: есть только user.
  */
 export interface SpacePerson {
-  user: { id: string; name: string; email: string; status: UserStatus }
+  /** status — в компании пространства; guest — гость компании (бейдж, П2c). */
+  user: { id: string; name: string; email: string; status: UserStatus; guest: boolean }
   /** Самая сильная роль по всем источникам (для показа). */
   role?: SpaceRole
   /** Личное участие; null — доступ только через группы. */
@@ -529,7 +597,8 @@ export interface Group {
   }[]
 }
 
-export type AccessInactiveReason = 'group_archived' | 'user_deactivated' | 'user_invited'
+export type AccessInactiveReason =
+  'group_archived' | 'user_deactivated' | 'user_invited' | 'guest_expired'
 
 /** Админка → пользователь: к каким пространствам доступ и почему. */
 export interface UserAccess {

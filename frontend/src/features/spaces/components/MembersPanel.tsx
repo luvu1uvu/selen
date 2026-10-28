@@ -111,6 +111,10 @@ function PeopleTable({ space }: { space: Space }) {
                     {person.user.id === me?.id && (
                       <Badge variant="outline">{tc('badges.you')}</Badge>
                     )}
+                    {person.user.guest && (
+                      // Гость — сотрудник другой компании с личным доступом (П2c); откуда он — не показываем
+                      <Badge variant="outline">{t('members.guest')}</Badge>
+                    )}
                     {person.user.status === 'deactivated' && (
                       <Badge variant="destructive">{t('members.deactivated')}</Badge>
                     )}
@@ -144,7 +148,7 @@ function PeopleTable({ space }: { space: Space }) {
                             )
                           }
                         >
-                          <RoleSelectOptions />
+                          <RoleSelectOptions withoutAdmin={person.user.guest} />
                         </NativeSelect>
                       ) : (
                         <span className="text-muted-foreground text-sm whitespace-nowrap">

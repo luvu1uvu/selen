@@ -93,10 +93,12 @@ class AccessResolver
             ->whereColumn('active.id', 'access_grants.id')
             ->selectRaw('1');
 
+        // Только участники компании (строка членства есть): человек без членства в ней — не её, его там не показываем
         return DB::table('access_grants')
             ->join('nav_nodes', 'nav_nodes.id', '=', 'access_grants.nav_node_id')
+            ->join('company_members', fn ($join) => $join->on('company_members.company_id', '=', 'access_grants.company_id')
+                ->on('company_members.user_id', '=', 'access_grants.user_id'))
             ->where('nav_nodes.space_id', $space->getKey())
-            ->whereNotNull('access_grants.user_id')
             ->whereNotExists($active)
             ->pluck('access_grants.user_id');
     }

@@ -17,6 +17,7 @@ import { Checkbox } from '@/shared/ui/checkbox'
 import { Label } from '@/shared/ui/label'
 import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { CompanyPermissionsSection } from './components/CompanyPermissionsSection'
 import { GroupDialog } from './components/GroupDialog'
 import { UserStatusBadge } from './components/UserStatusBadge'
 import {
@@ -194,6 +195,8 @@ export function GroupPage() {
           onRevoke={(id, name) => setConfirm({ kind: 'space', id, name })}
         />
       </section>
+
+      <CompanyPermissionsSection groupId={group.id} />
 
       <GroupDialog group={editing} onClose={() => setEditing(null)} />
       <ConfirmDialog

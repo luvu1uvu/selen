@@ -279,17 +279,26 @@ describe('Админка нескольких компаний', () => {
     expect(screen.getByRole('heading', { name: 'Пользователи', level: 1 })).toBeInTheDocument()
   })
 
-  it('человек с «домами» в нескольких компаниях: действий нет, подсказка — только Владелец', async () => {
+  it('гость: бейдж со сроком, действия гостя; отключённый Владельцем — свой бейдж, «Активировать» нет', async () => {
     signedInAs(makeUser({ id: 'admin-1' }))
     server.use(
       http.get('*/api/v1/admin/companies/:company/users', () =>
         HttpResponse.json(
           usersPage([
             makeAdminUser({
-              id: 'u-both',
+              id: 'u-guest',
               name: 'Олег Никитин',
               role: 'member',
-              permissions: { ...NO_USER_PERMISSIONS, owner_only: true },
+              guest: { expires_at: '2026-11-15T20:59:59Z', expired: false },
+              permissions: { ...NO_USER_PERMISSIONS, manage_guest: true },
+            }),
+            makeAdminUser({
+              id: 'u-blocked',
+              name: 'Пётр Отключённый',
+              role: 'member',
+              status: 'deactivated',
+              blocked: true,
+              permissions: { ...NO_USER_PERMISSIONS, reactivate: true },
             }),
           ]),
         ),
@@ -297,12 +306,20 @@ describe('Админка нескольких компаний', () => {
     )
     renderApp('/admin/users')
 
-    const row = (await screen.findByText('Олег Никитин')).closest('tr')!
-    expect(within(row).queryByRole('button', { name: /Действия с пользователем/ })).toBeNull()
-    await userEvent.hover(within(row).getByRole('link', { name: 'Доступ к пространствам' }))
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(
-      'деактивировать и активировать его может только Владелец',
-    )
+    const guest = (await screen.findByText('Олег Никитин')).closest('tr')!
+    expect(within(guest).getByText('Гость до 15.11.2026')).toBeInTheDocument()
+    await userEvent.click(within(guest).getByRole('button', { name: /Действия с пользователем/ }))
+    expect(
+      await screen.findByRole('menuitem', { name: 'Изменить доступ гостя…' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Убрать гостя' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Деактивировать' })).toBeNull()
+    await userEvent.keyboard('{Escape}')
+
+    const blocked = screen.getByText('Пётр Отключённый').closest('tr')!
+    expect(within(blocked).getByText('Отключён Владельцем')).toBeInTheDocument()
+    // Вернуть отключённого Владельцем может только он: «Активировать» нет — и меню нет
+    expect(within(blocked).queryByRole('button', { name: /Действия с пользователем/ })).toBeNull()
   })
 })
 

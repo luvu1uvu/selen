@@ -65,3 +65,30 @@ export function useAdminUrl(): (path: string) => string {
   const company = useAdminCompanyId()
   return (path: string) => adminUrl(company, path)
 }
+
+/**
+ * Разделы админки по правам компании — в порядке меню: первая доступная страница для пункта «Пользователи» и адреса
+ * /admin/c/{id} без раздела (у участника с отдельными правами вкладки «Пользователи» может не быть, П2c).
+ */
+const ADMIN_PAGES: [string, CompanyPermission][] = [
+  ['users', 'company.manage_users'],
+  ['groups', 'company.manage_groups'],
+  ['invitations', 'company.invite_users'],
+  ['spaces', 'company.manage_structure'],
+  ['structure', 'company.manage_structure'],
+  ['card-types', 'company.manage_dictionaries'],
+  ['labels', 'company.manage_dictionaries'],
+  ['trash', 'company.manage_trash'],
+  ['events', 'company.view_event_log'],
+]
+
+/** Первая доступная страница админки компании; only — среди этих разделов (вкладки «Пользователей»). */
+export function firstAdminPath(
+  company: AdminCompany | undefined,
+  only?: string[],
+): string | undefined {
+  return ADMIN_PAGES.find(
+    ([path, permission]) =>
+      (only === undefined || only.includes(path)) && hasCompanyPermission(company, permission),
+  )?.[0]
+}

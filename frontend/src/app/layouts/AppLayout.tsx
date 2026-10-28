@@ -22,12 +22,17 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { adminUrl, defaultAdminCompany, hasCompanyPermission } from '@/features/admin/company'
+import {
+  adminUrl,
+  defaultAdminCompany,
+  firstAdminPath,
+  hasCompanyPermission,
+} from '@/features/admin/company'
 import { useCurrentUser, useLogout } from '@/features/auth/queries'
 import { useUpdateTheme } from '@/features/profile/queries'
 import { TreePanel } from '@/features/navigation/components/TreePanel'
 import { Hint } from '@/shared/components/Hint'
-import { adminCompanies, isOwner, isSystemAdmin } from '@/shared/lib/roles'
+import { adminCompanies, hasAdminAccess, isOwner } from '@/shared/lib/roles'
 import { isTheme } from '@/shared/lib/theme'
 import type { CompanyPermission, Theme } from '@/shared/types/api'
 import { cn } from '@/shared/lib/utils'
@@ -312,7 +317,13 @@ function AdminPanel({
           sections.map((item) => (
             <AdminLink
               key={item.path}
-              to={adminUrl(company.id, item.path)}
+              to={adminUrl(
+                company.id,
+                // «Пользователи» — на первую доступную вкладку (П2c: прав может быть только на «Приглашения»)
+                item.path === 'users'
+                  ? (firstAdminPath(company, USERS_PATHS) ?? item.path)
+                  : item.path,
+              )}
               icon={item.icon}
               active={item.path === 'users' ? !!match && USERS_PATHS.includes(section) : undefined}
               onNavigate={onNavigate}
@@ -339,7 +350,7 @@ export function AppLayout() {
   const { data: user } = useCurrentUser()
   const logoutMutation = useLogout()
   const navigate = useNavigate()
-  const isAdmin = isSystemAdmin(user)
+  const isAdmin = hasAdminAccess(user)
   const [menuOpen, setMenuOpen] = useState(false)
   const desktop = useMediaQuery('(min-width: 48rem)')
   // Окно стало широким — выезжающее меню закрыто (иначе, сузив окно снова, пользователь увидел бы его открытым)

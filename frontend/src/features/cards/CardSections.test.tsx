@@ -12,7 +12,7 @@ const member = (
   name: string,
   status: SpacePerson['user']['status'] = 'active',
 ): SpacePerson => ({
-  user: { id, name, email: `${id}@selen.test`, status },
+  user: { id, name, email: `${id}@selen.test`, status, guest: false },
   role: 'editor',
   personal: { role: 'editor', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
   groups: [],

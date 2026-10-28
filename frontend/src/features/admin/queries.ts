@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { currentUserKey } from '@/features/auth/queries'
-import type { AssignableRole, SpaceRole } from '@/shared/types/api'
+import type { AssignableRole, CompanyPermission, SpaceRole } from '@/shared/types/api'
 import {
   addGroupMember,
   archiveSpace,
@@ -14,7 +14,17 @@ import {
   fetchAdminCardTypes,
   fetchAdminSpaces,
   fetchCompanies,
+  addGuest,
   fetchDeactivationImpact,
+  fetchGrantableSpaces,
+  fetchGroupPermissions,
+  fetchTransferImpact,
+  fetchUserPermissions,
+  removeGuest,
+  saveGroupPermissions,
+  saveUserPermissions,
+  setUserBlocked,
+  updateGuest,
   fetchEvents,
   fetchGroup,
   fetchGroups,
@@ -56,8 +66,15 @@ export const adminKeys = {
   group: (company: string, id: string) => ['admin', company, 'groups', id] as const,
   userAccess: (company: string, userId: string) =>
     ['admin', company, 'user-access', userId] as const,
-  deactivationImpact: (company: string, userId: string) =>
-    ['admin', company, 'deactivation-impact', userId] as const,
+  deactivationImpact: (company: string, userId: string, account = false) =>
+    ['admin', company, 'deactivation-impact', userId, account] as const,
+  transferImpact: (company: string, userId: string) =>
+    ['admin', company, 'transfer-impact', userId] as const,
+  grantableSpaces: (company: string) => ['admin', company, 'grantable-spaces'] as const,
+  userPermissions: (company: string, userId: string) =>
+    ['admin', company, 'user-permissions', userId] as const,
+  groupPermissions: (company: string, groupId: string) =>
+    ['admin', company, 'group-permissions', groupId] as const,
   trash: (company: string, page: number) => ['admin', company, 'trash', page] as const,
 }
 
@@ -196,7 +213,106 @@ export function useDeactivateUser() {
   const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
   return useMutation({
-    mutationFn: (arg: Parameters<typeof deactivateUser>[1]) => deactivateUser(company, arg),
+    mutationFn: ({ userId, successorId }: { userId: string; successorId?: string | null }) =>
+      deactivateUser(company, userId, successorId),
+    onSuccess: invalidate,
+  })
+}
+
+/** Отключить или включить учётную запись — только Владелец (П2c). */
+export function useSetUserBlocked() {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: ({ userId, blocked }: { userId: string; blocked: boolean }) =>
+      setUserBlocked(company, userId, blocked),
+    onSuccess: invalidate,
+  })
+}
+
+/** Гости компании (П2c). */
+export function useAddGuest() {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: (arg: Parameters<typeof addGuest>[1]) => addGuest(company, arg),
+    onSuccess: invalidate,
+  })
+}
+
+export function useUpdateGuest() {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: ({ userId, ...payload }: { userId: string } & Parameters<typeof updateGuest>[2]) =>
+      updateGuest(company, userId, payload),
+    onSuccess: invalidate,
+  })
+}
+
+export function useRemoveGuest() {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: (userId: string) => removeGuest(company, userId),
+    onSuccess: invalidate,
+  })
+}
+
+/** Пространства, где можно выдать доступ (приглашение, гость); company — компания приглашения. */
+export function useGrantableSpaces(company: string, enabled = true) {
+  return useQuery({
+    queryKey: adminKeys.grantableSpaces(company),
+    queryFn: () => fetchGrantableSpaces(company),
+    enabled: enabled && company !== '',
+  })
+}
+
+export function useTransferImpact(userId: string | null) {
+  const company = useAdminCompanyId()
+  return useQuery({
+    queryKey: adminKeys.transferImpact(company, userId ?? ''),
+    queryFn: () => fetchTransferImpact(company, userId ?? ''),
+    enabled: userId !== null,
+    staleTime: 0,
+  })
+}
+
+/** «Права компании» человека и группы (П2c). */
+export function useUserPermissions(userId: string, enabled = true) {
+  const company = useAdminCompanyId()
+  return useQuery({
+    queryKey: adminKeys.userPermissions(company, userId),
+    queryFn: () => fetchUserPermissions(company, userId),
+    enabled,
+  })
+}
+
+export function useSaveUserPermissions(userId: string) {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: (permissions: CompanyPermission[]) =>
+      saveUserPermissions(company, userId, permissions),
+    onSuccess: invalidate,
+  })
+}
+
+export function useGroupPermissions(groupId: string, enabled = true) {
+  const company = useAdminCompanyId()
+  return useQuery({
+    queryKey: adminKeys.groupPermissions(company, groupId),
+    queryFn: () => fetchGroupPermissions(company, groupId),
+    enabled,
+  })
+}
+
+export function useSaveGroupPermissions(groupId: string) {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: (permissions: CompanyPermission[]) =>
+      saveGroupPermissions(company, groupId, permissions),
     onSuccess: invalidate,
   })
 }
@@ -210,11 +326,12 @@ export function useReactivateUser() {
   })
 }
 
+/** Приглашение — в выбранную в окне компанию (у кого их несколько, П2c). */
 export function useInviteUser() {
-  const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
   return useMutation({
-    mutationFn: (arg: Parameters<typeof inviteUser>[1]) => inviteUser(company, arg),
+    mutationFn: ({ company, ...payload }: { company: string } & Parameters<typeof inviteUser>[1]) =>
+      inviteUser(company, payload),
     onSuccess: invalidate,
   })
 }
@@ -310,20 +427,21 @@ export function useSetCardTypeArchived() {
   })
 }
 
-export function useUserAccess(userId: string) {
+export function useUserAccess(userId: string, enabled = true) {
   const company = useAdminCompanyId()
   return useQuery({
     queryKey: adminKeys.userAccess(company, userId),
     queryFn: () => fetchUserAccess(company, userId),
+    enabled,
   })
 }
 
 /** Запрашивается при открытии диалога деактивации — данные всегда свежие. */
-export function useDeactivationImpact(userId: string | null) {
+export function useDeactivationImpact(userId: string | null, account = false) {
   const company = useAdminCompanyId()
   return useQuery({
-    queryKey: adminKeys.deactivationImpact(company, userId ?? ''),
-    queryFn: () => fetchDeactivationImpact(company, userId ?? ''),
+    queryKey: adminKeys.deactivationImpact(company, userId ?? '', account),
+    queryFn: () => fetchDeactivationImpact(company, userId ?? '', account),
     enabled: userId !== null,
     staleTime: 0,
   })
