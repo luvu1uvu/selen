@@ -103,7 +103,7 @@ export function EventLogPage() {
                 {formatDateTime(entry.occurred_at, me?.timezone)}
               </TableCell>
               <TableCell>{label(entry.event_type)}</TableCell>
-              <TableCell>
+              <TableCell className="min-w-40">
                 {entry.actor?.name ??
                   (entry.meta.source === 'http'
                     ? t('events.anonymousActor')
@@ -133,11 +133,13 @@ function AuthAudit({ audit }: { audit: NonNullable<EventLogEntry['auth_audit']> 
 
   return (
     <div className="text-muted-foreground grid text-xs">
-      {audit.ip && <span className="font-mono">{t('events.ip', { ip: audit.ip })}</span>}
+      {audit.ip && (
+        <span className="font-mono whitespace-nowrap">{t('events.ip', { ip: audit.ip })}</span>
+      )}
       {audit.user_agent && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span tabIndex={0} className="w-fit">
+            <span tabIndex={0} className="w-fit whitespace-nowrap">
               {browser ?? t('events.unknownBrowser')}
             </span>
           </TooltipTrigger>

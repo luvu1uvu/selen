@@ -40,6 +40,7 @@ use App\Enums\Theme;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Company;
+use App\Models\EmailChangeRequest;
 use App\Models\Lane;
 use App\Models\NavNode;
 use App\Models\Space;
@@ -103,6 +104,7 @@ use Illuminate\Support\Facades\DB;
  * администратор двух компаний и человек с двумя «домами» — см. moreCompanies(). П2c-1 — гости, деактивация в компании,
  * права компании: пространство RGUEST и люди e2e-guest*, e2e-partly, e2e-rights — см. guestsAndRights(); для автотестов
  * ТК-R2.16–R2.22 ещё RLEAVE, RKEEP, e2e-leaver, e2e-successor, e2e-blocked, e2e-invitee — см. guestsAndRightsCases().
+ * П2c-2 — «Завершить все сеансы» и смена email: e2e-sessions, e2e-email, e2e-email-confirm — см. sessionsAndEmail().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  * Приёмка пачки UX-3 (acceptance/stage-ux3): пространство UXC «Пачка UX-3» — см. uxBatch3().
  */
@@ -309,6 +311,9 @@ class E2eSeeder extends Seeder
         $this->guestsAndRights($admin, $second);
         // …и данные приёмочных автотестов тест-кейсов П2c-1 (ТК-R2.16–R2.22)
         $this->guestsAndRightsCases($admin, $second);
+
+        // Приёмка «Права 2.0», П2c-2 — сеансы, смена email (acceptance/stage-R2)
+        $this->sessionsAndEmail($admin);
 
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
@@ -608,6 +613,33 @@ class E2eSeeder extends Seeder
 
         // ТК-R2.21: учётную запись отключает Владелец
         User::factory()->create(['name' => 'E2E Отключаемый', 'email' => 'e2e-blocked@selen.test']);
+    }
+
+    /** Токен ссылки подтверждения нового email у «E2E Подтверждение email» (письма в E2E уходят в лог, не в почту). */
+    public const EMAIL_CHANGE_TOKEN = 'e2eEmailChangeToken0000000000000000000000000000000000000000000001';
+
+    /**
+     * «Права 2.0», П2c-2 (acceptance/stage-R2): свои люди «Компании 1» — тест-кейсы завершают их сеансы и меняют email,
+     * не задевая сохранённые входы других тестов.
+     *
+     * - «E2E Сеансы» (e2e-sessions@) — входит в систему (сохранённый вход): «Завершить все сеансы…» его завершает.
+     *   После теста его сохранённый вход не действует.
+     * - «E2E Смена email» (e2e-email@) — не входит: администратор запрашивает смену email и отменяет её.
+     * - «E2E Подтверждение email» (e2e-email-confirm@) — не входит: смена на e2e-email-confirmed@ уже запрошена
+     *   администратором, ссылка из письма — /email-change/{EMAIL_CHANGE_TOKEN}; тест-кейс подтверждает адрес.
+     */
+    private function sessionsAndEmail(User $admin): void
+    {
+        User::factory()->create(['name' => 'E2E Сеансы', 'email' => 'e2e-sessions@selen.test']);
+        User::factory()->create(['name' => 'E2E Смена email', 'email' => 'e2e-email@selen.test']);
+        $confirm = User::factory()->create(['name' => 'E2E Подтверждение email', 'email' => 'e2e-email-confirm@selen.test']);
+        EmailChangeRequest::query()->create([
+            'user_id' => $confirm->id,
+            'new_email' => 'e2e-email-confirmed@selen.test',
+            'token_hash' => EmailChangeRequest::hashToken(self::EMAIL_CHANGE_TOKEN),
+            'requested_by_id' => $admin->id,
+            'expires_at' => now()->addHours((int) config('selen.email_change.ttl_hours')),
+        ]);
     }
 
     /**
