@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\BoardTemplate;
+use App\Enums\EventType;
 use App\Enums\SpaceRole;
 use App\Enums\StandardRole;
 use App\Enums\UserStatus;
@@ -11,6 +12,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Notifications\AccessOpenedNotification;
 use App\Notifications\InvitationNotification;
+use App\Services\EventLog\EventRecorder;
 use Database\Factories\UserFactory;
 use Illuminate\Support\Facades\Notification;
 
@@ -271,4 +273,19 @@ describe('приглашение существующего сотрудника
             ->assertJsonPath('data.0.id', $mine->id)->assertJsonPath('data.0.can_resend', true);
         $this->postJson(adminPath()."invitations/{$mine->id}/resend")->assertSuccessful();
     });
+});
+
+it('события «о человеке» убранного из компании: пока он работает в другой — не видны; ушёл отовсюду — видны', function () {
+    $both = member();
+    $both->companies()->attach($this->second->id, ['kind' => 'home']);
+    $secondAdmin = admin(company: $this->second);
+    $this->actingAs($this->admin)->postJson(adminPath()."users/{$both->id}/deactivate")->assertOk();
+    $event = app(EventRecorder::class)->record(EventType::PasswordChanged, $both, $both);
+
+    $ids = fn (User $actor, $company) => collect($this->actingAs($actor)->getJson(adminPath($company).'events')->json('data'))->pluck('id');
+    expect($ids($this->admin, company()))->not->toContain($event->id)
+        ->and($ids($secondAdmin, $this->second))->toContain($event->id);
+
+    $this->actingAs($secondAdmin)->postJson(adminPath($this->second)."users/{$both->id}/deactivate")->assertOk();
+    expect($ids($this->admin, company()))->toContain($event->id);
 });

@@ -418,6 +418,21 @@ class AccessResolver
     }
 
     /**
+     * Подзапрос id людей, события «о человеке» (без компании: вход, смена пароля, отключение учётной записи) которых видит
+     * журнал компании: её действующие «дома» и убранные из неё, если они больше нигде не работают (учётная запись
+     * деактивирована). Убранный, но работающий в другой компании, — нет: его входы выдали бы, что он работает где-то ещё.
+     */
+    public function eventSubjectIds(Company $company): Builder
+    {
+        return $this->companyMemberIds($company)->union($this->memberships()
+            ->select('user_id')
+            ->where('company_id', $company->getKey())
+            ->where('kind', self::HOME)
+            ->whereNotNull('deactivated_at')
+            ->whereIn('user_id', DB::table('users')->select('id')->where('status', UserStatus::Deactivated->value)));
+    }
+
+    /**
      * Подзапрос id людей компании для админки «Пользователи» и привязки {user} в её адресах: все её «дома» (и убранные
      * из компании — их можно вернуть), гости (и с истёкшим сроком — его можно продлить) и Владелец — он участник всех
      * компаний (ADR-0024).
