@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { openBoard, pageAs } from '../../tests/helpers'
 import {
+  chips,
   COMPANY_1,
   COMPANY_2,
   expandClients,
@@ -18,6 +19,9 @@ import {
  * продажи», гость «Компании 1» в RGUEST «Гостевое», «Комментатор»); «Поддержка» → RGUEST, доска «Задачи», карточка
  * RGUEST-1; irina@ (администратор «Поддержки») → e2e-admin (администратор RGUEST). Компании наоборот: гость — в «Компании
  * 1», его «дом» — вторая (E2eSeeder::guestsAndRights, guestsAndRightsCases). Данные не меняются.
+ *
+ * П2d-1: роли в «Участниках» — чипы в столбце «Личные роли» и окно «Роли: …» по кнопке «Изменить роли …» (вместо списка
+ * «Роль …» в строке): у гостя в окне нет «Администратора», у сотрудника компании — есть; окна закрываются «Отменой».
  */
 
 const GUEST = 'E2E Гость'
@@ -53,14 +57,30 @@ test('ТК-R2.18. Гость в чужом пространстве — с бе�
   await openMembers(admin, GUEST_SPACE)
   const row = admin.getByRole('row').filter({ hasText: 'e2e-guest@selen.test' })
   await expect(row.getByText('Гость', { exact: true })).toBeVisible()
-  const role = row.getByRole('combobox', { name: `Роль ${GUEST}` })
-  await expect(role).toHaveValue('commenter')
-  await expect(role.getByRole('option')).toHaveText(['Редактор', 'Комментатор'])
+  await expect(chips(row.getByRole('cell').nth(1))).toHaveText(['Комментатор'])
+  await row.getByRole('button', { name: `Изменить роли ${GUEST}` }).click()
+  const guestRoles = admin.getByRole('dialog', { name: `Роли: ${GUEST}` })
+  const guestChoice = guestRoles.getByRole('group', { name: 'Роли', exact: true })
+  await expect(guestChoice.getByRole('button', { pressed: true })).toHaveText(['Комментатор'])
+  await expect(guestChoice.getByRole('button')).toHaveText([
+    'Редактор',
+    'Комментатор',
+    'Редактор — только свои карточки',
+    'Комментатор — только свои карточки',
+  ])
+  await guestRoles.getByRole('button', { name: 'Отмена' }).click()
+  await expect(guestRoles).toBeHidden()
   // Для сравнения: у сотрудника компании «Администратор» в выборе есть
   const own = admin.getByRole('row').filter({ hasText: 'e2e-admin@selen.test' })
-  await expect(own.getByRole('combobox', { name: 'Роль E2E Администратор' }).getByRole('option')).toHaveText([
+  await own.getByRole('button', { name: 'Изменить роли E2E Администратор' }).click()
+  const ownRoles = admin.getByRole('dialog', { name: 'Роли: E2E Администратор' })
+  await expect(ownRoles.getByRole('group', { name: 'Роли', exact: true }).getByRole('button')).toHaveText([
     'Администратор',
     'Редактор',
     'Комментатор',
+    'Редактор — только свои карточки',
+    'Комментатор — только свои карточки',
   ])
+  await ownRoles.getByRole('button', { name: 'Отмена' }).click()
+  await expect(ownRoles).toBeHidden()
 })

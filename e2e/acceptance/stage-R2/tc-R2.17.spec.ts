@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
 import { roleCell, userRow } from '../stage-3/helpers'
 import {
+  chooseRoles,
   COMPANY_3,
   moscowDate,
   moscowIsoDate,
@@ -20,6 +21,8 @@ import {
  * guestsAndRightsCases); «Склад» → RTHIRD. Срок — до конца дня по часовому поясу пользователя (Москва), бейдж —
  * в нём же. В конце гостя возвращает Владелец (лимит приглашений и гостей e2e-multi-admin занят ТК-R2.14) — тест можно
  * повторить.
+ *
+ * П2d-1: роль в строке пространства окна «Добавить гостя» — чипами (группа «Роли в «…»») вместо списка «Роль».
  */
 
 const GUEST = 'E2E Гость'
@@ -76,7 +79,7 @@ test('ТК-R2.17. Гость: бейдж со сроком, изменить д�
   await add.getByRole('button', { name: 'Добавить пространство' }).click()
   const grants = add.getByRole('group', { name: 'Доступ к пространствам' })
   await grants.getByRole('combobox', { name: 'Пространство' }).selectOption({ label: `${THIRD_SPACE} (RTHIRD)` })
-  await grants.getByRole('combobox', { name: 'Роль' }).selectOption({ label: 'Редактор' })
+  await chooseRoles(grants.getByRole('group', { name: `Роли в «${THIRD_SPACE} (RTHIRD)»` }), ['Редактор'])
   await add.getByLabel('Доступ до').fill(moscowIsoDate(30))
   await add.getByRole('button', { name: 'Добавить', exact: true }).click()
   await expect(add).toBeHidden()

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
 import { roleCell } from '../stage-3/helpers'
-import { chooseCompany, COMPANY_1, COMPANY_2, openAdminPanel, SECOND_SPACE } from './helpers'
+import { chooseCompany, chooseRoles, COMPANY_1, COMPANY_2, grantRoles, grantRows, openAdminPanel, SECOND_SPACE } from './helpers'
 
 /**
  * ТК-R2.27: Владелец заранее видит, к каким пространствам потеряет доступ. owner@ → e2e-owner («дом» — только «Компания
@@ -9,10 +9,14 @@ import { chooseCompany, COMPANY_1, COMPANY_2, openAdminPanel, SECOND_SPACE } fro
  * Администратор». Владение не передаётся. В конце роль Владельца в RSECOND снимает её администратор e2e-multi-admin:
  * иначе у Владельца в дереве появилась бы вторая компания (seeder обещает дерево Владельца без неё) — и тест можно
  * повторить.
+ *
+ * П2d-1: пункт «Назначить роль» в «Пространствах» админки заменён на «Доступ…» — окно «Доступ: <пространство>» (то же,
+ * что в «Структуре»): «Сотруднику» → «Себе», роли чипами → «Выдать доступ»; окно остаётся открытым, в списке — строка
+ * Владельца с ролью, закрывается крестиком.
  */
 
 test('ТК-R2.27. Передача владения предупреждает о доступе вне своих компаний @tc-R2.27', async ({ browser }) => {
-  // 1. Администрирование → «E2E Компания 2» → «Пространства» → «⋯» у «Вторая компания: продажи» → «Назначить роль»:
+  // 1. Администрирование → «E2E Компания 2» → «Пространства» → «⋯» у «Вторая компания: продажи» → «Доступ…»:
   //    себе, «Редактор»
   const owner = await pageAs(browser, 'e2e-owner@selen.test')
   const panel = await openAdminPanel(owner)
@@ -20,13 +24,16 @@ test('ТК-R2.27. Передача владения предупреждает �
   await panel.getByRole('link', { name: 'Пространства', exact: true }).click()
   await expect(owner.getByRole('heading', { name: 'Пространства', level: 1 })).toBeVisible()
   await owner.getByRole('button', { name: `Действия с пространством «${SECOND_SPACE}»` }).click()
-  await owner.getByRole('menuitem', { name: 'Назначить роль' }).click()
-  const assign = owner.getByRole('dialog', { name: `Назначить роль в «${SECOND_SPACE}»` })
-  await assign.getByRole('button', { name: 'Назначить себе' }).click()
-  await assign.getByLabel('Роль').selectOption({ label: 'Редактор' })
-  await assign.getByRole('button', { name: 'Назначить', exact: true }).click()
+  await owner.getByRole('menuitem', { name: 'Доступ…' }).click()
+  const assign = owner.getByRole('dialog', { name: `Доступ: ${SECOND_SPACE}` })
+  await expect(assign.getByRole('columnheader', { name: 'Кто' })).toBeVisible()
+  await assign.getByRole('button', { name: 'Себе', exact: true }).click()
+  await chooseRoles(assign.getByRole('group', { name: 'Роли', exact: true }), ['Редактор'])
+  await assign.getByRole('button', { name: 'Выдать доступ', exact: true }).click()
+  await expect(owner.getByText('Доступ выдан')).toBeVisible()
+  await expect(grantRoles(grantRows(assign, 'E2E Владелец'))).toHaveText(['Редактор'])
+  await assign.getByRole('button', { name: 'Закрыть', exact: true }).click()
   await expect(assign).toBeHidden()
-  await expect(owner.getByText('Роль назначена')).toBeVisible()
 
   // 2. «Пользователи» «Компании 1» → «Передать владение» → «E2E Администратор»: предупреждение, не подтверждать
   await chooseCompany(owner, COMPANY_1)

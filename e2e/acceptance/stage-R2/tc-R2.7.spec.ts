@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
 import { openCardByKey } from '../stage-ux2/helpers'
-import { COMPANY_KEY, COMPANY_SPACE } from './helpers'
+import { chips, chooseRoles, COMPANY_KEY, COMPANY_SPACE } from './helpers'
 
 /**
  * ТК-R2.7: поиск людей и групп для выдачи доступа и список типов карточек — по компании пространства; в одной компании
@@ -9,13 +9,17 @@ import { COMPANY_KEY, COMPANY_SPACE } from './helpers'
  * «E2E Сотрудник компании» (в систему не входит), карточка доски «Продукт» → RCOMP-1 «Сменить тип»; группы E2eSeeder:
  * активные «E2E Аналитики», «E2E Руководители», «E2E Подрядчики», архивная «E2E Стажёры» (E2eSeeder::companies,
  * rights2). Пространство открывается по адресу: ТК-R2.6 переносит его в папку и возвращает.
+ *
+ * П2d-1: роль в окне «Добавить участника» — чипами (вместо списка «Роль»); в «Участниках» личные роли — чипы в столбце
+ * «Личные роли» и кнопка «Изменить роли …» (вместо списка «Роль …» в строке).
  */
 test.use({ storageState: authFile('e2e-admin@selen.test') })
 
 const PERSON = 'E2E Сотрудник компании'
 
-const role = (page: Page) => page.getByRole('combobox', { name: `Роль ${PERSON}` })
-const row = (page: Page) => page.getByRole('row').filter({ has: role(page) })
+const row = (page: Page) =>
+  page.getByRole('row').filter({ has: page.getByRole('button', { name: `Изменить роли ${PERSON}` }) })
+const personalRoles = (page: Page) => chips(row(page).getByRole('cell').nth(1))
 
 /** Пространство → вкладка «Участники» (по умолчанию — «Люди»). */
 async function openMembers(page: Page) {
@@ -23,7 +27,7 @@ async function openMembers(page: Page) {
   await expect(page.getByRole('heading', { name: COMPANY_SPACE }).first()).toBeVisible()
   await page.getByRole('tab', { name: 'Участники', exact: true }).click()
   // Список загружен: строка единственного личного администратора
-  await expect(page.getByRole('combobox', { name: 'Роль E2E Администратор' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Изменить роли E2E Администратор' })).toBeVisible()
 }
 
 test('ТК-R2.7. Выдача доступа в пространстве и тип карточки — как раньше @tc-R2.7', async ({ page }) => {
@@ -41,15 +45,15 @@ test('ТК-R2.7. Выдача доступа в пространстве и ти
   const dialog = page.getByRole('dialog', { name: 'Добавить участника' })
   await dialog.getByRole('textbox', { name: 'Сотрудник' }).fill('E2E Сотрудник комп')
   await dialog.getByRole('button', { name: new RegExp(`^${PERSON}`) }).click()
-  await dialog.getByLabel('Роль', { exact: true }).selectOption({ label: 'Комментатор' })
+  await chooseRoles(dialog.getByRole('group', { name: 'Роли', exact: true }), ['Комментатор'])
   await dialog.getByRole('button', { name: 'Добавить', exact: true }).click()
   await expect(page.getByText('Участник добавлен')).toBeVisible()
   await expect(dialog).toBeHidden()
 
   // Человек — в «Участниках» с ролью «Комментатор» (и после обновления страницы)
-  await expect(role(page).locator('option:checked')).toHaveText('Комментатор')
+  await expect(personalRoles(page)).toHaveText(['Комментатор'])
   await openMembers(page)
-  await expect(role(page).locator('option:checked')).toHaveText('Комментатор')
+  await expect(personalRoles(page)).toHaveText(['Комментатор'])
   await expect(row(page)).toContainText('Лично: Комментатор')
 
   // 2. «Группы» → «Добавить группу»: «Все сотрудники» первой, активные группы есть, архивной нет

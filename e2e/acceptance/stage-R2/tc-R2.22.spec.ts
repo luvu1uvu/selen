@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { openBoard, pageAs } from '../../tests/helpers'
 import { roleCell, searchUsers, userRow } from '../stage-3/helpers'
 import {
+  chooseRoles,
   COMPANY_1,
   COMPANY_2,
   expandClients,
@@ -21,6 +22,9 @@ import {
  * MAIL_MAILER=log). Повторный прогон на том же стеке не годится: она уже сотрудница «Компании 1» (после make e2e данные
  * заново). Список «Пользователи» тест смотрит через поле «Поиск по имени или email» (П2c-2): в списке 25 человек
  * на странице, «E2E Сотрудница второй» — в конце алфавита.
+ *
+ * П2d-1: в приглашении доступ — к папкам и пространствам: кнопка «Добавить папку или пространство» (вместо «Добавить
+ * пространство»), поле «Папка или пространство», роли — чипами (группа «Роли в «…»») вместо списка «Роль».
  */
 
 const PERSON = 'E2E Сотрудница второй'
@@ -41,10 +45,12 @@ test('ТК-R2.22. Пригласить сотрудника другой ком�
   await dialog.getByLabel('Имя и фамилия').fill('Сотрудница')
   await dialog.getByLabel('Рабочий email').fill(EMAIL)
   await expect(dialog.getByLabel('Роль', { exact: true }).first()).toHaveValue('member')
-  await dialog.getByRole('button', { name: 'Добавить пространство' }).click()
-  const grants = dialog.getByRole('group', { name: 'Доступ к пространствам' })
-  await grants.getByRole('combobox', { name: 'Пространство' }).selectOption({ label: `${GUEST_SPACE} (RGUEST)` })
-  await grants.getByRole('combobox', { name: 'Роль' }).selectOption({ label: 'Редактор' })
+  await dialog.getByRole('button', { name: 'Добавить папку или пространство' }).click()
+  const grants = dialog.getByRole('group', { name: 'Доступ к папкам и пространствам' })
+  await grants
+    .getByRole('combobox', { name: 'Папка или пространство' })
+    .selectOption({ label: `${GUEST_SPACE} (RGUEST)` })
+  await chooseRoles(grants.getByRole('group', { name: `Роли в «${GUEST_SPACE} (RGUEST)»` }), ['Редактор'])
   await dialog.getByRole('button', { name: 'Отправить приглашение' }).click()
   await expect(dialog).toBeHidden()
 
