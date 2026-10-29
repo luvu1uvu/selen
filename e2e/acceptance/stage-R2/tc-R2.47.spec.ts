@@ -1,5 +1,4 @@
 import { expect, test, type Locator } from '@playwright/test'
-import { pageAs } from '../../tests/helpers'
 import { treeFolder } from '../stage-3/helpers'
 import {
   closeDialog,
@@ -7,6 +6,7 @@ import {
   grantNodeAccess,
   openNodeAccess,
   openStructure,
+  pagesClosedAfterEach,
   revokeNodeAccess,
   tree,
   treeFolderItem,
@@ -27,18 +27,21 @@ const FOLDER = 'E2E Идеи на 2027'
 /** Подпись «пустая» — рядом с кнопкой папки, в той же строке дерева (как в ТК-3.29). */
 const emptyMark = (folder: Locator) => folder.locator('xpath=..').locator('span[tabindex="0"]', { hasText: 'пустая' })
 
+/** Страницы сотрудников закрываются после теста. */
+const openAs = pagesClosedAfterEach()
+
 test('ТК-R2.47. Пустая папка с доступом видна, остальные — нет @tc-R2.47', async ({ browser }) => {
   // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
   test.slow()
   // 1. «Структура» → «⋯» у вложенной пустой папки → «Доступ…» → сотрудник, «Комментатор»
-  const admin = await pageAs(browser, 'e2e-admin@selen.test')
+  const admin = await openAs(browser, 'e2e-admin@selen.test')
   await openStructure(admin)
   const dialog = await openNodeAccess(admin, FOLDER)
   await grantNodeAccess(dialog, { user: FOLDERS_PERSON }, ['Комментатор'])
 
   try {
     // 2. Сотрудник: «Продуктовые команды» с «Разработкой», «Новые направления» → «Идеи на 2027» («пустая»)
-    const person = await pageAs(browser, 'e2e-folders@selen.test')
+    const person = await openAs(browser, 'e2e-folders@selen.test')
     const product = treeFolder(person, 'E2E Продуктовые команды')
     await expect(product).toBeVisible()
     if ((await product.getAttribute('aria-expanded')) !== 'true') await product.click()

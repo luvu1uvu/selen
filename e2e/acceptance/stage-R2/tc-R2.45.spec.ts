@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openBoard, pageAs } from '../../tests/helpers'
+import { openBoard } from '../../tests/helpers'
 import { treeFolder } from '../stage-3/helpers'
 import {
   closeDialog,
@@ -9,6 +9,7 @@ import {
   grantRows,
   openNodeAccess,
   openStructure,
+  pagesClosedAfterEach,
   revokeNodeAccess,
   spaceLink,
   treeFolderItem,
@@ -25,11 +26,14 @@ const FOLDER = 'E2E Операции'
 const OPS = 'Папки: эксплуатация'
 const MKT = 'Папки: маркетинг'
 
+/** Страницы сотрудников закрываются после теста. */
+const openAs = pagesClosedAfterEach()
+
 test('ТК-R2.45. Доступ к папке открывает всё внутри @tc-R2.45', async ({ browser }) => {
   // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
   test.slow()
   // 1–2. «Структура» → «⋯» у папки → «Доступ…» → «Сотруднику», роль «Комментатор» вместо «Редактора»
-  const admin = await pageAs(browser, 'e2e-admin@selen.test')
+  const admin = await openAs(browser, 'e2e-admin@selen.test')
   await openStructure(admin)
   const dialog = await openNodeAccess(admin, FOLDER)
   await expect(dialog.getByRole('group', { name: 'Роли', exact: true }).getByRole('button', { pressed: true })).toHaveText([
@@ -44,7 +48,7 @@ test('ТК-R2.45. Доступ к папке открывает всё внут�
     await expect(row).not.toContainText('через папку')
 
     // 3. Сотрудник: в дереве — папка с обоими пространствами
-    const person = await pageAs(browser, 'e2e-folders@selen.test')
+    const person = await openAs(browser, 'e2e-folders@selen.test')
     const folder = treeFolder(person, FOLDER)
     await expect(folder).toBeVisible()
     if ((await folder.getAttribute('aria-expanded')) !== 'true') await folder.click()

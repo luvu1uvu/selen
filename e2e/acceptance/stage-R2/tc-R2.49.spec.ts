@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { openBoard, pageAs } from '../../tests/helpers'
-import { chips, chooseRoles, FOLDERS_PERSON, openMembersByKey } from './helpers'
+import { openBoard } from '../../tests/helpers'
+import { chips, chooseRoles, FOLDERS_PERSON, openMembersByKey, pagesClosedAfterEach } from './helpers'
 
 /**
  * ТК-R2.49: несколько ролей — «Комментатор» + «Редактор — только свои карточки»: видит все карточки, правит только свои
@@ -31,11 +31,14 @@ const personalRoles = (admin: Page) =>
       .nth(1),
   )
 
+/** Страницы сотрудников закрываются после теста. */
+const openAs = pagesClosedAfterEach()
+
 test('ТК-R2.49. Несколько ролей: «Комментатор» + «Редактор — только свои карточки» @tc-R2.49', async ({ browser }) => {
   // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
   test.slow()
   // 1–2. «Участники» → «Изменить роли»: вместо «Редактора» — «Комментатор» и «Редактор — только свои карточки»
-  const admin = await pageAs(browser, 'e2e-admin@selen.test')
+  const admin = await openAs(browser, 'e2e-admin@selen.test')
   await openMembersByKey(admin, 'FROLES', SPACE)
   await expect(personalRoles(admin)).toHaveText(['Редактор'])
   await setRoles(admin, ['Комментатор', 'Редактор — только свои карточки'])
@@ -47,7 +50,7 @@ test('ТК-R2.49. Несколько ролей: «Комментатор» + «
     await expect(personalRoles(admin)).toHaveText(['Комментатор', 'Редактор — только свои карточки'])
 
     // 3. Сотрудник: доска «Продукт» — видны все карточки, в том числе чужая
-    const person = await pageAs(browser, 'e2e-folders@selen.test')
+    const person = await openAs(browser, 'e2e-folders@selen.test')
     await openBoard(person, SPACE, 'Продукт')
     const foreign = person.getByRole('button', { name: 'Открыть FROLES-1: Чужая задача' })
     await expect(foreign).toBeVisible()

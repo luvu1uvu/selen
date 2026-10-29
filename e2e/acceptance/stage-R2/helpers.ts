@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Browser, type Locator, type Page } from '@playwright/test'
+import { pageAs, type User } from '../../tests/helpers'
 
 /**
  * Общие шаги приёмочных автотестов «Права 2.0», П2a (docs/stages/rights-2.md, «Как проверить руками (П2a…)»,
@@ -297,3 +298,20 @@ export async function openMembersByKey(page: Page, key: string, name: string) {
  */
 export const treeFolderItem = (page: Page, name: string) =>
   tree(page).getByRole('listitem').filter({ has: page.getByRole('button', { name, exact: true }) })
+
+/**
+ * pageAs, чьи страницы закрываются после каждого теста файла (test.afterEach). Контексты pageAs без закрытия живут до
+ * конца прогона: к ТК-R2.45 их открыто полсотни, браузер тормозит, и тесты рядом не укладываются во время (полный
+ * make e2e, П2d-1). Вызывать на уровне файла: `const openAs = pagesClosedAfterEach()`.
+ */
+export function pagesClosedAfterEach() {
+  const opened: Page[] = []
+  test.afterEach(async () => {
+    for (const page of opened.splice(0)) await page.context().close()
+  })
+  return async (browser: Browser, user: User) => {
+    const page = await pageAs(browser, user)
+    opened.push(page)
+    return page
+  }
+}

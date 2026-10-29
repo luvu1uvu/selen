@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test'
-import { pageAs } from '../../tests/helpers'
 import { findUser, structureRow, userRow } from '../stage-3/helpers'
 import {
   closeDialog,
@@ -9,6 +8,7 @@ import {
   openCompanyUsers,
   openNodeAccess,
   openStructure,
+  pagesClosedAfterEach,
   revokeNodeAccess,
 } from './helpers'
 
@@ -41,12 +41,15 @@ async function setStructureRight(admin: Page, checked: boolean) {
   await expect(right).toBeChecked({ checked })
 }
 
+/** Страницы сотрудников закрываются после теста. */
+const openAs = pagesClosedAfterEach()
+
 test('ТК-R2.55. Перемещение, которое меняет доступ, — только с правом «Управлять доступом» @tc-R2.55', async ({
   browser,
 }) => {
   // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
   test.slow()
-  const admin = await pageAs(browser, 'e2e-admin@selen.test')
+  const admin = await openAs(browser, 'e2e-admin@selen.test')
   // 1. «Пользователи» → сотрудник → «Права компании» → «Управлять структурой (пространства и папки)»
   await setStructureRight(admin, true)
   try {
@@ -57,7 +60,7 @@ test('ТК-R2.55. Перемещение, которое меняет досту
     await closeDialog(access)
 
     // 3. Сотрудник: «Администрирование» → «Структура» → «⋯» у пространства → «Переместить в…» → «Куда» — папка «куда»
-    const person = await pageAs(browser, 'e2e-folders@selen.test')
+    const person = await openAs(browser, 'e2e-folders@selen.test')
     const panel = await openAdminPanel(person)
     await panel.getByRole('link', { name: 'Структура', exact: true }).click()
     await expect(person.getByRole('heading', { name: 'Структура', level: 1 })).toBeVisible()

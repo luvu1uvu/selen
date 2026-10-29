@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { pageAs } from '../../tests/helpers'
 import { treeFolder } from '../stage-3/helpers'
-import { openStructure, structureAction, tree, treeFolderItem } from './helpers'
+import { openStructure, pagesClosedAfterEach, structureAction, tree, treeFolderItem } from './helpers'
 
 /**
  * ТК-R2.46: доступ к папке действует и на то, что создадут в ней позже. admin@ → e2e-admin; Демо Участник с ролью
@@ -24,6 +23,9 @@ const uniqueKey = () =>
     .replace(/[0-9]/g, (digit) => 'ABCDEFGHIJ'[Number(digit)])
     .slice(-8)}`
 
+/** Страницы сотрудников закрываются после теста. */
+const openAs = pagesClosedAfterEach()
+
 test('ТК-R2.46. Новое пространство в папке сразу доступно @tc-R2.46', async ({ browser }) => {
   // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
   test.slow()
@@ -31,12 +33,12 @@ test('ТК-R2.46. Новое пространство в папке сразу �
   const key = uniqueKey()
 
   // До: у сотрудника папка в дереве, нового пространства в ней нет
-  const person = await pageAs(browser, 'e2e-folders@selen.test')
+  const person = await openAs(browser, 'e2e-folders@selen.test')
   await expect(treeFolder(person, FOLDER)).toBeVisible()
   await expect(tree(person).getByText(name, { exact: true })).toHaveCount(0)
 
   // 1. Администратор: в дереве «+» у папки → «Пространство» → название, ключ → «Создать»
-  const admin = await pageAs(browser, 'e2e-admin@selen.test')
+  const admin = await openAs(browser, 'e2e-admin@selen.test')
   await tree(admin).getByRole('button', { name: `Добавить в «${FOLDER}»` }).click()
   await admin.getByRole('menuitem', { name: 'Пространство', exact: true }).click()
   const dialog = admin.getByRole('dialog', { name: 'Новое пространство' })

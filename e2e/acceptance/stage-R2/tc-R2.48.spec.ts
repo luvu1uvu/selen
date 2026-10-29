@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test'
-import { pageAs } from '../../tests/helpers'
 import {
   chips,
   closeDialog,
@@ -8,6 +7,7 @@ import {
   openMembersByKey,
   openNodeAccess,
   openStructure,
+  pagesClosedAfterEach,
   revokeNodeAccess,
 } from './helpers'
 
@@ -21,11 +21,14 @@ import {
 const FOLDER = 'E2E Продуктовые команды'
 const SPACE = 'Папки: разработка'
 
+/** Страницы сотрудников закрываются после теста. */
+const openAs = pagesClosedAfterEach()
+
 test('ТК-R2.48. «Участники»: источник «через папку», личные роли — чипами @tc-R2.48', async ({ browser }) => {
   // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
   test.slow()
   // 1. «Структура» → «⋯» у папки → «Доступ…» → сотрудник, «Комментатор»
-  const admin = await pageAs(browser, 'e2e-admin@selen.test')
+  const admin = await openAs(browser, 'e2e-admin@selen.test')
   await openStructure(admin)
   const dialog = await openNodeAccess(admin, FOLDER)
   await grantNodeAccess(dialog, { user: FOLDERS_PERSON }, ['Комментатор'])
