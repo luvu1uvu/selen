@@ -753,27 +753,18 @@ class AccessResolver
     {
         return DB::query()->fromRaw(<<<'SQL'
             (WITH RECURSIVE down AS (
-                SELECT id, space_id FROM nav_nodes WHERE id = ?
+                SELECT id, space_id, 0 AS depth FROM nav_nodes WHERE id = ?
                 UNION ALL
-                SELECT n.id, n.space_id FROM nav_nodes n JOIN down ON n.parent_id = down.id
+                SELECT n.id, n.space_id, down.depth + 1 FROM nav_nodes n JOIN down ON n.parent_id = down.id
+                 WHERE down.depth < ?
             ) SELECT id, space_id FROM down) AS subtree
-            SQL, [$node->getKey()])->select('subtree.id');
+            SQL, [$node->getKey(), NavNode::RECURSION_LIMIT])->select('subtree.id');
     }
 
     /** Подзапрос id пространств поддерева узла. */
     private function subtreeSpaceIds(NavNode $node): Builder
     {
         return $this->subtreeNodeIds($node)->select('subtree.space_id')->whereNotNull('subtree.space_id');
-    }
-
-    /** Останется ли в пространстве другой действующий личный администратор, кроме $user (инвариант ADR-0012). */
-    public function hasAnotherActivePersonalManager(Space $space, User $user): bool
-    {
-        return DB::query()
-            ->fromSub($this->personalManagersQuery(active: true), 'managers')
-            ->where('managers.space_id', $space->getKey())
-            ->where('managers.user_id', '!=', $user->getKey())
-            ->exists();
     }
 
     /**
@@ -883,7 +874,8 @@ class AccessResolver
     /**
      * Узлы дерева с путём к корню (П2d-1): строка на каждую пару «узел — он сам или папка над ним». Колонки: node_id,
      * space_id (у узла пространства), ancestor_id. Отбор — по узлу, пространству или только узлы пространств; рекурсия
-     * идёт вверх по первичному ключу, глубина дерева ограничена (NavNode::MAX_FOLDER_DEPTH).
+     * идёт вверх по первичному ключу. Глубину дерева держат перемещение и создание папок (NavNode::MAX_FOLDER_DEPTH),
+     * число шагов рекурсии — ещё и здесь (NavNode::RECURSION_LIMIT: цикл в данных не зациклит запрос).
      */
     private function paths(?string $nodeId = null, ?string $spaceId = null, bool $spacesOnly = false): Builder
     {
@@ -902,11 +894,14 @@ class AccessResolver
         }
         $filter = $where === [] ? '' : 'WHERE '.implode(' AND ', $where);
 
+        $bindings[] = NavNode::RECURSION_LIMIT;
+
         return DB::query()->fromRaw(<<<SQL
             (WITH RECURSIVE up AS (
-                SELECT n.id AS node_id, n.space_id, n.id AS ancestor_id, n.parent_id FROM nav_nodes n {$filter}
+                SELECT n.id AS node_id, n.space_id, n.id AS ancestor_id, n.parent_id, 0 AS depth FROM nav_nodes n {$filter}
                 UNION ALL
-                SELECT up.node_id, up.space_id, a.id, a.parent_id FROM up JOIN nav_nodes a ON a.id = up.parent_id
+                SELECT up.node_id, up.space_id, a.id, a.parent_id, up.depth + 1 FROM up JOIN nav_nodes a ON a.id = up.parent_id
+                 WHERE up.depth < ?
             ) SELECT node_id, space_id, ancestor_id FROM up) AS paths
             SQL, $bindings);
     }

@@ -36,7 +36,7 @@ export function RolesField({
   showHints = true,
 }: {
   id: string
-  /** Подпись группы чипов, если поле без своей подписи (строка выдачи в приглашении). */
+  /** Имя группы чипов для экранного диктора; по умолчанию — «Роли». */
   label?: string
   value: RoleKey[]
   onChange: (roles: RoleKey[]) => void
@@ -61,9 +61,13 @@ export function RolesField({
       <div
         id={id}
         role="group"
-        aria-label={label}
+        // Подпись FormField (<label for>) группе не достаётся — имя группы задаём сами; ошибка FormField — `${id}-error`
+        aria-label={label ?? t('rolesField.label')}
         aria-invalid={invalid || undefined}
-        aria-describedby={showHints ? `${id}-hint` : undefined}
+        aria-describedby={
+          [showHints && `${id}-hint`, invalid && `${id}-error`].filter(Boolean).join(' ') ||
+          undefined
+        }
         className="flex flex-wrap gap-2"
       >
         {options.map((role) => {

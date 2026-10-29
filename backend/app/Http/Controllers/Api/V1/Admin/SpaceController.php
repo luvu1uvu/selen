@@ -94,9 +94,9 @@ class SpaceController extends Controller
         return new AdminSpaceResource($this->reload($action->handle($request->user(), $space)));
     }
 
-    /** Назначить роль в пространстве себе или другому пользователю (пишется в журнал). */
     /**
-     * Счётчики личных выдач и выдач группам, флаг действующего администратора (права — из AccessResolver).
+     * Счётчики людей и групп с выдачами на пространство, флаг действующего управляющего доступом (права — из
+     * AccessResolver).
      *
      * @param  Builder<Space>  $query
      * @return Builder<Space>

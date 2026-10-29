@@ -9,15 +9,14 @@ use App\Actions\Navigation\MoveNavNodeAction;
 use App\Actions\Navigation\SetFolderArchivedAction;
 use App\Actions\Navigation\UpdateNavNodeAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\MoveImpactRequest;
 use App\Http\Requests\Admin\MoveNavNodeRequest;
 use App\Http\Requests\Admin\RestoreFolderRequest;
 use App\Http\Requests\Admin\StoreFolderRequest;
 use App\Http\Requests\Admin\UpdateNavNodeRequest;
+use App\Http\Resources\MoveImpactResource;
 use App\Models\Company;
-use App\Models\Group;
 use App\Models\NavNode;
-use App\Models\Space;
-use App\Models\User;
 use App\Services\Navigation\NavigationTree;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -99,22 +98,9 @@ class NavigationController extends Controller
      * «Переместить в…»: что изменится в доступе (П2d-1) — кто получит и кто потеряет доступ, где не останется того, кто
      * управляет доступом (тогда перемещение будет отказом 422). Ничего не меняет.
      */
-    public function moveImpact(Request $request, Company $company, NavNode $node, MoveImpact $impact): JsonResponse
+    public function moveImpact(MoveImpactRequest $request, Company $company, NavNode $node, MoveImpact $impact): MoveImpactResource
     {
-        Gate::authorize('update', $node);
-        // Нет parent_id — корень
-        $parentId = $request->validate(['parent_id' => ['nullable', 'ulid']])['parent_id'] ?? null;
-
-        $result = $impact->of($node, $parentId);
-        $subject = fn (User|Group $subject) => $subject instanceof Group
-            ? ['type' => 'group', 'id' => $subject->id, 'name' => $subject->name, 'system' => $subject->system_key]
-            : ['type' => 'user', 'id' => $subject->id, 'name' => $subject->name];
-
-        return response()->json(['data' => [
-            'gain' => array_map($subject, $result['gain']),
-            'lose' => array_map($subject, $result['lose']),
-            'unmanaged_spaces' => $result['unmanaged']->map(fn (Space $space) => ['id' => $space->id, 'key' => $space->key, 'name' => $space->name])->values(),
-        ]]);
+        return new MoveImpactResource($impact->of($node, $request->parentId()));
     }
 
     /** @param  array<string, mixed>  $meta */

@@ -169,7 +169,7 @@ describe('Участники пространства: люди и группы'
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('petr@selen.test')).toBeInTheDocument()
     // По умолчанию — «Редактор»; снять его и выбрать две роли чипами
-    const roles = within(within(dialog).getByRole('group'))
+    const roles = within(within(dialog).getByRole('group', { name: 'Роли' }))
     await userEvent.click(roles.getByRole('button', { name: 'Редактор', pressed: true }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить' }))
     expect(await within(dialog).findByText('Выберите хотя бы одну роль')).toBeInTheDocument()
@@ -217,7 +217,7 @@ describe('Участники пространства: люди и группы'
     const select = within(dialog).getByLabelText('Группа')
     expect(within(select).queryByRole('option', { name: /Analysts/ })).not.toBeInTheDocument()
     await userEvent.selectOptions(select, 'g-co')
-    const roles = within(within(dialog).getByRole('group'))
+    const roles = within(within(dialog).getByRole('group', { name: 'Роли' }))
     await userEvent.click(roles.getByRole('button', { name: 'Комментатор', pressed: true }))
     await userEvent.click(roles.getByRole('button', { name: 'Редактор — только свои карточки' }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Выдать доступ' }))

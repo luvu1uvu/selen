@@ -87,16 +87,14 @@ final readonly class SpaceAccess
         return null;
     }
 
-    /** Личная выдача на сам узел (не унаследованная), если она есть. */
-    public function personal(): ?AccessSource
+    /**
+     * Личные выдачи на сам узел (не унаследованные) — у субъекта на узле может быть несколько ролей (П2d-1).
+     *
+     * @return list<AccessSource>
+     */
+    public function personalSources(): array
     {
-        foreach ($this->sources as $source) {
-            if ($source->isPersonal() && ! $source->isInherited()) {
-                return $source;
-            }
-        }
-
-        return null;
+        return array_values(array_filter($this->sources, fn (AccessSource $source) => $source->isPersonal() && ! $source->isInherited()));
     }
 
     /** @param  callable(AccessSource): bool  $check */

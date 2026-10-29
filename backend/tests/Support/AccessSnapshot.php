@@ -179,7 +179,7 @@ final class AccessSnapshot
             foreach (User::query()->orderBy('id')->get() as $user) {
                 // Инвариант «есть администратор»: тот же вопрос, что задаёт SpaceAdminGuard
                 if ($user->status !== UserStatus::Deactivated
-                    && $resolver->forSpace($user, $space)->personal()?->permits(Permission::SpaceManageAccess)) {
+                    && collect($resolver->forSpace($user, $space)->personalSources())->contains(fn ($source) => $source->permits(Permission::SpaceManageAccess))) {
                     $admins[] = [$space->id, $user->id];
                 }
             }

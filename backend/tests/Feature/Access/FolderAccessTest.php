@@ -85,6 +85,34 @@ describe('наследование', function () {
     });
 });
 
+describe('через папку — те же правила членства, что лично (ревью П2d-1)', function () {
+    it('убранному из компании, деактивированному, через архивную группу — ничего; гостю «Все сотрудники» через папку — ничего', function () {
+        $resolver = app(AccessResolver::class);
+        $removed = member();
+        grantAccess($this->product, $removed, StandardRole::Editor);
+        $removed->companies()->updateExistingPivot(company()->id, ['deactivated_at' => now()]);
+        $removed->companies()->attach(otherCompany()->id, ['kind' => 'home']);
+        $deactivated = member(['status' => 'deactivated']);
+        grantAccess($this->product, addToGroup(makeGroup(), $deactivated), StandardRole::Editor);
+        $archived = member();
+        grantAccess($this->product, addToGroup(makeGroup(['archived_at' => now()]), $archived), StandardRole::Editor);
+        $guest = User::factory()->inCompany(otherCompany())->guestIn(company())->create();
+
+        foreach (['убран из компании' => $removed, 'деактивирован' => $deactivated, 'архивная группа' => $archived, 'гость' => $guest] as $case => $user) {
+            // «Все сотрудники» через папку — только для гостя: остальные — «дома», им она дала бы доступ сама
+            if ($user === $guest) {
+                grantAccess($this->product, Group::everyone(company()), StandardRole::Commenter);
+            }
+            expect($resolver->forSpace($user, $this->front)->isMember())->toBeFalse($case)
+                ->and($resolver->forNode($user, $this->web)->isMember())->toBeFalse($case);
+            // Деактивированный и не войдёт (401); остальные входят, но пространства для них нет
+            $user->isDeactivated() || $this->actingAs($user)->getJson('/api/v1/spaces/FRONT')->assertNotFound();
+        }
+        // Действующий сотрудник — «Все сотрудники» через папку действует
+        expect($resolver->forSpace(member(), $this->front)->isMember())->toBeTrue();
+    });
+});
+
 describe('дерево из итоговых прав', function () {
     it('папка с правом видна и пустая; папки над ней — путь к ней; чужие папки — не видны', function () {
         $empty = makeFolder('Пустая с доступом', makeFolder('Над пустой'));

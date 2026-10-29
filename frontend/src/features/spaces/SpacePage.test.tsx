@@ -65,7 +65,7 @@ describe('Страница пространства', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Добавить участника' }))
     await userEvent.click(await screen.findByRole('button', { name: /Вера/ }))
-    const roles = within(screen.getByRole('group'))
+    const roles = within(screen.getByRole('group', { name: 'Роли' }))
     await userEvent.click(roles.getByRole('button', { name: 'Редактор' }))
     await userEvent.click(roles.getByRole('button', { name: 'Комментатор' }))
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))

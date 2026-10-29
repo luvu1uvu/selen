@@ -138,8 +138,14 @@ function NodeAccessContent({ node }: { node: NodeAccessTarget }) {
                       {grant.group?.archived_at && (
                         <Badge variant="warning">{t('structure.access.archivedGroup')}</Badge>
                       )}
+                      {grant.user?.guest && (
+                        <Badge variant="outline">{t('structure.access.guest')}</Badge>
+                      )}
                       {grant.user?.status === 'deactivated' && (
                         <Badge variant="destructive">{t('structure.access.deactivated')}</Badge>
+                      )}
+                      {grant.user?.status === 'invited' && (
+                        <Badge variant="warning">{t('structure.access.invited')}</Badge>
                       )}
                       {folder && (
                         <Tooltip>

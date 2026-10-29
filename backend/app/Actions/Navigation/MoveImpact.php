@@ -9,7 +9,6 @@ use App\Models\User;
 use App\Services\Access\AccessResolver;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Что изменит «Переместить в…» в доступе (docs/adr/0024-rights-2.md, план 1.3, раздел 4): выдача на папку действует на
@@ -37,16 +36,13 @@ class MoveImpact
             return ['gain' => [], 'lose' => [], 'unmanaged' => new Collection];
         }
 
-        // Те же проверки места, что у перемещения: активная папка этой компании, не внутри самого узла (иначе цикл)
-        $node->loadMissing('company');
-        $this->tree->ensureParent($node->company, $parentId);
-        if ($parentId !== null && $node->isFolder() && in_array($parentId, $node->folderSubtree()['ids'], true)) {
-            throw ValidationException::withMessages(['parent_id' => __('selen.navigation.cycle')]);
-        }
-
         DB::beginTransaction();
         try {
+            // Под блокировкой дерева — те же проверки места, что у перемещения (цикл, глубина, архив): иначе параллельное
+            // перемещение между проверкой и UPDATE могло бы замкнуть дерево в цикл (ревью П2d-1)
             NavNode::lockTree();
+            $node = NavNode::query()->with(['space', 'company'])->findOrFail($node->getKey());
+            $this->tree->ensureMovable($node, $parentId);
             $before = $this->resolver->subtreeSubjects($node);
             $unmanagedBefore = $this->resolver->unmanagedSpaceIds($node);
             NavNode::query()->whereKey($node->getKey())->update(['parent_id' => $parentId]);

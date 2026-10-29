@@ -88,7 +88,6 @@ class GroupController extends Controller
         return response()->noContent();
     }
 
-    /** Выдать или изменить доступ группы к пространству (в журнале — via=admin_panel). */
     /** Свежий экземпляр со счётчиками, составом и доступами. */
     private function reload(Group $group): Group
     {

@@ -36,8 +36,9 @@ class RemoveGuestAction
             }
 
             // У гостя — только выдачи на пространства (П2c); несколько ролей на пространстве — одно событие (П2d-1)
-            $grants = AccessGrant::query()->inCompany($company)->where('user_id', $guest->id)->with(['navNode.space', 'role'])->orderBy('id')->get();
+            // Сначала блокировка дерева, потом выборка: выдача, добавленная параллельно, не останется «спящей»
             NavNode::lockTree();
+            $grants = AccessGrant::query()->inCompany($company)->where('user_id', $guest->id)->with(['navNode.space', 'role'])->orderBy('id')->get();
             foreach ($grants->groupBy('nav_node_id') as $same) {
                 /** @var AccessGrant $first */
                 $first = $same->first();

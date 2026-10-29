@@ -94,7 +94,7 @@ export function NodeGrantsField({
                   .filter((node) => node.id === grant.node_id || !used.has(node.id))
                   .map((node) => (
                     <option key={node.id} value={node.id}>
-                      {`${'  '.repeat(forGuest ? 0 : node.depth - 1)}${label(node)}`}
+                      {`${'  '.repeat(forGuest ? 0 : node.depth - 1)}${label(node)}`}
                     </option>
                   ))}
               </NativeSelect>

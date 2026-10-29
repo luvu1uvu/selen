@@ -90,11 +90,14 @@ export function InviteUserDialog() {
       clear()
       setOpen(false)
     } catch (error) {
-      const spaceError = Object.entries(getErrorBody(error)?.errors ?? {}).find(([key]) =>
-        key.startsWith('grants'),
+      const fields = getErrorBody(error)?.errors ?? {}
+      // Ошибки выдачи доступа: строки доступа и правила ролей (например, пространство осталось бы без управляющего)
+      const grantError = Object.entries(fields).find(
+        ([key]) => key.startsWith('grants') || key === 'roles' || key === 'user_id',
       )
-      if (spaceError) setGrantsError(spaceError[1][0])
-      if (!applyValidationErrors(error, setError) && !spaceError) {
+      if (grantError) setGrantsError(grantError[1][0])
+      const known = ['name', 'email', 'role'].some((key) => key in fields)
+      if (!grantError && (!applyValidationErrors(error, setError) || !known)) {
         toast.error(getErrorMessage(error, tc('errors.generic')))
       }
     }

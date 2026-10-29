@@ -339,7 +339,7 @@ function EntityAccessForm({ group }: { group: Group }) {
           <option value="">{t('groups.spaces.choose')}</option>
           {options.map((node) => (
             <option key={node.id} value={node.id}>
-              {`${'  '.repeat(node.depth - 1)}${
+              {`${'  '.repeat(node.depth - 1)}${
                 node.space
                   ? t('groups.spaces.option', { name: node.name, key: node.space.key })
                   : t('groups.spaces.folderOption', { name: node.name })

@@ -47,6 +47,12 @@ class NavNode extends Model implements HasCompany
     /** Предельная глубина вложенности папок (пространство может лежать в папке 4-го уровня). */
     public const MAX_FOLDER_DEPTH = 4;
 
+    /**
+     * Предел шагов рекурсивных запросов по дереву (предки, поддерево) — с запасом над MAX_FOLDER_DEPTH. Страховка: если
+     * в данных окажется цикл (ошибка), запрос остановится, а не будет крутиться, держа блокировку дерева (ревью П2d-1).
+     */
+    public const RECURSION_LIMIT = 32;
+
     /** @var array<string, SpaceAccess> user_id → права (кеш accessOf) */
     private array $resolvedAccess = [];
 
@@ -144,9 +150,10 @@ class NavNode extends Model implements HasCompany
                 SELECT id, parent_id, 1 AS depth FROM nav_nodes WHERE id = ?
                 UNION ALL
                 SELECT n.id, n.parent_id, up.depth + 1 FROM nav_nodes n JOIN up ON n.id = up.parent_id
+                 WHERE up.depth < ?
             )
             SELECT max(depth) AS depth FROM up
-            SQL, [$folderId])->depth;
+            SQL, [$folderId, self::RECURSION_LIMIT])->depth;
     }
 
     /**
@@ -161,9 +168,10 @@ class NavNode extends Model implements HasCompany
                 SELECT id, parent_id, 0 AS distance FROM nav_nodes WHERE id = ?
                 UNION ALL
                 SELECT n.id, n.parent_id, up.distance + 1 FROM nav_nodes n JOIN up ON n.id = up.parent_id
+                 WHERE up.distance < ?
             )
             SELECT id FROM up ORDER BY distance
-            SQL, [$this->id]);
+            SQL, [$this->id, self::RECURSION_LIMIT]);
 
         return array_map(fn (object $row) => (string) $row->id, $rows);
     }
@@ -180,10 +188,11 @@ class NavNode extends Model implements HasCompany
             WITH RECURSIVE down AS (
                 SELECT id, 1 AS depth FROM nav_nodes WHERE id = ?
                 UNION ALL
-                SELECT n.id, down.depth + 1 FROM nav_nodes n JOIN down ON n.parent_id = down.id WHERE n.type = 'folder'
+                SELECT n.id, down.depth + 1 FROM nav_nodes n JOIN down ON n.parent_id = down.id
+                 WHERE n.type = 'folder' AND down.depth < ?
             )
             SELECT id, depth FROM down
-            SQL, [$this->id]);
+            SQL, [$this->id, self::RECURSION_LIMIT]);
 
         return [
             'ids' => array_map(fn (object $row) => (string) $row->id, $rows),
