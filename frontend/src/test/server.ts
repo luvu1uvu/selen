@@ -39,6 +39,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
     timezone: 'Europe/Moscow',
     theme: 'light',
     last_login_at: null,
+    last_seen_at: null,
     deactivated_at: null,
     created_at: '2026-01-01T00:00:00Z',
     admin_companies:
@@ -62,6 +63,8 @@ export const ALL_USER_PERMISSIONS: AdminUserPermissions = {
   transfer_access: true,
   manage_guest: false,
   manage_permissions: true,
+  terminate_sessions: true,
+  change_email: true,
 }
 
 export const NO_USER_PERMISSIONS: AdminUserPermissions = {
@@ -74,6 +77,8 @@ export const NO_USER_PERMISSIONS: AdminUserPermissions = {
   transfer_access: false,
   manage_guest: false,
   manage_permissions: false,
+  terminate_sessions: false,
+  change_email: false,
 }
 
 /** Пользователь в админском списке (AdminUserResource): по умолчанию — со всеми действиями. */
@@ -82,6 +87,7 @@ export function makeAdminUser(overrides: Partial<AdminUser> = {}): AdminUser {
     ...makeUser(),
     guest: null,
     blocked: false,
+    email_change: null,
     permissions: ALL_USER_PERMISSIONS,
     ...overrides,
   }

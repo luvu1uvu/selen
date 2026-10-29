@@ -24,7 +24,21 @@ class ListUsersRequest extends FormRequest
             // Статус в компании (AccessResolver::companyPeopleIdsIn): active | invited | deactivated | guest
             'status' => ['nullable', Rule::in(['active', 'invited', 'deactivated', 'guest'])],
             'search' => ['nullable', 'string', 'max:100'],
+            // Сортировка (П2c-2): по имени (по умолчанию) или по «последней активности» — last_seen (раньше — давние),
+            // -last_seen (сначала недавние)
+            'sort' => ['nullable', Rule::in(['name', 'last_seen', '-last_seen'])],
             'page' => ['nullable', 'integer', 'min:1'],
         ];
+    }
+
+    public function sortsByLastSeen(): bool
+    {
+        return in_array($this->validated('sort'), ['last_seen', '-last_seen'], true);
+    }
+
+    /** Направление сортировки по «последней активности» — для ORDER BY (только эти два значения). */
+    public function sortDirection(): string
+    {
+        return $this->validated('sort') === '-last_seen' ? 'DESC' : 'ASC';
     }
 }

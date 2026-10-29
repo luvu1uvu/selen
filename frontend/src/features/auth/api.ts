@@ -38,3 +38,26 @@ export async function resetPassword(payload: ResetPasswordPayload): Promise<void
   await ensureCsrfCookie()
   await api.post('/auth/reset-password', payload)
 }
+
+/** Новый email по ссылке из письма (смена администратором, П2c-2): какой адрес подтверждается. */
+export async function fetchEmailChange(token: string): Promise<{ email: string }> {
+  const { data } = await api.get<Resource<{ email: string }>>(
+    `/email-changes/${encodeURIComponent(token)}`,
+  )
+  return data.data
+}
+
+/** Подтвердить новый email нынешним паролем: email меняется, все сеансы человека завершаются. */
+export async function confirmEmailChange(
+  token: string,
+  password: string,
+): Promise<{ email: string }> {
+  await ensureCsrfCookie()
+  const { data } = await api.post<Resource<{ email: string }>>(
+    `/email-changes/${encodeURIComponent(token)}/confirm`,
+    {
+      password,
+    },
+  )
+  return data.data
+}

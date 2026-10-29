@@ -31,11 +31,13 @@ use Illuminate\Support\Carbon;
  * @property string $timezone
  * @property Theme $theme
  * @property Carbon|null $last_login_at
+ * @property Carbon|null $last_seen_at
  * @property Carbon|null $deactivated_at
  * @property Carbon|null $blocked_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Invitation|null $latestInvitation
+ * @property-read EmailChangeRequest|null $emailChangeRequest
  * @property-read Collection<int, Company> $companies
  * @property-read Collection<int, Group> $groups
  * @property-read Collection<int, Lane> $collapsedLanes
@@ -67,6 +69,7 @@ class User extends Authenticatable
             'status' => UserStatus::class,
             'theme' => Theme::class,
             'last_login_at' => 'datetime',
+            'last_seen_at' => 'datetime',
             'deactivated_at' => 'datetime',
             'blocked_at' => 'datetime',
         ];
@@ -96,6 +99,16 @@ class User extends Authenticatable
     public function latestInvitation(): HasOne
     {
         return $this->hasOne(Invitation::class)->latestOfMany();
+    }
+
+    /**
+     * Смена email, которая ждёт подтверждения по ссылке на новый адрес (LATER-9).
+     *
+     * @return HasOne<EmailChangeRequest, $this>
+     */
+    public function emailChangeRequest(): HasOne
+    {
+        return $this->hasOne(EmailChangeRequest::class);
     }
 
     /**

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pageAs } from '../../tests/helpers'
-import { openUsers, roleCell, userRow } from '../stage-3/helpers'
+import { findUser, openUsers, roleCell, userRow } from '../stage-3/helpers'
 import { stamp, usersTabs } from './helpers'
 
 /**
@@ -8,7 +8,9 @@ import { stamp, usersTabs } from './helpers'
  * работают как прежде. owner@ → e2e-owner, admin@ → e2e-admin, «Демо Участник» → «E2E Роль компании» (участник,
  * в систему не входит), деактивированный — «E2E Деактивированный» (E2eSeeder::companies). Приглашение — с одноразовыми
  * именем и email (тест можно повторить). С П2b-2 «Приглашения» — не переключатель на странице, а вкладка-ссылка
- * раздела «Пользователи» со своим адресом (…/invitations).
+ * раздела «Пользователи» со своим адресом (…/invitations). Людей тест находит полем «Поиск по имени или email» (П2c-2):
+ * в списке 25 человек на странице, по имени, — приглашённый «Проверка ТК …» и люди в конце алфавита уходят на следующие
+ * страницы.
  */
 
 const MEMBER = 'E2E Роль компании'
@@ -20,18 +22,23 @@ const statusCell = (page: Page, name: string) => userRow(page, name).getByRole('
 
 /** «⋯» строки → «Сделать администратором» / «Сделать участником». */
 async function changeRole(page: Page, name: string, item: 'Сделать администратором' | 'Сделать участником') {
+  await findUser(page, name)
   await actions(page, name).click()
   await page.getByRole('menuitem', { name: item }).click()
 }
 
-/** Список «Пользователи» — как раньше: люди, их роли и пометка деактивированного. */
+/** Список «Пользователи» — как раньше: люди (каждого находит поиск), их роли и пометка деактивированного. */
 async function expectUsers(page: Page) {
+  await findUser(page, 'E2E Владелец')
   await expect(roleCell(page, 'E2E Владелец')).toHaveText('Владелец')
+  await findUser(page, 'E2E Администратор')
   await expect(roleCell(page, 'E2E Администратор')).toHaveText('Администратор')
   for (const name of ['E2E Редактор', 'E2E Посторонний', 'E2E Подрядчик', MEMBER]) {
+    await findUser(page, name)
     await expect(roleCell(page, name), name).toHaveText('Участник')
     await expect(statusCell(page, name), name).toHaveText('Активен')
   }
+  await findUser(page, DEACTIVATED)
   await expect(statusCell(page, DEACTIVATED)).toHaveText('Деактивирован')
 }
 
@@ -49,11 +56,13 @@ test('ТК-R2.5. Пользователи, роли и приглашения в
   await changeRole(owner, MEMBER, 'Сделать администратором')
   await expect(roleCell(owner, MEMBER)).toHaveText('Администратор')
   await owner.reload()
+  await findUser(owner, MEMBER)
   await expect(roleCell(owner, MEMBER)).toHaveText('Администратор')
 
   // К шагу 4: пока он администратор, у администратора компании в его строке нет действий (только «Доступ»)
   const admin = await pageAs(browser, 'e2e-admin@selen.test')
   await openUsers(admin)
+  await findUser(admin, MEMBER)
   await expect(roleCell(admin, MEMBER)).toHaveText('Администратор')
   await expect(actions(admin, MEMBER)).toHaveCount(0)
   await expect(userRow(admin, MEMBER).getByRole('link', { name: 'Доступ к пространствам' })).toBeVisible()
@@ -62,6 +71,7 @@ test('ТК-R2.5. Пользователи, роли и приглашения в
   await changeRole(owner, MEMBER, 'Сделать участником')
   await expect(roleCell(owner, MEMBER)).toHaveText('Участник')
   await owner.reload()
+  await findUser(owner, MEMBER)
   await expect(roleCell(owner, MEMBER)).toHaveText('Участник')
 
   // 3. «Пригласить»: имя, email, роль «Участник» → в приглашениях — ожидает принятия
@@ -83,14 +93,17 @@ test('ТК-R2.5. Пользователи, роли и приглашения в
   // 4. Администратор компании: тот же список (и приглашённый)
   await openUsers(admin)
   await expectUsers(admin)
+  await findUser(admin, inviteName)
   await expect(statusCell(admin, inviteName)).toHaveText('Приглашён')
 
   // У Владельца и администраторов нет действий смены роли и деактивации — только «Доступ к пространствам»
   for (const name of ['E2E Владелец', 'E2E Администратор']) {
+    await findUser(admin, name)
     await expect(actions(admin, name), name).toHaveCount(0)
     await expect(userRow(admin, name).getByRole('link', { name: 'Доступ к пространствам' }), name).toBeVisible()
   }
   // У участника «Деактивировать» есть; роль (администраторы) — только у Владельца, как раньше (ADR-0017)
+  await findUser(admin, MEMBER)
   await actions(admin, MEMBER).click()
   await expect(admin.getByRole('menuitem', { name: 'Деактивировать' })).toBeVisible()
   await expect(admin.getByRole('menuitem', { name: /^Сделать / })).toHaveCount(0)

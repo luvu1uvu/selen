@@ -4,6 +4,7 @@ use App\Http\Controllers\FileController;
 use App\Http\Middleware\EnsureMultiCompany;
 use App\Http\Middleware\EnsureSessionUserMatches;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\TouchLastSeen;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -39,6 +40,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'tab-user' => EnsureSessionUserMatches::class,
             // Только копия с несколькими компаниями (ADR-0026): иначе — 404
             'multi-company' => EnsureMultiCompany::class,
+            // «Последняя активность» вошедшего (П2c-2) — не чаще раза в несколько минут
+            'last-seen' => TouchLastSeen::class,
         ]);
         // API без редиректов на страницу входа: гость получает 401 JSON. Ссылка на файл (/files/{id}, UI-1b) — на вход
         // с возвратом к файлу: страница входа принимает только next вида /files/<id>

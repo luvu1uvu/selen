@@ -24,6 +24,8 @@ class ListEventsRequest extends FormRequest
         return [
             'event_type' => ['nullable', Rule::enum(EventType::class)],
             'actor_id' => ['nullable', 'string', 'max:64'],
+            // Человек — автор или объект события (П2c-2)
+            'user_id' => ['nullable', 'string', 'max:64'],
             'subject_type' => ['nullable', 'string', 'max:50'],
             'subject_id' => ['nullable', 'string', 'max:64'],
             'page' => ['nullable', 'integer', 'min:1'],

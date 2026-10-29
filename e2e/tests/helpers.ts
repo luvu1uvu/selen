@@ -23,6 +23,8 @@ export const USERS = [
   'e2e-rights@selen.test',
   'e2e-blocked@selen.test',
   'e2e-invitee@selen.test',
+  // «Права 2.0», П2c-2 (E2eSeeder::sessionsAndEmail): «Завершить все сеансы…» завершает его сохранённый вход
+  'e2e-sessions@selen.test',
   // «Редизайн», шаг 2: сохранённая тема «Тёмная» (E2eSeeder::darkTheme) — проект «dark», acceptance/stage-RD2
   'e2e-dark@selen.test',
 ] as const

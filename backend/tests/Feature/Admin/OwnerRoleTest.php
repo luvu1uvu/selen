@@ -161,13 +161,13 @@ it('список пользователей подсказывает интер�
         ->keyBy('id')->map(fn (array $row) => $row['permissions']);
 
     $asOwner = $rows($this->owner);
-    $all = ['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true, 'block' => true, 'transfer_access' => true, 'manage_guest' => false, 'manage_permissions' => true];
+    $all = ['update_role' => true, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => true, 'block' => true, 'transfer_access' => true, 'manage_guest' => false, 'manage_permissions' => true, 'terminate_sessions' => true, 'change_email' => true];
     expect($asOwner[$member->id])->toBe($all)
         ->and($asOwner[$this->admin->id])->toBe($all)
         ->and($asOwner[$this->owner->id])->each->toBeFalse();
 
     $asAdmin = $rows($this->admin);
-    expect($asAdmin[$member->id])->toBe(['update_role' => false, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => false, 'block' => false, 'transfer_access' => true, 'manage_guest' => false, 'manage_permissions' => true])
+    expect($asAdmin[$member->id])->toBe(['update_role' => false, 'deactivate' => true, 'reactivate' => true, 'manage_invitation' => true, 'transfer_ownership' => false, 'block' => false, 'transfer_access' => true, 'manage_guest' => false, 'manage_permissions' => true, 'terminate_sessions' => true, 'change_email' => true])
         ->and($asAdmin[$this->owner->id])->each->toBeFalse()
         // Себе и другим администраторам — ничего, в том числе права компании (ими управляет Владелец)
         ->and($asAdmin[$this->admin->id])->each->toBeFalse();

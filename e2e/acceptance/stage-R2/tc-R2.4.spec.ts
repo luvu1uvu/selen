@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openHome, pageAs } from '../../tests/helpers'
-import { openUsers, userRow } from '../stage-3/helpers'
+import { findUser, openUsers, userRow } from '../stage-3/helpers'
 import { expectHint } from '../stage-ux1/helpers'
 import { accessRow, ALL, INTERNS, openMembers, result, sources, spaceLink, tree } from './helpers'
 
@@ -11,12 +11,14 @@ import { accessRow, ALL, INTERNS, openMembers, result, sources, spaceLink, tree 
  * группа «E2E Подрядчики» — то же в RGROUPS); Демо Участник — e2e-outsider (в архивной группе «E2E Стажёры» с доступом
  * к RINTERN «Права: стажёры»). «Компания», открытая всем сотрудникам, — RALL «Права: для всех»: доступ «Всем
  * сотрудникам» тест выдаёт на время и в конце отзывает (иначе пространство увидели бы e2e-outsider и e2e-analyst
- * в других тестах). E2eSeeder::rights2.
+ * в других тестах). E2eSeeder::rights2. Человека в «Пользователях» тест находит полем «Поиск по имени или email» (П2c-2):
+ * в списке 25 человек на странице, «E2E Руководитель» — ближе к концу алфавита.
  */
 
 /** Администрирование → Пользователи → человек: страница «Доступ к пространствам». */
 async function openAccess(page: Page, name: string) {
   await openUsers(page)
+  await findUser(page, name)
   await userRow(page, name).getByRole('link', { name, exact: true }).click()
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Доступ к пространствам' })).toBeVisible()

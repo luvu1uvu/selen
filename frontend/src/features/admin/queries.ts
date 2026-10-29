@@ -3,6 +3,10 @@ import { currentUserKey } from '@/features/auth/queries'
 import type { AssignableRole, CompanyPermission, SpaceRole } from '@/shared/types/api'
 import {
   addGroupMember,
+  cancelEmailChange,
+  fetchEventPeople,
+  requestEmailChange,
+  terminateSessions,
   archiveSpace,
   deleteSpace,
   assignGroupSpace,
@@ -58,6 +62,7 @@ export const adminKeys = {
   companies: () => ['admin', 'companies'] as const,
   users: (company: string, filters: UserFilters) => ['admin', company, 'users', filters] as const,
   invitations: (company: string, page: number) => ['admin', company, 'invitations', page] as const,
+  eventPeople: (company: string) => ['admin', company, 'event-people'] as const,
   events: (company: string, filters: EventFilters) =>
     ['admin', company, 'events', filters] as const,
   spaces: (company: string) => ['admin', company, 'spaces'] as const,
@@ -131,6 +136,15 @@ export function useEvents(filters: EventFilters) {
     queryKey: adminKeys.events(company, filters),
     queryFn: () => fetchEvents(company, filters),
     placeholderData: keepPreviousData,
+  })
+}
+
+/** Люди компании для фильтра журнала по человеку (П2c-2). */
+export function useEventPeople() {
+  const company = useAdminCompanyId()
+  return useQuery({
+    queryKey: adminKeys.eventPeople(company),
+    queryFn: () => fetchEventPeople(company),
   })
 }
 
@@ -322,6 +336,36 @@ export function useReactivateUser() {
   const invalidate = useInvalidateAdmin()
   return useMutation({
     mutationFn: (arg: Parameters<typeof reactivateUser>[1]) => reactivateUser(company, arg),
+    onSuccess: invalidate,
+  })
+}
+
+/** «Завершить все сеансы» (П2c-2): событие — в журнале, его и перечитываем. */
+export function useTerminateSessions() {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: (userId: string) => terminateSessions(company, userId),
+    onSuccess: invalidate,
+  })
+}
+
+/** Сменить email (П2c-2): новый адрес ждёт подтверждения — строка человека показывает его. */
+export function useRequestEmailChange() {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: ({ userId, email }: { userId: string; email: string }) =>
+      requestEmailChange(company, userId, email),
+    onSuccess: invalidate,
+  })
+}
+
+export function useCancelEmailChange() {
+  const company = useAdminCompanyId()
+  const invalidate = useInvalidateAdmin()
+  return useMutation({
+    mutationFn: (userId: string) => cancelEmailChange(company, userId),
     onSuccess: invalidate,
   })
 }

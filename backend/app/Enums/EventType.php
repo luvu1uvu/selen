@@ -19,6 +19,11 @@ enum EventType: string
     case PasswordChanged = 'auth.password_changed';
     case PasswordResetRequested = 'auth.password_reset_requested';
     case PasswordResetCompleted = 'auth.password_reset_completed';
+    // Новый email подтверждён по ссылке из письма (П2c-2, LATER-9): без компании, «о человеке»; адресов в журнале нет,
+    // IP и браузер того, кто перешёл по ссылке, — в auth_audit. {requested_by_id}
+    case EmailChanged = 'auth.email_changed';
+    // Неверный пароль на странице подтверждения нового email (аудит П2c-2, S-1): «о человеке», без компании
+    case EmailChangePasswordFailed = 'auth.email_change_password_failed';
 
     // Компании (subject — компания; события системные, без компании — видит только Владелец, ADR-0024; название
     // в журнал не пишется)
@@ -46,6 +51,12 @@ enum EventType: string
     case GuestAdded = 'user.guest_added';
     case GuestUpdated = 'user.guest_updated';
     case GuestRemoved = 'user.guest_removed';
+    // «Завершить все сеансы» человека — администратор компании (П2c-2): событие компании
+    case UserSessionsTerminated = 'user.sessions_terminated';
+    // Смена email администратором (П2c-2, LATER-9): запрошена (письмо со ссылкой на новый адрес) и отменена; событие
+    // компании, адресов в журнале нет. Подтверждение — auth.email_changed
+    case UserEmailChangeRequested = 'user.email_change_requested';
+    case UserEmailChangeCancelled = 'user.email_change_cancelled';
     // Доступ деактивированного передан преемнику (П2c, решение PM 28.10, п. 5): {to_user_id}
     case UserAccessTransferred = 'user.access_transferred';
     // {from_user_id (null — Владельца не было), to_user_id, via: admin_panel | console | migration}, ADR-0017

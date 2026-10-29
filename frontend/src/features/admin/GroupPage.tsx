@@ -202,7 +202,7 @@ export function GroupPage() {
         />
       </section>
 
-      <CompanyPermissionsSection groupId={group.id} />
+      <CompanyPermissionsSection groupId={group.id} everyone={group.system === 'everyone'} />
 
       <GroupDialog group={editing} onClose={() => setEditing(null)} />
       <ConfirmDialog

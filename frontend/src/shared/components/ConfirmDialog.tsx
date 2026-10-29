@@ -17,6 +17,7 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   pending = false,
+  confirmVariant = 'destructive',
   onConfirm,
   onOpenChange,
   onCloseAutoFocus,
@@ -28,6 +29,8 @@ export function ConfirmDialog({
   /** Подпись отказа, если «Отмена» не подходит по смыслу. */
   cancelLabel?: string
   pending?: boolean
+  /** Кнопка подтверждения: destructive — удаление и отключение; default — чувствительное, но не разрушающее действие. */
+  confirmVariant?: 'destructive' | 'default'
   onConfirm: () => void
   onOpenChange: (open: boolean) => void
   /** Куда вернуть фокус после закрытия (по умолчанию — туда, где он был до открытия). */
@@ -45,7 +48,7 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {cancelLabel ?? t('actions.cancel')}
           </Button>
-          <Button variant="destructive" disabled={pending} onClick={onConfirm}>
+          <Button variant={confirmVariant} disabled={pending} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </DialogFooter>

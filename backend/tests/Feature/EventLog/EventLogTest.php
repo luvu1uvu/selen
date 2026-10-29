@@ -2,6 +2,7 @@
 
 use App\Enums\EventType;
 use App\Models\EventLogEntry;
+use App\Models\User;
 use App\Services\EventLog\EventRecorder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -77,4 +78,39 @@ it('при откате транзакции событие тоже не сох
     }
 
     expect(EventLogEntry::query()->count())->toBe(0);
+});
+
+it('фильтр по человеку: что он сделал и что сделали с ним (П2c-2)', function () {
+    $admin = admin();
+    $boris = member();
+    $vera = member();
+    $recorder = app(EventRecorder::class);
+    $recorder->record(EventType::Logout, $boris, $boris);
+    $recorder->record(EventType::UserRoleChanged, $admin, $boris, ['from' => 'member', 'to' => 'admin'], company: company());
+    $recorder->record(EventType::Logout, $vera, $vera);
+    $recorder->record(EventType::GroupCreated, $boris, makeGroup());
+
+    $types = fn (string $query) => collect($this->actingAs($admin)->getJson(adminPath()."events?{$query}")->assertOk()->json('data'))
+        ->pluck('event_type')->all();
+
+    expect($types("user_id={$boris->id}"))->toBe(['group.created', 'user.role_changed', 'auth.logout'])
+        ->and($types("user_id={$boris->id}&event_type=auth.logout"))->toBe(['auth.logout'])
+        ->and($types("user_id={$vera->id}"))->toBe(['auth.logout'])
+        ->and($types('user_id=nobody'))->toBe([]);
+    // Ссылки страниц в ответе — с фильтрами (замечание тестировщика П2c-2)
+    expect($this->actingAs($admin)->getJson(adminPath()."events?user_id={$boris->id}")->json('links.first'))
+        ->toContain("user_id={$boris->id}");
+});
+
+it('люди для фильтра журнала — люди компании, только имена; другой компании и без права «журнал» — нет', function () {
+    $admin = admin(['name' => 'Анна']);
+    member(['name' => 'Борис', 'email' => 'boris@selen.test']);
+    $other = otherCompany();
+    member(['name' => 'Чужой'], $other);
+
+    $this->actingAs($admin)->getJson(adminPath().'events/people')->assertOk()
+        ->assertExactJson(['data' => collect(['Анна', 'Борис'])->map(fn ($name) => ['id' => User::query()->where('name', $name)->value('id'), 'name' => $name])->all()]);
+
+    $this->actingAs(member())->getJson(adminPath().'events/people')->assertForbidden();
+    $this->actingAs(admin(company: $other))->getJson(adminPath().'events/people')->assertNotFound();
 });

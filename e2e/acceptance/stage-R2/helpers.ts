@@ -168,3 +168,37 @@ export function moscowDate(days: number) {
 export function moscowIsoDate(days: number) {
   return moscowDate(days).split('.').reverse().join('-')
 }
+
+/*
+ * «Права 2.0», П2c-2 — активность, сеансы, смена email, журнал, права компании (docs/stages/rights-2.md, «Как проверить
+ * руками (П2c-2)», ТК-R2.35–R2.44). Данные — E2eSeeder::sessionsAndEmail.
+ */
+
+/**
+ * Ссылки из писем о смене email (в E2E письма уходят в лог, не в почту): запросы смены у «E2E Подтверждение email»
+ * и «E2E Email к отмене» E2eSeeder создаёт с этими токенами (EMAIL_CHANGE_TOKEN, EMAIL_CANCEL_TOKEN).
+ */
+export const EMAIL_CHANGE_LINK = '/email-change/e2eEmailChangeToken0000000000000000000000000000000000000000000001'
+export const EMAIL_CANCEL_LINK = '/email-change/e2eEmailChangeToken0000000000000000000000000000000000000000000002'
+
+/** Администрирование → (выбор компании, если она задана) → «Журнал событий». */
+export async function openCompanyEvents(page: Page, company?: string) {
+  await page.goto('/')
+  const panel = await openAdminPanel(page)
+  if (company) await chooseCompany(page, company)
+  await panel.getByRole('link', { name: 'Журнал событий', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Журнал событий', level: 1 })).toBeVisible()
+}
+
+/** Строки журнала с событием этого типа. Ячейки: Время, Событие, Кто, Объект, Подробности. */
+export const eventRows = (page: Page, type: string) =>
+  page
+    .getByRole('main')
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: type, exact: true }) })
+
+/** Ячейка «Кто» строки журнала: имя (или «Без входа»), у входов — IP и браузер. */
+export const whoCell = (row: Locator) => row.getByRole('cell').nth(2)
+
+/** Ячейка «Подробности» строки журнала. */
+export const detailsCell = (row: Locator) => row.getByRole('cell').nth(4)

@@ -7,7 +7,7 @@ import { useCurrentUser } from '@/features/auth/queries'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
 import { getErrorMessage } from '@/shared/api/errors'
 import { companyModeContext } from '@/shared/lib/roles'
-import type { DirectoryUser, User } from '@/shared/types/api'
+import type { AdminUser, DirectoryUser } from '@/shared/types/api'
 import { Alert } from '@/shared/ui/alert'
 import { Button } from '@/shared/ui/button'
 import {
@@ -27,13 +27,20 @@ import { AssignSpaceRoleDialog } from './AssignSpaceRoleDialog'
  * этапа 3), но заранее предупреждает о пространствах, где человек — последний личный администратор (при отключении —
  * во всех его компаниях), и даёт назначить замену. При деактивации — по желанию передать доступ преемнику (аудит
  * Kaiten «Заменить», решение PM 28.10, п. 5). В копии с одной компанией (ADR-0026) тексты — без других компаний.
+ * Тексты (П2c-2, UX-ревью U-2): кто вернёт человека — администратор или только Владелец; у уже деактивированного
+ * «Отключить учётную запись…» — свой текст (решение PM 28.10, п. 4).
  */
 export function DeactivateUserDialog({
   user,
   account = false,
   onClose,
 }: {
-  user: (Pick<User, 'id' | 'name'> & { permissions?: { transfer_access: boolean } }) | null
+  user:
+    | (Pick<AdminUser, 'id' | 'name'> &
+        Partial<Pick<AdminUser, 'role' | 'status'>> & {
+          permissions?: { transfer_access: boolean }
+        })
+    | null
   /** Отключить учётную запись во всех компаниях — только Владелец. */
   account?: boolean
   onClose: () => void
@@ -49,6 +56,17 @@ export function DeactivateUserDialog({
   const [replaceIn, setReplaceIn] = useState<{ id: string; name: string } | null>(null)
   const [successor, setSuccessor] = useState<DirectoryUser | null>(null)
   const spaces = impact.data?.last_admin_spaces ?? []
+  const name = user?.name ?? ''
+  // Деактивированного администратора компании возвращает только Владелец (ADR-0017) — окно у него и открыто
+  const description = account
+    ? user?.status === 'deactivated'
+      ? t('users.confirm.blockTextDeactivated', { context })
+      : t('users.confirm.blockText', { name, context })
+    : `${t('users.confirm.deactivateText', { name, context })} ${
+        user?.role === 'admin'
+          ? t('users.confirm.returnByOwner')
+          : t('users.confirm.returnByAdmin', { context })
+      }`
 
   const close = () => {
     setSuccessor(null)
@@ -85,17 +103,13 @@ export function DeactivateUserDialog({
                 ? t('users.confirm.blockTitle')
                 : t('users.confirm.deactivateTitle', { context })}
             </DialogTitle>
-            <DialogDescription>
-              {account
-                ? t('users.confirm.blockText', { name: user?.name ?? '', context })
-                : t('users.confirm.deactivateText', { name: user?.name ?? '', context })}
-            </DialogDescription>
+            <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           {!account && user?.permissions?.transfer_access && (
             <FormField
               id="deactivate-successor"
               label={t('users.transferAccess.label')}
-              hint={t('users.transferAccess.hint')}
+              hint={t('users.transferAccess.hint', { context })}
             >
               <UserPicker
                 id="deactivate-successor"

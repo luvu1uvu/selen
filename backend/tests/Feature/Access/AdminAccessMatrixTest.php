@@ -69,6 +69,18 @@ function adminEndpoints(): array
         // «Аналитику трудозатрат» выдаёт только Владелец: администратору — 422 (до правила дошло)
         ['PUT', 'admin/companies/{company}/users/{member}/permissions', $allow, $allow, $deny, ['permissions' => ['company.view_time_analytics']]],
         ['GET', 'admin/companies/{company}/users/{guest}/permissions', $deny, $deny, $deny],
+        // «Завершить все сеансы» и смена email (П2c-2) — как деактивация; email сотрудника нескольких компаний — только
+        // Владелец (EmailChangeTest)
+        ['POST', 'admin/companies/{company}/users/{member}/terminate-sessions', $allow, $allow, $deny],
+        ['POST', 'admin/companies/{company}/users/{admin}/terminate-sessions', $allow, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{owner}/terminate-sessions', $deny, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{guest}/terminate-sessions', $deny, $deny, $deny],
+        ['POST', 'admin/companies/{company}/users/{member}/email-change', $allow, $allow, $deny, ['email' => 'changed@selen.test']],
+        ['POST', 'admin/companies/{company}/users/{admin}/email-change', $allow, $deny, $deny, ['email' => 'changed@selen.test']],
+        ['POST', 'admin/companies/{company}/users/{owner}/email-change', $deny, $deny, $deny, ['email' => 'changed@selen.test']],
+        ['POST', 'admin/companies/{company}/users/{guest}/email-change', $deny, $deny, $deny, ['email' => 'changed@selen.test']],
+        ['DELETE', 'admin/companies/{company}/users/{member}/email-change', $allow, $allow, $deny],
+        ['DELETE', 'admin/companies/{company}/users/{admin}/email-change', $allow, $deny, $deny],
         ['GET', 'admin/companies/{company}/users/{member}/access', $allow, $allow, $deny],
         ['GET', 'admin/companies/{company}/users/{member}/deactivation-impact', $allow, $allow, $deny],
         ['GET', 'admin/companies/{company}/users/{admin}/deactivation-impact', $allow, $deny, $deny],
@@ -109,6 +121,8 @@ function adminEndpoints(): array
         ['GET', 'admin/companies/{company}/groups/{group}/permissions', $allow, $allow, $deny],
         ['PUT', 'admin/companies/{company}/groups/{group}/permissions', $allow, $allow, $deny, ['permissions' => ['company.invite_users']]],
         ['GET', 'admin/companies/{company}/events', $allow, $allow, $deny],
+        // Люди для фильтра журнала по человеку (П2c-2) — с правом «журнал»
+        ['GET', 'admin/companies/{company}/events/people', $allow, $allow, $deny],
         ['GET', 'admin/companies/{company}/spaces', $allow, $allow, $deny],
         ['POST', 'admin/companies/{company}/spaces', $allow, $allow, $deny, ['name' => 'Новое', 'key' => 'NEW']],
         ['POST', 'admin/companies/{company}/spaces/{space}/archive', $allow, $allow, $deny],
@@ -230,7 +244,7 @@ function routePermissions(string $method, string $path, array $body = []): ?arra
         str_starts_with($path, 'invitations'), $path === 'grantable-spaces' => [Permission::CompanyInviteUsers],
         (bool) preg_match('/^groups\/[^\/]+\/(members|spaces|archive|restore)/', $path) => [Permission::CompanyManageGroups, Permission::CompanyManageAccess],
         str_starts_with($path, 'groups') => [Permission::CompanyManageGroups],
-        $path === 'events' => [Permission::CompanyViewEventLog],
+        $path === 'events', $path === 'events/people' => [Permission::CompanyViewEventLog],
         (bool) preg_match('/^spaces\/[^\/]+\/members\//', $path), str_contains($path, '/directory') => [Permission::CompanyManageAccess],
         str_starts_with($path, 'spaces'), $path === 'navigation', str_starts_with($path, 'folders'), str_starts_with($path, 'nav-nodes') => [Permission::CompanyManageStructure],
         str_starts_with($path, 'trash') => [Permission::CompanyManageTrash],

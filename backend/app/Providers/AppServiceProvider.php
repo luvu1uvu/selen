@@ -132,9 +132,12 @@ class AppServiceProvider extends ServiceProvider
 
         // Отправка приглашений (новое и «Отправить повторно»): 10 в минуту и 300 в сутки на приглашающего (решение PM
         // 26.10) — перебор email по ответу «email уже используется» медленный; отказы тоже считаются. Ключи у пределов
-        // разные: с одинаковым ключом они делили бы один счётчик
+        // разные: с одинаковым ключом они делили бы один счётчик. Тот же счётчик — у гостей и смены email (П2c-2, ревью):
+        // их ответ «email уже используется» — такой же способ перебора; текст — свой у смены email
         $tooManyInvitations = fn (Request $request, array $headers): JsonResponse => response()->json(
-            ['message' => __('selen.invitations.throttle', ['time' => $this->waitTime((int) ($headers['Retry-After'] ?? 60))])],
+            ['message' => __($request->routeIs('admin.users.email-change') ? 'selen.email_change.throttle' : 'selen.invitations.throttle', [
+                'time' => $this->waitTime((int) ($headers['Retry-After'] ?? 60)),
+            ])],
             429,
             $headers,
         );
@@ -142,6 +145,12 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(10)->by('minute:'.$request->user()?->getAuthIdentifier())->response($tooManyInvitations),
             Limit::perDay(300)->by('day:'.$request->user()?->getAuthIdentifier())->response($tooManyInvitations),
         ]);
+
+        // Страница подтверждения нового email по ссылке из письма (П2c-2): защита от перебора токенов, как у приглашения;
+        // подбор пароля по ссылке — ещё и 5 попыток в минуту на учётную запись (ConfirmEmailChangeAction)
+        RateLimiter::for('email-change-links', fn (Request $request) => Limit::perMinute(20)
+            ->by($request->ip())
+            ->response($tooMany('selen.throttle')));
 
         // Страница приглашения: защита от перебора токенов
         RateLimiter::for('invitations', fn (Request $request) => Limit::perMinute(20)

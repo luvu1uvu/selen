@@ -10,6 +10,7 @@ use App\Models\EventLogEntry;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
@@ -39,11 +40,30 @@ class EventLogController extends Controller
             ->with(['actor', 'authAudit'])
             ->when($request->validated('event_type'), fn ($q, $type) => $q->where('event_type', $type))
             ->when($request->validated('actor_id'), fn ($q, $id) => $q->where('actor_id', $id))
+            // Фильтр по человеку (П2c-2): что он сделал и что сделали с ним (объект события — он)
+            ->when($request->validated('user_id'), fn ($q, $id) => $q->where(fn (Builder $q) => $q
+                ->where('actor_id', $id)
+                ->orWhere(fn (Builder $q) => $q->where('subject_type', $user)->where('subject_id', $id))))
             ->when($request->validated('subject_type'), fn ($q, $type) => $q->where('subject_type', $type))
             ->when($request->validated('subject_id'), fn ($q, $id) => $q->where('subject_id', $id))
             ->orderByDesc('id')
-            ->paginate(50);
+            ->paginate(50)
+            ->withQueryString();
 
         return EventLogEntryResource::collection($entries);
+    }
+
+    /**
+     * Люди компании для фильтра «Человек» (П2c-2): те же, что в «Пользователях» (её «дома», в том числе убранные, гости и
+     * Владелец), — только имена, без email: право «журнал» не открывает список сотрудников с адресами.
+     */
+    public function people(ListEventsRequest $request, Company $company, AccessResolver $resolver): JsonResponse
+    {
+        $people = User::query()
+            ->whereIn('id', $resolver->companyPeopleIds($company))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json(['data' => $people->map(fn (User $user) => ['id' => $user->id, 'name' => $user->name])->values()]);
     }
 }
