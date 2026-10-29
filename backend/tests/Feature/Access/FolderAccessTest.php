@@ -116,14 +116,21 @@ describe('через папку — те же правила членства, �
 
 describe('дерево из итоговых прав', function () {
     it('папка с правом видна и пустая; папки над ней — путь к ней; чужие папки — не видны', function () {
-        $empty = makeFolder('Пустая с доступом', makeFolder('Над пустой'));
+        $empty = makeFolder('Пустая с доступом', $above = makeFolder('Над пустой'));
         makeFolder('Секретная-папка');
         $boris = member();
         grantAccess($empty, $boris, StandardRole::Commenter);
 
-        $tree = flatTree(navItems($this->actingAs($boris)->getJson('/api/v1/navigation')));
-        expect($tree)->toBe(['[Над пустой]', '  [Пустая с доступом]'])
-            ->and($this->getJson('/api/v1/navigation')->getContent())->not->toContain('Секретная-папка')->not->toContain('Продукт');
+        $items = navItems($this->actingAs($boris)->getJson('/api/v1/navigation'));
+        expect(flatTree($items))->toBe(['[Над пустой]', '  [Пустая с доступом]'])
+            ->and($this->getJson('/api/v1/navigation')->getContent())->not->toContain('Секретная-папка')->not->toContain('Продукт')
+            ->and($items[0]['children'][0]['empty'])->toBeTrue();
+
+        // Папка-путь «не пустая» и с недоступным пространством, и без него: флаг не выдаёт скрытое (аудит, S-3)
+        $emptyFlag = fn () => navItems($this->getJson('/api/v1/navigation'))[0]['empty'];
+        expect($emptyFlag())->toBeFalse();
+        placeIn(nodeOf($this->ops), $above);
+        expect($emptyFlag())->toBeFalse();
     });
 
     it('выдача на папку открывает её поддерево; «доступно всем» — и через папку', function () {
@@ -145,7 +152,7 @@ describe('дерево из итоговых прав', function () {
             ->and($items[0]['children'][1]['can_manage'])->toBeFalse();
     });
 
-    it('цикл в данных дерева не зацикливает запросы прав, дерева и «Переместить в…» (ревью П2d-1, п. 1)', function () {
+    it('цикл в данных дерева не зацикливает запросы прав, дерева, «Переместить в…» и сводку доступа (ревью, п. 1; аудит, S-2)', function () {
         // Цикл приложение не создаст (проверка места под блокировкой дерева), но рекурсия по дереву ограничена и на
         // такой случай: без предела запрос крутился бы, держа блокировку дерева, — встали бы все изменения структуры
         grantAccess($this->product, $boris = member(), StandardRole::Editor);
@@ -156,6 +163,8 @@ describe('дерево из итоговых прав', function () {
         $this->actingAs($boris)->getJson('/api/v1/navigation')->assertOk();
         $this->actingAs($this->admin)->getJson(adminPath().'nav-nodes/'.nodeOf($this->ops)->id."/move-impact?parent_id={$this->web->id}")
             ->assertOk();
+        // Сводка «Доступ» человека обходит пути в PHP — тоже с пределом (аудит, S-2)
+        $this->getJson(adminPath()."users/{$boris->id}/access")->assertOk();
     });
 
     it('число запросов дерева и доски не зависит от числа папок с выдачами и глубины', function () {

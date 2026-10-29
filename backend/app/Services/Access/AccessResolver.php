@@ -823,7 +823,9 @@ class AccessResolver
         $parents = $nodes->pluck('parent_id', 'id');
         $paths = [];
         foreach ($nodes->whereNotNull('space_id') as $node) {
-            for ($id = $node->id; $id !== null; $id = $parents[$id] ?? null) {
+            // Каждый узел пути — один раз: цикл в данных не зациклит обход (аудит П2d-1, S-2)
+            for ($id = $node->id, $seen = []; $id !== null && ! isset($seen[$id]); $id = $parents[$id] ?? null) {
+                $seen[$id] = true;
                 if ($grants->has($id)) {
                     $paths[$node->space_id][] = $id;
                 }

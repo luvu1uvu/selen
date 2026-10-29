@@ -221,8 +221,9 @@ class NavigationTree
                         'name' => $node->name,
                         'icon' => $node->icon,
                         'everyone' => $inner['active'] > 0 && $inner['open'] === $inner['active'],
-                        // Пустая папка приходит Владельцу и тому, у кого на неё есть право (П2d-1)
-                        'empty' => $empty,
+                        // Пустая папка приходит Владельцу и тому, у кого на неё есть право (П2d-1). Папка-путь без права
+                        // на неё — не «пустая»: иначе флаг выдал бы, есть ли в ней недоступные ему пространства (аудит, S-3)
+                        'empty' => $empty && ($granted || $context['showEmpty']),
                         'children' => $inner['items'],
                     ];
                 }
