@@ -14,8 +14,10 @@ use Illuminate\Support\Facades\DB;
 /**
  * Что изменит «Переместить в…» в доступе (docs/adr/0024-rights-2.md, план 1.3, раздел 4): выдача на папку действует на
  * всё внутри, поэтому перемещение папки или пространства меняет унаследованный доступ. До подтверждения окно показывает,
- * кто получит и кто потеряет доступ к перемещаемому (к узлу или чему-то внутри), и какие пространства останутся без
- * того, кто управляет доступом (тогда перемещение — отказ 422).
+ * кто получит и кто потеряет доступ к перемещаемому (к узлу или чему-то внутри), у кого изменятся роли при сохранённом
+ * доступе (в том числе «только свои карточки») и какие пространства останутся без того, кто управляет доступом (тогда
+ * перемещение — отказ 422). Сравнение — по каждому субъекту выдач (человек, группа) и каждому узлу поддерева: набор
+ * ролей до и после (решение PM 29.10).
  *
  * Считается точно: перемещение выполняется в транзакции, доступ поддерева сравнивается до и после, транзакция
  * откатывается — ни узел, ни журнал не меняются. Люди и группы — действующие (группа не в архиве, человек — действующий
@@ -30,12 +32,12 @@ class MoveImpact
     ) {}
 
     /**
-     * @return array{gain: list<User|Group>, lose: list<User|Group>, unmanaged: Collection<int, Space>}
+     * @return array{gain: list<User|Group>, lose: list<User|Group>, changed: list<User|Group>, changes_access: bool, dormant: bool, unmanaged: Collection<int, Space>}
      */
     public function of(NavNode $node, ?string $parentId): array
     {
         if ($parentId === $node->parent_id) {
-            return ['gain' => [], 'lose' => [], 'unmanaged' => new Collection];
+            return ['gain' => [], 'lose' => [], 'changed' => [], 'changes_access' => false, 'dormant' => false, 'unmanaged' => new Collection];
         }
 
         DB::beginTransaction();
@@ -56,11 +58,14 @@ class MoveImpact
     }
 
     /**
-     * Выполнить перемещение и вернуть, кто получил и кто потерял доступ к перемещаемому. Вызывать в транзакции под
+     * Выполнить перемещение и вернуть, что изменилось в доступе к перемещаемому: кто получил и кто потерял доступ, у кого
+     * при сохранённом доступе другой набор ролей (действующие люди и группы — для показа); changes_access — изменилось
+     * ли хоть что-то, и у выдач, которые сейчас не действуют (группа в архиве, человек убран из компании или
+     * деактивирован: они оживут при возвращении), dormant — есть ли такие среди изменений. Вызывать в транзакции под
      * блокировкой дерева.
      *
      * @param  Closure(): mixed  $move
-     * @return array{gain: list<User|Group>, lose: list<User|Group>}
+     * @return array{gain: list<User|Group>, lose: list<User|Group>, changed: list<User|Group>, changes_access: bool, dormant: bool}
      */
     public function apply(NavNode $node, Closure $move): array
     {
@@ -68,25 +73,58 @@ class MoveImpact
         $move();
         $after = $this->resolver->subtreeSubjects($node);
 
-        return [
-            'gain' => $this->subjects($this->changed($after, $before), $node),
-            'lose' => $this->subjects($this->changed($before, $after), $node),
+        $gain = $this->gained($after, $before);
+        $lose = $this->gained($before, $after);
+        // Получивший или потерявший доступ уже в списке — второй раз не показываем
+        $changed = array_values(array_diff($this->rolesChanged($before, $after), $gain, $lose));
+        $shown = [
+            'gain' => $this->subjects($gain, $node),
+            'lose' => $this->subjects($lose, $node),
+            'changed' => $this->subjects($changed, $node),
+        ];
+        $raw = count($gain) + count($lose) + count($changed);
+
+        return $shown + [
+            'changes_access' => $raw > 0,
+            'dormant' => $raw > count($shown['gain']) + count($shown['lose']) + count($shown['changed']),
         ];
     }
 
     /**
      * Субъекты, у которых в $a есть узел поддерева, которого нет в $b.
      *
-     * @param  array<string, list<string>>  $a  субъект → узлы поддерева с доступом
-     * @param  array<string, list<string>>  $b
+     * @param  array<string, array<string, list<string>>>  $a  субъект → узел поддерева → роли
+     * @param  array<string, array<string, list<string>>>  $b
      * @return list<string>
      */
-    private function changed(array $a, array $b): array
+    private function gained(array $a, array $b): array
     {
         $result = [];
         foreach ($a as $subject => $nodes) {
-            if (array_diff($nodes, $b[$subject] ?? []) !== []) {
+            if (array_diff_key($nodes, $b[$subject] ?? []) !== []) {
                 $result[] = $subject;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Субъекты, у которых на узле с доступом и до, и после — другой набор ролей.
+     *
+     * @param  array<string, array<string, list<string>>>  $before
+     * @param  array<string, array<string, list<string>>>  $after
+     * @return list<string>
+     */
+    private function rolesChanged(array $before, array $after): array
+    {
+        $result = [];
+        foreach ($before as $subject => $nodes) {
+            foreach ($nodes as $nodeId => $roles) {
+                if (isset($after[$subject][$nodeId]) && $after[$subject][$nodeId] !== $roles) {
+                    $result[] = $subject;
+                    break;
+                }
             }
         }
 

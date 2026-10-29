@@ -725,11 +725,12 @@ class AccessResolver
     }
 
     /**
-     * Кто к чему в поддереве узла имеет доступ по выдачам (на узлы поддерева и на папки над ним) — «Переместить в…»
-     * сравнивает до и после (MoveImpact): «user:<id>» / «group:<id>» → узлы поддерева. Без проверки членства — её
-     * делает вызывающий для итогового списка людей.
+     * Какие роли у кого в поддереве узла по выдачам (на узлы поддерева и на папки над ним) — «Переместить в…»
+     * сравнивает до и после (MoveImpact): «user:<id>» / «group:<id>» → узел поддерева → id ролей (по возрастанию). Без
+     * проверки членства: выдачи архивной группе и убранному из компании тоже считаются — они оживут при возвращении
+     * (решение PM 29.10); итоговый список людей фильтрует вызывающий.
      *
-     * @return array<string, list<string>>
+     * @return array<string, array<string, list<string>>>
      */
     public function subtreeSubjects(NavNode $node): array
     {
@@ -737,15 +738,20 @@ class AccessResolver
             ->join('access_grants', 'access_grants.nav_node_id', '=', 'paths.ancestor_id')
             ->whereIn('paths.node_id', $this->subtreeNodeIds($node))
             ->distinct()
-            ->get(['paths.node_id', 'access_grants.user_id', 'access_grants.group_id']);
+            ->get(['paths.node_id', 'access_grants.user_id', 'access_grants.group_id', 'access_grants.role_id']);
 
         $result = [];
         foreach ($rows as $row) {
             $key = $row->user_id !== null ? 'user:'.trim($row->user_id) : 'group:'.trim($row->group_id);
-            $result[$key][] = trim($row->node_id);
+            $result[$key][trim($row->node_id)][] = trim($row->role_id);
         }
 
-        return $result;
+        // Набор ролей — без порядка: сравнивается как список
+        return array_map(fn (array $nodes) => array_map(function (array $roles) {
+            sort($roles);
+
+            return $roles;
+        }, $nodes), $result);
     }
 
     /** Подзапрос id узлов поддерева (сам узел и всё внутри него). */

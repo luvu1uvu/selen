@@ -347,7 +347,7 @@ describe('Панель «Дерево»', () => {
     expect(mark).not.toHaveAttribute('title')
     await user.hover(mark)
     expect(await screen.findByRole('tooltip')).toHaveTextContent(
-      'В папке нет ни одного пространства. Такие папки в дереве видит только Владелец',
+      'В папке нет ни одного пространства. Такую папку в дереве видят Владелец и те, кому выдан доступ к ней',
     )
     await user.unhover(mark)
     await user.click(folder)

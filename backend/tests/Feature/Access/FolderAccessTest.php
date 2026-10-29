@@ -302,7 +302,7 @@ describe('«Переместить в…»', function () {
         grantAccess($this->product, $boris, StandardRole::Editor);
         grantAccess($sales, $vera, StandardRole::Commenter);
         grantAccess($sales, $team = makeGroup(['name' => 'Команда продаж']), StandardRole::Editor);
-        // Выдача на самой перемещаемой папке — доступ не меняется, хоть он есть и на новом месте
+        // Выдача на самой перемещаемой папке — доступ сохраняется, но к «Редактору» добавится «Комментатор» с нового места
         grantAccess($this->web, $both = member(['name' => 'Глеб']), StandardRole::Editor);
         grantAccess($sales, $both, StandardRole::Commenter);
         $this->actingAs($this->admin);
@@ -312,6 +312,9 @@ describe('«Переместить в…»', function () {
             ['type' => 'group', 'id' => $team->id, 'name' => 'Команда продаж', 'system' => null],
             ['type' => 'user', 'id' => $vera->id, 'name' => 'Вера'],
         ])->and($impact['lose'])->toBe([['type' => 'user', 'id' => $boris->id, 'name' => 'Борис']])
+            ->and($impact['changed'])->toBe([['type' => 'user', 'id' => $both->id, 'name' => 'Глеб']])
+            ->and($impact['changes_access'])->toBeTrue()
+            ->and($impact['dormant'])->toBeFalse()
             ->and($impact['unmanaged_spaces'])->toBe([]);
         // Сам узел не сдвинулся, журнал пуст
         expect($this->web->fresh()->parent_id)->toBe($this->product->id)
@@ -333,7 +336,7 @@ describe('«Переместить в…»', function () {
             ->assertJsonPath('data.unmanaged_spaces.0.key', 'FRONT');
         $this->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => null])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['parent_id' => __('selen.access.move_unmanaged', ['spaces' => '«Фронтенд»'])]);
+            ->assertJsonValidationErrors(['parent_id' => __('selen.access.move_unmanaged_one', ['spaces' => '«Фронтенд»'])]);
         expect($this->web->fresh()->parent_id)->toBe($this->product->id);
 
         // Перестановка внутри той же папки инвариант не задевает
@@ -372,6 +375,51 @@ describe('«Переместить в…»', function () {
         $this->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => $sales->id])->assertOk();
         expect($this->web->fresh()->parent_id)->toBe($sales->id);
     });
+
+    it('смена ролей при сохранённом доступе — тоже изменение доступа: окно показывает, без «управлять доступом» — отказ', function (string $case) {
+        $sales = makeFolder('Продажи');
+        // «Вложенные папки»: роль на новом месте — с папки на уровень выше той, куда переносят
+        $target = $case === 'вложенные папки' ? makeFolder('Подпапка', $sales) : $sales;
+        [$subject, $was, $becomes] = match ($case) {
+            'смена роли', 'вложенные папки' => [member(['name' => 'Борис']), StandardRole::Commenter, StandardRole::Editor],
+            'снятие «только свои»' => [member(['name' => 'Борис']), StandardRole::CommenterOwnCards, StandardRole::Commenter],
+            'группа' => [makeGroup(['name' => 'Команда']), StandardRole::Commenter, StandardRole::Editor],
+            '«Все сотрудники»' => [Group::everyone(company()), StandardRole::Commenter, StandardRole::Editor],
+        };
+        grantAccess($this->product, $subject, $was);
+        grantAccess($sales, $subject, $becomes);
+        $structure = structureOnly();
+
+        // «Веб» с «Фронтендом» внутри: доступ у субъекта сохраняется, роли — другие
+        $impact = $this->actingAs($structure)->getJson(adminPath()."nav-nodes/{$this->web->id}/move-impact?parent_id={$target->id}")
+            ->assertOk()->json('data');
+        expect($impact['gain'])->toBe([])->and($impact['lose'])->toBe([])
+            ->and(array_column($impact['changed'], 'id'))->toBe([$subject->id])
+            ->and($impact['changes_access'])->toBeTrue()->and($impact['dormant'])->toBeFalse();
+
+        $this->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => $target->id])
+            ->assertForbidden()->assertJsonPath('message', __('selen.access.move_needs_access'));
+        expect($this->web->fresh()->parent_id)->toBe($this->product->id);
+        // С правом «управлять доступом» — проходит
+        $this->actingAs($this->admin)->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => $target->id])->assertOk();
+    })->with(['смена роли', 'снятие «только свои»', 'вложенные папки', 'группа', '«Все сотрудники»']);
+
+    it('и выдачи, которые сейчас не действуют (группа в архиве, убранный из компании): без «управлять доступом» — отказ', function (string $case) {
+        $sales = makeFolder('Продажи');
+        $subject = $case === 'группа в архиве' ? makeGroup() : member();
+        grantAccess($sales, $subject, StandardRole::Editor);
+        $case === 'группа в архиве'
+            ? $subject->forceFill(['archived_at' => now()])->save()
+            : $subject->companies()->updateExistingPivot(company()->id, ['deactivated_at' => now()]);
+        $structure = structureOnly();
+
+        // Окно не называет их (доступа у них сейчас нет), но предупреждает: доступ оживёт при возвращении
+        $this->actingAs($structure)->getJson(adminPath()."nav-nodes/{$this->web->id}/move-impact?parent_id={$sales->id}")->assertOk()
+            ->assertJsonPath('data.gain', [])->assertJsonPath('data.lose', [])->assertJsonPath('data.changed', [])
+            ->assertJsonPath('data.changes_access', true)->assertJsonPath('data.dormant', true);
+        $this->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => $sales->id])->assertForbidden();
+        expect($this->web->fresh()->parent_id)->toBe($this->product->id);
+    })->with(['группа в архиве', 'убранный из компании']);
 });
 
 describe('приглашение и передача доступа — с папками', function () {
@@ -407,3 +455,12 @@ describe('приглашение и передача доступа — с па�
             ->toEqual(['user_id' => $successor->id, 'roles' => ['admin'], 'via' => 'access_transfer']);
     });
 });
+
+/** Участник только с правом компании «управлять структурой» (без «управлять доступом»). */
+function structureOnly(): User
+{
+    $user = member();
+    CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $user->id, 'permission' => Permission::CompanyManageStructure]);
+
+    return $user;
+}

@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import type { AdminNavNode, AdminNavigation } from '@/shared/types/api'
+import type { AdminNavNode, AdminNavigation, MoveImpact } from '@/shared/types/api'
 import {
   makeNavSpace,
   makeSpace,
@@ -17,6 +17,16 @@ import { renderApp } from '@/test/render'
 const ADMIN = `/admin/companies/${TEST_COMPANY_ID}`
 
 const admin = makeUser({ id: 'admin-1', name: 'Сергей' })
+
+/** «Переместить в…»: доступ не меняется. */
+const NO_CHANGES: MoveImpact = {
+  gain: [],
+  lose: [],
+  changed: [],
+  changes_access: false,
+  dormant: false,
+  unmanaged_spaces: [],
+}
 
 const folder = (id: string, name: string, overrides: Partial<AdminNavNode> = {}): AdminNavNode => ({
   id,
@@ -505,11 +515,13 @@ describe('«Структура»: доступ через папки (П2d-1)', 
                     { type: 'user', id: 'u-1', name: 'Вера' },
                   ],
                   lose: [{ type: 'user', id: 'u-2', name: 'Борис' }],
+                  changed: [{ type: 'user', id: 'u-3', name: 'Глеб' }],
+                  changes_access: true,
+                  dormant: false,
                   unmanaged_spaces: [],
                 }
               : {
-                  gain: [],
-                  lose: [],
+                  ...NO_CHANGES,
                   unmanaged_spaces: [{ id: 's-back', key: 'BACK', name: 'Backend' }],
                 },
         })
@@ -523,16 +535,21 @@ describe('«Структура»: доступ через папки (П2d-1)', 
     await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-store')
     expect(await within(dialog).findByText(/группа «Продажи», Вера/)).toBeInTheDocument()
     expect(within(dialog).getByText('Борис', { exact: false })).toBeInTheDocument()
+    expect(within(dialog).getByText('Изменятся роли:')).toBeInTheDocument()
+    expect(within(dialog).getByText('Глеб', { exact: false })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeEnabled()
 
     await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-mobile')
+    // Одно пространство — «в пространстве», не «в пространствах»
     expect(
-      await within(dialog).findByText(/не останется никого, кто лично управляет доступом/),
+      await within(dialog).findByText(
+        /в пространстве «Backend» не останется никого, кто лично управляет доступом/,
+      ),
     ).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeDisabled()
   })
 
-  it('без права «Управлять доступом» перемещение, которое меняет доступ, недоступно — с объяснением', async () => {
+  it('без права «Управлять доступом» перемещение, которое меняет доступ или роли, недоступно — с объяснением', async () => {
     signedInAs(
       makeUser({
         role: 'member',
@@ -547,11 +564,11 @@ describe('«Структура»: доступ через папки (П2d-1)', 
           data:
             new URL(request.url).searchParams.get('parent_id') === 'f-store'
               ? {
-                  gain: [{ type: 'user', id: 'u-1', name: 'Вера' }],
-                  lose: [],
-                  unmanaged_spaces: [],
+                  ...NO_CHANGES,
+                  changed: [{ type: 'user', id: 'u-1', name: 'Вера' }],
+                  changes_access: true,
                 }
-              : { gain: [], lose: [], unmanaged_spaces: [] },
+              : NO_CHANGES,
         }),
       ),
     )
@@ -561,15 +578,39 @@ describe('«Структура»: доступ через папки (П2d-1)', 
     await user.click(await screen.findByRole('menuitem', { name: 'Переместить в…' }))
     const dialog = await screen.findByRole('dialog', { name: 'Переместить «Backend»' })
     await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-store')
+    // Доступ у Веры сохраняется, меняются только роли — это тоже изменение доступа (решение PM 29.10)
     expect(
-      await within(dialog).findByText(/нужно ещё право «Управлять доступом»/),
+      await within(dialog).findByText(
+        /нужно ещё право «Управлять доступом ко всем пространствам компании»/,
+      ),
     ).toBeInTheDocument()
+    expect(within(dialog).getByText('Изменятся роли:')).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeDisabled()
 
     // Доступ не меняется — одного права на структуру хватает
     await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-mobile')
     expect(await within(dialog).findByText('Доступ не изменится.')).toBeInTheDocument()
     expect(within(dialog).queryByText(/нужно ещё право/)).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeEnabled()
+  })
+
+  it('выдачи, которые сейчас не действуют, — отдельной строкой: людей и группы окно не называет', async () => {
+    server.use(
+      http.get(`*${ADMIN}/nav-nodes/n-back/move-impact`, () =>
+        HttpResponse.json({ data: { ...NO_CHANGES, changes_access: true, dormant: true } }),
+      ),
+    )
+    renderApp('/admin/structure')
+
+    const user = await openMenu('Backend')
+    await user.click(await screen.findByRole('menuitem', { name: 'Переместить в…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Переместить «Backend»' })
+    await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-store')
+    expect(
+      await within(dialog).findByText(/Изменятся и выдачи, которые сейчас не действуют/),
+    ).toBeInTheDocument()
+    expect(within(dialog).queryByText('Доступ не изменится.')).not.toBeInTheDocument()
+    // У администратора компании право «Управлять доступом» есть — перемещать можно
     expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeEnabled()
   })
 

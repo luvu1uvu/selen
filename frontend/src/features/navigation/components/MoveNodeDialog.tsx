@@ -23,10 +23,11 @@ const ROOT = ''
 /**
  * «Переместить в…»: корень или активная папка. Папку нельзя переместить в саму себя, во вложенную
  * и туда, где поддерево станет глубже предела (те же проверки — на сервере). Узел встаёт в конец папки.
- * До подтверждения — что изменится в доступе (П2d-1: доступ к папке действует на всё внутри): «Получат доступ» и
- * «Потеряют доступ»; если пространство останется без того, кто лично управляет доступом, — объяснение, кнопка недоступна
- * (сервер тоже отказывает). Перемещение, которое меняет доступ, — только с правом «Управлять доступом» (решение PM 29.10):
- * без него — объяснение, кнопка недоступна.
+ * До подтверждения — что изменится в доступе (П2d-1: доступ к папке действует на всё внутри): «Получат доступ»,
+ * «Потеряют доступ», «Изменятся роли» и выдачи, которые сейчас не действуют; если пространство останется без того, кто
+ * лично управляет доступом, — объяснение, кнопка недоступна (сервер тоже отказывает). Перемещение, которое меняет доступ
+ * (хоть что-то из перечисленного), — только с правом «Управлять доступом» (решения PM 29.10): без него — объяснение,
+ * кнопка недоступна.
  */
 export function MoveNodeDialog({
   node,
@@ -65,8 +66,7 @@ function MoveNodeForm({
   const changed = target !== (node.parent_id ?? ROOT)
   const impact = useMoveImpact(node.id, parentId, changed)
   const unmanaged = impact.data?.unmanaged_spaces ?? []
-  const accessChanges = !!impact.data && impact.data.gain.length + impact.data.lose.length > 0
-  const needsAccessRight = accessChanges && !canManageAccess
+  const needsAccessRight = !!impact.data?.changes_access && !canManageAccess
 
   const name = node.name ?? node.space?.name ?? ''
   const excluded = node.type === 'folder' ? descendantIds(nodes, node.id) : new Set<string>()
@@ -114,10 +114,7 @@ function MoveNodeForm({
               })}
             </NativeSelect>
           </FormField>
-          {changed && <AccessImpact impact={impact} />}
-          {needsAccessRight && (
-            <Alert variant="destructive">{t('structure.move.needsAccess')}</Alert>
-          )}
+          {changed && <AccessImpact impact={impact} needsAccessRight={needsAccessRight} />}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               {tc('actions.cancel')}
@@ -141,8 +138,17 @@ function MoveNodeForm({
   )
 }
 
-/** Что изменится в доступе при перемещении: кто получит, кто потеряет, где не останется управляющего. */
-function AccessImpact({ impact }: { impact: ReturnType<typeof useMoveImpact> }) {
+/**
+ * Что изменится в доступе при перемещении: кто получит, кто потеряет, у кого изменятся роли, выдачи, которые сейчас не
+ * действуют; почему переместить нельзя — сверху, все причины в одном месте.
+ */
+function AccessImpact({
+  impact,
+  needsAccessRight,
+}: {
+  impact: ReturnType<typeof useMoveImpact>
+  needsAccessRight: boolean
+}) {
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
   if (impact.isPending) {
@@ -155,7 +161,7 @@ function AccessImpact({ impact }: { impact: ReturnType<typeof useMoveImpact> }) 
       </p>
     )
   }
-  const { gain, lose, unmanaged_spaces: unmanaged } = impact.data
+  const { gain, lose, changed, dormant, unmanaged_spaces: unmanaged } = impact.data
   const names = (subjects: AccessSubject[]) =>
     subjects
       .map((subject) =>
@@ -169,12 +175,13 @@ function AccessImpact({ impact }: { impact: ReturnType<typeof useMoveImpact> }) 
     <div className="grid gap-2 text-sm" aria-live="polite">
       {unmanaged.length > 0 && (
         <Alert variant="destructive">
-          {t('structure.move.unmanaged', {
+          {t(unmanaged.length === 1 ? 'structure.move.unmanagedOne' : 'structure.move.unmanaged', {
             spaces: unmanaged.map((space) => `«${space.name}»`).join(', '),
           })}
         </Alert>
       )}
-      {gain.length === 0 && lose.length === 0 ? (
+      {needsAccessRight && <Alert variant="destructive">{t('structure.move.needsAccess')}</Alert>}
+      {!impact.data.changes_access ? (
         <p className="text-muted-foreground">{t('structure.move.impactNone')}</p>
       ) : (
         <>
@@ -188,6 +195,12 @@ function AccessImpact({ impact }: { impact: ReturnType<typeof useMoveImpact> }) 
               <span className="font-medium">{t('structure.move.lose')}:</span> {names(lose)}
             </p>
           )}
+          {changed.length > 0 && (
+            <p>
+              <span className="font-medium">{t('structure.move.changed')}:</span> {names(changed)}
+            </p>
+          )}
+          {dormant && <p className="text-muted-foreground">{t('structure.move.dormant')}</p>}
         </>
       )}
     </div>

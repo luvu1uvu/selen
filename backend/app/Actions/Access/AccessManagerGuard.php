@@ -88,6 +88,8 @@ class AccessManagerGuard
             ->map(fn (string $name) => "«{$name}»")
             ->implode(', ');
 
-        return __($moving ? 'selen.access.move_unmanaged' : 'selen.access.unmanaged', ['spaces' => $names]);
+        $key = $moving ? 'selen.access.move_unmanaged' : 'selen.access.unmanaged';
+
+        return __(count($spaceIds) === 1 ? "{$key}_one" : $key, ['spaces' => $names]);
     }
 }

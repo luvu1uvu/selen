@@ -722,10 +722,17 @@ export type AccessSubject =
   | { type: 'user'; id: string; name: string }
   | { type: 'group'; id: string; name: string; system: SystemGroup | null }
 
-/** Что изменит перемещение в доступе (П2d-1): кто получит, кто потеряет, где не останется управляющего. */
+/**
+ * Что изменит перемещение в доступе (П2d-1): кто получит, кто потеряет, у кого изменятся роли (действующие люди и
+ * группы); changes_access — изменится ли хоть что-то, и у выдач, которые сейчас не действуют (тогда нужно право
+ * «Управлять доступом»), dormant — есть ли такие среди изменений; где не останется управляющего.
+ */
 export interface MoveImpact {
   gain: AccessSubject[]
   lose: AccessSubject[]
+  changed: AccessSubject[]
+  changes_access: boolean
+  dormant: boolean
   unmanaged_spaces: { id: string; key: string; name: string }[]
 }
 
