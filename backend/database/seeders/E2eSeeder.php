@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Access\SetNodeAccessAction;
 use App\Actions\Attachments\UploadAttachmentAction;
 use App\Actions\Boards\CreateBoardAction;
 use App\Actions\Boards\MoveBoardAction;
@@ -111,7 +112,10 @@ use Illuminate\Support\Facades\DB;
  * ТК-R2.16–R2.22 ещё RLEAVE, RKEEP, e2e-leaver, e2e-successor, e2e-blocked, e2e-invitee — см. guestsAndRightsCases().
  * П2c-2 — «Завершить все сеансы», смена email и «последняя активность»: e2e-sessions, e2e-email, e2e-email-confirm,
  * e2e-email-cancel; время активности у e2e-lead, e2e-roles, e2e-candidate — см. sessionsAndEmail(); неудачная попытка
- * входа e2e-owner с известными IP и браузером (журнал, ТК-R2.40) — см. failedLogin().
+ * входа e2e-owner с известными IP и браузером (журнал, ТК-R2.40) — см. failedLogin(). П2d-1 — доступ через папки
+ * и несколько ролей: папки «E2E Продуктовые команды», «E2E Операции», «E2E Склады», «E2E Новые направления», «E2E
+ * Перенос: …», «E2E Инвариант», «E2E Структура: …», пространства FDEV, FOPS, FMKT, FSTORE, FROLES, FMOVE, FINVA, FINVB,
+ * FSTRUCT и e2e-folders — см. foldersAccess().
  * Приёмка пачки UX-2 (окно карточки, уведомления, acceptance/stage-ux2): пространство UXB «Пачка UX-2» — см. uxBatch2().
  * Приёмка пачки UX-3 (acceptance/stage-ux3): пространство UXC «Пачка UX-3» — см. uxBatch3().
  */
@@ -322,6 +326,9 @@ class E2eSeeder extends Seeder
         // Приёмка «Права 2.0», П2c-2 — сеансы, смена email (acceptance/stage-R2)
         $this->sessionsAndEmail($admin);
         $this->failedLogin($owner);
+
+        // Приёмка «Права 2.0», П2d-1 — доступ через папки и несколько ролей (acceptance/stage-R2, ТК-R2.45–R2.55)
+        $this->foldersAccess($admin);
 
         // Приёмка пачки UX-2 (acceptance/stage-ux2, ТК-L98.*, ТК-L102.1, ТК-L103.1)
         $this->uxBatch2($admin, $editor);
@@ -621,6 +628,96 @@ class E2eSeeder extends Seeder
 
         // ТК-R2.21: учётную запись отключает Владелец
         User::factory()->create(['name' => 'E2E Отключаемый', 'email' => 'e2e-blocked@selen.test']);
+    }
+
+    /**
+     * «Права 2.0», П2d-1 — доступ через папки и несколько ролей (e2e/acceptance/stage-R2, ТК-R2.45–R2.55). Свои папки,
+     * пространства и люди «Компании 1» вместо «Продуктовых команд», «Операций», «Новых направлений», Демо Участника,
+     * Егора и Дины демо-данных: тест-кейсы выдают и снимают доступ, не задевая данные других тестов (каждый тест в конце
+     * возвращает как было). Имена людей начинаются с «E2E Я»: в списке «Пользователи» (25 человек на странице, по имени)
+     * они в конце алфавита и не сдвигают остальных. Пароль — как у всех.
+     *
+     * - «E2E Ярослав Папкин» (e2e-folders@, входит) — как Демо Участник: лично Редактор FDEV и FROLES, Комментатор
+     *   на папках «E2E Склады» и «E2E Перенос: откуда».
+     * - «E2E Яков Эксплуатации», «E2E Яна Маркетинга» (не входят) — как Егор и Дина: личные администраторы FOPS, FINVA
+     *   и FMKT, FMOVE, FINVB.
+     * - «E2E Продуктовые команды» → FDEV «Папки: разработка» (администратор — e2e-admin), доска «Бэклог»
+     *   (ТК-R2.47, R2.48, R2.51).
+     * - «E2E Операции» → FOPS «Папки: эксплуатация» (Яков), доска «Заявки», FOPS-1 «Заявка для комментария»; FMKT «Папки:
+     *   маркетинг» (Яна), доска «Контент», FMKT-1 «Пост в канал» (ТК-R2.45, R2.50, R2.54).
+     * - «E2E Склады» → FSTORE «Склады: основной» (e2e-admin — папка видна ему в дереве, «+» у неё; у Ярослава —
+     *   Комментатор на папке, как после ТК-R2.45): ТК-R2.46 создаёт в папке пространство и удаляет его.
+     * - «E2E Новые направления» → «E2E Идеи на 2027» — пустые (ТК-R2.47).
+     * - FROLES «Папки: роли» в корне (e2e-admin — администратор, Ярослав — Редактор), доска «Продукт», FROLES-1 «Чужая
+     *   задача» (заказчик — e2e-admin; ТК-R2.49).
+     * - «E2E Перенос: откуда» (у Ярослава — Комментатор на папке) → FMOVE «Перенос: маркетинг» (Яна); «E2E Перенос: куда»
+     *   — пустая: ТК-R2.52 выдаёт ей доступ группе «E2E Подрядчики».
+     * - «E2E Инвариант» → FINVA «Инвариант: эксплуатация» (Яков), FINVB «Инвариант: маркетинг» (Яна) — ТК-R2.53.
+     * - «E2E Структура: откуда» → FSTRUCT «Структура: маркетинг» (Яна); пустая «E2E Структура: куда» — ТК-R2.55: Ярославу
+     *   на время теста дают право компании «Управлять структурой», группе «E2E Подрядчики» — доступ к папке «куда».
+     */
+    private function foldersAccess(User $admin): void
+    {
+        $company = Company::primary();
+        $folders = User::factory()->create(['name' => 'E2E Ярослав Папкин', 'email' => 'e2e-folders@selen.test']);
+        $yakov = User::factory()->create(['name' => 'E2E Яков Эксплуатации', 'email' => 'e2e-yakov@selen.test']);
+        $yana = User::factory()->create(['name' => 'E2E Яна Маркетинга', 'email' => 'e2e-yana@selen.test']);
+        $folder = fn (string $name, ?string $parentId = null) => app(CreateFolderAction::class)
+            ->handle($admin, $company, $name, null, $parentId);
+        $space = fn (string $name, string $key, User $spaceAdmin, ?NavNode $parent = null) => app(CreateSpaceAction::class)
+            ->handle($admin, $company, ['name' => $name, 'key' => $key], [$spaceAdmin], null, $parent?->id);
+        $card = function (Space $space, string $boardName, string $title) use ($admin) {
+            $board = app(CreateBoardAction::class)->handle($admin, $space, ['name' => $boardName], BoardTemplate::Simple);
+            app(CreateCardAction::class)->handle(
+                $admin,
+                $board,
+                ['title' => $title],
+                BoardColumn::query()->where('board_id', $board->id)->where('name', 'To Do')->sole(),
+                Lane::query()->where('board_id', $board->id)->sole(),
+            );
+        };
+        $commenter = fn (NavNode $node) => app(SetNodeAccessAction::class)
+            ->handle($admin, $node, $folders, [Role::standard(StandardRole::Commenter)]);
+
+        // ТК-R2.47, R2.48, R2.51: как «Продуктовые команды» → «Разработка»
+        $product = $folder('E2E Продуктовые команды');
+        $dev = $space('Папки: разработка', 'FDEV', $admin, $product);
+        app(AddSpaceMemberAction::class)->handle($admin, $dev, $folders, SpaceRole::Editor);
+        // Доска — не «Продукт»: две одноимённые доски в дереве Ярослава (FDEV и FROLES) не различить по названию
+        $card($dev, 'Бэклог', 'Задача разработки');
+
+        // ТК-R2.45, R2.50, R2.54: как «Операции» → «Эксплуатация», «Маркетинг»
+        $operations = $folder('E2E Операции');
+        $card($space('Папки: эксплуатация', 'FOPS', $yakov, $operations), 'Заявки', 'Заявка для комментария');
+        $card($space('Папки: маркетинг', 'FMKT', $yana, $operations), 'Контент', 'Пост в канал');
+
+        // ТК-R2.46: у Ярослава уже есть доступ к папке (предусловие «выполнен ТК-R2.45»)
+        $stores = $folder('E2E Склады');
+        $space('Склады: основной', 'FSTORE', $admin, $stores);
+        $commenter($stores);
+
+        // ТК-R2.47: пустая папка с вложенной пустой
+        app(CreateFolderAction::class)->handle($admin, $company, 'E2E Идеи на 2027', null, $folder('E2E Новые направления')->id);
+
+        // ТК-R2.49: «Изменить роли» у Ярослава — чужая карточка и своя
+        $roles = $space('Папки: роли', 'FROLES', $admin);
+        app(AddSpaceMemberAction::class)->handle($admin, $roles, $folders, SpaceRole::Editor);
+        $card($roles, 'Продукт', 'Чужая задача');
+
+        // ТК-R2.52: откуда переносится пространство (Ярослав потеряет доступ) и куда (группа получит)
+        $from = $folder('E2E Перенос: откуда');
+        $space('Перенос: маркетинг', 'FMOVE', $yana, $from);
+        $commenter($from);
+        $folder('E2E Перенос: куда');
+
+        // ТК-R2.53: управляющий доступом — только лично на пространствах (тест назначает его на папке и снимает личных)
+        $invariant = $folder('E2E Инвариант');
+        $space('Инвариант: эксплуатация', 'FINVA', $yakov, $invariant);
+        $space('Инвариант: маркетинг', 'FINVB', $yana, $invariant);
+
+        // ТК-R2.55: перенос, который меняет доступ (в «куда» — доступ группы) и который его не меняет (в «Новые направления»)
+        $space('Структура: маркетинг', 'FSTRUCT', $yana, $folder('E2E Структура: откуда'));
+        $folder('E2E Структура: куда');
     }
 
     /** Токен ссылки подтверждения нового email у «E2E Подтверждение email» (письма в E2E уходят в лог, не в почту). */
