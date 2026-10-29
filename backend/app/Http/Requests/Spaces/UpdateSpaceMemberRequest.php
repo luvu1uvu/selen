@@ -2,14 +2,15 @@
 
 namespace App\Http\Requests\Spaces;
 
-use App\Enums\SpaceRole;
+use App\Http\Requests\Concerns\ValidatesRoles;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 
 class UpdateSpaceMemberRequest extends FormRequest
 {
+    use ValidatesRoles;
+
     public function authorize(): Response
     {
         return Gate::inspect('manageMembers', $this->route('space'));
@@ -21,8 +22,8 @@ class UpdateSpaceMemberRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'role' => ['required_without:own_cards_only', Rule::enum(SpaceRole::class)],
-            'own_cards_only' => ['sometimes', 'boolean'],
+            // Набор личных ролей на пространстве целиком (П2d-1)
+            ...$this->roleRules(),
         ];
     }
 }

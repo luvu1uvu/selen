@@ -159,12 +159,17 @@ function addToSpace(Space $space, User $user, SpaceRole|StandardRole $role): Acc
     return grantAccess($space, $user, $role instanceof SpaceRole ? StandardRole::fromLegacy($role) : $role);
 }
 
-/** Выдача доступа к пространству в обход Actions: пользователю или группе, стандартная роль или любая роль. */
-function grantAccess(Space $space, User|Group $subject, StandardRole|Role $role): AccessGrant
+/**
+ * Выдача доступа к пространству или папке (П2d-1: действует на всё внутри) в обход Actions: пользователю или группе,
+ * стандартная роль или любая роль.
+ */
+function grantAccess(Space|NavNode $target, User|Group $subject, StandardRole|Role $role): AccessGrant
 {
+    $node = $target instanceof NavNode ? $target : nodeOf($target);
+
     return AccessGrant::query()->forceCreate([
-        'company_id' => $space->company_id,
-        'nav_node_id' => nodeOf($space)->id,
+        'company_id' => $node->company_id,
+        'nav_node_id' => $node->id,
         'user_id' => $subject instanceof User ? $subject->id : null,
         'group_id' => $subject instanceof Group ? $subject->id : null,
         'role_id' => ($role instanceof Role ? $role : Role::standard($role))->id,

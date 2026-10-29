@@ -25,7 +25,7 @@ class GuestController extends Controller
 {
     public function store(StoreGuestRequest $request, Company $company, AddGuestAction $action, AccessResolver $resolver): JsonResponse
     {
-        $guest = $action->handle($request->user(), $company, $request->string('email')->toString(), $request->expiresAt(), $request->spaceGrants());
+        $guest = $action->handle($request->user(), $company, $request->string('email')->toString(), $request->expiresAt(), $request->nodeGrants());
         $resolver->rememberCompanyPermissions($company, [$request->user(), $guest]);
 
         return (new AdminUserResource($guest))->response()->setStatusCode(201);
@@ -33,7 +33,7 @@ class GuestController extends Controller
 
     public function update(UpdateGuestRequest $request, Company $company, User $user, UpdateGuestAction $action): AdminUserResource
     {
-        return new AdminUserResource($action->handle($request->user(), $company, $user, $request->expiresAt(), $request->spaceGrants()));
+        return new AdminUserResource($action->handle($request->user(), $company, $user, $request->expiresAt(), $request->nodeGrants()));
     }
 
     public function destroy(Request $request, Company $company, User $user, RemoveGuestAction $action): Response

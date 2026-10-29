@@ -2,11 +2,11 @@
 
 namespace App\Actions\Guests;
 
-use App\Actions\Spaces\AddSpaceMemberAction;
+use App\Actions\Access\SetNodeAccessAction;
 use App\Enums\EventType;
-use App\Enums\SpaceRole;
 use App\Models\Company;
-use App\Models\Space;
+use App\Models\NavNode;
+use App\Models\Role;
 use App\Models\User;
 use App\Notifications\AccessOpenedNotification;
 use App\Services\Access\AccessResolver;
@@ -30,11 +30,11 @@ class AddGuestAction
         private readonly EventRecorder $events,
         private readonly AccessResolver $resolver,
         private readonly CompanyMemberships $memberships,
-        private readonly AddSpaceMemberAction $addMember,
+        private readonly SetNodeAccessAction $setAccess,
     ) {}
 
     /**
-     * @param  list<array{space: Space, role: SpaceRole, own_cards_only: bool}>  $spaces
+     * @param  list<array{node: NavNode, roles: list<Role>}>  $spaces  только узлы пространств (проверяет запрос)
      */
     public function handle(User $actor, Company $company, string $email, ?CarbonInterface $expiresAt, array $spaces): User
     {
@@ -58,7 +58,7 @@ class AddGuestAction
 
             $this->memberships->addGuest($company, $user, $expiresAt);
             foreach ($spaces as $grant) {
-                $this->addMember->handle($actor, $grant['space'], $user, $grant['role'], self::VIA, $grant['own_cards_only']);
+                $this->setAccess->handle($actor, $grant['node'], $user, $grant['roles'], self::VIA, SetNodeAccessAction::CREATE);
             }
 
             $this->events->record(EventType::GuestAdded, $actor, $user, [

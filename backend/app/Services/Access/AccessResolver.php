@@ -12,8 +12,10 @@ use App\Models\AccessGrant;
 use App\Models\Company;
 use App\Models\EventLogEntry;
 use App\Models\Group;
+use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
+use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Query\Builder;
@@ -34,11 +36,13 @@ use Illuminate\Support\Facades\DB;
  * компании выдачи; строка выдачи человеку без действующего членства ничего не даёт (гостю истёк срок, человека убрали из
  * компании) — срок проверяется на каждый запрос, без фоновых задач.
  *
- * Действующий источник — выдача на узел пространства: личная; группе — если она не в архиве, а пользователь
- * не деактивирован; встроенной группе «Все сотрудники» компании — каждому активному «дому» этой компании (её состав
- * не хранится, а вычисляется здесь: новый сотрудник получает доступ сразу после принятия приглашения,
- * деактивированный теряет его сразу). Права источника — права его роли; права ролей приходят тем же запросом,
- * что и выдачи.
+ * Действующий источник — выдача на узел дерева или на любую папку над ним (П2d-1: выдача на папку действует на всё
+ * внутри, включая созданное позже; предки — рекурсивный CTE по nav_nodes в том же запросе): личная; группе — если она
+ * не в архиве, а пользователь не деактивирован; встроенной группе «Все сотрудники» компании — каждому активному «дому»
+ * этой компании (её состав не хранится, а вычисляется здесь: новый сотрудник получает доступ сразу после принятия
+ * приглашения, деактивированный теряет его сразу). Гостю — только личные выдачи на само пространство, без
+ * наследования. Каждая строка выдачи — отдельный источник (несколько ролей у субъекта на узле — несколько источников).
+ * Права источника — права его роли; права ролей приходят тем же запросом, что и выдачи.
  */
 class AccessResolver
 {
@@ -55,6 +59,25 @@ class AccessResolver
     public function forSpace(User $user, Space $space): SpaceAccess
     {
         return $this->toAccess($this->withRoles($this->sourceRows(spaceId: $space->getKey(), userId: $user->getKey()))->get());
+    }
+
+    /** Права пользователя на узле дерева (папке или пространстве) — один запрос. Кеширует NavNode::accessOf(). */
+    public function forNode(User $user, NavNode $node): SpaceAccess
+    {
+        return $this->toAccess($this->withRoles($this->sourceRows(userId: $user->getKey(), nodeId: $node->getKey(), spacesOnly: false))->get());
+    }
+
+    /**
+     * Права пользователя на всех узлах дерева одним запросом (дерево навигации: папка видна, если на неё есть право):
+     * node_id → права. Узла без доступа в ответе нет.
+     *
+     * @return Collection<string, SpaceAccess>
+     */
+    public function forUserNodes(User $user): Collection
+    {
+        return $this->withRoles($this->sourceRows(userId: $user->getKey(), spacesOnly: false))->get()
+            ->groupBy(fn (\stdClass $row) => trim($row->node_id))
+            ->map(fn (Collection $rows) => $this->toAccess($rows));
     }
 
     /**
@@ -113,15 +136,15 @@ class AccessResolver
     }
 
     /**
-     * Управляет доступом хотя бы к одному пространству компании (лично или через группу) — справочник сотрудников
-     * и групп этой компании для выдачи доступа.
+     * Управляет доступом хотя бы к одному пространству или папке компании (лично, через группу, через папку выше) —
+     * справочник сотрудников и групп этой компании для выдачи доступа.
      */
     public function managesAccessIn(User $user, Company $company): bool
     {
         return DB::query()
-            ->fromSub($this->sourceRows(userId: $user->getKey(), companyId: $company->getKey()), 'access')
+            ->fromSub($this->sourceRows(userId: $user->getKey(), companyId: $company->getKey(), spacesOnly: false), 'access')
             ->join('role_permissions', 'role_permissions.role_id', '=', 'access.role_id')
-            ->where('role_permissions.permission', Permission::SpaceManageAccess->value)
+            ->whereIn('role_permissions.permission', [Permission::SpaceManageAccess->value, Permission::FolderManageAccess->value])
             ->exists();
     }
 
@@ -630,23 +653,25 @@ class AccessResolver
     }
 
     /**
-     * Id пространств, открытых встроенной группе «Все сотрудники» (значок «доступно всем» в дереве).
+     * Id пространств, открытых встроенной группе «Все сотрудники» (значок «доступно всем» в дереве) — выдачей на само
+     * пространство или на папку над ним.
      *
      * @return Collection<int, string>
      */
     public function spacesOpenToEveryone(): Collection
     {
-        return DB::table('access_grants')
+        // Выдача «Все сотрудники» на пространство или на папку над ним (П2d-1)
+        return $this->paths(spacesOnly: true)
+            ->join('access_grants', 'access_grants.nav_node_id', '=', 'paths.ancestor_id')
             ->join('groups', 'groups.id', '=', 'access_grants.group_id')
-            ->join('nav_nodes', 'nav_nodes.id', '=', 'access_grants.nav_node_id')
             ->where('groups.system_key', Group::EVERYONE)
-            ->whereNotNull('nav_nodes.space_id')
-            ->pluck('nav_nodes.space_id');
+            ->distinct()
+            ->pluck('paths.space_id');
     }
 
     /**
-     * Личные выдачи с правом «управление доступом» (администраторы пространств, ADR-0012) — у любых пользователей,
-     * включая деактивированных: space_id → пользователи в порядке выдачи.
+     * Личные выдачи с правом «управление доступом» на пространство или папку над ним (администраторы пространств,
+     * ADR-0012) — у любых пользователей, включая деактивированных: space_id → пользователи в порядке выдачи.
      *
      * @param  list<string>  $spaceIds
      * @return Collection<string, list<User>>
@@ -660,27 +685,85 @@ class AccessResolver
             ->with('user')
             ->get(['access_grants.*', 'managers.space_id']);
 
-        /** @var array<string, list<User>> $result */
+        /** @var array<string, array<string, User>> $result */
         $result = [];
         foreach ($grants as $grant) {
             /** @var User $user */
             $user = $grant->user;
-            $result[(string) $grant->getAttribute('space_id')][] = $user;
+            // Управляющий и на пространстве, и на папке над ним — один раз
+            $result[(string) $grant->getAttribute('space_id')][$user->id] ??= $user;
         }
 
-        return collect($result);
+        return collect($result)->map(fn (array $users) => array_values($users));
     }
 
     /**
-     * Подзапрос-флаг для строки spaces (админка, сортировка): есть ли в пространстве действующий личный
-     * администратор — личная выдача с правом «управление доступом» не деактивированному пользователю (ADR-0012).
+     * Подзапрос id пространств, где есть действующий личный управляющий — личная выдача с правом «управление доступом»
+     * на пространство или папку над ним не деактивированному действующему участнику (ADR-0012; админка, сортировка):
+     * считается один раз, а не на каждую строку списка.
      */
-    public function hasActivePersonalManagerColumn(): Builder
+    public function managedSpaceIds(): Builder
     {
-        return DB::query()
-            ->fromSub($this->personalManagersQuery(active: true), 'managers')
-            ->whereColumn('managers.space_id', 'spaces.id')
-            ->selectRaw('count(*) > 0');
+        return DB::query()->fromSub($this->personalManagersQuery(active: true), 'managers')->select('managers.space_id');
+    }
+
+    /**
+     * Активные пространства поддерева узла (сам узел, если это пространство, и всё внутри папки) без действующего личного
+     * управляющего — инвариант «есть кто управляет доступом» (AccessManagerGuard, П2d-1).
+     *
+     * @return list<string>
+     */
+    public function unmanagedSpaceIds(NavNode $node): array
+    {
+        return Space::query()
+            ->whereIn('id', $this->subtreeSpaceIds($node))
+            ->whereNull('archived_at')
+            ->whereNotIn('id', $this->managedSpaceIds())
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+    }
+
+    /**
+     * Кто к чему в поддереве узла имеет доступ по выдачам (на узлы поддерева и на папки над ним) — «Переместить в…»
+     * сравнивает до и после (MoveImpact): «user:<id>» / «group:<id>» → узлы поддерева. Без проверки членства — её
+     * делает вызывающий для итогового списка людей.
+     *
+     * @return array<string, list<string>>
+     */
+    public function subtreeSubjects(NavNode $node): array
+    {
+        $rows = $this->paths()
+            ->join('access_grants', 'access_grants.nav_node_id', '=', 'paths.ancestor_id')
+            ->whereIn('paths.node_id', $this->subtreeNodeIds($node))
+            ->distinct()
+            ->get(['paths.node_id', 'access_grants.user_id', 'access_grants.group_id']);
+
+        $result = [];
+        foreach ($rows as $row) {
+            $key = $row->user_id !== null ? 'user:'.trim($row->user_id) : 'group:'.trim($row->group_id);
+            $result[$key][] = trim($row->node_id);
+        }
+
+        return $result;
+    }
+
+    /** Подзапрос id узлов поддерева (сам узел и всё внутри него). */
+    private function subtreeNodeIds(NavNode $node): Builder
+    {
+        return DB::query()->fromRaw(<<<'SQL'
+            (WITH RECURSIVE down AS (
+                SELECT id, space_id FROM nav_nodes WHERE id = ?
+                UNION ALL
+                SELECT n.id, n.space_id FROM nav_nodes n JOIN down ON n.parent_id = down.id
+            ) SELECT id, space_id FROM down) AS subtree
+            SQL, [$node->getKey()])->select('subtree.id');
+    }
+
+    /** Подзапрос id пространств поддерева узла. */
+    private function subtreeSpaceIds(NavNode $node): Builder
+    {
+        return $this->subtreeNodeIds($node)->select('subtree.space_id')->whereNotNull('subtree.space_id');
     }
 
     /** Останется ли в пространстве другой действующий личный администратор, кроме $user (инвариант ADR-0012). */
@@ -718,10 +801,10 @@ class AccessResolver
 
     /**
      * Сводка для админки компании «почему он видит / не видит»: все источники пользователя в пространствах этой
-     * компании, включая недействующие, с причиной. Пространства — по названию. Человек — участник компании
-     * (его ищет привязка маршрута среди людей компании).
+     * компании, включая недействующие, с причиной; унаследованные с папок выше — с папкой (П2d-1). Пространства — по
+     * названию. Человек — участник компании (его ищет привязка маршрута среди людей компании).
      *
-     * @return Collection<int, array{space: Space, access: SpaceAccess, sources: list<array{group: Group|null, source: AccessSource, inactive_reason: AccessInactiveReason|null}>}>
+     * @return Collection<int, array{space: Space, access: SpaceAccess, sources: list<array{group: Group|null, folder: NavNode|null, source: AccessSource, inactive_reason: AccessInactiveReason|null}>}>
      */
     public function explain(User $user, Company $company): Collection
     {
@@ -729,6 +812,7 @@ class AccessResolver
         // не входит
         $membership = $this->membership($company, $user);
         $home = $membership?->kind === self::HOME;
+        $guest = $membership?->kind === self::GUEST;
         $memberReason = $user->isOwner() ? null : $this->membershipReason($membership);
 
         $grants = AccessGrant::query()
@@ -737,35 +821,53 @@ class AccessResolver
                 ->where('user_id', $user->getKey())
                 ->orWhereIn('group_id', DB::table('group_members')->select('group_id')->where('user_id', $user->getKey()))
                 ->when($home, fn ($q) => $q->orWhereIn('group_id', DB::table('groups')->select('id')->where('system_key', Group::EVERYONE))))
-            ->whereHas('navNode', fn ($q) => $q->whereNotNull('space_id'))
             ->with(['group', 'navNode', 'role'])
             ->orderBy('id')
-            ->get();
-        $permissions = $this->rolePermissions($grants->pluck('role_id')->unique()->values()->all());
-        $spaces = Space::query()
-            ->whereIn('id', $grants->pluck('navNode.space_id')->unique())
-            ->orderByRaw('lower(name)')
-            ->get();
+            ->get()
+            ->groupBy('nav_node_id');
+        $permissions = $this->rolePermissions($grants->flatten()->pluck('role_id')->unique()->values()->all());
 
-        return $spaces->map(function (Space $space) use ($grants, $permissions, $user, $memberReason) {
-            $spaceGrants = $grants->filter(fn (AccessGrant $grant) => $grant->navNode->space_id === $space->id);
-            $sources = [];
-
-            foreach ($spaceGrants->whereNull('group_id') as $grant) {
-                $sources[] = ['group' => null, 'source' => $this->source($grant, $permissions), 'inactive_reason' => $memberReason];
+        // Выдача на папку действует на всё внутри: путь каждого пространства компании к корню — по дереву компании
+        $nodes = NavNode::query()->inCompany($company)->get(['id', 'parent_id', 'space_id']);
+        $parents = $nodes->pluck('parent_id', 'id');
+        $paths = [];
+        foreach ($nodes->whereNotNull('space_id') as $node) {
+            for ($id = $node->id; $id !== null; $id = $parents[$id] ?? null) {
+                if ($grants->has($id)) {
+                    $paths[$node->space_id][] = $id;
+                }
             }
+        }
+        $spaces = Space::query()->whereIn('id', array_keys($paths))->orderByRaw('lower(name)')->get();
 
-            $groupGrants = $spaceGrants->whereNotNull('group_id')
-                ->sortBy(fn (AccessGrant $grant) => mb_strtolower((string) $grant->group?->name));
+        return $spaces->map(function (Space $space) use ($grants, $paths, $permissions, $user, $memberReason, $guest) {
+            $sources = [];
+            // Сначала выдачи на само пространство, затем — с ближней папки к дальней; на каждом узле — личные, затем группы
+            foreach ($paths[$space->id] as $nodeId) {
+                /** @var EloquentCollection<int, AccessGrant> $nodeGrants */
+                $nodeGrants = $grants[$nodeId];
+                $folder = $nodeGrants->first()?->navNode;
+                $folder = $folder?->isFolder() ? $folder : null;
 
-            foreach ($groupGrants as $grant) {
-                /** @var Group $group */
-                $group = $grant->group;
-                $sources[] = [
-                    'group' => $group,
-                    'source' => $this->source($grant, $permissions),
-                    'inactive_reason' => $memberReason ?? $this->inactiveReason($group, $user),
-                ];
+                foreach ($nodeGrants->whereNull('group_id') as $grant) {
+                    // Гостю — только выдача на само пространство (выдачи гостю на папки запрещены, П2c)
+                    $reason = $memberReason ?? ($guest && $folder !== null ? AccessInactiveReason::UserDeactivated : null);
+                    $sources[] = ['group' => null, 'folder' => $folder, 'source' => $this->source($grant, $permissions), 'inactive_reason' => $reason];
+                }
+
+                $groupGrants = $nodeGrants->whereNotNull('group_id')
+                    ->sortBy(fn (AccessGrant $grant) => mb_strtolower((string) $grant->group?->name));
+
+                foreach ($groupGrants as $grant) {
+                    /** @var Group $group */
+                    $group = $grant->group;
+                    $sources[] = [
+                        'group' => $group,
+                        'folder' => $folder,
+                        'source' => $this->source($grant, $permissions),
+                        'inactive_reason' => $memberReason ?? $this->inactiveReason($group, $user),
+                    ];
+                }
             }
 
             $active = array_values(array_filter($sources, fn (array $s) => $s['inactive_reason'] === null));
@@ -779,23 +881,61 @@ class AccessResolver
     }
 
     /**
-     * Строки действующих источников: личные выдачи + выдачи активных групп активным участникам +
-     * выдачи группе «Все сотрудники» компании её активным «домам». Только выдачи на узлы пространств и только
-     * действующим участникам компании выдачи (activeMember — каждая ветка). Колонки: space_id, user_id, group_id
-     * (null — личная), role_id.
+     * Узлы дерева с путём к корню (П2d-1): строка на каждую пару «узел — он сам или папка над ним». Колонки: node_id,
+     * space_id (у узла пространства), ancestor_id. Отбор — по узлу, пространству или только узлы пространств; рекурсия
+     * идёт вверх по первичному ключу, глубина дерева ограничена (NavNode::MAX_FOLDER_DEPTH).
      */
-    private function sourceRows(?string $spaceId = null, ?string $userId = null, ?string $companyId = null): Builder
+    private function paths(?string $nodeId = null, ?string $spaceId = null, bool $spacesOnly = false): Builder
     {
-        $grants = fn () => DB::table('access_grants')
-            ->join('nav_nodes', fn ($join) => $join->on('nav_nodes.id', '=', 'access_grants.nav_node_id')
-                ->whereNotNull('nav_nodes.space_id'))
-            ->when($spaceId !== null, fn (Builder $q) => $q->where('nav_nodes.space_id', $spaceId))
-            ->when($companyId !== null, fn (Builder $q) => $q->where('access_grants.company_id', $companyId));
+        $where = [];
+        $bindings = [];
+        if ($nodeId !== null) {
+            $where[] = 'n.id = ?';
+            $bindings[] = $nodeId;
+        }
+        if ($spaceId !== null) {
+            $where[] = 'n.space_id = ?';
+            $bindings[] = $spaceId;
+        }
+        if ($spacesOnly) {
+            $where[] = 'n.space_id IS NOT NULL';
+        }
+        $filter = $where === [] ? '' : 'WHERE '.implode(' AND ', $where);
 
-        // Личная выдача — и гостю с неистёкшим сроком (гостю — только на пространства: выдачи на папки — П2d, без гостей)
-        $personal = $this->activeMember($grants(), 'access_grants.company_id', 'access_grants.user_id', guests: true)
+        return DB::query()->fromRaw(<<<SQL
+            (WITH RECURSIVE up AS (
+                SELECT n.id AS node_id, n.space_id, n.id AS ancestor_id, n.parent_id FROM nav_nodes n {$filter}
+                UNION ALL
+                SELECT up.node_id, up.space_id, a.id, a.parent_id FROM up JOIN nav_nodes a ON a.id = up.parent_id
+            ) SELECT node_id, space_id, ancestor_id FROM up) AS paths
+            SQL, $bindings);
+    }
+
+    /**
+     * Строки действующих источников: выдачи на узел и на папки над ним — личные + выдачи активных групп активным
+     * участникам + выдачи группе «Все сотрудники» компании её активным «домам». Только действующим участникам
+     * компании выдачи (activeMember — каждая ветка); гостю — только личная выдача на само пространство. Колонки: node_id,
+     * space_id (у узла пространства), user_id, group_id (null — личная), role_id, grant_node_id (узел выдачи: сам узел
+     * или папка, с которой доступ унаследован).
+     */
+    private function sourceRows(?string $spaceId = null, ?string $userId = null, ?string $companyId = null, ?string $nodeId = null, bool $spacesOnly = true): Builder
+    {
+        $grants = fn () => $this->paths($nodeId, $spaceId, $spacesOnly && $nodeId === null)
+            ->join('access_grants', 'access_grants.nav_node_id', '=', 'paths.ancestor_id')
+            ->when($companyId !== null, fn (Builder $q) => $q->where('access_grants.company_id', $companyId));
+        $columns = fn (string $user, string|Expression $group) => [
+            'paths.node_id', 'paths.space_id', $user, $group, 'access_grants.role_id', 'access_grants.nav_node_id AS grant_node_id',
+        ];
+
+        // Личная выдача: «дому» и Владельцу — на узел и на папки над ним; гостю с неистёкшим сроком — только на само
+        // пространство (выдачи гостю на папки запрещены и в БД, П2c)
+        $personal = $grants()
             ->whereNotNull('access_grants.user_id')
-            ->select(['nav_nodes.space_id', 'access_grants.user_id', DB::raw('NULL::char(26) AS group_id'), 'access_grants.role_id'])
+            ->where(fn (Builder $q) => $this->activeMember($q, 'access_grants.company_id', 'access_grants.user_id')
+                ->orWhere(fn (Builder $q) => $this->activeMember($q, 'access_grants.company_id', 'access_grants.user_id', guests: true)
+                    ->whereColumn('access_grants.nav_node_id', 'paths.node_id')
+                    ->whereNotNull('paths.space_id')))
+            ->select($columns('access_grants.user_id', DB::raw('NULL::char(26) AS group_id')))
             ->when($userId !== null, fn (Builder $q) => $q->where('access_grants.user_id', $userId));
 
         // Группа — той же компании, что выдача (составной FK); её участник — действующий участник этой компании
@@ -807,7 +947,7 @@ class AccessResolver
             // Деактивированный остаётся в группе, но доступа через неё не получает
             ->join('users', fn ($join) => $join->on('users.id', '=', 'group_members.user_id')
                 ->where('users.status', '!=', UserStatus::Deactivated->value))
-            ->select(['nav_nodes.space_id', 'group_members.user_id', 'access_grants.group_id', 'access_grants.role_id'])
+            ->select($columns('group_members.user_id', 'access_grants.group_id'))
             ->when($userId !== null, fn (Builder $q) => $q->where('group_members.user_id', $userId));
 
         // Встроенная группа: состав не хранится — каждый активный «дом» компании выдачи
@@ -819,7 +959,7 @@ class AccessResolver
                 ->whereNull('company_members.deactivated_at'))
             ->join('users', 'users.id', '=', 'company_members.user_id')
             ->where('users.status', UserStatus::Active->value)
-            ->select(['nav_nodes.space_id', 'users.id AS user_id', 'access_grants.group_id', 'access_grants.role_id'])
+            ->select($columns('users.id AS user_id', 'access_grants.group_id'))
             ->when($userId !== null, fn (Builder $q) => $q->where('users.id', $userId));
 
         return $personal->unionAll($groups)->unionAll($everyone);
@@ -827,14 +967,14 @@ class AccessResolver
 
     /**
      * Источники вместе с ролью и её правами — тем же запросом.
-     * Колонки: space_id, user_id, group_id, role_id, role_key, card_scope, permissions (JSON-массив).
+     * Колонки: node_id, space_id, user_id, group_id, role_id, grant_node_id, role_key, card_scope, permissions (JSON-массив).
      */
     private function withRoles(Builder $rows): Builder
     {
         return DB::query()
             ->fromSub($rows, 'src')
             ->join('roles', 'roles.id', '=', 'src.role_id')
-            ->select(['src.space_id', 'src.user_id', 'src.group_id', 'src.role_id', 'roles.key AS role_key', 'roles.card_scope'])
+            ->select(['src.node_id', 'src.space_id', 'src.user_id', 'src.group_id', 'src.role_id', 'src.grant_node_id', 'roles.key AS role_key', 'roles.card_scope'])
             ->selectSub(
                 DB::table('role_permissions')->selectRaw("coalesce(json_agg(permission), '[]')")->whereColumn('role_permissions.role_id', 'src.role_id'),
                 'permissions',
@@ -842,19 +982,20 @@ class AccessResolver
     }
 
     /**
-     * Личные выдачи с правом «управление доступом» на узлы пространств. Колонки: grant_id, space_id, user_id.
+     * Личные выдачи с правом «управление доступом» на пространства и на папки над ними. Колонки: grant_id, space_id,
+     * user_id (у выдачи на папку — строка на каждое пространство внутри).
      * Для показа — участникам компании выдачи: её «домам» (и убранным из неё — с пометкой) и Владельцу; $active —
      * только действующим (activeMember) и не деактивированным: инвариант «личный администратор» (ADR-0012).
      */
     private function personalManagersQuery(bool $active = false): Builder
     {
-        $grants = DB::table('access_grants')
-            ->join('nav_nodes', 'nav_nodes.id', '=', 'access_grants.nav_node_id')
+        // Выдача на пространство или на папку над ним (П2d-1): управляющий папки управляет доступом ко всему внутри
+        $grants = $this->paths(spacesOnly: true)
+            ->join('access_grants', 'access_grants.nav_node_id', '=', 'paths.ancestor_id')
             ->join('role_permissions', fn ($join) => $join->on('role_permissions.role_id', '=', 'access_grants.role_id')
                 ->where('role_permissions.permission', Permission::SpaceManageAccess->value))
             ->whereNotNull('access_grants.user_id')
-            ->whereNotNull('nav_nodes.space_id')
-            ->select(['access_grants.id AS grant_id', 'nav_nodes.space_id', 'access_grants.user_id']);
+            ->select(['access_grants.id AS grant_id', 'paths.space_id', 'access_grants.user_id']);
 
         if ($active) {
             return $this->activeMember($grants, 'access_grants.company_id', 'access_grants.user_id')
@@ -906,6 +1047,7 @@ class AccessResolver
             $grant->role->card_scope,
             $permissions[$grant->role_id] ?? [],
             $grant->group_id,
+            $grant->navNode->isFolder() ? $grant->nav_node_id : null,
         );
     }
 
@@ -943,14 +1085,15 @@ class AccessResolver
     private function toAccess(Collection $rows): SpaceAccess
     {
         return new SpaceAccess($rows
-            // Личная выдача — первой (порядок важен только для показа)
-            ->sortBy(fn (\stdClass $row) => $row->group_id === null ? '' : $row->group_id)
+            // Личные выдачи — первыми, на сам узел — раньше унаследованных (порядок важен только для показа)
+            ->sortBy(fn (\stdClass $row) => [$row->group_id === null ? '' : $row->group_id, $row->grant_node_id === $row->node_id ? 0 : 1, $row->role_id])
             ->map(fn (\stdClass $row) => new AccessSource(
                 $row->role_id,
                 $row->role_key === null ? null : StandardRole::from($row->role_key),
                 CardScope::from($row->card_scope),
                 array_fill_keys(json_decode($row->permissions, true), true),
                 $row->group_id === null ? null : trim($row->group_id),
+                trim($row->grant_node_id) === trim($row->node_id) ? null : trim($row->grant_node_id),
             ))
             ->values()
             ->all());

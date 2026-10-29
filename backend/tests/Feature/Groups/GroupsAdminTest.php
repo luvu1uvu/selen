@@ -25,7 +25,7 @@ describe('группа', function () {
             ->json('data.id');
 
         $this->patchJson(adminPath()."groups/{$id}", ['name' => 'Аналитики'])->assertOk()->assertJsonPath('data.name', 'Аналитики');
-        $this->getJson(adminPath().'groups')->assertOk()->assertJsonPath('data.0.system', 'everyone')->assertJsonPath('data.1.id', $id)->assertJsonPath('data.1.spaces_count', 0);
+        $this->getJson(adminPath().'groups')->assertOk()->assertJsonPath('data.0.system', 'everyone')->assertJsonPath('data.1.id', $id)->assertJsonPath('data.1.entities_count', 0);
 
         expect(EventLogEntry::query()->orderBy('id')->get(['event_type', 'payload'])->map(fn ($e) => [$e->event_type, $e->payload])->all())
             ->toEqual([['group.created', []], ['group.updated', ['fields' => ['name']]]]);
@@ -66,7 +66,8 @@ describe('группа', function () {
         $this->postJson(adminPath()."groups/{$group->id}/archive")->assertForbidden();
         $this->postJson(adminPath()."groups/{$group->id}/members", ['user_id' => $spaceAdmin->id])->assertForbidden();
         $this->deleteJson(adminPath()."groups/{$group->id}/members/{$spaceAdmin->id}")->assertForbidden();
-        $this->putJson(adminPath()."groups/{$group->id}/spaces/".space()->id, ['role' => 'editor'])->assertForbidden();
+        // Доступ группы к папке или пространству — «Доступ…» узла, право «управлять доступом» (П2d-1)
+        $this->putJson(adminPath().'nav-nodes/'.nodeOf(space())->id."/access/groups/{$group->id}", ['roles' => ['editor']])->assertForbidden();
     });
 });
 
@@ -93,33 +94,41 @@ describe('состав', function () {
     });
 });
 
-describe('доступ группы к пространствам из админки', function () {
-    it('выдаётся, меняется и отзывается; в журнале via=admin_panel', function () {
+describe('«Сущности» группы из админки (П2d-1: папки и пространства, несколько ролей)', function () {
+    it('выдаётся, меняется и отзывается через «Доступ…» узла; на странице группы — сущности с ролями; via=admin_panel', function () {
         $group = makeGroup();
         $space = space(['key' => 'FRONT', 'name' => 'Frontend']);
+        $folder = makeFolder('Продукт');
+        $node = nodeOf($space);
         $this->actingAs($this->admin);
+        $access = fn (string $nodeId) => adminPath()."nav-nodes/{$nodeId}/access/groups/{$group->id}";
 
-        $this->putJson(adminPath()."groups/{$group->id}/spaces/{$space->id}", ['role' => 'editor', 'own_cards_only' => true])
-            ->assertOk()
-            ->assertJsonPath('data.spaces.0.space.key', 'FRONT')
-            ->assertJsonPath('data.spaces.0.role', 'editor')
-            ->assertJsonPath('data.spaces.0.own_cards_only', true);
-        $this->putJson(adminPath()."groups/{$group->id}/spaces/{$space->id}", ['role' => 'admin'])
-            ->assertOk()
-            ->assertJsonPath('data.spaces.0.role', 'admin')
-            ->assertJsonPath('data.spaces.0.own_cards_only', false);
-        $this->putJson(adminPath()."groups/{$group->id}/spaces/{$space->id}", ['role' => 'admin', 'own_cards_only' => true])
-            ->assertJsonValidationErrors(['own_cards_only' => __('selen.spaces.admin_not_restricted')]);
-        $this->deleteJson(adminPath()."groups/{$group->id}/spaces/{$space->id}")->assertNoContent();
+        $this->putJson($access($node->id), ['roles' => ['editor_own']])->assertOk()
+            ->assertJsonPath('data.grants.0.group.id', $group->id)
+            ->assertJsonPath('data.grants.0.roles', ['editor_own']);
+        $this->putJson($access($node->id), ['roles' => ['admin', 'editor_own']])->assertOk();
+        $this->putJson($access($folder->id), ['roles' => ['commenter']])->assertOk();
+
+        $this->getJson(adminPath()."groups/{$group->id}")->assertOk()
+            ->assertJsonPath('data.entities.0.node.type', 'folder')
+            ->assertJsonPath('data.entities.0.node.name', 'Продукт')
+            ->assertJsonPath('data.entities.0.roles', ['commenter'])
+            ->assertJsonPath('data.entities.1.node.space.key', 'FRONT')
+            ->assertJsonPath('data.entities.1.roles', ['admin', 'editor_own']);
+        $this->getJson(adminPath().'groups')->assertJsonPath('data.1.entities_count', 2);
+
+        $this->deleteJson($access($node->id))->assertNoContent();
+        $this->deleteJson($access($folder->id))->assertNoContent();
 
         expect(AccessGrant::query()->whereNotNull('group_id')->count())->toBe(0)
-            ->and(EventLogEntry::query()->where('event_type', 'like', 'space.group_%')->orderBy('id')->get(['event_type', 'payload'])
-                ->map(fn ($e) => [$e->event_type, $e->payload])->all())
+            ->and(EventLogEntry::query()->where('event_type', 'like', 'space.group_%')->orWhere('event_type', 'like', 'folder.access_%')
+                ->orderBy('id')->get(['event_type', 'payload'])->map(fn ($e) => [$e->event_type, $e->payload])->all())
             ->toEqual([
-                ['space.group_added', ['group_id' => $group->id, 'role' => 'editor', 'own_cards_only' => true, 'via' => 'admin_panel']],
-                ['space.group_role_changed', ['group_id' => $group->id, 'from' => 'editor', 'to' => 'admin', 'via' => 'admin_panel']],
-                ['space.group_restriction_changed', ['group_id' => $group->id, 'from' => true, 'to' => false, 'via' => 'role_changed']],
-                ['space.group_removed', ['group_id' => $group->id, 'role' => 'admin', 'via' => 'admin_panel']],
+                ['space.group_added', ['group_id' => $group->id, 'roles' => ['editor_own'], 'via' => 'admin_panel']],
+                ['space.group_role_changed', ['group_id' => $group->id, 'from' => ['editor_own'], 'to' => ['admin', 'editor_own'], 'via' => 'admin_panel']],
+                ['folder.access_granted', ['group_id' => $group->id, 'roles' => ['commenter'], 'via' => 'admin_panel']],
+                ['space.group_removed', ['group_id' => $group->id, 'roles' => ['admin', 'editor_own'], 'via' => 'admin_panel']],
+                ['folder.access_revoked', ['group_id' => $group->id, 'roles' => ['commenter'], 'via' => 'admin_panel']],
             ]);
     });
 
@@ -127,8 +136,9 @@ describe('доступ группы к пространствам из адми�
         $group = makeGroup(['archived_at' => now()]);
         $space = space();
 
-        // Архивная группа — только для чтения (как в админке)
-        $this->actingAs($this->admin)->putJson(adminPath()."groups/{$group->id}/spaces/{$space->id}", ['role' => 'editor'])->assertForbidden();
+        // Архивная группа доступа не получает
+        $this->actingAs($this->admin)->putJson(adminPath().'nav-nodes/'.nodeOf($space)->id."/access/groups/{$group->id}", ['roles' => ['editor']])
+            ->assertJsonValidationErrors(['group_id' => __('selen.groups.archived')]);
 
         // «Администратор» не может стать ролью с областью «только свои карточки» (триггер roles_scope_check, ADR-0024)
         expect(fn () => DB::transaction(fn () => DB::table('roles')->where('key', 'admin')->update(['card_scope' => 'own'])))
@@ -141,7 +151,7 @@ it('в журнале групп нет ПДн, названий и описан
     $id = $this->postJson(adminPath().'groups', ['name' => 'Секретный отдел', 'description' => 'Описание отдела'])->json('data.id');
     $this->patchJson(adminPath()."groups/{$id}", ['name' => 'Тайный отдел', 'description' => 'Новое описание'])->assertOk();
     $this->postJson(adminPath()."groups/{$id}/members", ['user_id' => member(['name' => 'Иван Петров'])->id])->assertOk();
-    $this->putJson(adminPath()."groups/{$id}/spaces/".space()->id, ['role' => 'commenter'])->assertOk();
+    $this->putJson(adminPath().'nav-nodes/'.nodeOf(space())->id."/access/groups/{$id}", ['roles' => ['commenter']])->assertOk();
     $this->postJson(adminPath()."groups/{$id}/archive")->assertOk();
 
     expectNoPersonalDataInEventLog();

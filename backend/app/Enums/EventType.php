@@ -98,6 +98,13 @@ enum EventType: string
     case FolderArchived = 'folder.archived';
     case FolderRestored = 'folder.restored';
     case FolderDeleted = 'folder.deleted';
+    /**
+     * Доступ к папке (П2d-1, действует на всё внутри): {user_id | group_id, roles, via?}; изменение ролей — {…, from, to};
+     * снятие — {…, roles} (прежние роли). Роли — ключи стандартных ролей (у пользовательских, П2e, — id роли)
+     */
+    case FolderAccessGranted = 'folder.access_granted';
+    case FolderAccessChanged = 'folder.access_changed';
+    case FolderAccessRevoked = 'folder.access_revoked';
     /** {node_id, space_id?, from_parent_id, to_parent_id, via?} — и перестановка внутри той же папки */
     case NavNodeMoved = 'nav_node.moved';
     /** {node_id, space_id?} — сама иконка в журнал не пишется */

@@ -34,7 +34,7 @@ use LogicException;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property-read Collection<int, User> $members
- * @property-read Collection<int, AccessGrant> $spaceGrants
+ * @property-read Collection<int, AccessGrant> $accessGrants
  * @property-read int|null $members_count
  */
 #[Fillable(['name', 'description'])]
@@ -63,13 +63,28 @@ class Group extends Model implements HasCompany
     }
 
     /**
-     * Выдачи доступа группе (в П2a — только на пространства, ADR-0024).
+     * Выдачи доступа группе — на папки и пространства, по строке на роль (ADR-0024, П2d-1).
      *
      * @return HasMany<AccessGrant, $this>
      */
-    public function spaceGrants(): HasMany
+    public function accessGrants(): HasMany
     {
         return $this->hasMany(AccessGrant::class);
+    }
+
+    /**
+     * Сколько папок и пространств, к которым у группы есть доступ (узлов, а не строк: ролей на узле может быть
+     * несколько): entities_count.
+     *
+     * @param  Builder<Group>  $query
+     */
+    public function scopeWithEntitiesCount(Builder $query): void
+    {
+        if ($query->getQuery()->columns === null) {
+            $query->select('groups.*');
+        }
+
+        $query->selectSub(AccessGrant::query()->whereColumn('group_id', 'groups.id')->selectRaw('count(distinct nav_node_id)'), 'entities_count');
     }
 
     /** @param  Builder<Group>  $query */

@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Spaces\AddSpaceMemberAction;
-use App\Actions\Spaces\RemoveSpaceMemberAction;
-use App\Actions\Spaces\UpdateSpaceMemberAction;
-use App\Enums\SpaceRole;
+use App\Actions\Access\NodeGrants;
+use App\Actions\Access\RevokeNodeAccessAction;
+use App\Actions\Access\SetNodeAccessAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Spaces\StoreSpaceMemberRequest;
 use App\Http\Requests\Spaces\UpdateSpaceMemberRequest;
 use App\Http\Resources\SpacePersonResource;
 use App\Models\Group;
+use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
@@ -24,8 +24,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Люди с доступом к пространству — лично и через группы (ADR-0012). Смотреть могут все, у кого есть доступ,
- * управлять личным участием — администраторы пространства. Деактивированные и убранные из компании (П2c) с личным
+ * Люди с доступом к пространству — лично и через группы, на само пространство и через папки выше (ADR-0012, П2d-1).
+ * Смотреть могут все, у кого есть доступ, управлять личными ролями на самом пространстве — те, кто управляет в нём
+ * доступом (унаследованные с папок меняются на своей папке). Деактивированные и убранные из компании (П2c) с личным
  * участием остаются в списке (ради истории), доступа у них нет.
  */
 class SpaceMemberController extends Controller
@@ -49,10 +50,10 @@ class SpaceMemberController extends Controller
         return SpacePersonResource::collection($people);
     }
 
-    public function store(StoreSpaceMemberRequest $request, Space $space, AddSpaceMemberAction $action): JsonResponse
+    public function store(StoreSpaceMemberRequest $request, Space $space, SetNodeAccessAction $action): JsonResponse
     {
         $user = User::query()->findOrFail($request->validated('user_id'));
-        $action->handle($request->user(), $space, $user, $request->enum('role', SpaceRole::class));
+        $action->handle($request->user(), $space->navNode, $user, $request->roles(), mode: SetNodeAccessAction::CREATE);
 
         return $this->person($request, $space, $user)->response()->setStatusCode(201);
     }
@@ -61,24 +62,23 @@ class SpaceMemberController extends Controller
         UpdateSpaceMemberRequest $request,
         Space $space,
         User $user,
-        UpdateSpaceMemberAction $action,
+        SetNodeAccessAction $action,
+        NodeGrants $grants,
     ): SpacePersonResource {
-        $action->handle(
-            $request->user(),
-            $space,
-            $user,
-            $request->enum('role', SpaceRole::class),
-            $request->has('own_cards_only') ? $request->boolean('own_cards_only') : null,
-        );
+        // Меняются только личные роли на самом пространстве: нет их — нечего менять (как прежде, 404)
+        if ($grants->of($space->navNode, $user)->isEmpty()) {
+            abort(404);
+        }
+        $action->handle($request->user(), $space->navNode, $user, $request->roles());
 
         return $this->person($request, $space, $user);
     }
 
-    public function destroy(Request $request, Space $space, User $user, RemoveSpaceMemberAction $action): Response
+    public function destroy(Request $request, Space $space, User $user, RevokeNodeAccessAction $action): Response
     {
         Gate::authorize('manageMembers', $space);
 
-        $action->handle($request->user(), $space, $user);
+        $action->handle($request->user(), $space->navNode, $user);
 
         return response()->noContent();
     }
@@ -101,22 +101,27 @@ class SpaceMemberController extends Controller
         // Подрядчику (все источники с ограничением) источники доступа не показываем — поправка PM
         $showSources = Gate::forUser($request->user())->allows('viewAccessSources', $space);
 
+        // Личные выдачи на само пространство (несколько ролей — несколько строк, П2d-1)
         $personal = $showSources
-            ? $space->personalGrants()->with('role')->whereIn('access_grants.user_id', $accesses->keys())->get()->keyBy('user_id')
+            ? $space->personalGrants()->with('role')->whereIn('access_grants.user_id', $accesses->keys())->get()->groupBy('user_id')
             : collect();
-        $groupIds = $accesses->flatMap(fn (SpaceAccess $access) => array_filter(array_map(
-            fn (AccessSource $source) => $source->groupId,
-            $access->sources,
-        )))->unique()->values();
+        $sources = $accesses->flatMap(fn (SpaceAccess $access) => $access->sources);
+        $groupIds = $sources->map(fn (AccessSource $source) => $source->groupId)->filter()->unique()->values();
         $groups = $showSources && $groupIds->isNotEmpty()
             ? Group::query()->whereIn('id', $groupIds)->get()->keyBy('id')
+            : collect();
+        // Папки, с которых доступ унаследован: их названия человек видит и в своём дереве (папка над доступным)
+        $folderIds = $sources->map(fn (AccessSource $source) => $source->inheritedFrom)->filter()->unique()->values();
+        $folders = $showSources && $folderIds->isNotEmpty()
+            ? NavNode::query()->whereIn('id', $folderIds)->get()->keyBy('id')
             : collect();
 
         return $accesses->map(fn (SpaceAccess $access, string $userId) => [
             'user' => $users[$userId],
             'access' => $access,
-            'personal' => $personal->get($userId),
+            'personal' => $personal->get($userId, collect()),
             'groups' => $groups,
+            'folders' => $folders,
             'show_sources' => $showSources,
             'space_company_id' => $space->company_id,
         ])->values()->all();

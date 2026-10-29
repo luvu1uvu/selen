@@ -2,15 +2,14 @@
 
 namespace App\Actions\Guests;
 
-use App\Actions\Spaces\AddSpaceMemberAction;
-use App\Actions\Spaces\GrantableSpaces;
-use App\Actions\Spaces\RemoveSpaceMemberAction;
-use App\Actions\Spaces\SpaceGrants;
-use App\Actions\Spaces\UpdateSpaceMemberAction;
+use App\Actions\Access\GrantableNodes;
+use App\Actions\Access\NodeGrants;
+use App\Actions\Access\RevokeNodeAccessAction;
+use App\Actions\Access\SetNodeAccessAction;
 use App\Enums\EventType;
-use App\Enums\SpaceRole;
 use App\Models\Company;
-use App\Models\Space;
+use App\Models\NavNode;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use App\Services\Access\CompanyMemberships;
@@ -21,9 +20,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Изменить гостя (П2c): срок доступа и его пространства — список заменяет прежний, но только в пространствах, где автор
- * может выдавать доступ (GrantableSpaces): выдачи гостя в остальных не трогаются. Продление истёкшего срока возвращает
- * доступ — его выдачи «спали».
+ * Изменить гостя (П2c): срок доступа и его пространства с ролями — список заменяет прежний, но только в пространствах,
+ * где автор может выдавать доступ (GrantableNodes): выдачи гостя в остальных не трогаются. Продление истёкшего срока
+ * возвращает доступ — его выдачи «спали».
  */
 class UpdateGuestAction
 {
@@ -31,15 +30,14 @@ class UpdateGuestAction
         private readonly EventRecorder $events,
         private readonly AccessResolver $resolver,
         private readonly CompanyMemberships $memberships,
-        private readonly GrantableSpaces $grantable,
-        private readonly SpaceGrants $grants,
-        private readonly AddSpaceMemberAction $addMember,
-        private readonly UpdateSpaceMemberAction $updateMember,
-        private readonly RemoveSpaceMemberAction $removeMember,
+        private readonly GrantableNodes $grantable,
+        private readonly NodeGrants $grants,
+        private readonly SetNodeAccessAction $setAccess,
+        private readonly RevokeNodeAccessAction $revoke,
     ) {}
 
     /**
-     * @param  list<array{space: Space, role: SpaceRole, own_cards_only: bool}>  $spaces
+     * @param  list<array{node: NavNode, roles: list<Role>}>  $spaces  только узлы пространств (проверяет запрос)
      */
     public function handle(User $actor, Company $company, User $guest, ?CarbonInterface $expiresAt, array $spaces): User
     {
@@ -58,21 +56,23 @@ class UpdateGuestAction
                 ], company: $company);
             }
 
-            $wanted = collect($spaces)->keyBy(fn (array $grant) => $grant['space']->id);
-            foreach ($this->grantable->of($actor, $company) as $space) {
-                $current = $this->grants->personal($space, $guest);
-                $grant = $wanted->get($space->id);
+            $wanted = collect($spaces)->keyBy(fn (array $grant) => $grant['node']->id);
+            foreach ($this->grantable->of($actor, $company) as ['node' => $node]) {
+                // Гостю — только пространства (папки ему не выдаются, П2c)
+                if ($node->isFolder()) {
+                    continue;
+                }
+                $current = $this->grants->of($node, $guest);
+                $grant = $wanted->get($node->id);
                 if ($grant === null) {
-                    if ($current !== null) {
-                        $this->removeMember->handle($actor, $space, $guest);
+                    if ($current->isNotEmpty()) {
+                        $this->revoke->handle($actor, $node, $guest, AddGuestAction::VIA);
                     }
 
                     continue;
                 }
 
-                $current === null
-                    ? $this->addMember->handle($actor, $space, $guest, $grant['role'], AddGuestAction::VIA, $grant['own_cards_only'])
-                    : $this->updateMember->handle($actor, $space, $guest, $grant['role'], $grant['own_cards_only']);
+                $this->setAccess->handle($actor, $node, $guest, $grant['roles'], AddGuestAction::VIA);
             }
 
             return $guest;

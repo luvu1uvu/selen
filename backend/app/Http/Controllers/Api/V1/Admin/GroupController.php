@@ -7,13 +7,8 @@ use App\Actions\Groups\AddGroupMemberAction;
 use App\Actions\Groups\RemoveGroupMemberAction;
 use App\Actions\Groups\SaveGroupAction;
 use App\Actions\Groups\SetGroupArchivedAction;
-use App\Actions\Spaces\AssignSpaceGroupAction;
-use App\Actions\Spaces\AssignSpaceRoleAction;
-use App\Actions\Spaces\RevokeSpaceGroupAction;
 use App\Enums\Permission;
-use App\Enums\SpaceRole;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\AssignSpaceGroupRequest;
 use App\Http\Requests\Admin\SaveGroupRequest;
 use App\Http\Requests\Admin\StoreGroupMemberRequest;
 use App\Http\Requests\Admin\UpdateCompanyPermissionsRequest;
@@ -21,7 +16,6 @@ use App\Http\Resources\GroupResource;
 use App\Models\Company;
 use App\Models\CompanyPermissionGrant;
 use App\Models\Group;
-use App\Models\Space;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,7 +34,7 @@ class GroupController extends Controller
         Gate::authorize('viewAny', [Group::class, $company]);
 
         // Встроенная «Все сотрудники» компании — первой
-        $groups = Group::query()->inCompany($company)->withCount(['members', 'spaceGrants'])->orderByRaw('system_key IS NULL, lower(name)')->get();
+        $groups = Group::query()->inCompany($company)->withCount('members')->withEntitiesCount()->orderByRaw('system_key IS NULL, lower(name)')->get();
 
         return GroupResource::collection($groups);
     }
@@ -95,39 +89,13 @@ class GroupController extends Controller
     }
 
     /** Выдать или изменить доступ группы к пространству (в журнале — via=admin_panel). */
-    public function assignSpace(
-        AssignSpaceGroupRequest $request,
-        Company $company,
-        Group $group,
-        Space $space,
-        AssignSpaceGroupAction $action,
-    ): GroupResource {
-        $action->handle(
-            $request->user(),
-            $space,
-            $group,
-            $request->enum('role', SpaceRole::class),
-            $request->boolean('own_cards_only'),
-        );
-
-        return new GroupResource($this->reload($group));
-    }
-
-    public function revokeSpace(Request $request, Company $company, Group $group, Space $space, RevokeSpaceGroupAction $action): Response
-    {
-        Gate::authorize('manageSpaces', $group);
-
-        $action->handle($request->user(), $space, $group, AssignSpaceRoleAction::VIA);
-
-        return response()->noContent();
-    }
-
     /** Свежий экземпляр со счётчиками, составом и доступами. */
     private function reload(Group $group): Group
     {
         return Group::query()
-            ->withCount(['members', 'spaceGrants'])
-            ->with(['members', 'spaceGrants.space', 'spaceGrants.role'])
+            ->withCount('members')
+            ->withEntitiesCount()
+            ->with(['members', 'accessGrants.navNode.space', 'accessGrants.role'])
             ->findOrFail($group->id);
     }
 

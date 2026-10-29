@@ -2,53 +2,46 @@
 
 namespace App\Actions\Spaces;
 
-use App\Enums\EventType;
+use App\Actions\Access\NodeGrants;
+use App\Actions\Access\SetNodeAccessAction;
 use App\Enums\StandardRole;
 use App\Models\AccessGrant;
+use App\Models\Role;
 use App\Models\Space;
 use App\Models\User;
-use App\Services\EventLog\EventRecorder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Режим «только свои карточки» для участника (ADR-0008): ограничение доступа, а не фильтр.
- * Применим к ролям editor и commenter; администратор пространства видит всё. В модели прав (ADR-0024) —
- * смена стандартной роли на вариант «— только свои карточки» и обратно.
+ * Режим «только свои карточки» для личных ролей участника на пространстве (ADR-0008) — для демо-данных: в модели прав
+ * (ADR-0024) это стандартные роли «— только свои карточки», в интерфейсе их выбирают ролями (П2d-1). Каждая роль
+ * Редактора и Комментатора меняется на вариант «только свои» и обратно.
  */
 class SetSpaceMemberRestrictionAction
 {
     public function __construct(
-        private readonly EventRecorder $events,
-        private readonly SpaceAdminGuard $guard,
-        private readonly SpaceGrants $grants,
+        private readonly SetNodeAccessAction $setAccess,
+        private readonly NodeGrants $grants,
     ) {}
 
-    public function handle(User $actor, Space $space, User $user, bool $ownCardsOnly): AccessGrant
+    public function handle(User $actor, Space $space, User $user, bool $ownCardsOnly): void
     {
-        return DB::transaction(function () use ($actor, $space, $user, $ownCardsOnly) {
-            $space = $this->guard->lock($space);
-            $grant = $this->grants->personal($space, $user) ?? throw (new ModelNotFoundException)->setModel(AccessGrant::class);
-            $role = $this->grants->standardRoleOf($grant)->legacyRole();
+        $current = $this->grants->of($space->navNode, $user);
+        if ($current->isEmpty()) {
+            throw (new ModelNotFoundException)->setModel(AccessGrant::class);
+        }
 
-            if ($grant->ownCardsOnly() === $ownCardsOnly) {
-                return $grant;
+        $roles = $current->map(function (AccessGrant $grant) use ($ownCardsOnly) {
+            $role = $grant->standardRole() ?? throw new \LogicException('A custom role has no «own cards» variant');
+            if ($role === StandardRole::Admin) {
+                return $ownCardsOnly
+                    ? throw ValidationException::withMessages(['roles' => __('selen.spaces.admin_not_restricted')])
+                    : $role;
             }
 
-            if ($ownCardsOnly && $role->canManageSpace()) {
-                throw ValidationException::withMessages(['own_cards_only' => __('selen.spaces.admin_not_restricted')]);
-            }
+            return StandardRole::fromLegacy($role->legacyRole(), $ownCardsOnly);
+        })->unique()->map(fn (StandardRole $role) => Role::standard($role))->values()->all();
 
-            $grant = $this->grants->changeRole($grant, StandardRole::fromLegacy($role, $ownCardsOnly));
-
-            $this->events->record(EventType::SpaceMemberRestrictionChanged, $actor, $space, [
-                'user_id' => $user->id,
-                'from' => ! $ownCardsOnly,
-                'to' => $ownCardsOnly,
-            ]);
-
-            return $grant;
-        });
+        $this->setAccess->handle($actor, $space->navNode, $user, $roles);
     }
 }

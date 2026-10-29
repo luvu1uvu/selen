@@ -13,11 +13,13 @@ use App\Actions\Spaces\CreateSpaceAction;
 use App\Actions\Spaces\GrantSpaceGroupAction;
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Company;
 use App\Models\Group;
 use App\Models\Lane;
+use App\Models\Role;
 use App\Models\Space;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -93,8 +95,8 @@ class CompaniesDemoSeeder extends Seeder
 
         // Гости (П2c): сотрудники «Компании 1» с личным доступом к пространству чужой компании
         $guests = app(AddGuestAction::class);
-        $guests->handle($irina, $second, 'boris@selen.test', null, [['space' => $support, 'role' => SpaceRole::Commenter, 'own_cards_only' => false]]);
-        $guests->handle($irina, $third, 'vera@selen.test', now('Europe/Moscow')->addDays(30)->endOfDay()->utc(), [['space' => $stock, 'role' => SpaceRole::Editor, 'own_cards_only' => false]]);
+        $guests->handle($irina, $second, 'boris@selen.test', null, [['node' => $support->navNode, 'roles' => [Role::standard(StandardRole::Commenter)]]]);
+        $guests->handle($irina, $third, 'vera@selen.test', now('Europe/Moscow')->addDays(30)->endOfDay()->utc(), [['node' => $stock->navNode, 'roles' => [Role::standard(StandardRole::Editor)]]]);
 
         $this->command->info('Компании: «Компания 2» (SALES, SUP; администратор irina@selen.test), «Компания 3» (STOCK; администратор — тоже Ирина).');
         $this->command->info('Гости: boris@selen.test — в «Поддержке» «Компании 2» без срока, vera@selen.test — в «Складе» «Компании 3» на 30 дней.');

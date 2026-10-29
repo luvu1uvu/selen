@@ -2,20 +2,23 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Actions\Access\AccessManagerGuard;
+use App\Actions\Access\NodeGrants;
 use App\Actions\Companies\SetCompanyPermissionsAction;
-use App\Actions\Spaces\SpaceAdminGuard;
 use App\Enums\Permission;
 use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateCompanyPermissionsRequest;
 use App\Models\Company;
 use App\Models\Group;
+use App\Models\Role;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use App\Services\Access\CompanyMembers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -36,20 +39,25 @@ class UserAccessController extends Controller
             $groups->prepend(Group::everyone($company));
         }
 
+        // Роли выдач — один запрос (их немного: стандартные и роли компании)
+        $roles = Role::query()->get()->keyBy('id');
         $spaces = $resolver->explain($user, $company)->map(fn (array $entry) => [
             'space' => $this->space($entry['space']),
             'has_access' => $entry['access']->isMember(),
             // Итог по всем действующим источникам (ADR-0012)
             'role' => $entry['access']->highestRole(),
             'sees_all_cards' => $entry['access']->canSeeAllCards(),
-            // Источник — в прежнем виде API: роль + «только свои карточки» (ADR-0024, П2a)
-            'sources' => array_map(fn (array $source) => [
-                'type' => $source['group'] === null ? 'personal' : 'group',
-                'group' => $source['group'] === null ? null : ['id' => $source['group']->id, 'name' => $source['group']->name],
-                'role' => $source['source']->legacyRole(),
-                'own_cards_only' => $source['source']->ownCardsOnly(),
-                'inactive_reason' => $source['inactive_reason']?->value,
-            ], $entry['sources']),
+            // Источник — лично или группа, на пространство или через папку (П2d-1), со всеми ролями этого источника
+            'sources' => collect($entry['sources'])
+                ->groupBy(fn (array $source) => ($source['group']->id ?? '').'|'.($source['folder']->id ?? ''))
+                ->map(fn (Collection $same) => [
+                    'type' => $same->first()['group'] === null ? 'personal' : 'group',
+                    'group' => $same->first()['group'] === null ? null : ['id' => $same->first()['group']->id, 'name' => $same->first()['group']->name],
+                    'folder' => $same->first()['folder'] === null ? null : ['id' => $same->first()['folder']->id, 'name' => $same->first()['folder']->name],
+                    'roles' => NodeGrants::values($same->map(fn (array $source) => $roles[$source['source']->roleId])),
+                    'inactive_reason' => $same->first()['inactive_reason']?->value,
+                ])
+                ->values(),
         ]);
 
         $guest = CompanyMembers::guestOf($user, $company->id);
@@ -80,13 +88,15 @@ class UserAccessController extends Controller
      * Пространства, которые после деактивации в компании останутся без действующего администратора; с account=1 —
      * после отключения учётной записи Владельцем: во всех компаниях человека (аудит S-1).
      */
-    public function deactivationImpact(Request $request, Company $company, User $user, SpaceAdminGuard $guard): JsonResponse
+    public function deactivationImpact(Request $request, Company $company, User $user, AccessManagerGuard $guard): JsonResponse
     {
         $account = $request->boolean('account');
         Gate::authorize($account ? 'block' : 'deactivate', [$user, $company]);
 
         return response()->json(['data' => [
-            'last_admin_spaces' => $guard->lastAdminSpaces($user, $account ? null : $company)->map(fn (Space $space) => $this->space($space)),
+            // Узел пространства — «Доступ…» в окне деактивации: назначить замену (П2d-1)
+            'last_admin_spaces' => $guard->lastAdminSpaces($user, $account ? null : $company)->load('navNode')
+                ->map(fn (Space $space) => $this->space($space) + ['node_id' => $space->navNode?->id]),
         ]]);
     }
 

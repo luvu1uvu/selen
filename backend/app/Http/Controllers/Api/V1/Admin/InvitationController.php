@@ -2,17 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Actions\Access\GrantableNodes;
 use App\Actions\Invitations\InviteUserAction;
 use App\Actions\Invitations\ResendInvitationAction;
 use App\Actions\Invitations\RevokeInvitationAction;
-use App\Actions\Spaces\GrantableSpaces;
 use App\Enums\CompanyRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreInvitationRequest;
 use App\Http\Resources\InvitationResource;
 use App\Models\Company;
 use App\Models\Invitation;
-use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use Illuminate\Http\JsonResponse;
@@ -53,7 +52,7 @@ class InvitationController extends Controller
             $request->string('name')->trim()->toString(),
             $request->string('email')->toString(),
             $request->enum('role', CompanyRole::class),
-            $request->spaceGrants(),
+            $request->nodeGrants(),
         );
         $invitation = $result->invitation?->load(self::RELATIONS);
         if ($invitation !== null) {
@@ -67,15 +66,20 @@ class InvitationController extends Controller
         ]], 201);
     }
 
-    /** Пространства, где автор может выдать доступ приглашённому и гостю (GrantableSpaces). */
-    public function spaces(Request $request, Company $company, GrantableSpaces $spaces): JsonResponse
+    /**
+     * Папки и пространства, где автор может выдать доступ приглашённому и гостю (GrantableNodes, П2d-1), в порядке дерева
+     * с уровнем; гостю окно предлагает только пространства.
+     */
+    public function nodes(Request $request, Company $company, GrantableNodes $nodes): JsonResponse
     {
         Gate::authorize('viewGrantableSpaces', [User::class, $company]);
 
-        return response()->json(['data' => $spaces->of($request->user(), $company)->map(fn (Space $space) => [
-            'id' => $space->id,
-            'key' => $space->key,
-            'name' => $space->name,
+        return response()->json(['data' => $nodes->of($request->user(), $company)->map(fn (array $entry) => [
+            'id' => $entry['node']->id,
+            'type' => $entry['node']->type,
+            'name' => $entry['node']->space->name ?? $entry['node']->name,
+            'depth' => $entry['depth'],
+            'space' => $entry['node']->space === null ? null : ['id' => $entry['node']->space->id, 'key' => $entry['node']->space->key],
         ])->values()]);
     }
 

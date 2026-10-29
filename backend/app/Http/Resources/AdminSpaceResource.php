@@ -34,9 +34,12 @@ class AdminSpaceResource extends JsonResource
             'description' => $this->description,
             // Иконка-эмодзи из дерева навигации (ADR-0013)
             'icon' => $this->whenLoaded('navNode', fn () => $this->navNode?->icon),
+            // Узел пространства в дереве — «Доступ…» (П2d-1)
+            'node_id' => $this->whenLoaded('navNode', fn () => $this->navNode?->id),
             'archived_at' => $this->archived_at?->toIso8601ZuluString(),
             'created_at' => $this->created_at->toIso8601ZuluString(),
-            // Личные администраторы пространства — личные выдачи с правом «управление доступом» (ADR-0012, ADR-0024)
+            // Личные управляющие доступом — личные выдачи с правом «управление доступом» на пространство или папку над ним
+            // (ADR-0012, ADR-0024, П2d-1)
             'admins' => $admins->map(fn (User $admin) => [
                 'id' => $admin->id,
                 'name' => $admin->name,
@@ -45,7 +48,7 @@ class AdminSpaceResource extends JsonResource
             ])->values(),
             'members_count' => (int) $this->getAttribute('personal_grants_count'),
             'groups_count' => (int) $this->getAttribute('group_grants_count'),
-            // Инвариант: хотя бы один личный не деактивированный администратор (ADR-0012)
+            // Инвариант: хотя бы один, кто лично управляет доступом (на пространстве или папке выше), не деактивирован
             'has_active_admin' => (bool) $this->getAttribute('has_active_admin'),
             // Своя роль администратора в этом пространстве (null — нет доступа к содержимому)
             'my_role' => $this->roleOf($user),

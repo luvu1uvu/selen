@@ -8,9 +8,10 @@ use App\Enums\SpaceRole;
 use App\Enums\StandardRole;
 
 /**
- * Один источник доступа пользователя к пространству — одна выдача (access_grants): личная (groupId = null)
- * или через группу, с ролью — набором прав и областью карточек. Права и область одного источника действуют
- * только вместе (ADR-0012, ADR-0024). Строит только AccessResolver.
+ * Один источник доступа пользователя к узлу (пространству или папке) — одна выдача (access_grants): личная
+ * (groupId = null) или через группу, с ролью — набором прав и областью карточек; на сам узел или унаследованная с папки
+ * выше (inheritedFrom — узел папки, П2d-1). Права и область одного источника действуют только вместе (ADR-0012,
+ * ADR-0024). Строит только AccessResolver.
  */
 final readonly class AccessSource
 {
@@ -23,6 +24,7 @@ final readonly class AccessSource
         public CardScope $cardScope,
         public array $permissions,
         public ?string $groupId = null,
+        public ?string $inheritedFrom = null,
     ) {}
 
     public function permits(Permission $permission): bool
@@ -39,6 +41,12 @@ final readonly class AccessSource
     public function isPersonal(): bool
     {
         return $this->groupId === null;
+    }
+
+    /** Выдача на папку над узлом, а не на сам узел (меняется на той папке). */
+    public function isInherited(): bool
+    {
+        return $this->inheritedFrom !== null;
     }
 
     /** Роль в API пространств (admin | editor | commenter); у пользовательских ролей (П2e) её нет. */

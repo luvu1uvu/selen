@@ -37,6 +37,7 @@ use App\Enums\ColumnCategory;
 use App\Enums\EventType;
 use App\Enums\Permission;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
 use App\Enums\Theme;
 use App\Models\AuthAuditEntry;
 use App\Models\Board;
@@ -46,6 +47,7 @@ use App\Models\EmailChangeRequest;
 use App\Models\EventLogEntry;
 use App\Models\Lane;
 use App\Models\NavNode;
+use App\Models\Role;
 use App\Models\Space;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -550,7 +552,7 @@ class E2eSeeder extends Seeder
         foreach ([['e2e-guest', 'E2E Гость', null], ['e2e-guest-expired', 'E2E Гость с истёкшим сроком', now()->addDay()]] as [$login, $name, $until]) {
             User::factory()->inCompany($second)->create(['name' => $name, 'email' => "{$login}@selen.test"]);
             $guests->handle($admin, Company::primary(), "{$login}@selen.test", $until, [
-                ['space' => $space, 'role' => SpaceRole::Commenter, 'own_cards_only' => false],
+                ['node' => $space->navNode, 'roles' => [Role::standard(StandardRole::Commenter)]],
             ]);
         }
         // Срок истёк вчера — в обход приложения (оно не даёт задать прошедший день)
@@ -603,7 +605,7 @@ class E2eSeeder extends Seeder
         // ТК-R2.17: гость третьей компании на 30 дней (как Вера демо-данных)
         $third = Company::query()->where('name', 'E2E Компания 3')->sole();
         app(AddGuestAction::class)->handle($multiAdmin, $third, 'e2e-guest@selen.test', now('Europe/Moscow')->addDays(30)->endOfDay()->utc(), [
-            ['space' => Space::query()->where('key', 'RTHIRD')->sole(), 'role' => SpaceRole::Editor, 'own_cards_only' => false],
+            ['node' => Space::query()->where('key', 'RTHIRD')->sole()->navNode, 'roles' => [Role::standard(StandardRole::Editor)]],
         ]);
 
         // ТК-R2.20: уходящий и преемник (как Григорий и Егор демо-данных)

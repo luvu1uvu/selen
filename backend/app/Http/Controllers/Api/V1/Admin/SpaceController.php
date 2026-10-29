@@ -3,13 +3,10 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Actions\Spaces\ArchiveSpaceAction;
-use App\Actions\Spaces\AssignSpaceRoleAction;
 use App\Actions\Spaces\CreateSpaceAction;
 use App\Actions\Spaces\DeleteSpaceAction;
 use App\Actions\Spaces\RestoreSpaceAction;
-use App\Enums\SpaceRole;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\AssignSpaceRoleRequest;
 use App\Http\Requests\Admin\StoreSpaceRequest;
 use App\Http\Resources\AdminSpaceResource;
 use App\Models\Company;
@@ -98,18 +95,6 @@ class SpaceController extends Controller
     }
 
     /** Назначить роль в пространстве себе или другому пользователю (пишется в журнал). */
-    public function assignRole(
-        AssignSpaceRoleRequest $request,
-        Company $company,
-        Space $space,
-        User $user,
-        AssignSpaceRoleAction $action,
-    ): AdminSpaceResource {
-        $action->handle($request->user(), $space, $user, $request->enum('role', SpaceRole::class));
-
-        return new AdminSpaceResource($this->reload($space));
-    }
-
     /**
      * Счётчики личных выдач и выдач группам, флаг действующего администратора (права — из AccessResolver).
      *
@@ -118,9 +103,12 @@ class SpaceController extends Controller
      */
     private function withAdminData($query)
     {
+        $managed = $this->resolver->managedSpaceIds();
+
         return $query
-            ->withCount(['personalGrants', 'groupGrants'])
-            ->selectSub($this->resolver->hasActivePersonalManagerColumn(), 'has_active_admin')
+            ->withGrantCounts()
+            // Подзапрос считается один раз, а не на каждую строку (управляющие — и через папки, П2d-1)
+            ->selectRaw('spaces.id IN ('.$managed->toSql().') AS has_active_admin', $managed->getBindings())
             ->with('navNode');
     }
 

@@ -3,8 +3,8 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\CompanyRole;
-use App\Enums\SpaceRole;
-use App\Http\Requests\Admin\Concerns\ValidatesSpaceGrants;
+use App\Enums\StandardRole;
+use App\Http\Requests\Admin\Concerns\ValidatesNodeGrants;
 use App\Models\Invitation;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,12 +13,13 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Приглашение в компанию: имя, email, роль в компании и сразу — доступ к пространствам (П2c). Email существующей
+ * Приглашение в компанию: имя, email, роль в компании и сразу — доступ к папкам и пространствам с ролями (П2c, папки и
+ * несколько ролей — П2d-1). Email существующей
  * учётной записи — не ошибка: она сразу получает «дом» (InviteUserAction, В8).
  */
 class StoreInvitationRequest extends FormRequest
 {
-    use ValidatesSpaceGrants;
+    use ValidatesNodeGrants;
 
     public function authorize(): Response
     {
@@ -44,13 +45,13 @@ class StoreInvitationRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:255'],
             // Владелец не приглашается — только передача владения
             'role' => ['required', Rule::enum(CompanyRole::class)],
-            ...$this->spaceGrantRules(SpaceRole::cases()),
+            ...$this->nodeGrantRules(StandardRole::cases()),
         ];
     }
 
     /** @return list<callable(Validator): void> */
     public function after(): array
     {
-        return [fn (Validator $validator) => $validator->errors()->isEmpty() ? $this->validateSpaceGrants($validator) : null];
+        return [fn (Validator $validator) => $validator->errors()->isEmpty() ? $this->validateNodeGrants($validator) : null];
     }
 }

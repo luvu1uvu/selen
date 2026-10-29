@@ -120,7 +120,7 @@ it('стандартные роли и их права меняют только
     }
 });
 
-it('выдача — ровно одному субъекту, у субъекта на узле одна роль (до П2d)', function () {
+it('выдача — ровно одному субъекту; у субъекта на узле несколько ролей, но каждая — один раз (П2d-1)', function () {
     $space = space();
     $user = member();
     $node = nodeOf($space);
@@ -131,6 +131,14 @@ it('выдача — ровно одному субъекту, у субъект
     ])))->toThrow(QueryException::class, 'access_grants_one_subject');
 
     grantAccess($space, $user, StandardRole::Editor);
-    expect(fn () => DB::transaction(fn () => grantAccess($space, $user, StandardRole::Commenter)))
-        ->toThrow(QueryException::class, 'access_grants_one_role_user');
+    grantAccess($space, $user, StandardRole::CommenterOwnCards);
+    expect(DB::table('access_grants')->where('nav_node_id', $node->id)->where('user_id', $user->id)->count())->toBe(2)
+        ->and(fn () => DB::transaction(fn () => grantAccess($space, $user, StandardRole::Editor)))
+        ->toThrow(QueryException::class, 'access_grants_user_role_unique');
+
+    $group = makeGroup();
+    grantAccess($space, $group, StandardRole::Editor);
+    grantAccess($space, $group, StandardRole::Commenter);
+    expect(fn () => DB::transaction(fn () => grantAccess($space, $group, StandardRole::Commenter)))
+        ->toThrow(QueryException::class, 'access_grants_group_role_unique');
 });

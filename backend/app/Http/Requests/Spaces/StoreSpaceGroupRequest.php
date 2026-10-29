@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Spaces;
 
-use App\Enums\SpaceRole;
+use App\Http\Requests\Concerns\ValidatesRoles;
 use App\Models\Space;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
@@ -11,6 +11,8 @@ use Illuminate\Validation\Rule;
 
 class StoreSpaceGroupRequest extends FormRequest
 {
+    use ValidatesRoles;
+
     public function authorize(): Response
     {
         return Gate::inspect('manageMembers', $this->route('space'));
@@ -27,8 +29,8 @@ class StoreSpaceGroupRequest extends FormRequest
         return [
             // Только группа компании пространства (ADR-0024): группа другой компании — как несуществующая
             'group_id' => ['required', 'ulid', Rule::exists('groups', 'id')->where('company_id', $space->company_id)],
-            'role' => ['required', Rule::enum(SpaceRole::class)],
-            'own_cards_only' => ['sometimes', 'boolean'],
+            // Несколько ролей (П2d-1)
+            ...$this->roleRules(),
         ];
     }
 }

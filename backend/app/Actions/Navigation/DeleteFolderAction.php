@@ -2,6 +2,7 @@
 
 namespace App\Actions\Navigation;
 
+use App\Actions\Access\RevokeNodeAccessAction;
 use App\Enums\EventType;
 use App\Models\NavNode;
 use App\Models\User;
@@ -15,7 +16,10 @@ use Illuminate\Validation\ValidationException;
  */
 class DeleteFolderAction
 {
-    public function __construct(private readonly EventRecorder $events) {}
+    public function __construct(
+        private readonly EventRecorder $events,
+        private readonly RevokeNodeAccessAction $revoke,
+    ) {}
 
     public function handle(User $actor, NavNode $folder): void
     {
@@ -27,6 +31,8 @@ class DeleteFolderAction
                 throw ValidationException::withMessages(['node' => __('selen.navigation.delete_not_empty')]);
             }
 
+            // Выдачи на папку (П2d-1) уходят вместе с ней — каждая событием снятия
+            $this->revoke->revokeAllOnEmptyFolder($actor, $folder, 'folder_deleted');
             $this->events->record(EventType::FolderDeleted, $actor, $folder, ['parent_id' => $folder->parent_id]);
             $folder->delete();
         });

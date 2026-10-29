@@ -57,7 +57,7 @@ it('Владельцу в чужой компании выдают доступ 
     expect($directory())->toContain($this->owner->id)
         ->and($directory('?homes=1'))->not->toContain($this->owner->id)->toContain($this->secondAdmin->id);
 
-    $this->postJson('/api/v1/spaces/SEC/members', ['user_id' => $this->owner->id, 'role' => 'commenter'])->assertCreated();
+    $this->postJson('/api/v1/spaces/SEC/members', ['user_id' => $this->owner->id, 'roles' => ['commenter']])->assertCreated();
     $this->postJson(adminPath($this->second)."groups/{$group->id}/members", ['user_id' => $this->owner->id])
         ->assertUnprocessable()->assertJsonValidationErrors('user_id');
 
@@ -72,7 +72,7 @@ it('Владелец сам выдаёт себе роль в пространс
     $space = space(['key' => 'SEC', 'company_id' => $this->second->id]);
     addToSpace($space, $this->secondAdmin, SpaceRole::Admin);
 
-    $this->actingAs($this->owner)->putJson(adminPath($this->second)."spaces/{$space->id}/members/{$this->owner->id}", ['role' => 'editor'])->assertOk();
+    $this->actingAs($this->owner)->putJson(adminPath($this->second).'nav-nodes/'.nodeOf($space)->id."/access/users/{$this->owner->id}", ['roles' => ['editor']])->assertOk();
     $this->getJson('/api/v1/spaces/SEC')->assertOk()->assertJsonPath('data.my_role', 'editor');
 });
 

@@ -2,67 +2,30 @@
 
 namespace App\Actions\Spaces;
 
-use App\Enums\EventType;
+use App\Actions\Access\SetNodeAccessAction;
 use App\Enums\SpaceRole;
 use App\Enums\StandardRole;
-use App\Models\AccessGrant;
 use App\Models\Group;
+use App\Models\Role;
 use App\Models\Space;
 use App\Models\User;
-use App\Services\EventLog\EventRecorder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Выдача доступа группе: роль и режим «только свои карточки» для всех её участников (ADR-0012) — выдача группе
- * со стандартной ролью (ADR-0024).
- * $via — как у участников: null (из пространства) или admin_panel (системный администратор).
+ * Выдать группе доступ к пространству с одной ролью API (роль + «только свои карточки») — для демо-данных и мест без
+ * выбора ролей. Выдачи меняет SetNodeAccessAction (П2d-1: несколько ролей, папки).
  */
 class GrantSpaceGroupAction
 {
-    public function __construct(
-        private readonly EventRecorder $events,
-        private readonly SpaceAdminGuard $guard,
-        private readonly SpaceGrants $grants,
-    ) {}
+    public function __construct(private readonly SetNodeAccessAction $setAccess) {}
 
-    public function handle(
-        User $actor,
-        Space $space,
-        Group $group,
-        SpaceRole $role,
-        bool $ownCardsOnly = false,
-        ?string $via = null,
-    ): AccessGrant {
-        return DB::transaction(function () use ($actor, $space, $group, $role, $ownCardsOnly, $via) {
-            $space = $this->guard->lock($space);
+    public function handle(User $actor, Space $space, Group $group, SpaceRole $role, bool $ownCardsOnly = false, ?string $via = null): void
+    {
+        if ($ownCardsOnly && $role->canManageSpace()) {
+            throw ValidationException::withMessages(['roles' => __('selen.spaces.admin_not_restricted')]);
+        }
 
-            if ($group->isArchived()) {
-                throw ValidationException::withMessages(['group_id' => __('selen.groups.archived')]);
-            }
-
-            if ($this->grants->ofGroup($space, $group) !== null) {
-                throw ValidationException::withMessages(['group_id' => __('selen.groups.already_granted')]);
-            }
-
-            if ($group->isSystem() && $role->canManageSpace()) {
-                throw ValidationException::withMessages(['role' => __('selen.groups.system_not_admin')]);
-            }
-
-            if ($ownCardsOnly && $role->canManageSpace()) {
-                throw ValidationException::withMessages(['own_cards_only' => __('selen.spaces.admin_not_restricted')]);
-            }
-
-            $grant = $this->grants->create($actor, $space, $group, StandardRole::fromLegacy($role, $ownCardsOnly));
-
-            $this->events->record(EventType::SpaceGroupAdded, $actor, $space, array_filter([
-                'group_id' => $group->id,
-                'role' => $role->value,
-                'own_cards_only' => $ownCardsOnly,
-                'via' => $via,
-            ], fn ($value) => $value !== null));
-
-            return $grant;
-        });
+        $roles = [Role::standard(StandardRole::fromLegacy($role, $ownCardsOnly))];
+        $this->setAccess->handle($actor, $space->navNode, $group, $roles, $via, SetNodeAccessAction::CREATE);
     }
 }

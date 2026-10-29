@@ -42,10 +42,11 @@ it('проходит сквозной сценарий этапа 2', function (
     $boardId = $a->post('/api/v1/spaces/DEV/boards', ['name' => 'Разработка', 'template' => 'development'])
         ->assertCreated()->json('data.id');
     foreach (['B' => 'editor', 'C' => 'commenter', 'E' => 'editor'] as $name => $role) {
-        $a->post('/api/v1/spaces/DEV/members', ['user_id' => $id($name), 'role' => $role])->assertCreated();
+        $a->post('/api/v1/spaces/DEV/members', ['user_id' => $id($name), 'roles' => [$role]])->assertCreated();
     }
-    $a->patch("/api/v1/spaces/DEV/members/{$id('E')}", ['own_cards_only' => true])
-        ->assertOk()->assertJsonPath('data.personal.own_cards_only', true);
+    // «Только свои карточки» — роль (П2d-1)
+    $a->patch("/api/v1/spaces/DEV/members/{$id('E')}", ['roles' => ['editor_own']])
+        ->assertOk()->assertJsonPath('data.personal.roles', ['editor_own']);
 
     $companyLabel = $s->post(adminPath().'labels', ['name' => 'Безопасность', 'color' => '#ef4444'])->assertCreated()->json('data.id');
     $spaceLabel = $a->post('/api/v1/spaces/DEV/labels', ['name' => 'Бэкенд', 'color' => '#3b82f6'])->assertCreated()->json('data.id');

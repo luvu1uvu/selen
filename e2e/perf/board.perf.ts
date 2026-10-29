@@ -56,7 +56,8 @@ async function measure(page: Page, boardId: string, cpuSlowdown: number): Promis
     await page.waitForTimeout(500)
 
     // Перетаскивание: первая карточка первой колонки → колонка In Progress первой дорожки
-    const lane = page.locator('section').first()
+    // Дорожка — по data-lane-section: первый <section> страницы — уже не дорожка (дерево и блок доски тоже section)
+    const lane = page.locator('[data-lane-section]').first()
     const source = lane.locator('[aria-label^="Открыть DEV-"]').first()
     const target = lane.getByRole('group').nth(2)
     await target.scrollIntoViewIfNeeded()
