@@ -61,3 +61,11 @@ Security упал на PR #42 («П2c-2») на коммите только с �
 - `./scripts/test-stack.sh composer update symfony/mime` — в `backend/composer.lock` изменился только `symfony/mime`
   (v8.1.7 → v8.1.10, 6 строк); `composer.json` не менялся (ограничение и так допускает 8.1.10); других пакетов
   обновление не потянуло. `composer audit` после обновления — «No security vulnerability advisories found».
+
+## Прогоны перед PR
+
+- `395ecf5` (обновление symfony/mime): `make audit-deps` — зелёный; `make lint` — зелёный; `make test` — backend 2917
+  тестов, покрытие 98,3 %, frontend 59 файлов; `make e2e` — 309 + 21 («одна компания»), все зелёные.
+- `84e3f12` (скрипт и документы): `make lint` — зелёный (`scripts/check-scripts.sh`), `make audit-deps` — «Уязвимостей
+  high и critical нет.»; код приложения после `395ecf5` не менялся — `make test` и `make e2e` не повторялись.
+
