@@ -41,7 +41,13 @@ test('ТК-R2.46. Новое пространство в папке сразу �
   await expect(dialog).toContainText(`Оно появится в папке «${FOLDER}».`)
   await dialog.getByLabel('Название', { exact: true }).fill(name)
   await dialog.getByLabel('Ключ', { exact: true }).fill(key)
+  // Создание пространства под нагрузкой полного прогона бывает дольше 5 с: ждём ответ сервера, как tree.spec
+  const created = admin.waitForResponse(
+    (r) => /\/api\/v1\/admin\/companies\/[^/]+\/spaces$/.test(r.url()) && r.request().method() === 'POST',
+  )
   await dialog.getByRole('button', { name: 'Создать', exact: true }).click()
+  const response = await created
+  expect(response.status(), await response.text()).toBe(201)
   await expect(dialog).toBeHidden()
   await expect(admin.getByText('Пространство создано')).toBeVisible()
 
