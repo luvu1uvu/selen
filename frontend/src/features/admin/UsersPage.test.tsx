@@ -204,6 +204,28 @@ describe('Админка пользователей', () => {
     expect(await screen.findByText('Этот email уже используется в Selen.')).toBeInTheDocument()
   })
 
+  it('ошибку выдачи доступа (роли, «не останется управляющего») показывает в окне приглашения, а не молча', async () => {
+    const message =
+      'Нельзя: в пространствах «Разработка» не останется никого, кто лично управляет доступом.'
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/users', () =>
+        HttpResponse.json(page([self(owner)])),
+      ),
+      http.post('*/api/v1/admin/companies/:company/invitations', () =>
+        HttpResponse.json({ message: 'x', errors: { roles: [message] } }, { status: 422 }),
+      ),
+    )
+    renderApp('/admin/users')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Пригласить' }))
+    await userEvent.type(screen.getByLabelText('Имя и фамилия'), 'Вера')
+    await userEvent.type(screen.getByLabelText('Рабочий email'), 'vera@selen.test')
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить приглашение' }))
+
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
   it('деактивирует пользователя после подтверждения', async () => {
     let deactivated = false
     server.use(

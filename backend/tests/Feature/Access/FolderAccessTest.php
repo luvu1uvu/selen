@@ -145,6 +145,19 @@ describe('дерево из итоговых прав', function () {
             ->and($items[0]['children'][1]['can_manage'])->toBeFalse();
     });
 
+    it('цикл в данных дерева не зацикливает запросы прав, дерева и «Переместить в…» (ревью П2d-1, п. 1)', function () {
+        // Цикл приложение не создаст (проверка места под блокировкой дерева), но рекурсия по дереву ограничена и на
+        // такой случай: без предела запрос крутился бы, держа блокировку дерева, — встали бы все изменения структуры
+        grantAccess($this->product, $boris = member(), StandardRole::Editor);
+        NavNode::query()->whereKey($this->product->id)->update(['parent_id' => $this->web->id]);
+        DB::statement("SET LOCAL statement_timeout = '10s'");
+
+        expect($this->dev->accessOf($boris))->not->toBeNull();
+        $this->actingAs($boris)->getJson('/api/v1/navigation')->assertOk();
+        $this->actingAs($this->admin)->getJson(adminPath().'nav-nodes/'.nodeOf($this->ops)->id."/move-impact?parent_id={$this->web->id}")
+            ->assertOk();
+    });
+
     it('число запросов дерева и доски не зависит от числа папок с выдачами и глубины', function () {
         $boris = member();
         $board = makeBoard($this->front, $this->anna, BoardTemplate::Simple);
