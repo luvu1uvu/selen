@@ -8,14 +8,17 @@ use App\Models\NavNode;
 use App\Models\User;
 use App\Services\EventLog\EventRecorder;
 use App\Services\Positions\Positioner;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Перемещение папки или пространства: в другую папку, в корень, на другое место среди соседей
  * (after_id/before_id, ADR-0007). Меняет только nav_nodes.parent_id/position — ключ пространства, номера
  * карточек, история и метрики не трогаются (ADR-0013). Унаследованный доступ меняется (выдачи на папки действуют на
- * всё внутри, П2d-1): что изменится, окно показывает заранее (MoveImpact); если пространство останется без того, кто
- * лично управляет доступом, — отказ 422.
+ * всё внутри, П2d-1): что изменится, окно показывает заранее (MoveImpact). Если кто-то получит или потеряет доступ,
+ * кроме «управлять структурой» нужно право компании «управлять доступом» (решение PM 29.10), иначе — отказ 403 с
+ * объяснением; если пространство останется без того, кто лично управляет доступом, — отказ 422.
  */
 class MoveNavNodeAction
 {
@@ -24,6 +27,7 @@ class MoveNavNodeAction
         private readonly Positioner $positions,
         private readonly NavTreeGuard $guard,
         private readonly AccessManagerGuard $access,
+        private readonly MoveImpact $impact,
     ) {}
 
     public function handle(User $actor, NavNode $node, ?string $parentId, ?string $afterId, ?string $beforeId): NavNode
@@ -39,7 +43,14 @@ class MoveNavNodeAction
                 'position' => $this->positions->place(NavNode::siblingsOf($node->company_id, $parentId, $node->id), $afterId, $beforeId),
             ])->save();
             // Другая папка — другой унаследованный доступ (П2d-1): пространство не должно остаться без управляющего
-            $fromParentId === $parentId ? $move() : $this->access->guard($node, $move, 'parent_id', moving: true);
+            $fromParentId === $parentId ? $move() : $this->access->guard($node, function () use ($actor, $node, $move) {
+                $changes = $this->impact->apply($node, $move);
+                // Перемещение, которое меняет доступ, — это выдача доступа. Компания узла — компания действующего
+                // (право «управлять структурой» в ней уже проверено), поэтому denies, а не inspect с 404
+                if (($changes['gain'] !== [] || $changes['lose'] !== []) && Gate::forUser($actor)->denies('manageAccess', $node)) {
+                    throw new AuthorizationException(__('selen.access.move_needs_access'));
+                }
+            }, 'parent_id', moving: true);
 
             $payload = ['node_id' => $node->id, 'from_parent_id' => $fromParentId, 'to_parent_id' => $parentId];
             if ($node->space_id !== null) {

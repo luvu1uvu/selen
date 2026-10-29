@@ -92,6 +92,7 @@ export function useStructureActions(enabled = true) {
         node={moving}
         nodes={active}
         maxDepth={maxDepth}
+        canManageAccess={canManageAccess}
         onClose={() => setMoving(null)}
       />
       <ConfirmDialog

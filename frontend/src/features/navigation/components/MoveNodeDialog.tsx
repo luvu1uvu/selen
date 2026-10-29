@@ -25,7 +25,8 @@ const ROOT = ''
  * и туда, где поддерево станет глубже предела (те же проверки — на сервере). Узел встаёт в конец папки.
  * До подтверждения — что изменится в доступе (П2d-1: доступ к папке действует на всё внутри): «Получат доступ» и
  * «Потеряют доступ»; если пространство останется без того, кто лично управляет доступом, — объяснение, кнопка недоступна
- * (сервер тоже отказывает).
+ * (сервер тоже отказывает). Перемещение, которое меняет доступ, — только с правом «Управлять доступом» (решение PM 29.10):
+ * без него — объяснение, кнопка недоступна.
  */
 export function MoveNodeDialog({
   node,
@@ -35,6 +36,8 @@ export function MoveNodeDialog({
   /** Активная часть дерева (без архивного). */
   nodes: AdminNavNode[]
   maxDepth: number
+  /** Право компании «Управлять доступом»: без него нельзя перемещение, после которого кто-то получит или потеряет доступ. */
+  canManageAccess: boolean
   onClose: () => void
 }) {
   // Новый узел — новая форма с его текущей папкой по умолчанию
@@ -45,11 +48,13 @@ function MoveNodeForm({
   node,
   nodes,
   maxDepth,
+  canManageAccess,
   onClose,
 }: {
   node: AdminNavNode
   nodes: AdminNavNode[]
   maxDepth: number
+  canManageAccess: boolean
   onClose: () => void
 }) {
   const { t } = useTranslation('admin')
@@ -60,6 +65,8 @@ function MoveNodeForm({
   const changed = target !== (node.parent_id ?? ROOT)
   const impact = useMoveImpact(node.id, parentId, changed)
   const unmanaged = impact.data?.unmanaged_spaces ?? []
+  const accessChanges = !!impact.data && impact.data.gain.length + impact.data.lose.length > 0
+  const needsAccessRight = accessChanges && !canManageAccess
 
   const name = node.name ?? node.space?.name ?? ''
   const excluded = node.type === 'folder' ? descendantIds(nodes, node.id) : new Set<string>()
@@ -108,13 +115,22 @@ function MoveNodeForm({
             </NativeSelect>
           </FormField>
           {changed && <AccessImpact impact={impact} />}
+          {needsAccessRight && (
+            <Alert variant="destructive">{t('structure.move.needsAccess')}</Alert>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               {tc('actions.cancel')}
             </Button>
             <Button
               type="submit"
-              disabled={move.isPending || !changed || !impact.isSuccess || unmanaged.length > 0}
+              disabled={
+                move.isPending ||
+                !changed ||
+                !impact.isSuccess ||
+                unmanaged.length > 0 ||
+                needsAccessRight
+              }
             >
               {t('structure.move.submit')}
             </Button>

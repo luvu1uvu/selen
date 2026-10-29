@@ -532,6 +532,47 @@ describe('«Структура»: доступ через папки (П2d-1)', 
     expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeDisabled()
   })
 
+  it('без права «Управлять доступом» перемещение, которое меняет доступ, недоступно — с объяснением', async () => {
+    signedInAs(
+      makeUser({
+        role: 'member',
+        admin_companies: [
+          { id: TEST_COMPANY_ID, name: null, permissions: ['company.manage_structure'] },
+        ],
+      }),
+    )
+    server.use(
+      http.get(`*${ADMIN}/nav-nodes/n-back/move-impact`, ({ request }) =>
+        HttpResponse.json({
+          data:
+            new URL(request.url).searchParams.get('parent_id') === 'f-store'
+              ? {
+                  gain: [{ type: 'user', id: 'u-1', name: 'Вера' }],
+                  lose: [],
+                  unmanaged_spaces: [],
+                }
+              : { gain: [], lose: [], unmanaged_spaces: [] },
+        }),
+      ),
+    )
+    renderApp('/admin/structure')
+
+    const user = await openMenu('Backend')
+    await user.click(await screen.findByRole('menuitem', { name: 'Переместить в…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Переместить «Backend»' })
+    await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-store')
+    expect(
+      await within(dialog).findByText(/нужно ещё право «Управлять доступом»/),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeDisabled()
+
+    // Доступ не меняется — одного права на структуру хватает
+    await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-mobile')
+    expect(await within(dialog).findByText('Доступ не изменится.')).toBeInTheDocument()
+    expect(within(dialog).queryByText(/нужно ещё право/)).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeEnabled()
+  })
+
   it('«Доступ…» папки: выдачи на неё и унаследованные; выдать группе роли чипами', async () => {
     let body: unknown
     server.use(

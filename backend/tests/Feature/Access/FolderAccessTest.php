@@ -5,6 +5,7 @@ use App\Enums\Permission;
 use App\Enums\SpaceRole;
 use App\Enums\StandardRole;
 use App\Models\AccessGrant;
+use App\Models\CompanyPermissionGrant;
 use App\Models\EventLogEntry;
 use App\Models\Group;
 use App\Models\NavNode;
@@ -319,6 +320,35 @@ describe('«Переместить в…»', function () {
         grantAccess($sales = makeFolder('Продажи'), member(), StandardRole::Admin);
         $this->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => $sales->id])->assertOk();
         expect(NavNode::query()->find($this->web->id)->parent_id)->toBe($sales->id);
+    });
+
+    it('перемещение, которое меняет доступ, — ещё и право «управлять доступом»; без изменений доступа — одной «структуры» хватает', function () {
+        $structure = member();
+        CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $structure->id, 'permission' => Permission::CompanyManageStructure]);
+        $sales = makeFolder('Продажи');
+        $empty = makeFolder('Пустая');
+        grantAccess($this->product, member(), StandardRole::Editor);
+        $this->actingAs($structure);
+
+        // Из «Продукта» в «Продажи» — сотрудник с доступом к «Продукту» потеряет доступ к «Вебу»: отказ, ничего не меняется
+        $this->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => $sales->id])
+            ->assertForbidden()
+            ->assertJsonPath('message', __('selen.access.move_needs_access'));
+        expect($this->web->fresh()->parent_id)->toBe($this->product->id)
+            ->and(EventLogEntry::query()->where('event_type', 'nav_node.moved')->exists())->toBeFalse();
+        // Окно «что изменится» ему видно — поэтому интерфейс объясняет отказ заранее
+        $this->getJson(adminPath()."nav-nodes/{$this->web->id}/move-impact?parent_id={$sales->id}")->assertOk()
+            ->assertJsonCount(1, 'data.lose');
+
+        // Перестановка в той же папке и перемещение между папками без выдач — доступ не меняется
+        $this->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => $this->product->id])->assertOk();
+        $this->postJson(adminPath().'nav-nodes/'.nodeOf($this->ops)->id.'/move', ['parent_id' => $sales->id])->assertOk();
+        $this->postJson(adminPath().'nav-nodes/'.nodeOf($this->ops)->id.'/move', ['parent_id' => $empty->id])->assertOk();
+
+        // С правом «управлять доступом» — проходит
+        CompanyPermissionGrant::query()->forceCreate(['company_id' => company()->id, 'user_id' => $structure->id, 'permission' => Permission::CompanyManageAccess]);
+        $this->postJson(adminPath()."nav-nodes/{$this->web->id}/move", ['parent_id' => $sales->id])->assertOk();
+        expect($this->web->fresh()->parent_id)->toBe($sales->id);
     });
 });
 

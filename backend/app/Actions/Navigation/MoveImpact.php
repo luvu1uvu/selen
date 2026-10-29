@@ -7,6 +7,7 @@ use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
+use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -18,7 +19,8 @@ use Illuminate\Support\Facades\DB;
  *
  * Считается точно: перемещение выполняется в транзакции, доступ поддерева сравнивается до и после, транзакция
  * откатывается — ни узел, ни журнал не меняются. Люди и группы — действующие (группа не в архиве, человек — действующий
- * участник компании и не деактивирован); права по выдачам считает AccessResolver.
+ * участник компании и не деактивирован); права по выдачам считает AccessResolver. Тот же подсчёт (apply) решает при самом
+ * перемещении, нужно ли право «управлять доступом» (решение PM 29.10).
  */
 class MoveImpact
 {
@@ -43,19 +45,32 @@ class MoveImpact
             NavNode::lockTree();
             $node = NavNode::query()->with(['space', 'company'])->findOrFail($node->getKey());
             $this->tree->ensureMovable($node, $parentId);
-            $before = $this->resolver->subtreeSubjects($node);
             $unmanagedBefore = $this->resolver->unmanagedSpaceIds($node);
-            NavNode::query()->whereKey($node->getKey())->update(['parent_id' => $parentId]);
-            $after = $this->resolver->subtreeSubjects($node);
+            $changes = $this->apply($node, fn () => NavNode::query()->whereKey($node->getKey())->update(['parent_id' => $parentId]));
             $unmanaged = array_values(array_diff($this->resolver->unmanagedSpaceIds($node), $unmanagedBefore));
         } finally {
             DB::rollBack();
         }
 
+        return $changes + ['unmanaged' => Space::query()->whereKey($unmanaged)->orderByRaw('lower(name)')->get()];
+    }
+
+    /**
+     * Выполнить перемещение и вернуть, кто получил и кто потерял доступ к перемещаемому. Вызывать в транзакции под
+     * блокировкой дерева.
+     *
+     * @param  Closure(): mixed  $move
+     * @return array{gain: list<User|Group>, lose: list<User|Group>}
+     */
+    public function apply(NavNode $node, Closure $move): array
+    {
+        $before = $this->resolver->subtreeSubjects($node);
+        $move();
+        $after = $this->resolver->subtreeSubjects($node);
+
         return [
             'gain' => $this->subjects($this->changed($after, $before), $node),
             'lose' => $this->subjects($this->changed($before, $after), $node),
-            'unmanaged' => Space::query()->whereKey($unmanaged)->orderByRaw('lower(name)')->get(),
         ];
     }
 
