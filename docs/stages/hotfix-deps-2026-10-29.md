@@ -20,7 +20,8 @@ Security упал на PR #42 («П2c-2») на коммите только с �
   CVSS 4.0 — 4.9). Затронуты 8.1.0–8.1.9; **исправлено в 8.1.10** (ветки 5.4.55, 6.4.49, 7.4.22 — у других линеек).
 - **Почему проверка упала на medium — поведение Composer 2.10.3** (дополнение PM к заданию 29.10: скрипт верит коду
   выхода `composer audit`, а версия Composer не зафиксирована — `composer:v2` в CI, `composer:2` в Dockerfile).
-  - Версия: `Composer version 2.10.3 2026-08-27 13:34:23` (образ `selen-php:dev`; в CI — та же 2.10.3 из `setup-php`).
+  - Версия: `Composer version 2.10.3 2026-08-27 13:34:23` (образ `selen-php:dev`); в CI — та же (лог «Security»,
+    `setup-php`: «Added composer 2.10.3»).
   - Команда (как в прежнем `scripts/deps-audit.sh`, `composer.lock` с одной medium-уязвимостью — `symfony/mime` 8.1.7):
     `composer audit --locked --no-interaction --abandoned=ignore --ignore-severity=low --ignore-severity=medium
     --format=summary` → «Found 1 security vulnerability advisory affecting 1 package.», **код выхода 1**.
