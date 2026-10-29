@@ -35,7 +35,7 @@ test('ТК-R2.47. Пустая папка с доступом видна, ост
   await grantNodeAccess(dialog, { user: FOLDERS_PERSON }, ['Комментатор'])
 
   try {
-    // 2. Сотрудник: «Продуктовые команды» с «Разработкой», «Новые направления» → «Идеи на 2027» (обе — «пустая»)
+    // 2. Сотрудник: «Продуктовые команды» с «Разработкой», «Новые направления» → «Идеи на 2027» («пустая»)
     const person = await pageAs(browser, 'e2e-folders@selen.test')
     const product = treeFolder(person, 'E2E Продуктовые команды')
     await expect(product).toBeVisible()
@@ -44,9 +44,11 @@ test('ТК-R2.47. Пустая папка с доступом видна, ост
       treeFolderItem(person, 'E2E Продуктовые команды').getByRole('link', { name: /Папки: разработка$/ }),
     ).toBeVisible()
 
+    // «Новые направления» — путь к папке с доступом: видна, но без пометки «пустая» (флаг не выдаёт, есть ли в ней
+    // недоступные пространства — точечный аудит П2d-1, S-3); «пустая» — только папка, на которую есть доступ
     const parent = treeFolder(person, PARENT)
     await expect(parent).toBeVisible()
-    await expect(emptyMark(parent)).toHaveText('пустая')
+    await expect(emptyMark(parent)).toHaveCount(0)
     if ((await parent.getAttribute('aria-expanded')) !== 'true') await parent.click()
     const folder = treeFolderItem(person, PARENT).getByRole('button', { name: FOLDER, exact: true })
     await expect(folder).toBeVisible()
