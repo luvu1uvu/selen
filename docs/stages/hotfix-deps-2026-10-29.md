@@ -89,3 +89,11 @@ Security упал на PR #42 («П2c-2») на коммите только с �
   предупреждением; автотест `scripts/test-deps-audit.sh` в `scripts/check-scripts.sh` (заглушка `composer` в `PATH`).
 - Вопрос аудитора: сообщить ли в composer/composer о поведении `--format=summary` с `--ignore-severity`.
 
+## Решения PM 29.10 (PR #43 — «принято»)
+
+PR принят и смёржен (`6e9f62a`) после зелёного CI в обоих прогонах; LATER-144 — «Сделано».
+
+1. **S-1 аудита** — не отдельной задачей: в задачи полного аудита перед пилотом (рядом с общим счётчиком попыток пароля;
+   `docs/stages/rights-2.md`, «Решения PM 29.10 (отчёт П2c-2)»).
+2. **В composer/composer о поведении `--format=summary` с `--ignore-severity` не сообщать.**
+
