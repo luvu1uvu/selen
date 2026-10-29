@@ -44,6 +44,8 @@ async function setStructureRight(admin: Page, checked: boolean) {
 test('ТК-R2.55. Перемещение, которое меняет доступ, — только с правом «Управлять доступом» @tc-R2.55', async ({
   browser,
 }) => {
+  // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
+  test.slow()
   const admin = await pageAs(browser, 'e2e-admin@selen.test')
   // 1. «Пользователи» → сотрудник → «Права компании» → «Управлять структурой (пространства и папки)»
   await setStructureRight(admin, true)

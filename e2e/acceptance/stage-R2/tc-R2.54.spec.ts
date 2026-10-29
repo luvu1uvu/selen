@@ -22,6 +22,8 @@ test.use({ storageState: authFile('e2e-admin@selen.test') })
 const FOLDER = 'E2E Операции'
 
 test('ТК-R2.54. Приглашение сразу с доступом к папке @tc-R2.54', async ({ page }) => {
+  // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
+  test.slow()
   const id = stamp()
   const name = `Новый Сотрудник ${id}`
   const email = `new-${id}@selen.test`

@@ -25,6 +25,8 @@ const uniqueKey = () =>
     .slice(-8)}`
 
 test('ТК-R2.46. Новое пространство в папке сразу доступно @tc-R2.46', async ({ browser }) => {
+  // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
+  test.slow()
   const name = `Склад ${Date.now().toString(36)}`
   const key = uniqueKey()
 

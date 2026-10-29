@@ -22,6 +22,8 @@ const entityRow = (page: Page, name: string) =>
 const roles = (page: Page, name: string) => chips(entityRow(page, name).getByRole('cell').nth(1))
 
 test('ТК-R2.51. «Сущности» группы: папки и пространства с ролями @tc-R2.51', async ({ page }) => {
+  // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
+  test.slow()
   // 1. «Пользователи» → «Группы» → группа → раздел «Сущности»
   await openCompanyUsers(page)
   await usersTabs(page).getByRole('link', { name: 'Группы' }).click()

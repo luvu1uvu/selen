@@ -32,6 +32,8 @@ const personalRoles = (admin: Page) =>
   )
 
 test('ТК-R2.49. Несколько ролей: «Комментатор» + «Редактор — только свои карточки» @tc-R2.49', async ({ browser }) => {
+  // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
+  test.slow()
   // 1–2. «Участники» → «Изменить роли»: вместо «Редактора» — «Комментатор» и «Редактор — только свои карточки»
   const admin = await pageAs(browser, 'e2e-admin@selen.test')
   await openMembersByKey(admin, 'FROLES', SPACE)

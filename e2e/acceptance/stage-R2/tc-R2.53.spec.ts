@@ -51,6 +51,8 @@ async function restoreSpaceAdmin(page: Page, space: string, person: string) {
 }
 
 test('ТК-R2.53. Пространство не остаётся без того, кто управляет доступом @tc-R2.53', async ({ page }) => {
+  // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
+  test.slow()
   // 1. «Структура» → «Доступ…» у папки → сотрудник, «Администратор»
   await openStructure(page)
   const folder = await openNodeAccess(page, FOLDER)

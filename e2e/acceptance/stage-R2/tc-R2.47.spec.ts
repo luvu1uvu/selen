@@ -28,6 +28,8 @@ const FOLDER = 'E2E Идеи на 2027'
 const emptyMark = (folder: Locator) => folder.locator('xpath=..').locator('span[tabindex="0"]', { hasText: 'пустая' })
 
 test('ТК-R2.47. Пустая папка с доступом видна, остальные — нет @tc-R2.47', async ({ browser }) => {
+  // Много шагов, выдача и уборка в конце: под нагрузкой полного прогона тест шёл дольше 30 с (ТК-R2.48)
+  test.slow()
   // 1. «Структура» → «⋯» у вложенной пустой папки → «Доступ…» → сотрудник, «Комментатор»
   const admin = await pageAs(browser, 'e2e-admin@selen.test')
   await openStructure(admin)
