@@ -108,3 +108,15 @@ GitHub (Configuring multi-ecosystem updates, Multi-ecosystem updates → Configu
 
 **Последствие.** Локально конфиг не проверить: схема SchemaStore эти ключи у экосистемы не запрещает, GitHub
 разбирает файл только в основной ветке. Проверка — после мёржа, в Insights → Dependency graph → Dependabot.
+
+### 2026-10-29, хотфикс deps-2026-10-29: уровень уязвимостей composer — по JSON, не по коду выхода
+
+`scripts/deps-audit.sh` больше не полагается на код выхода `composer audit`: Composer 2.10.3 с `--format=summary`
+завершается кодом 1 и тогда, когда единственная уязвимость пропущена `--ignore-severity=medium` (в этом формате он
+загружает записи без уровня, фильтр по уровню к ним не применяется), — CI «Security» упал на medium-уязвимости
+`symfony/mime` (CVE-2026-45070). Теперь скрипт берёт `composer audit --format=json` и сам отбирает high, critical и
+уязвимости без уровня (как прежнее `--ignore-severity=low --ignore-severity=medium`); не запустившийся composer и ответ,
+который не разобрать, — по-прежнему провал проверки. Версия Composer не фиксируется (`composer:v2` в CI, `composer:2`
+в Dockerfile); разбор — PHP (`setup-php` в CI, образ `selen-php:dev` локально). Подробности и проверка —
+`docs/stages/hotfix-deps-2026-10-29.md`.
+
