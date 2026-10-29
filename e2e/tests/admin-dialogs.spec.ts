@@ -3,10 +3,11 @@ import { pageAs } from './helpers'
 
 /**
  * Окна админки (UX-ревью П2c-1; docs/ui-guidelines.md, разделы 4 и 11): окно не выше экрана — прокручивается его
- * содержимое, и кнопка отправки достижима (U-1); после «Добавить пространство» фокус на поле новой строки, после × —
- * на × соседней строки (U-2), у × — название пространства (U-6). Jsdom раскладку не считает — поэтому E2E.
+ * содержимое, и кнопка отправки достижима (U-1); после «Добавить папку или пространство» (П2d-1: строка — папка или
+ * пространство и роли чипами) фокус на поле новой строки, после × — на × соседней строки (U-2), у × — название (U-6).
+ * Jsdom раскладку не считает — поэтому E2E.
  */
-test('«Пригласить» с шестью пространствами помещается в экран 1280×720; фокус не теряется', async ({ browser }) => {
+test('«Пригласить» с шестью строками доступа помещается в экран 1280×720; фокус не теряется', async ({ browser }) => {
   const page = await pageAs(browser, 'e2e-owner@selen.test')
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto('/admin/users')
@@ -14,9 +15,9 @@ test('«Пригласить» с шестью пространствами по
   await page.getByRole('button', { name: 'Пригласить' }).click()
   const dialog = page.getByRole('dialog', { name: 'Пригласить пользователя' })
 
-  const spaces = dialog.getByRole('combobox', { name: 'Пространство', exact: true })
+  const spaces = dialog.getByRole('combobox', { name: 'Папка или пространство', exact: true })
   for (let row = 0; row < 6; row++) {
-    await dialog.getByRole('button', { name: 'Добавить пространство' }).click()
+    await dialog.getByRole('button', { name: 'Добавить папку или пространство' }).click()
     await expect(spaces.nth(row)).toBeFocused()
   }
 
@@ -29,7 +30,8 @@ test('«Пригласить» с шестью пространствами по
 
   // × второй строки с клавиатуры: строка убрана, фокус — на × следующей (теперь второй) строки, в подписи — пространство
   const removes = dialog.getByRole('button', { name: /^Убрать «.+»$/ })
-  const third = await spaces.nth(2).locator('option:checked').textContent()
+  // Название в подписи × — без отступа уровня дерева, который есть в тексте пункта списка
+  const third = (await spaces.nth(2).locator('option:checked').textContent())?.trim()
   await removes.nth(1).focus()
   await page.keyboard.press('Enter')
   await expect(removes).toHaveCount(5)
