@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { AdminUser, Group, UserAccess } from '@/shared/types/api'
@@ -372,14 +372,18 @@ describe('Админка: деактивация последнего админ
     ).toBeInTheDocument()
     expect(screen.getByText('Dev (DEV)')).toBeInTheDocument()
 
-    // «Доступ…» пространства — сразу с ролью «Администратор» (П2d-1)
-    await userEvent.click(screen.getByRole('button', { name: 'Назначить администратора' }))
+    // «Доступ…» пространства — сразу с ролью «Администратор» (П2d-1), фокус — в поиске сотрудника (UX-ревью, U-5)
+    const assign = screen.getByRole('button', { name: 'Назначить администратора' })
+    await userEvent.click(assign)
     const access = await screen.findByRole('dialog', { name: 'Доступ: Dev' })
+    await waitFor(() => expect(within(access).getByLabelText('Сотрудник')).toHaveFocus())
     await userEvent.click(await within(access).findByRole('button', { name: /Борис/ }))
     await userEvent.click(within(access).getByRole('button', { name: 'Выдать доступ' }))
     expect(await screen.findByText('Доступ выдан')).toBeInTheDocument()
     expect(assigned).toEqual({ roles: ['admin'] })
+    // «Доступ…» — поверх окна деактивации: после закрытия фокус снова на «Назначить администратора» (U-4)
     await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(assign).toHaveFocus())
 
     await userEvent.click(await screen.findByRole('button', { name: 'Деактивировать' }))
     expect(await screen.findByText('Пользователь деактивирован')).toBeInTheDocument()

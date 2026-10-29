@@ -21,6 +21,7 @@ import {
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { NativeSelect } from '@/shared/ui/select'
+import { ToggleChip } from '@/shared/ui/toggle-chip'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { useNodeAccess, useRevokeNodeAccess, useSetNodeAccess } from '../queries'
@@ -57,7 +58,15 @@ export function NodeAccessDialog({
 
   return (
     <Dialog open={node !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent closeLabel={tc('actions.close')} className="sm:max-w-3xl">
+      <DialogContent
+        closeLabel={tc('actions.close')}
+        className="sm:max-w-3xl"
+        // Фокус — в поиск сотрудника, первое поле формы (UX-ревью П2d-1, U-5)
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          document.getElementById('access-user')?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t('structure.access.title', { name: shown?.name ?? '' })}</DialogTitle>
           <DialogDescription>
@@ -150,10 +159,7 @@ function NodeAccessContent({ node }: { node: NodeAccessTarget }) {
                       {folder && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span
-                              tabIndex={0}
-                              className="focus-visible:ring-ring rounded-md focus-visible:ring-2 focus-visible:outline-none"
-                            >
+                            <span tabIndex={0} className="rounded-md">
                               <Badge variant="outline">
                                 {t('structure.access.inherited', { folder: folder.name })}
                               </Badge>
@@ -223,10 +229,10 @@ function NodeAccessContent({ node }: { node: NodeAccessTarget }) {
         onOpenChange={(open) => !open && setRevoking(null)}
         pending={revoke.isPending}
         title={t('structure.access.revokeTitle')}
-        description={t('structure.access.revokeText', {
-          name: revoking ? nameOf(revoking) : '',
-          node: node.name,
-        })}
+        description={t(
+          revoking?.group ? 'structure.access.revokeTextGroup' : 'structure.access.revokeText',
+          { name: revoking ? nameOf(revoking) : '', node: node.name },
+        )}
         confirmLabel={t('structure.access.revoke')}
         onConfirm={async () => {
           const grant = revoking
@@ -306,21 +312,19 @@ function AddAccessForm({
   return (
     <form onSubmit={submit} className="grid gap-4 rounded-md border p-4" noValidate>
       <h3 className="text-sm font-semibold">{t('structure.access.addTitle')}</h3>
+      {/* Выбранный вариант — как выбранная роль (UX-ревью П2d-1, U-2) */}
       <div role="group" aria-label={t('structure.access.kind')} className="flex gap-2">
         {(['user', 'group'] as const).map((value) => (
-          <Button
+          <ToggleChip
             key={value}
-            type="button"
-            size="sm"
-            variant={kind === value ? 'secondary' : 'outline'}
-            aria-pressed={kind === value}
+            pressed={kind === value}
             onClick={() => {
               setKind(value)
               setSubjectError(undefined)
             }}
           >
             {t(`structure.access.kinds.${value}`)}
-          </Button>
+          </ToggleChip>
         ))}
       </div>
       {kind === 'user' ? (

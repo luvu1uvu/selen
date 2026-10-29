@@ -99,10 +99,7 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
                     {folder && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span
-                            tabIndex={0}
-                            className="focus-visible:ring-ring rounded-md focus-visible:ring-2 focus-visible:outline-none"
-                          >
+                          <span tabIndex={0} className="rounded-md">
                             <Badge variant="outline">
                               {t('groups.inherited', { folder: folder.name })}
                             </Badge>

@@ -21,7 +21,11 @@ export function AccessSourceBadges({ person }: { person: SpacePerson }) {
     >
       {(person.sources ?? []).map((source) => (
         <li key={`${source.group?.id ?? 'personal'}|${source.folder?.id ?? ''}`}>
-          <Badge variant={source.type === 'personal' && !source.folder ? 'secondary' : 'outline'}>
+          {/* Длинный источник переносится, а не растягивает таблицу (UX-ревью П2d-1, M-9) */}
+          <Badge
+            variant={source.type === 'personal' && !source.folder ? 'secondary' : 'outline'}
+            className="text-left whitespace-normal"
+          >
             {source.type === 'personal'
               ? t('members.sources.personal', { roles: roles(source.roles) })
               : // Гостю группы компании-хозяина — без названий (решение PM 28.10)

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { pageAs } from './helpers'
 
 /**
@@ -37,4 +37,50 @@ test('«Пригласить» с шестью строками доступа �
   await expect(removes).toHaveCount(5)
   await expect(removes.nth(1)).toBeFocused()
   await expect(removes.nth(1)).toHaveAccessibleName(`Убрать «${third}»`)
+})
+
+/**
+ * «Доступ…» (UX-ревью П2d-1): фокус при открытии — в поиске сотрудника (U-5); выбор роли и «Сотруднику / Группе» не
+ * сдвигает ни один чип и кнопку «Выдать доступ» — место галочки и жирность заняты у всех чипов, описание роли — в
+ * подсказке, а не строкой под чипами (U-1). Положение — относительно группы чипов: окно может прокрутиться.
+ */
+test('«Доступ…»: фокус в поиске; чипы ролей при выборе не сдвигаются', async ({ browser }) => {
+  const page = await pageAs(browser, 'e2e-owner@selen.test')
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/admin/structure')
+  await expect(page.getByRole('heading', { name: 'Структура', level: 1 })).toBeVisible()
+  await page.getByRole('button', { name: 'Действия с «E2E Продуктовые команды»' }).click()
+  await page.getByRole('menuitem', { name: 'Доступ…', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Доступ: E2E Продуктовые команды' })
+  await expect(dialog.getByRole('textbox', { name: 'Сотрудник' })).toBeFocused()
+  // Список сотрудников под поиском подгружается и сдвигает форму — замер после него
+  await expect(dialog.getByRole('button', { name: /e2e-owner@selen\.test/ })).toBeVisible()
+
+  const roles = dialog.getByRole('group', { name: 'Роли' })
+  const kinds = dialog.getByRole('group', { name: 'Кому' })
+  const submit = dialog.getByRole('button', { name: 'Выдать доступ' })
+  const layout = async () => {
+    const origin = (await roles.boundingBox())!
+    const place = async (element: Locator) => {
+      const box = (await element.boundingBox())!
+      return { x: box.x - origin.x, y: box.y - origin.y, width: box.width }
+    }
+    return {
+      chips: await Promise.all((await roles.getByRole('button').all()).map(place)),
+      kinds: await Promise.all((await kinds.getByRole('button').all()).map(place)),
+      submit: (await place(submit)).y,
+    }
+  }
+
+  const before = await layout()
+  await roles.getByRole('button', { name: 'Комментатор', exact: true }).click()
+  await roles.getByRole('button', { name: 'Администратор', exact: true }).click()
+  await expect(roles.getByRole('button', { pressed: true })).toHaveCount(3)
+  expect(await layout()).toEqual(before)
+
+  // Все роли сняты — ни одной галочки, раскладка та же
+  for (const name of ['Администратор', 'Редактор', 'Комментатор'])
+    await roles.getByRole('button', { name, exact: true }).click()
+  await expect(roles.getByRole('button', { pressed: true })).toHaveCount(0)
+  expect(await layout()).toEqual(before)
 })
