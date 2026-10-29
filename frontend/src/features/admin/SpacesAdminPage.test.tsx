@@ -21,6 +21,7 @@ function adminSpace(overrides: Partial<AdminSpace> = {}): AdminSpace {
     groups_count: 0,
     has_active_admin: true,
     my_role: null,
+    node_id: 'n-1',
     ...overrides,
   }
 }
@@ -132,17 +133,24 @@ describe('Админка: пространства', () => {
     ).toBeInTheDocument()
   })
 
-  it('назначает роль себе', async () => {
+  it('«Доступ…» пространства: выдаёт доступ себе с ролями (П2d-1)', async () => {
     let request: { url: string; body: unknown } | undefined
+    const access = {
+      node: { id: 'n-1', type: 'space', name: 'Разработка', space: null },
+      grants: [],
+    }
     server.use(
       http.get('*/api/v1/admin/companies/:company/spaces', () =>
         HttpResponse.json({ data: [adminSpace()] }),
       ),
+      http.get('*/api/v1/admin/companies/:company/nav-nodes/n-1/access', () =>
+        HttpResponse.json({ data: access }),
+      ),
       http.put(
-        '*/api/v1/admin/companies/:company/spaces/space-1/members/:userId',
+        '*/api/v1/admin/companies/:company/nav-nodes/n-1/access/users/:userId',
         async ({ request: req }) => {
           request = { url: req.url, body: await req.json() }
-          return HttpResponse.json({ data: adminSpace({ my_role: 'commenter' }) })
+          return HttpResponse.json({ data: access })
         },
       ),
     )
@@ -151,14 +159,16 @@ describe('Админка: пространства', () => {
     await userEvent.click(
       await screen.findByRole('button', { name: /^Действия с пространством «/ }),
     )
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Назначить роль' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Назначить себе' }))
-    await userEvent.selectOptions(screen.getByLabelText('Роль'), 'commenter')
-    await userEvent.click(screen.getByRole('button', { name: 'Назначить' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Доступ…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Доступ: Разработка' })
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Себе' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Редактор', pressed: true }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Комментатор' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Выдать доступ' }))
 
-    expect(await screen.findByText('Роль назначена')).toBeInTheDocument()
-    expect(request?.url).toMatch(/members\/admin-1$/)
-    expect(request?.body).toEqual({ role: 'commenter' })
+    expect(await screen.findByText('Доступ выдан')).toBeInTheDocument()
+    expect(request?.url).toMatch(/access\/users\/admin-1$/)
+    expect(request?.body).toEqual({ roles: ['commenter'] })
   })
 
   it('обычному сотруднику админка недоступна, пункта меню нет', async () => {

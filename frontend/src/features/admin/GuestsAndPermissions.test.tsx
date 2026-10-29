@@ -113,8 +113,18 @@ describe('Окно гостя', () => {
     })
     server.use(
       http.get('*/api/v1/admin/companies/:company/users', () => HttpResponse.json(page([guest]))),
-      http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
-        HttpResponse.json({ data: [{ id: 's-dev', key: 'DEV', name: 'Разработка' }] }),
+      http.get('*/api/v1/admin/companies/:company/grantable-nodes', () =>
+        HttpResponse.json({
+          data: [
+            {
+              id: 'n-dev',
+              type: 'space',
+              name: 'Разработка',
+              depth: 1,
+              space: { id: 's-dev', key: 'DEV' },
+            },
+          ],
+        }),
       ),
       http.get('*/api/v1/admin/companies/:company/users/:user/access', () =>
         HttpResponse.json({
@@ -142,8 +152,8 @@ describe('Окно гостя', () => {
                 {
                   type: 'personal',
                   group: null,
-                  role: 'commenter',
-                  own_cards_only: false,
+                  folder: null,
+                  roles: ['commenter'],
                   inactive_reason: null,
                 },
               ],
@@ -166,16 +176,30 @@ describe('Окно гостя', () => {
     await waitFor(() =>
       expect(body).toEqual({
         expires_on: null,
-        spaces: [{ space_id: 's-dev', role: 'commenter', own_cards_only: false }],
+        grants: [{ node_id: 'n-dev', roles: ['commenter'] }],
       }),
     )
   })
 })
 
 describe('Окно гостя: загрузка, пустые строки и фокус (UX-ревью П2c-1)', () => {
+  // Гостю — только пространства: папку окно гостя не предлагает
   const spacesList = [
-    { id: 's-dev', key: 'DEV', name: 'Разработка' },
-    { id: 's-ops', key: 'OPS', name: 'Эксплуатация' },
+    { id: 'n-folder', type: 'folder', name: 'Продукт', depth: 1, space: null },
+    {
+      id: 'n-dev',
+      type: 'space',
+      name: 'Разработка',
+      depth: 2,
+      space: { id: 's-dev', key: 'DEV' },
+    },
+    {
+      id: 'n-ops',
+      type: 'space',
+      name: 'Эксплуатация',
+      depth: 1,
+      space: { id: 's-ops', key: 'OPS' },
+    },
   ]
 
   it('пока доступ гостя грузится — «Загрузка…», а не «нет доступа»; потом фокус на его пространстве', async () => {
@@ -190,7 +214,7 @@ describe('Окно гостя: загрузка, пустые строки и ф
     })
     server.use(
       http.get('*/api/v1/admin/companies/:company/users', () => HttpResponse.json(page([guest]))),
-      http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
+      http.get('*/api/v1/admin/companies/:company/grantable-nodes', () =>
         HttpResponse.json({ data: spacesList }),
       ),
       http.get('*/api/v1/admin/companies/:company/users/:user/access', async () => {
@@ -209,8 +233,8 @@ describe('Окно гостя: загрузка, пустые строки и ф
                   {
                     type: 'personal',
                     group: null,
-                    role: 'commenter',
-                    own_cards_only: false,
+                    folder: null,
+                    roles: ['commenter'],
                     inactive_reason: null,
                   },
                 ],
@@ -230,7 +254,8 @@ describe('Окно гостя: загрузка, пустые строки и ф
 
     release()
     const space = await within(dialog).findByRole('combobox', { name: 'Пространство' })
-    expect(space).toHaveValue('s-ops')
+    expect(space).toHaveValue('n-ops')
+    expect(within(space).queryByRole('option', { name: /Продукт/ })).toBeNull()
     await waitFor(() => expect(space).toHaveFocus())
     expect(within(dialog).queryByText('Загрузка…')).toBeNull()
   })
@@ -239,7 +264,7 @@ describe('Окно гостя: загрузка, пустые строки и ф
     signedInAs(makeUser({ id: 'admin-1' }))
     server.use(
       http.get('*/api/v1/admin/companies/:company/users', () => HttpResponse.json(page([]))),
-      http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
+      http.get('*/api/v1/admin/companies/:company/grantable-nodes', () =>
         HttpResponse.json({ data: spacesList }),
       ),
     )
@@ -259,10 +284,10 @@ describe('Окно гостя: загрузка, пустые строки и ф
     await waitFor(() =>
       expect(within(dialog).getByRole('combobox', { name: 'Пространство' })).toHaveFocus(),
     )
-    // × и «Только свои карточки» строки названы её пространством
-    expect(
-      within(dialog).getByRole('checkbox', { name: 'Только свои карточки в «Разработка (DEV)»' }),
-    ).toBeInTheDocument()
+    // × и роли строки названы её пространством; «Администратора» гостю нет
+    const roles = within(within(dialog).getByRole('group', { name: 'Роли в «Разработка (DEV)»' }))
+    expect(roles.getByRole('button', { name: 'Комментатор', pressed: true })).toBeInTheDocument()
+    expect(roles.queryByRole('button', { name: 'Администратор' })).toBeNull()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Убрать «Разработка (DEV)»' }))
     await waitFor(() =>
       expect(within(dialog).getByRole('button', { name: 'Добавить пространство' })).toHaveFocus(),

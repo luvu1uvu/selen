@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
-import type { AdminNavNode } from '@/shared/types/api'
+import type { AccessSubject, AdminNavNode } from '@/shared/types/api'
+import { Alert } from '@/shared/ui/alert'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -14,7 +15,7 @@ import {
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { NativeSelect } from '@/shared/ui/select'
-import { useMoveNavNode } from '../queries'
+import { useMoveImpact, useMoveNavNode } from '../queries'
 import { descendantIds, folderHeight } from '../tree'
 
 const ROOT = ''
@@ -22,6 +23,9 @@ const ROOT = ''
 /**
  * «Переместить в…»: корень или активная папка. Папку нельзя переместить в саму себя, во вложенную
  * и туда, где поддерево станет глубже предела (те же проверки — на сервере). Узел встаёт в конец папки.
+ * До подтверждения — что изменится в доступе (П2d-1: доступ к папке действует на всё внутри): «Получат доступ» и
+ * «Потеряют доступ»; если пространство останется без того, кто лично управляет доступом, — объяснение, кнопка недоступна
+ * (сервер тоже отказывает).
  */
 export function MoveNodeDialog({
   node,
@@ -52,6 +56,10 @@ function MoveNodeForm({
   const { t: tc } = useTranslation()
   const move = useMoveNavNode()
   const [target, setTarget] = useState(node.parent_id ?? ROOT)
+  const parentId = target === ROOT ? null : target
+  const changed = target !== (node.parent_id ?? ROOT)
+  const impact = useMoveImpact(node.id, parentId, changed)
+  const unmanaged = impact.data?.unmanaged_spaces ?? []
 
   const name = node.name ?? node.space?.name ?? ''
   const excluded = node.type === 'folder' ? descendantIds(nodes, node.id) : new Set<string>()
@@ -61,7 +69,7 @@ function MoveNodeForm({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     try {
-      await move.mutateAsync({ id: node.id, parent_id: target === ROOT ? null : target })
+      await move.mutateAsync({ id: node.id, parent_id: parentId })
       toast.success(t('structure.toasts.moved'))
       onClose()
     } catch (error) {
@@ -99,16 +107,73 @@ function MoveNodeForm({
               })}
             </NativeSelect>
           </FormField>
+          {changed && <AccessImpact impact={impact} />}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               {tc('actions.cancel')}
             </Button>
-            <Button type="submit" disabled={move.isPending || target === (node.parent_id ?? ROOT)}>
+            <Button
+              type="submit"
+              disabled={move.isPending || !changed || !impact.isSuccess || unmanaged.length > 0}
+            >
               {t('structure.move.submit')}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Что изменится в доступе при перемещении: кто получит, кто потеряет, где не останется управляющего. */
+function AccessImpact({ impact }: { impact: ReturnType<typeof useMoveImpact> }) {
+  const { t } = useTranslation('admin')
+  const { t: tc } = useTranslation()
+  if (impact.isPending) {
+    return <p className="text-muted-foreground text-sm">{t('structure.move.impactLoading')}</p>
+  }
+  if (impact.isError) {
+    return (
+      <p className="text-destructive text-sm">
+        {getErrorMessage(impact.error, tc('errors.generic'))}
+      </p>
+    )
+  }
+  const { gain, lose, unmanaged_spaces: unmanaged } = impact.data
+  const names = (subjects: AccessSubject[]) =>
+    subjects
+      .map((subject) =>
+        subject.type === 'group'
+          ? t('structure.move.groupSubject', { name: subject.name })
+          : subject.name,
+      )
+      .join(', ')
+
+  return (
+    <div className="grid gap-2 text-sm" aria-live="polite">
+      {unmanaged.length > 0 && (
+        <Alert variant="destructive">
+          {t('structure.move.unmanaged', {
+            spaces: unmanaged.map((space) => `«${space.name}»`).join(', '),
+          })}
+        </Alert>
+      )}
+      {gain.length === 0 && lose.length === 0 ? (
+        <p className="text-muted-foreground">{t('structure.move.impactNone')}</p>
+      ) : (
+        <>
+          {gain.length > 0 && (
+            <p>
+              <span className="font-medium">{t('structure.move.gain')}:</span> {names(gain)}
+            </p>
+          )}
+          {lose.length > 0 && (
+            <p>
+              <span className="font-medium">{t('structure.move.lose')}:</span> {names(lose)}
+            </p>
+          )}
+        </>
+      )}
+    </div>
   )
 }

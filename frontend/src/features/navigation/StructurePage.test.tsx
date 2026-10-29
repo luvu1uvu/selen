@@ -244,10 +244,12 @@ describe('Админка: «Структура»', () => {
     dialog = await screen.findByRole('dialog', { name: 'Переместить «Backend»' })
     expect(
       within(dialog).getByText(
-        'Ключ пространства, номера карточек, история и доступы не меняются.',
+        'Ключ пространства, номера карточек и история не меняются. Доступ, выданный на папки, меняется: внутри новой папки действует её доступ.',
       ),
     ).toBeInTheDocument()
     await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-store')
+    // Перед подтверждением — что изменится в доступе (П2d-1)
+    expect(await within(dialog).findByText('Доступ не изменится.')).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Переместить' }))
 
     await waitFor(() =>
@@ -477,5 +479,131 @@ describe('Админка: «Структура»', () => {
 
     expect(await screen.findByText('В дереве пока ничего нет')).toBeInTheDocument()
     expect(screen.getByText('Архивных папок нет')).toBeInTheDocument()
+  })
+})
+
+describe('«Структура»: доступ через папки (П2d-1)', () => {
+  beforeEach(() => {
+    signedInAs(admin)
+    server.use(
+      http.get('*/api/v1/admin/companies/:company/navigation', () =>
+        HttpResponse.json(navigation()),
+      ),
+    )
+  })
+
+  it('«Переместить в…» показывает, кто получит и кто потеряет доступ; без управляющего — объяснение, кнопка недоступна', async () => {
+    server.use(
+      http.get(`*${ADMIN}/nav-nodes/n-back/move-impact`, ({ request }) => {
+        const parent = new URL(request.url).searchParams.get('parent_id')
+        return HttpResponse.json({
+          data:
+            parent === 'f-store'
+              ? {
+                  gain: [
+                    { type: 'group', id: 'g-1', name: 'Продажи', system: null },
+                    { type: 'user', id: 'u-1', name: 'Вера' },
+                  ],
+                  lose: [{ type: 'user', id: 'u-2', name: 'Борис' }],
+                  unmanaged_spaces: [],
+                }
+              : {
+                  gain: [],
+                  lose: [],
+                  unmanaged_spaces: [{ id: 's-back', key: 'BACK', name: 'Backend' }],
+                },
+        })
+      }),
+    )
+    renderApp('/admin/structure')
+
+    const user = await openMenu('Backend')
+    await user.click(await screen.findByRole('menuitem', { name: 'Переместить в…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Переместить «Backend»' })
+    await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-store')
+    expect(await within(dialog).findByText(/группа «Продажи», Вера/)).toBeInTheDocument()
+    expect(within(dialog).getByText('Борис', { exact: false })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeEnabled()
+
+    await user.selectOptions(within(dialog).getByLabelText('Куда'), 'f-mobile')
+    expect(
+      await within(dialog).findByText(/не останется никого, кто лично управляет доступом/),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Переместить' })).toBeDisabled()
+  })
+
+  it('«Доступ…» папки: выдачи на неё и унаследованные; выдать группе роли чипами', async () => {
+    let body: unknown
+    server.use(
+      http.get(`*${ADMIN}/nav-nodes/f-mobile/access`, () =>
+        HttpResponse.json({
+          data: {
+            node: { id: 'f-mobile', type: 'folder', name: 'Mobile', space: null },
+            grants: [
+              {
+                subject: 'user',
+                user: {
+                  id: 'u-1',
+                  name: 'Вера',
+                  email: 'vera@selen.test',
+                  status: 'active',
+                  guest: false,
+                },
+                group: null,
+                roles: ['admin'],
+                inherited_from: null,
+              },
+              {
+                subject: 'group',
+                user: null,
+                group: {
+                  id: 'g-all',
+                  name: 'Все сотрудники',
+                  system: 'everyone',
+                  archived_at: null,
+                },
+                roles: ['commenter'],
+                inherited_from: { id: 'f-root', name: 'Компания' },
+              },
+            ],
+          },
+        }),
+      ),
+      http.get('*/api/v1/companies/:company/groups/directory', () =>
+        HttpResponse.json({
+          data: [{ id: 'g-1', name: 'Продажи', description: null, system: null, members_count: 4 }],
+        }),
+      ),
+      http.put(`*${ADMIN}/nav-nodes/f-mobile/access/groups/g-1`, async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({
+          data: {
+            node: { id: 'f-mobile', type: 'folder', name: 'Mobile', space: null },
+            grants: [],
+          },
+        })
+      }),
+    )
+    renderApp('/admin/structure')
+
+    const user = await openMenu('Mobile')
+    await user.click(await screen.findByRole('menuitem', { name: 'Доступ…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Доступ: Mobile' })
+    const vera = (await within(dialog).findByText('Вера')).closest('tr')!
+    expect(within(vera).getByText('Администратор')).toBeInTheDocument()
+    expect(within(vera).getByRole('button', { name: 'Снять доступ: Вера' })).toBeInTheDocument()
+    // Унаследованное — с пометкой, без действий
+    const everyone = within(dialog).getByText('Все сотрудники').closest('tr')!
+    expect(within(everyone).getByText('через папку «Компания»')).toBeInTheDocument()
+    expect(within(everyone).queryByRole('button', { name: /Снять доступ/ })).toBeNull()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Группе' }))
+    await user.selectOptions(await within(dialog).findByLabelText('Группа'), 'g-1')
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Редактор — только свои карточки' }),
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Выдать доступ' }))
+    expect(await screen.findByText('Доступ выдан')).toBeInTheDocument()
+    expect(body).toEqual({ roles: ['editor', 'editor_own'] })
   })
 })

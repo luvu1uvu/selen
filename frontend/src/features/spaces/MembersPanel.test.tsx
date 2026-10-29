@@ -1,30 +1,55 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import type { Space, SpaceGroupGrant, SpacePerson } from '@/shared/types/api'
+import type { RoleKey, Space, SpaceGroupGrant, SpacePerson } from '@/shared/types/api'
 import { makeSpace, makeUser, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 const me = makeUser({ id: 'me', name: 'Анна', role: 'member' })
 
+const personal = (roles: RoleKey[]) => ({
+  type: 'personal' as const,
+  group: null,
+  folder: null,
+  roles,
+})
+
 const people: SpacePerson[] = [
   {
     user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active', guest: false },
-    role: 'admin',
-    personal: { role: 'admin', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
-    groups: [],
+    personal: { roles: ['admin'], added_at: '2026-10-01T00:00:00Z' },
+    sources: [personal(['admin'])],
   },
   {
     user: { id: 'u-olga', name: 'Ольга', email: 'olga@selen.test', status: 'active', guest: false },
-    role: 'editor',
-    personal: { role: 'editor', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
-    groups: [{ id: 'g-an', name: 'Analysts', role: 'commenter', own_cards_only: false }],
+    personal: { roles: ['editor', 'commenter_own'], added_at: '2026-10-01T00:00:00Z' },
+    sources: [
+      personal(['editor', 'commenter_own']),
+      {
+        type: 'group',
+        group: { id: 'g-an', name: 'Analysts' },
+        folder: null,
+        roles: ['commenter'],
+      },
+    ],
   },
   {
     user: { id: 'u-petr', name: 'Пётр', email: 'petr@selen.test', status: 'active', guest: false },
-    role: 'editor',
     personal: null,
-    groups: [{ id: 'g-co', name: 'Contractors', role: 'editor', own_cards_only: true }],
+    sources: [
+      {
+        type: 'group',
+        group: { id: 'g-co', name: 'Contractors' },
+        folder: null,
+        roles: ['editor_own'],
+      },
+      {
+        type: 'personal',
+        group: null,
+        folder: { id: 'f-product', name: 'Продукт' },
+        roles: ['commenter'],
+      },
+    ],
   },
 ]
 
@@ -38,9 +63,22 @@ const grants: SpaceGroupGrant[] = [
       archived_at: null,
       members_count: 3,
     },
-    role: 'commenter',
-    own_cards_only: false,
+    roles: ['commenter'],
     added_at: '2026-10-01T00:00:00Z',
+    inherited_from: null,
+  },
+  {
+    group: {
+      id: 'g-de',
+      name: 'Designers',
+      description: null,
+      system: null,
+      archived_at: null,
+      members_count: 2,
+    },
+    roles: ['editor'],
+    added_at: '2026-10-01T00:00:00Z',
+    inherited_from: { id: 'f-product', name: 'Продукт' },
   },
 ]
 
@@ -69,18 +107,24 @@ async function openMembers() {
 describe('Участники пространства: люди и группы', () => {
   beforeEach(() => signedInAs(me))
 
-  it('у человека видно, откуда доступ: лично и через какие группы', async () => {
+  it('у человека видно, откуда доступ: лично, через группы и через папку — с ролями; личные роли — чипами', async () => {
     serve(makeSpace())
     await openMembers()
 
     const olga = within(await screen.findByRole('list', { name: 'Источники доступа Ольга' }))
-    expect(olga.getByText('Лично: Редактор')).toBeInTheDocument()
+    expect(
+      olga.getByText('Лично: Редактор, Комментатор — только свои карточки'),
+    ).toBeInTheDocument()
     expect(olga.getByText('Analysts: Комментатор')).toBeInTheDocument()
+    const olgaRow = screen.getByText('Ольга').closest('tr')!
+    expect(within(olgaRow).getByText('Редактор')).toBeInTheDocument()
+    expect(within(olgaRow).getByText('Комментатор — только свои карточки')).toBeInTheDocument()
     const petr = within(screen.getByRole('list', { name: 'Источники доступа Пётр' }))
-    expect(petr.getByText('Contractors: Редактор · Только свои карточки')).toBeInTheDocument()
-    // Только через группу: личной роли нет, исключать нечего — можно добавить лично
+    expect(petr.getByText('Contractors: Редактор — только свои карточки')).toBeInTheDocument()
+    expect(petr.getByText('Лично: Комментатор · через папку «Продукт»')).toBeInTheDocument()
+    // Не лично на пространстве: личных ролей нет, исключать нечего — можно добавить лично
     const petrRow = screen.getByText('Пётр').closest('tr')!
-    expect(within(petrRow).getByText('Только через группы')).toBeInTheDocument()
+    expect(within(petrRow).getByText('Через группы или папки')).toBeInTheDocument()
     expect(
       within(petrRow).queryByRole('button', { name: 'Исключить Пётр' }),
     ).not.toBeInTheDocument()
@@ -90,15 +134,16 @@ describe('Участники пространства: люди и группы'
     serve(makeSpace(), [
       {
         user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active', guest: true },
-        role: 'commenter',
-        personal: { role: 'commenter', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
-        groups: [],
+        personal: { roles: ['commenter'], added_at: '2026-10-01T00:00:00Z' },
+        sources: [personal(['commenter'])],
       },
       {
         user: { id: 'u-olga', name: 'Ольга', email: null, status: 'active', guest: false },
-        role: 'editor',
-        personal: { role: 'editor', own_cards_only: false, added_at: '2026-10-01T00:00:00Z' },
-        groups: [{ id: 'g-an', name: null, role: 'commenter', own_cards_only: false }],
+        personal: { roles: ['editor'], added_at: '2026-10-01T00:00:00Z' },
+        sources: [
+          personal(['editor']),
+          { type: 'group', group: { id: 'g-an', name: null }, folder: null, roles: ['commenter'] },
+        ],
       },
     ])
     await openMembers()
@@ -109,7 +154,7 @@ describe('Участники пространства: люди и группы'
     expect(screen.getByText('anna@selen.test')).toBeInTheDocument()
   })
 
-  it('человека с доступом через группу можно добавить лично', async () => {
+  it('человека с доступом через группу можно добавить лично — с несколькими ролями', async () => {
     let body: unknown
     serve(makeSpace())
     server.use(
@@ -123,11 +168,17 @@ describe('Участники пространства: люди и группы'
     await userEvent.click(await screen.findByRole('button', { name: 'Добавить Пётр лично' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('petr@selen.test')).toBeInTheDocument()
-    await userEvent.selectOptions(within(dialog).getByLabelText('Роль'), 'commenter')
+    // По умолчанию — «Редактор»; снять его и выбрать две роли чипами
+    const roles = within(within(dialog).getByRole('group'))
+    await userEvent.click(roles.getByRole('button', { name: 'Редактор', pressed: true }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить' }))
+    expect(await within(dialog).findByText('Выберите хотя бы одну роль')).toBeInTheDocument()
+    await userEvent.click(roles.getByRole('button', { name: 'Комментатор' }))
+    await userEvent.click(roles.getByRole('button', { name: 'Редактор — только свои карточки' }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить' }))
 
     expect(await screen.findByText('Участник добавлен')).toBeInTheDocument()
-    expect(body).toEqual({ user_id: 'u-petr', role: 'commenter' })
+    expect(body).toEqual({ user_id: 'u-petr', roles: ['commenter', 'editor_own'] })
   })
 
   it('при исключении человека с группами предупреждает, что доступ через группы останется', async () => {
@@ -135,10 +186,10 @@ describe('Участники пространства: люди и группы'
     await openMembers()
 
     await userEvent.click(await screen.findByRole('button', { name: 'Исключить Ольга' }))
-    expect(await screen.findByText(/Доступ через группы сохранится/)).toBeInTheDocument()
+    expect(await screen.findByText(/Доступ через группы и папки сохранится/)).toBeInTheDocument()
   })
 
-  it('администратор выдаёт доступ группе, меняет роль и отзывает', async () => {
+  it('администратор выдаёт доступ группе с ролями, меняет роли и отзывает; унаследованное — без действий', async () => {
     const requests: { method: string; body: unknown }[] = []
     serve(makeSpace())
     server.use(
@@ -166,13 +217,22 @@ describe('Участники пространства: люди и группы'
     const select = within(dialog).getByLabelText('Группа')
     expect(within(select).queryByRole('option', { name: /Analysts/ })).not.toBeInTheDocument()
     await userEvent.selectOptions(select, 'g-co')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Роль'), 'editor')
-    await userEvent.click(within(dialog).getByRole('checkbox'))
+    const roles = within(within(dialog).getByRole('group'))
+    await userEvent.click(roles.getByRole('button', { name: 'Комментатор', pressed: true }))
+    await userEvent.click(roles.getByRole('button', { name: 'Редактор — только свои карточки' }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Выдать доступ' }))
     expect(await screen.findByText('Группе выдан доступ')).toBeInTheDocument()
 
-    await userEvent.selectOptions(screen.getByLabelText('Роль группы Analysts'), 'editor')
-    expect(await screen.findByText('Роль группы изменена')).toBeInTheDocument()
+    // Унаследованная с папки группа — с пометкой, без действий
+    const designers = screen.getByText('Designers').closest('tr')!
+    expect(within(designers).getByText('через папку «Продукт»')).toBeInTheDocument()
+    expect(within(designers).queryByRole('button')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Изменить роли группы Analysts' }))
+    const edit = await screen.findByRole('dialog')
+    await userEvent.click(within(edit).getByRole('button', { name: 'Редактор' }))
+    await userEvent.click(within(edit).getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Роли группы изменены')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Убрать группу Analysts' }))
     await userEvent.click(
@@ -181,8 +241,8 @@ describe('Участники пространства: люди и группы'
     expect(await screen.findByText('Доступ группы отозван')).toBeInTheDocument()
 
     expect(requests).toEqual([
-      { method: 'POST', body: { group_id: 'g-co', role: 'editor', own_cards_only: true } },
-      { method: 'PATCH', body: { role: 'editor' } },
+      { method: 'POST', body: { group_id: 'g-co', roles: ['editor_own'] } },
+      { method: 'PATCH', body: { roles: ['editor', 'commenter'] } },
       { method: 'DELETE', body: null },
     ])
   })
@@ -199,7 +259,9 @@ describe('Участники пространства: люди и группы'
 
     expect(await screen.findByText('Analysts')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Добавить группу' })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Роль группы Analysts')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Изменить роли группы Analysts' }),
+    ).not.toBeInTheDocument()
   })
 
   it('пользователь только со «своими карточками» видит людей без источников и без вкладки «Группы»', async () => {

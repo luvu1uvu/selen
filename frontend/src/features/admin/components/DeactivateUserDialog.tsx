@@ -20,7 +20,7 @@ import {
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { useDeactivateUser, useDeactivationImpact, useSetUserBlocked } from '../queries'
-import { AssignSpaceRoleDialog } from './AssignSpaceRoleDialog'
+import { NodeAccessDialog } from '@/features/navigation/components/NodeAccessDialog'
 
 /**
  * Деактивация в компании (П2c) и отключение учётной записи Владельцем (account). Никогда не блокируется (решение PM
@@ -148,7 +148,7 @@ export function DeactivateUserDialog({
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => setReplaceIn({ id: space.id, name: space.name })}
+                          onClick={() => setReplaceIn({ id: space.node_id, name: space.name })}
                         >
                           {t('users.lastAdmin.assign')}
                         </Button>
@@ -173,7 +173,12 @@ export function DeactivateUserDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <AssignSpaceRoleDialog space={replaceIn} onClose={() => setReplaceIn(null)} />
+      <NodeAccessDialog
+        node={
+          replaceIn && { id: replaceIn.id, type: 'space', name: replaceIn.name, roles: ['admin'] }
+        }
+        onClose={() => setReplaceIn(null)}
+      />
     </>
   )
 }

@@ -9,15 +9,14 @@ import type {
   CompanyPermission,
   DeactivationImpact,
   EventLogEntry,
-  GrantableSpace,
+  GrantableNode,
   Group,
   GroupCompanyPermission,
   Invitation,
   InviteResult,
   Paginated,
   Resource,
-  SpaceGrantInput,
-  SpaceRole,
+  NodeGrantInput,
   TransferImpact,
   TrashedCard,
   UserAccess,
@@ -164,7 +163,7 @@ export async function inviteUser(
     name: string
     email: string
     role: AssignableRole
-    spaces?: SpaceGrantInput[]
+    grants?: NodeGrantInput[]
   },
 ): Promise<InviteResult> {
   const { data } = await api.post<Resource<InviteResult>>(
@@ -265,19 +264,6 @@ export async function restoreSpace(company: string, spaceId: string): Promise<Ad
   return data.data
 }
 
-export async function assignSpaceRole(
-  company: string,
-  spaceId: string,
-  userId: string,
-  role: SpaceRole,
-): Promise<AdminSpace> {
-  const { data } = await api.put<Resource<AdminSpace>>(
-    `/admin/companies/${company}/spaces/${spaceId}/members/${userId}`,
-    { role },
-  )
-  return data.data
-}
-
 export async function fetchAdminCardTypes(company: string): Promise<CardType[]> {
   const { data } = await api.get<Collection<CardType>>(`/admin/companies/${company}/card-types`)
   return data.data
@@ -338,10 +324,10 @@ export async function fetchTransferImpact(
   return data.data
 }
 
-/** Пространства, где можно выдать доступ приглашённому и гостю (П2c). */
-export async function fetchGrantableSpaces(company: string): Promise<GrantableSpace[]> {
-  const { data } = await api.get<Collection<GrantableSpace>>(
-    `/admin/companies/${company}/grantable-spaces`,
+/** Папки и пространства, где можно выдать доступ приглашённому и гостю (П2c; папки — П2d-1), в порядке дерева. */
+export async function fetchGrantableNodes(company: string): Promise<GrantableNode[]> {
+  const { data } = await api.get<Collection<GrantableNode>>(
+    `/admin/companies/${company}/grantable-nodes`,
   )
   return data.data
 }
@@ -349,7 +335,7 @@ export async function fetchGrantableSpaces(company: string): Promise<GrantableSp
 /** Гости компании (П2c): expires_on — день (YYYY-MM-DD) или null — без срока. */
 export async function addGuest(
   company: string,
-  payload: { email: string; expires_on: string | null; spaces: SpaceGrantInput[] },
+  payload: { email: string; expires_on: string | null; grants: NodeGrantInput[] },
 ): Promise<AdminUser> {
   const { data } = await api.post<Resource<AdminUser>>(
     `/admin/companies/${company}/guests`,
@@ -361,7 +347,7 @@ export async function addGuest(
 export async function updateGuest(
   company: string,
   userId: string,
-  payload: { expires_on: string | null; spaces: SpaceGrantInput[] },
+  payload: { expires_on: string | null; grants: NodeGrantInput[] },
 ): Promise<AdminUser> {
   const { data } = await api.put<Resource<AdminUser>>(
     `/admin/companies/${company}/guests/${userId}`,
@@ -472,26 +458,4 @@ export async function removeGroupMember(
   userId: string,
 ): Promise<void> {
   await api.delete(`/admin/companies/${company}/groups/${groupId}/members/${userId}`)
-}
-
-/** Выдать или изменить доступ группы к пространству. */
-export async function assignGroupSpace(
-  company: string,
-  groupId: string,
-  spaceId: string,
-  payload: { role: SpaceRole; own_cards_only: boolean },
-): Promise<Group> {
-  const { data } = await api.put<Resource<Group>>(
-    `/admin/companies/${company}/groups/${groupId}/spaces/${spaceId}`,
-    payload,
-  )
-  return data.data
-}
-
-export async function revokeGroupSpace(
-  company: string,
-  groupId: string,
-  spaceId: string,
-): Promise<void> {
-  await api.delete(`/admin/companies/${company}/groups/${groupId}/spaces/${spaceId}`)
 }

@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { currentUserKey } from '@/features/auth/queries'
-import type { AssignableRole, CompanyPermission, SpaceRole } from '@/shared/types/api'
+import type { AssignableRole, CompanyPermission } from '@/shared/types/api'
 import {
   addGroupMember,
   cancelEmailChange,
@@ -9,8 +9,6 @@ import {
   terminateSessions,
   archiveSpace,
   deleteSpace,
-  assignGroupSpace,
-  assignSpaceRole,
   changeUserRole,
   transferOwnership,
   createSpace,
@@ -20,7 +18,7 @@ import {
   fetchCompanies,
   addGuest,
   fetchDeactivationImpact,
-  fetchGrantableSpaces,
+  fetchGrantableNodes,
   fetchGroupPermissions,
   fetchTransferImpact,
   fetchUserPermissions,
@@ -42,7 +40,6 @@ import {
   resendInvitation,
   restoreFromTrash,
   restoreSpace,
-  revokeGroupSpace,
   revokeInvitation,
   saveCardType,
   saveCompany,
@@ -75,7 +72,7 @@ export const adminKeys = {
     ['admin', company, 'deactivation-impact', userId, account] as const,
   transferImpact: (company: string, userId: string) =>
     ['admin', company, 'transfer-impact', userId] as const,
-  grantableSpaces: (company: string) => ['admin', company, 'grantable-spaces'] as const,
+  grantableNodes: (company: string) => ['admin', company, 'grantable-nodes'] as const,
   userPermissions: (company: string, userId: string) =>
     ['admin', company, 'user-permissions', userId] as const,
   groupPermissions: (company: string, groupId: string) =>
@@ -273,11 +270,11 @@ export function useRemoveGuest() {
   })
 }
 
-/** Пространства, где можно выдать доступ (приглашение, гость); company — компания приглашения. */
-export function useGrantableSpaces(company: string, enabled = true) {
+/** Папки и пространства, где можно выдать доступ (приглашение, гость); company — компания приглашения. */
+export function useGrantableNodes(company: string, enabled = true) {
   return useQuery({
-    queryKey: adminKeys.grantableSpaces(company),
-    queryFn: () => fetchGrantableSpaces(company),
+    queryKey: adminKeys.grantableNodes(company),
+    queryFn: () => fetchGrantableNodes(company),
     enabled: enabled && company !== '',
   })
 }
@@ -441,16 +438,6 @@ export function useRestoreSpace() {
   })
 }
 
-export function useAssignSpaceRole() {
-  const company = useAdminCompanyId()
-  const invalidate = useInvalidateAdmin()
-  return useMutation({
-    mutationFn: ({ spaceId, userId, role }: { spaceId: string; userId: string; role: SpaceRole }) =>
-      assignSpaceRole(company, spaceId, userId, role),
-    onSuccess: invalidate,
-  })
-}
-
 export function useSaveCardType() {
   const company = useAdminCompanyId()
   const invalidate = useInvalidateAdmin()
@@ -549,31 +536,6 @@ export function useRemoveGroupMember(groupId: string) {
   const invalidate = useInvalidateGroups()
   return useMutation({
     mutationFn: (userId: string) => removeGroupMember(company, groupId, userId),
-    onSuccess: invalidate,
-  })
-}
-
-export function useAssignGroupSpace(groupId: string) {
-  const company = useAdminCompanyId()
-  const invalidate = useInvalidateGroups()
-  return useMutation({
-    mutationFn: ({
-      spaceId,
-      ...payload
-    }: {
-      spaceId: string
-      role: SpaceRole
-      own_cards_only: boolean
-    }) => assignGroupSpace(company, groupId, spaceId, payload),
-    onSuccess: invalidate,
-  })
-}
-
-export function useRevokeGroupSpace(groupId: string) {
-  const company = useAdminCompanyId()
-  const invalidate = useInvalidateGroups()
-  return useMutation({
-    mutationFn: (spaceId: string) => revokeGroupSpace(company, groupId, spaceId),
     onSuccess: invalidate,
   })
 }

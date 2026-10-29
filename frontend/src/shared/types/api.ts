@@ -147,18 +147,23 @@ export interface InviteResult {
   invitation: Invitation | null
 }
 
-/** Пространство, где можно выдать доступ приглашённому и гостю. */
-export interface GrantableSpace {
+/**
+ * Папка или пространство, где можно выдать доступ приглашённому и гостю (П2d-1): в порядке дерева, depth — уровень
+ * (корень — 1). Гостю — только пространства.
+ */
+export interface GrantableNode {
+  /** id узла дерева. */
   id: string
-  key: string
+  type: 'folder' | 'space'
   name: string
+  depth: number
+  space: { id: string; key: string } | null
 }
 
-/** Доступ к пространству в приглашении и у гостя. */
-export interface SpaceGrantInput {
-  space_id: string
-  role: SpaceRole
-  own_cards_only?: boolean
+/** Доступ к папке или пространству в приглашении и у гостя: узел дерева и роли. */
+export interface NodeGrantInput {
+  node_id: string
+  roles: RoleKey[]
 }
 
 /** Право компании у человека (вкладка «Права компании», П2c). */
@@ -221,6 +226,18 @@ export interface EventLogEntry {
 }
 
 export type SpaceRole = 'admin' | 'editor' | 'commenter'
+
+/**
+ * Роль выдачи доступа (ADR-0024, П2d-1): ключ стандартной роли. У субъекта на папке или пространстве может быть
+ * несколько ролей; пользовательские роли (П2e) встанут в тот же список своим id.
+ */
+export type RoleKey = 'admin' | 'editor' | 'commenter' | 'editor_own' | 'commenter_own'
+
+/** Папка, с которой унаследован доступ (выдача на папку действует на всё внутри, П2d-1). */
+export interface FolderRef {
+  id: string
+  name: string
+}
 
 /** Пространство глазами участника (SpaceResource). */
 export interface Space {
@@ -550,17 +567,21 @@ export interface CardTransition {
   to_category: ColumnCategory
 }
 
-/** Источник доступа через группу у человека в пространстве. */
-export interface PersonGroupSource {
-  id: string
-  /** null — смотрит гость: группы компании-хозяина без названий (решение PM 28.10). */
-  name: string | null
-  role: SpaceRole
-  own_cards_only: boolean
+/**
+ * Источник доступа человека к пространству (ADR-0012, П2d-1): лично или через группу, на само пространство или
+ * унаследованный с папки выше, с ролями источника.
+ */
+export interface PersonAccessSource {
+  type: 'personal' | 'group'
+  /** name — null, когда смотрит гость: группы компании-хозяина без названий (решение PM 28.10). */
+  group: { id: string; name: string | null } | null
+  /** Папка, с которой источник унаследован (меняется на ней); null — выдача на само пространство. */
+  folder: FolderRef | null
+  roles: RoleKey[]
 }
 
 /**
- * Человек с доступом к пространству — лично и/или через группы (ADR-0012).
+ * Человек с доступом к пространству — лично и/или через группы, на пространство или через папку (ADR-0012, П2d-1).
  * Пользователю только с режимом «только свои карточки» источники не отдаются: есть только user.
  */
 export interface SpacePerson {
@@ -569,16 +590,10 @@ export interface SpacePerson {
    * компании-хозяина он видит только по имени, решение PM 28.10).
    */
   user: { id: string; name: string; email: string | null; status: UserStatus; guest: boolean }
-  /** Самая сильная роль по всем источникам (для показа). */
-  role?: SpaceRole
-  /** Личное участие; null — доступ только через группы. */
-  personal?: {
-    role: SpaceRole
-    /** Режим «только свои карточки»: видит только карточки, где он заказчик, ответственный или участник. */
-    own_cards_only: boolean
-    added_at: string
-  } | null
-  groups?: PersonGroupSource[]
+  /** Личные роли на самом пространстве (их меняют здесь); null — личной выдачи на пространство нет. */
+  personal?: { roles: RoleKey[]; added_at: string } | null
+  /** Все источники, в том числе личный на пространстве и унаследованные с папок. */
+  sources?: PersonAccessSource[]
 }
 
 /** Доступ группы к пространству (вкладка «Группы»). */
@@ -596,9 +611,10 @@ export interface SpaceGroupGrant {
     /** null — смотрит гость (численность компании-хозяина ему не показываем, LATER-139). */
     members_count: number | null
   }
-  role: SpaceRole
-  own_cards_only: boolean
+  roles: RoleKey[]
   added_at: string
+  /** Папка, с которой доступ унаследован (меняется на ней); null — выдача на само пространство. */
+  inherited_from: FolderRef | null
 }
 
 /** Группа в справочнике для выдачи доступа (только активные). */
@@ -619,14 +635,21 @@ export interface Group {
   archived_at: string | null
   created_at: string
   members_count: number
-  spaces_count: number
-  /** Страница группы: можно ли менять состав и доступ к пространствам (П2c: это выдача доступа). */
+  /** Сколько папок и пространств, к которым у группы есть доступ (выдачи на них). */
+  entities_count: number
+  /** Страница группы: можно ли менять состав и доступ к папкам и пространствам (П2c: это выдача доступа). */
   permissions?: { manage_members: boolean; manage_spaces: boolean; archive: boolean }
   members?: (DirectoryUser & { added_at: string })[]
-  spaces?: {
-    space: { id: string; key: string; name: string; archived_at: string | null }
-    role: SpaceRole
-    own_cards_only: boolean
+  /** Вкладка «Сущности»: папки и пространства, к которым у группы есть доступ, с ролями. */
+  entities?: {
+    node: {
+      id: string
+      type: 'folder' | 'space'
+      name: string
+      space: { id: string; key: string } | null
+      archived: boolean
+    }
+    roles: RoleKey[]
   }[]
 }
 
@@ -653,8 +676,9 @@ export interface UserAccess {
     sources: {
       type: 'personal' | 'group'
       group: { id: string; name: string } | null
-      role: SpaceRole
-      own_cards_only: boolean
+      /** Унаследовано с папки (П2d-1); null — выдача на само пространство. */
+      folder: FolderRef | null
+      roles: RoleKey[]
       inactive_reason: AccessInactiveReason | null
     }[]
   }[]
@@ -662,7 +686,47 @@ export interface UserAccess {
 
 /** Что будет после деактивации: пространства, где он последний личный администратор. */
 export interface DeactivationImpact {
-  last_admin_spaces: { id: string; key: string; name: string; archived_at: string | null }[]
+  /** node_id — узел пространства: «Назначить замену» открывает его «Доступ…» (П2d-1). */
+  last_admin_spaces: {
+    id: string
+    key: string
+    name: string
+    archived_at: string | null
+    node_id: string
+  }[]
+}
+
+/** Строка «Доступа…» узла (П2d-1): человек или группа со всеми ролями на одном узле. */
+export interface NodeAccessGrant {
+  subject: 'user' | 'group'
+  user: { id: string; name: string; email: string; status: UserStatus; guest: boolean } | null
+  group: { id: string; name: string; system: SystemGroup | null; archived_at: string | null } | null
+  roles: RoleKey[]
+  /** Папка выше, где выдача меняется; null — выдача на сам узел. */
+  inherited_from: FolderRef | null
+}
+
+/** «Доступ…» папки или пространства в «Структуре» и меню «⋯» дерева (П2d-1). */
+export interface NodeAccess {
+  node: {
+    id: string
+    type: 'folder' | 'space'
+    name: string
+    space: { id: string; key: string } | null
+  }
+  grants: NodeAccessGrant[]
+}
+
+/** Человек или группа в предупреждении «Переместить в…». */
+export type AccessSubject =
+  | { type: 'user'; id: string; name: string }
+  | { type: 'group'; id: string; name: string; system: SystemGroup | null }
+
+/** Что изменит перемещение в доступе (П2d-1): кто получит, кто потеряет, где не останется управляющего. */
+export interface MoveImpact {
+  gain: AccessSubject[]
+  lose: AccessSubject[]
+  unmanaged_spaces: { id: string; key: string; name: string }[]
 }
 
 /** Пространство в админке системного администратора (AdminSpaceResource): только метаданные. */
@@ -675,6 +739,8 @@ export interface AdminSpace {
   icon: string | null
   archived_at: string | null
   created_at: string
+  /** Узел пространства в дереве — «Доступ…» (П2d-1). */
+  node_id: string
   admins: { id: string; name: string; status: UserStatus }[]
   members_count: number
   groups_count: number

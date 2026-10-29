@@ -12,6 +12,7 @@ import {
   SquareKanban,
   SquarePlus,
   Trash2,
+  Users,
 } from 'lucide-react'
 import { useRef, type ReactNode } from 'react'
 import { hideHintUnlessKeyboard, restoreFocusQuietly } from '@/shared/ui/restore-focus'
@@ -155,6 +156,12 @@ export function TreeNodeActions({
             <Smile />
             {t('tree.node.icon')}
           </DropdownMenuItem>
+          {structure.canManageAccess && (
+            <DropdownMenuItem onSelect={() => structure.access(adminNode)}>
+              <Users />
+              {t('tree.node.access')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => structure.move(adminNode)}>
             <FolderInput />
             {t('tree.node.move')}

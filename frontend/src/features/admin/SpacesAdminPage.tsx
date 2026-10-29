@@ -11,7 +11,7 @@ import { Checkbox } from '@/shared/ui/checkbox'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/shared/ui/dropdown-menu'
 import { Label } from '@/shared/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import { AssignSpaceRoleDialog } from './components/AssignSpaceRoleDialog'
+import { NodeAccessDialog } from '@/features/navigation/components/NodeAccessDialog'
 import { CreateSpaceDialog } from './components/CreateSpaceDialog'
 import { useAdminSpaces, useArchiveSpace, useRestoreSpace } from './queries'
 
@@ -161,7 +161,10 @@ export function SpacesAdminPage() {
         </TableBody>
       </Table>
 
-      <AssignSpaceRoleDialog space={assignTo} onClose={() => setAssignTo(null)} />
+      <NodeAccessDialog
+        node={assignTo && { id: assignTo.node_id, type: 'space', name: assignTo.name }}
+        onClose={() => setAssignTo(null)}
+      />
 
       <ConfirmDialog
         open={toArchive !== null}

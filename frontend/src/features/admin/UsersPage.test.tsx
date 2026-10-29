@@ -102,18 +102,29 @@ describe('Админка пользователей', () => {
       name: 'Борис Новиков',
       email: 'boris@selen.test',
       role: 'admin',
-      spaces: [],
+      grants: [],
     })
   })
 
-  it('существующий сотрудник другой компании — «Сотрудник добавлен»; сразу доступ к пространству (П2c)', async () => {
+  it('существующий сотрудник другой компании — «Сотрудник добавлен»; сразу доступ к папке с ролями (П2c, П2d-1)', async () => {
     let body: unknown
     server.use(
       http.get('*/api/v1/admin/companies/:company/users', () =>
         HttpResponse.json(page([self(owner)])),
       ),
-      http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
-        HttpResponse.json({ data: [{ id: 's-dev', key: 'DEV', name: 'Разработка' }] }),
+      http.get('*/api/v1/admin/companies/:company/grantable-nodes', () =>
+        HttpResponse.json({
+          data: [
+            { id: 'n-product', type: 'folder', name: 'Продукт', depth: 1, space: null },
+            {
+              id: 'n-dev',
+              type: 'space',
+              name: 'Разработка',
+              depth: 2,
+              space: { id: 's-dev', key: 'DEV' },
+            },
+          ],
+        }),
       ),
       http.post('*/api/v1/admin/companies/:company/invitations', async ({ request }) => {
         body = await request.json()
@@ -134,13 +145,21 @@ describe('Админка пользователей', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Пригласить' }))
     await userEvent.type(screen.getByLabelText('Имя и фамилия'), 'Олег')
     await userEvent.type(screen.getByLabelText('Рабочий email'), 'oleg@selen.test')
-    await userEvent.click(await screen.findByRole('button', { name: 'Добавить пространство' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Добавить папку или пространство' }),
+    )
+    // Первая строка — папка «Продукт» (доступ действует на всё внутри); роли — чипами, можно несколько
+    expect(screen.getByRole('combobox', { name: 'Папка или пространство' })).toHaveValue(
+      'n-product',
+    )
+    const roles = within(screen.getByRole('group', { name: 'Роли в «Папка «Продукт»»' }))
+    await userEvent.click(roles.getByRole('button', { name: 'Комментатор' }))
     await userEvent.click(screen.getByRole('button', { name: 'Отправить приглашение' }))
 
     expect(await screen.findByText('Сотрудник добавлен: Олег Никитин')).toBeInTheDocument()
     expect(body).toMatchObject({
       email: 'oleg@selen.test',
-      spaces: [{ space_id: 's-dev', role: 'editor', own_cards_only: false }],
+      grants: [{ node_id: 'n-product', roles: ['editor', 'commenter'] }],
     })
   })
 

@@ -4,22 +4,22 @@ import { toast } from 'sonner'
 import { useCurrentUser } from '@/features/auth/queries'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
-import type { DirectoryUser, Space, SpacePerson, SpaceRole } from '@/shared/types/api'
+import type { DirectoryUser, Space, SpacePerson } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { useMembers, useRemoveMember, useUpdateMember } from '../queries'
 import { AddMemberDialog } from './AddMemberDialog'
 import { AccessSourceBadges } from './AccessSourceBadges'
-import { RoleSelectOptions } from './RoleSelectOptions'
+import { EditRolesDialog } from './EditRolesDialog'
+import { RoleChips } from './RolesField'
 import { SpaceGroupsPanel } from './SpaceGroupsPanel'
 
 /**
- * Участники пространства: вкладки «Люди» (все, у кого есть доступ, и откуда он) и «Группы».
- * Пользователю только с режимом «только свои карточки» источники доступа не показываются —
+ * Участники пространства: вкладки «Люди» (все, у кого есть доступ, и откуда он: лично, группа, через папку — с ролями,
+ * П2d-1) и «Группы». Личные роли на самом пространстве — чипами, меняются окном «Роли»; унаследованные с папок —
+ * в «Доступе…» папки. Пользователю только с режимом «только свои карточки» источники доступа не показываются —
  * он видит только список людей (их отдаёт API без ролей и групп).
  */
 export function MembersPanel({ space }: { space: Space }) {
@@ -54,6 +54,7 @@ function PeopleTable({ space }: { space: Space }) {
   const removeMember = useRemoveMember(space.key)
   const [toRemove, setToRemove] = useState<SpacePerson | null>(null)
   const [toAdd, setToAdd] = useState<DirectoryUser | null>(null)
+  const [editing, setEditing] = useState<SpacePerson | null>(null)
   const canManage = space.permissions.manage
   const showSources = space.permissions.view_access_sources
 
@@ -68,6 +69,9 @@ function PeopleTable({ space }: { space: Space }) {
 
   const people = membersQuery.data ?? []
   const personalIds = people.filter((person) => person.personal).map((person) => person.user.id)
+  // Есть ли источники кроме личных ролей на самом пространстве — от них текст подтверждения исключения
+  const hasOtherSources = (person: SpacePerson) =>
+    (person.sources ?? []).some((source) => source.type === 'group' || source.folder !== null)
 
   return (
     <div className="grid gap-4">
@@ -91,8 +95,7 @@ function PeopleTable({ space }: { space: Space }) {
             <TableHead>{t('members.columns.name')}</TableHead>
             {canManage && (
               <>
-                <TableHead>{t('members.columns.personalRole')}</TableHead>
-                <TableHead>{t('members.columns.restriction')}</TableHead>
+                <TableHead>{t('members.columns.personalRoles')}</TableHead>
                 <TableHead>
                   <span className="sr-only">{t('members.columns.actions')}</span>
                 </TableHead>
@@ -136,23 +139,7 @@ function PeopleTable({ space }: { space: Space }) {
                   <>
                     <TableCell>
                       {personal ? (
-                        <NativeSelect
-                          aria-label={t('members.roleLabel', { name: person.user.name })}
-                          value={personal.role}
-                          disabled={changeMember.isPending}
-                          onChange={(event) =>
-                            run(
-                              () =>
-                                changeMember.mutateAsync({
-                                  userId: person.user.id,
-                                  role: event.target.value as SpaceRole,
-                                }),
-                              t('members.roleChanged'),
-                            )
-                          }
-                        >
-                          <RoleSelectOptions withoutAdmin={person.user.guest} />
-                        </NativeSelect>
+                        <RoleChips roles={personal.roles} />
                       ) : (
                         <span className="text-muted-foreground text-sm whitespace-nowrap">
                           {t('members.noPersonal')}
@@ -160,62 +147,43 @@ function PeopleTable({ space }: { space: Space }) {
                       )}
                     </TableCell>
                     <TableCell>
-                      {personal && personal.role !== 'admin' && (
-                        <div
-                          className="flex items-center gap-2"
-                          title={t('members.ownCardsOnlyHint')}
-                        >
-                          <Checkbox
-                            id={`own-cards-${person.user.id}`}
-                            aria-label={t('members.ownCardsOnlyLabel', { name: person.user.name })}
-                            checked={personal.own_cards_only}
-                            disabled={changeMember.isPending}
-                            onCheckedChange={(checked) =>
-                              run(
-                                () =>
-                                  changeMember.mutateAsync({
-                                    userId: person.user.id,
-                                    own_cards_only: checked === true,
-                                  }),
-                                checked === true
-                                  ? t('members.restrictionOn')
-                                  : t('members.restrictionOff'),
-                              )
-                            }
-                          />
-                          <label
-                            htmlFor={`own-cards-${person.user.id}`}
-                            className="text-sm whitespace-nowrap"
-                          >
-                            {t('members.ownCardsOnly')}
-                          </label>
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {personal ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={t('members.removeLabel', { name: person.user.name })}
-                          onClick={() => setToRemove(person)}
-                        >
-                          {t('members.remove')}
-                        </Button>
-                      ) : (
-                        person.user.status !== 'deactivated' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={t('members.addPersonallyLabel', { name: person.user.name })}
-                            onClick={() =>
-                              setToAdd({ ...person.user, email: person.user.email ?? '' })
-                            }
-                          >
-                            {t('members.addPersonally')}
-                          </Button>
-                        )
-                      )}
+                      <div className="flex justify-end gap-1">
+                        {personal ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={t('members.editRolesLabel', { name: person.user.name })}
+                              onClick={() => setEditing(person)}
+                            >
+                              {t('members.editRoles')}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={t('members.removeLabel', { name: person.user.name })}
+                              onClick={() => setToRemove(person)}
+                            >
+                              {t('members.remove')}
+                            </Button>
+                          </>
+                        ) : (
+                          person.user.status !== 'deactivated' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={t('members.addPersonallyLabel', {
+                                name: person.user.name,
+                              })}
+                              onClick={() =>
+                                setToAdd({ ...person.user, email: person.user.email ?? '' })
+                              }
+                            >
+                              {t('members.addPersonally')}
+                            </Button>
+                          )
+                        )}
+                      </div>
                     </TableCell>
                   </>
                 )}
@@ -235,13 +203,30 @@ function PeopleTable({ space }: { space: Space }) {
         />
       )}
 
+      <EditRolesDialog
+        target={
+          editing && {
+            title: t('members.editRolesTitle', { name: editing.user.name }),
+            description: t('members.editRolesDescription'),
+            roles: editing.personal?.roles ?? [],
+            withoutManaging: editing.user.guest,
+          }
+        }
+        onClose={() => setEditing(null)}
+        onSave={async (roles) => {
+          if (!editing) return
+          await changeMember.mutateAsync({ userId: editing.user.id, roles })
+          toast.success(t('members.roleChanged'))
+        }}
+      />
+
       <ConfirmDialog
         open={toRemove !== null}
         onOpenChange={(open) => !open && setToRemove(null)}
         pending={removeMember.isPending}
         title={t('members.removeTitle')}
         description={t(
-          (toRemove?.groups?.length ?? 0) > 0
+          toRemove && hasOtherSources(toRemove)
             ? 'members.removeTextKeepsGroups'
             : 'members.removeText',
           { name: toRemove?.user.name ?? '' },

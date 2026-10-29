@@ -10,6 +10,7 @@ import {
   FolderPlus,
   Pencil,
   Trash2,
+  Users,
 } from 'lucide-react'
 import { useAdminCompanyId } from '@/features/admin/company'
 import { ActionsMenu } from '@/shared/components/ActionsMenu'
@@ -150,6 +151,12 @@ export function StructurePage() {
                             ? t('structure.actions.edit')
                             : t('structure.actions.icon')}
                         </DropdownMenuItem>
+                        {structure.canManageAccess && (
+                          <DropdownMenuItem onSelect={dialog(() => structure.access(node))}>
+                            <Users />
+                            {t('structure.actions.access')}
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onSelect={dialog(() => structure.move(node))}>
                           <FolderInput />
                           {t('structure.actions.move')}
