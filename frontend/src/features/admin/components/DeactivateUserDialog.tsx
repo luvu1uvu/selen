@@ -20,7 +20,7 @@ import {
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { useDeactivateUser, useDeactivationImpact, useSetUserBlocked } from '../queries'
-import { AssignSpaceRoleDialog } from './AssignSpaceRoleDialog'
+import { NodeAccessDialog } from '@/features/navigation/components/NodeAccessDialog'
 
 /**
  * Деактивация в компании (П2c) и отключение учётной записи Владельцем (account). Никогда не блокируется (решение PM
@@ -94,86 +94,91 @@ export function DeactivateUserDialog({
   }
 
   return (
-    <>
-      <Dialog open={user !== null && replaceIn === null} onOpenChange={(open) => !open && close()}>
-        <DialogContent closeLabel={tc('actions.close')}>
-          <DialogHeader>
-            <DialogTitle>
-              {account
-                ? t('users.confirm.blockTitle')
-                : t('users.confirm.deactivateTitle', { context })}
-            </DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
-          </DialogHeader>
-          {!account && user?.permissions?.transfer_access && (
-            <FormField
+    <Dialog open={user !== null} onOpenChange={(open) => !open && close()}>
+      <DialogContent closeLabel={tc('actions.close')}>
+        <DialogHeader>
+          <DialogTitle>
+            {account
+              ? t('users.confirm.blockTitle')
+              : t('users.confirm.deactivateTitle', { context })}
+          </DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {!account && user?.permissions?.transfer_access && (
+          <FormField
+            id="deactivate-successor"
+            label={t('users.transferAccess.label')}
+            hint={t('users.transferAccess.hint', { context })}
+          >
+            <UserPicker
               id="deactivate-successor"
-              label={t('users.transferAccess.label')}
-              hint={t('users.transferAccess.hint', { context })}
-            >
-              <UserPicker
-                id="deactivate-successor"
-                companyId={company}
-                value={successor}
-                onChange={setSuccessor}
-                excludeIds={user ? [user.id] : []}
-                onlyActive
-                homes
-              />
-            </FormField>
-          )}
-          {spaces.length > 0 && (
-            <Alert variant="warning" className="grid gap-2">
-              <div className="flex items-center gap-2 font-medium">
-                <TriangleAlert className="size-4 shrink-0" />
-                {t('users.lastAdmin.title', { count: spaces.length })}
-              </div>
-              <div>
-                <p>
-                  {account
-                    ? t('users.lastAdmin.accountText', { context })
-                    : t('users.lastAdmin.text')}
-                </p>
-                <ul className="mt-2 grid gap-1">
-                  {spaces.map((space) => (
-                    <li
-                      key={space.id}
-                      className="flex flex-wrap items-center justify-between gap-2"
-                    >
-                      <span>
-                        {t('users.lastAdmin.space', { name: space.name, key: space.key })}
-                      </span>
-                      {!account && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setReplaceIn({ id: space.id, name: space.name })}
-                        >
-                          {t('users.lastAdmin.assign')}
-                        </Button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Alert>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={close}>
-              {tc('actions.cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={deactivate.isPending || block.isPending || impact.isPending}
-              onClick={confirm}
-            >
-              {account ? t('users.actions.block') : t('users.actions.deactivate')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <AssignSpaceRoleDialog space={replaceIn} onClose={() => setReplaceIn(null)} />
-    </>
+              companyId={company}
+              value={successor}
+              onChange={setSuccessor}
+              excludeIds={user ? [user.id] : []}
+              onlyActive
+              homes
+            />
+          </FormField>
+        )}
+        {spaces.length > 0 && (
+          <Alert variant="warning" className="grid gap-2">
+            <div className="flex items-center gap-2 font-medium">
+              <TriangleAlert className="size-4 shrink-0" />
+              {t('users.lastAdmin.title', { count: spaces.length })}
+            </div>
+            <div>
+              <p>
+                {account
+                  ? t('users.lastAdmin.accountText', { context })
+                  : t('users.lastAdmin.text')}
+              </p>
+              <ul className="mt-2 grid gap-1">
+                {spaces.map((space) => (
+                  <li key={space.id} className="flex flex-wrap items-center justify-between gap-2">
+                    <span>{t('users.lastAdmin.space', { name: space.name, key: space.key })}</span>
+                    {!account && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setReplaceIn({ id: space.node_id, name: space.name })}
+                      >
+                        {t('users.lastAdmin.assign')}
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </Alert>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={close}>
+            {tc('actions.cancel')}
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={deactivate.isPending || block.isPending || impact.isPending}
+            onClick={confirm}
+          >
+            {account ? t('users.actions.block') : t('users.actions.deactivate')}
+          </Button>
+        </DialogFooter>
+        {/* «Доступ…» — поверх окна деактивации, а не вместо: после него фокус возвращается на «Назначить
+              администратора» (UX-ревью П2d-1, U-4) */}
+        <NodeAccessDialog
+          node={
+            replaceIn && {
+              id: replaceIn.id,
+              type: 'space',
+              name: replaceIn.name,
+              roles: ['admin'],
+            }
+          }
+          onClose={() => setReplaceIn(null)}
+        />
+      </DialogContent>
+    </Dialog>
   )
 }

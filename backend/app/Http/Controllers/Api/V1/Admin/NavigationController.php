@@ -4,14 +4,17 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Actions\Navigation\CreateFolderAction;
 use App\Actions\Navigation\DeleteFolderAction;
+use App\Actions\Navigation\MoveImpact;
 use App\Actions\Navigation\MoveNavNodeAction;
 use App\Actions\Navigation\SetFolderArchivedAction;
 use App\Actions\Navigation\UpdateNavNodeAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\MoveImpactRequest;
 use App\Http\Requests\Admin\MoveNavNodeRequest;
 use App\Http\Requests\Admin\RestoreFolderRequest;
 use App\Http\Requests\Admin\StoreFolderRequest;
 use App\Http\Requests\Admin\UpdateNavNodeRequest;
+use App\Http\Resources\MoveImpactResource;
 use App\Models\Company;
 use App\Models\NavNode;
 use App\Services\Navigation\NavigationTree;
@@ -89,6 +92,15 @@ class NavigationController extends Controller
         );
 
         return $this->tree($tree, $company);
+    }
+
+    /**
+     * «Переместить в…»: что изменится в доступе (П2d-1) — кто получит и кто потеряет доступ, где не останется того, кто
+     * управляет доступом (тогда перемещение будет отказом 422). Ничего не меняет.
+     */
+    public function moveImpact(MoveImpactRequest $request, Company $company, NavNode $node, MoveImpact $impact): MoveImpactResource
+    {
+        return new MoveImpactResource($impact->of($node, $request->parentId()));
     }
 
     /** @param  array<string, mixed>  $meta */

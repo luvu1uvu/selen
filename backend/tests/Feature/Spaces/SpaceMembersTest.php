@@ -14,22 +14,22 @@ beforeEach(function () {
 it('администратор пространства добавляет участника', function () {
     $boris = member(['name' => 'Борис']);
 
-    $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $boris->id, 'role' => 'editor'])
+    $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $boris->id, 'roles' => ['editor']])
         ->assertCreated()
         ->assertJsonPath('data.user.id', $boris->id)
-        ->assertJsonPath('data.role', 'editor');
+        ->assertJsonPath('data.personal.roles', ['editor']);
 
     expect($this->space->roleOf($boris))->toBe(SpaceRole::Editor)
         ->and(EventLogEntry::query()->sole())
         ->event_type->toBe('space.member_added')
         ->actor_id->toBe($this->owner->id)
-        ->payload->toEqual(['user_id' => $boris->id, 'role' => 'editor']);
+        ->payload->toEqual(['user_id' => $boris->id, 'roles' => ['editor']]);
 });
 
 it('приглашённого (ещё не вошедшего) сотрудника можно добавить заранее', function () {
     $newbie = User::factory()->invited()->create();
 
-    $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $newbie->id, 'role' => 'commenter'])
+    $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $newbie->id, 'roles' => ['commenter']])
         ->assertCreated();
 });
 
@@ -37,11 +37,11 @@ it('не добавляет деактивированного и уже сос�
     $gone = User::factory()->deactivated()->create();
 
     // Деактивированный убран из компании (П2c): для выдачи доступа его нет — как человека другой компании
-    $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $gone->id, 'role' => 'editor'])
+    $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $gone->id, 'roles' => ['editor']])
         ->assertUnprocessable()
         ->assertJsonPath('errors.user_id.0', __('validation.exists', ['attribute' => 'user id']));
 
-    $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $this->owner->id, 'role' => 'editor'])
+    $this->actingAs($this->owner)->postJson('/api/v1/spaces/DEV/members', ['user_id' => $this->owner->id, 'roles' => ['editor']])
         ->assertUnprocessable()
         ->assertJsonPath('errors.user_id.0', __('selen.spaces.already_member'));
 });
@@ -51,9 +51,11 @@ it('проверяет данные нового участника', function (
         ->assertUnprocessable()
         ->assertJsonValidationErrors($field);
 })->with([
-    'без пользователя' => [['role' => 'editor'], 'user_id'],
-    'несуществующий' => [['user_id' => '01JA0000000000000000000000', 'role' => 'editor'], 'user_id'],
-    'неизвестная роль' => [['user_id' => '01JA0000000000000000000000', 'role' => 'owner'], 'role'],
+    'без пользователя' => [['roles' => ['editor']], 'user_id'],
+    'несуществующий' => [['user_id' => '01JA0000000000000000000000', 'roles' => ['editor']], 'user_id'],
+    'без ролей' => [['user_id' => '01JA0000000000000000000000', 'roles' => []], 'roles'],
+    'неизвестная роль' => [['user_id' => '01JA0000000000000000000000', 'roles' => ['owner']], 'roles.0'],
+    'повтор роли' => [['user_id' => '01JA0000000000000000000000', 'roles' => ['editor', 'editor']], 'roles.0'],
 ]);
 
 it('показывает участников всем участникам, включая деактивированных', function () {
@@ -68,21 +70,30 @@ it('показывает участников всем участникам, в�
         ->assertJsonPath('data.0.user.name', 'Анна')
         ->assertJsonPath('data.1.user.name', 'Борис')
         ->assertJsonPath('data.1.user.status', 'deactivated')
-        ->assertJsonPath('data.2.role', 'commenter');
+        ->assertJsonPath('data.2.personal.roles', ['commenter'])
+        ->assertJsonPath('data.2.sources', [['type' => 'personal', 'group' => null, 'folder' => null, 'roles' => ['commenter']]]);
 });
 
-it('меняет роль участника и пишет было/стало в журнал', function () {
+it('меняет роли участника (можно несколько) и пишет было/стало в журнал', function () {
     $boris = member();
     addToSpace($this->space, $boris, SpaceRole::Editor);
 
-    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$boris->id}", ['role' => 'admin'])
+    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$boris->id}", ['roles' => ['admin']])
         ->assertOk()
-        ->assertJsonPath('data.role', 'admin');
+        ->assertJsonPath('data.personal.roles', ['admin']);
 
-    // Повтор той же роли — без события
-    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$boris->id}", ['role' => 'admin'])->assertOk();
+    // Повтор того же набора — без события
+    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$boris->id}", ['roles' => ['admin']])->assertOk();
 
-    expect(EventLogEntry::query()->sole()->payload)->toEqual(['user_id' => $boris->id, 'from' => 'editor', 'to' => 'admin']);
+    // Несколько ролей — строка выдачи на каждую (П2d-1)
+    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$boris->id}", ['roles' => ['commenter_own', 'editor']])
+        ->assertOk()
+        ->assertJsonPath('data.personal.roles', ['editor', 'commenter_own']);
+
+    expect(EventLogEntry::query()->orderBy('id')->pluck('payload')->all())->toEqual([
+        ['user_id' => $boris->id, 'from' => ['editor'], 'to' => ['admin']],
+        ['user_id' => $boris->id, 'from' => ['admin'], 'to' => ['editor', 'commenter_own']],
+    ])->and($this->space->personalGrants()->where('access_grants.user_id', $boris->id)->count())->toBe(2);
 });
 
 it('исключает участника: строка участия удаляется, пользователь остаётся', function () {
@@ -95,15 +106,15 @@ it('исключает участника: строка участия удал�
         ->and($boris->fresh())->not->toBeNull()
         ->and(EventLogEntry::query()->sole())
         ->event_type->toBe('space.member_removed')
-        ->payload->toEqual(['user_id' => $boris->id, 'role' => 'editor']);
+        ->payload->toEqual(['user_id' => $boris->id, 'roles' => ['editor']]);
 
     $this->actingAs($boris)->getJson('/api/v1/spaces/DEV')->assertNotFound();
 });
 
 it('не позволяет оставить пространство без администратора', function () {
-    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$this->owner->id}", ['role' => 'editor'])
+    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$this->owner->id}", ['roles' => ['editor']])
         ->assertUnprocessable()
-        ->assertJsonPath('errors.role.0', __('selen.spaces.last_admin'));
+        ->assertJsonPath('errors.roles.0', __('selen.spaces.last_admin'));
     $this->actingAs($this->owner)->deleteJson("/api/v1/spaces/DEV/members/{$this->owner->id}")
         ->assertUnprocessable();
 
@@ -116,7 +127,7 @@ it('не позволяет оставить пространство без а�
     // С другим активным администратором — можно (в том числе разжаловать себя)
     $second = member();
     addToSpace($this->space, $second, SpaceRole::Admin);
-    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$this->owner->id}", ['role' => 'editor'])
+    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$this->owner->id}", ['roles' => ['editor']])
         ->assertOk();
 
     // Разжалованный больше не управляет участниками; второй администратор — может
@@ -127,7 +138,7 @@ it('не позволяет оставить пространство без а�
 it('изменение участника вне пространства — 404', function () {
     $stranger = member();
 
-    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$stranger->id}", ['role' => 'admin'])->assertNotFound();
+    $this->actingAs($this->owner)->patchJson("/api/v1/spaces/DEV/members/{$stranger->id}", ['roles' => ['admin']])->assertNotFound();
     $this->actingAs($this->owner)->deleteJson("/api/v1/spaces/DEV/members/{$stranger->id}")->assertNotFound();
 });
 

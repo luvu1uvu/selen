@@ -12,6 +12,7 @@ import {
   SquareKanban,
   SquarePlus,
   Trash2,
+  Users,
 } from 'lucide-react'
 import { useRef, type ReactNode } from 'react'
 import { hideHintUnlessKeyboard, restoreFocusQuietly } from '@/shared/ui/restore-focus'
@@ -100,7 +101,7 @@ export function TreeNodeActions({
   const tooDeep = depth + 2 > structure.maxDepth
   const { first, last } = adminNode ? structure.position(adminNode) : { first: true, last: true }
   // Удалить можно только папку без вложенных папок и пространств (в том числе архивных и недоступных) — по
-  // полному дереву «Структуры»; пустые папки в дереве видит только Владелец (ADR-0017)
+  // полному дереву «Структуры»; пустые папки в дереве видят Владелец (ADR-0017) и тот, кому выдан доступ к ней (П2d-1)
   const folderNotEmpty = node.type === 'folder' && !!adminNode && structure.hasChildren(adminNode)
 
   if (!canAddInFolder && !canAddBoard && !adminNode) return null
@@ -155,6 +156,12 @@ export function TreeNodeActions({
             <Smile />
             {t('tree.node.icon')}
           </DropdownMenuItem>
+          {structure.canManageAccess && (
+            <DropdownMenuItem onSelect={() => structure.access(adminNode)}>
+              <Users />
+              {t('tree.node.access')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => structure.move(adminNode)}>
             <FolderInput />
             {t('tree.node.move')}

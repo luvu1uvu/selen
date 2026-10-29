@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Admin\GuestController;
 use App\Http\Controllers\Api\V1\Admin\InvitationController;
 use App\Http\Controllers\Api\V1\Admin\LabelController as AdminLabelController;
 use App\Http\Controllers\Api\V1\Admin\NavigationController as AdminNavigationController;
+use App\Http\Controllers\Api\V1\Admin\NodeAccessController;
 use App\Http\Controllers\Api\V1\Admin\SpaceController as AdminSpaceController;
 use App\Http\Controllers\Api\V1\Admin\TrashController as AdminTrashController;
 use App\Http\Controllers\Api\V1\Admin\UserAccessController;
@@ -239,8 +240,8 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user', 'last-seen'])->group(fu
             Route::put('guests/{user}', [GuestController::class, 'update'])->name('guests.update');
             Route::delete('guests/{user}', [GuestController::class, 'destroy'])->name('guests.destroy');
         });
-        // Пространства, где автор может выдать доступ приглашённому и гостю
-        Route::get('grantable-spaces', [InvitationController::class, 'spaces'])->name('grantable-spaces');
+        // Папки и пространства, где автор может выдать доступ приглашённому и гостю (П2d-1)
+        Route::get('grantable-nodes', [InvitationController::class, 'nodes'])->name('grantable-nodes');
 
         Route::get('groups', [AdminGroupController::class, 'index'])->name('groups.index');
         Route::post('groups', [AdminGroupController::class, 'store'])->name('groups.store');
@@ -250,8 +251,6 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user', 'last-seen'])->group(fu
         Route::post('groups/{group}/restore', [AdminGroupController::class, 'restore'])->name('groups.restore');
         Route::post('groups/{group}/members', [AdminGroupController::class, 'addMember'])->name('groups.members.store');
         Route::delete('groups/{group}/members/{user}', [AdminGroupController::class, 'removeMember'])->name('groups.members.destroy');
-        Route::put('groups/{group}/spaces/{space}', [AdminGroupController::class, 'assignSpace'])->name('groups.spaces.assign');
-        Route::delete('groups/{group}/spaces/{space}', [AdminGroupController::class, 'revokeSpace'])->name('groups.spaces.revoke');
         Route::get('groups/{group}/permissions', [AdminGroupController::class, 'permissions'])->name('groups.permissions');
         Route::put('groups/{group}/permissions', [AdminGroupController::class, 'updatePermissions'])->name('groups.permissions.update');
 
@@ -270,7 +269,6 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user', 'last-seen'])->group(fu
         Route::post('spaces/{space}/archive', [AdminSpaceController::class, 'archive'])->name('spaces.archive');
         Route::post('spaces/{space}/restore', [AdminSpaceController::class, 'restore'])->name('spaces.restore');
         Route::delete('spaces/{space}', [AdminSpaceController::class, 'destroy'])->name('spaces.destroy');
-        Route::put('spaces/{space}/members/{user}', [AdminSpaceController::class, 'assignRole'])->name('spaces.assign-role');
 
         // Дерево навигации — «Структура» (ADR-0013)
         Route::get('navigation', [AdminNavigationController::class, 'index'])->name('navigation.index');
@@ -280,6 +278,15 @@ Route::middleware(['auth:sanctum', 'active', 'tab-user', 'last-seen'])->group(fu
         Route::delete('folders/{node}', [AdminNavigationController::class, 'destroyFolder'])->name('folders.destroy');
         Route::patch('nav-nodes/{node}', [AdminNavigationController::class, 'update'])->name('nav-nodes.update');
         Route::post('nav-nodes/{node}/move', [AdminNavigationController::class, 'move'])->name('nav-nodes.move');
+        // «Переместить в…»: кто получит и кто потеряет доступ, где не останется управляющего (П2d-1)
+        Route::get('nav-nodes/{node}/move-impact', [AdminNavigationController::class, 'moveImpact'])->name('nav-nodes.move-impact');
+        // «Доступ…» папки и пространства (П2d-1): выдачи людям и группам с ролями; здесь же «Сущности» группы и роль из
+        // «Пространств» админки. Человек и группа — компании узла (NavNode::resolveChildRouteBinding)
+        Route::get('nav-nodes/{node}/access', [NodeAccessController::class, 'show'])->name('nav-nodes.access');
+        Route::put('nav-nodes/{node}/access/users/{user}', [NodeAccessController::class, 'setUser'])->name('nav-nodes.access.users.set');
+        Route::delete('nav-nodes/{node}/access/users/{user}', [NodeAccessController::class, 'revokeUser'])->name('nav-nodes.access.users.revoke');
+        Route::put('nav-nodes/{node}/access/groups/{group}', [NodeAccessController::class, 'setGroup'])->name('nav-nodes.access.groups.set');
+        Route::delete('nav-nodes/{node}/access/groups/{group}', [NodeAccessController::class, 'revokeGroup'])->name('nav-nodes.access.groups.revoke');
 
         // Корзина карточек (ADR-0015): {key} — номер DEV-123; ищется после проверки прав (без привязки маршрута,
         // иначе по 403/404 можно перебирать номера)

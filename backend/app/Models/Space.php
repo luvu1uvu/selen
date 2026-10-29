@@ -132,6 +132,25 @@ class Space extends Model implements HasCompany
         $query->whereIn('id', app(AccessResolver::class)->spaceIdsQuery($user));
     }
 
+    /**
+     * Счётчики выдач на само пространство для админки (П2d-1: у человека или группы может быть несколько ролей — считаем
+     * людей и группы, а не строки): personal_grants_count, group_grants_count.
+     *
+     * @param  Builder<Space>  $query
+     */
+    public function scopeWithGrantCounts(Builder $query): void
+    {
+        if ($query->getQuery()->columns === null) {
+            $query->select('spaces.*');
+        }
+
+        $count = fn (string $column) => AccessGrant::query()
+            ->whereIn('nav_node_id', NavNode::query()->select('id')->whereColumn('space_id', 'spaces.id'))
+            ->selectRaw("count(distinct {$column})");
+
+        $query->selectSub($count('user_id'), 'personal_grants_count')->selectSub($count('group_id'), 'group_grants_count');
+    }
+
     /** @param  Builder<Space>  $query */
     public function scopeActive(Builder $query): void
     {

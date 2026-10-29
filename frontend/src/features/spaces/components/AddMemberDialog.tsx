@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getErrorBody, getErrorMessage } from '@/shared/api/errors'
-import type { DirectoryUser, SpaceRole } from '@/shared/types/api'
+import type { DirectoryUser, RoleKey } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -14,14 +14,14 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
-import { NativeSelect } from '@/shared/ui/select'
 import { useAddMember } from '../queries'
-import { RoleSelectOptions } from './RoleSelectOptions'
+import { RolesField } from './RolesField'
 import { UserPicker } from './UserPicker'
 
 /**
- * Добавление участника лично. Без presetUser — кнопка «Добавить участника» и поиск сотрудника;
- * с presetUser — управляемый диалог «Добавить лично» для человека, у которого доступ только через группы.
+ * Добавление участника лично — с одной или несколькими ролями чипами (П2d-1). Без presetUser — кнопка «Добавить
+ * участника» и поиск сотрудника; с presetUser — управляемый диалог «Добавить лично» для человека, у которого доступ
+ * только через группы или папки.
  */
 export function AddMemberDialog({
   spaceKey,
@@ -45,30 +45,32 @@ export function AddMemberDialog({
   const setOpen = (next: boolean) => (controlled ? !next && onClose() : setOwnOpen(next))
   const [picked, setUser] = useState<DirectoryUser | null>(null)
   const user = presetUser ?? picked
-  const [role, setRole] = useState<SpaceRole>('editor')
+  const [roles, setRoles] = useState<RoleKey[]>(['editor'])
   const [error, setError] = useState<string>()
+  const [rolesError, setRolesError] = useState<string>()
   const addMember = useAddMember(spaceKey)
 
   const reset = () => {
     setUser(null)
-    setRole('editor')
+    setRoles(['editor'])
     setError(undefined)
+    setRolesError(undefined)
   }
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!user) {
-      setError(t('addMember.userRequired'))
-      return
-    }
+    if (!user) setError(t('addMember.userRequired'))
+    if (roles.length === 0) setRolesError(t('rolesField.required'))
+    if (!user || roles.length === 0) return
     try {
-      await addMember.mutateAsync({ user_id: user.id, role })
+      await addMember.mutateAsync({ user_id: user.id, roles })
       toast.success(t('members.added'))
       reset()
       setOpen(false)
     } catch (err) {
-      const fieldError = getErrorBody(err)?.errors?.user_id?.[0]
-      if (fieldError) setError(fieldError)
+      const errors = getErrorBody(err)?.errors
+      if (errors?.user_id?.[0]) setError(errors.user_id[0])
+      else if (errors?.roles?.[0]) setRolesError(errors.roles[0])
       else toast.error(getErrorMessage(err, tc('errors.generic')))
     }
   }
@@ -114,14 +116,16 @@ export function AddMemberDialog({
               />
             )}
           </FormField>
-          <FormField id="member-role" label={t('addMember.role')} hint={t(`roleHints.${role}`)}>
-            <NativeSelect
-              id="member-role"
-              value={role}
-              onChange={(event) => setRole(event.target.value as SpaceRole)}
-            >
-              <RoleSelectOptions />
-            </NativeSelect>
+          <FormField id="member-roles" label={t('rolesField.label')} error={rolesError}>
+            <RolesField
+              id="member-roles"
+              value={roles}
+              onChange={(next) => {
+                setRoles(next)
+                setRolesError(undefined)
+              }}
+              invalid={!!rolesError}
+            />
           </FormField>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

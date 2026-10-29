@@ -8,7 +8,7 @@ import { useCurrentUser } from '@/features/auth/queries'
 import { emailSchema } from '@/features/auth/schemas'
 import { applyValidationErrors, getErrorBody, getErrorMessage } from '@/shared/api/errors'
 import { adminCompanies, companyModeContext, isOwner } from '@/shared/lib/roles'
-import type { SpaceGrantInput } from '@/shared/types/api'
+import type { NodeGrantInput } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -24,7 +24,7 @@ import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/select'
 import { hasCompanyPermission, useAdminCompanyId } from '../company'
 import { useInviteUser } from '../queries'
-import { SpaceGrantsField } from './SpaceGrantsField'
+import { NodeGrantsField } from './NodeGrantsField'
 
 /**
  * «Пригласить» (П2c): компания — у кого приглашать можно в несколько, выбирает её явно; сразу — доступ к пространствам
@@ -44,8 +44,8 @@ export function InviteUserDialog() {
   )
   const [chosen, setChosen] = useState<string | null>(null)
   const company = chosen ?? current
-  const [spaces, setSpaces] = useState<SpaceGrantInput[]>([])
-  const [spacesError, setSpacesError] = useState<string>()
+  const [grants, setGrants] = useState<NodeGrantInput[]>([])
+  const [grantsError, setGrantsError] = useState<string>()
   // Пригласить администратора может только Владелец (ADR-0017); проверяет и сервер
   const canInviteAdmin = isOwner(me)
 
@@ -74,14 +74,14 @@ export function InviteUserDialog() {
   const clear = () => {
     reset()
     setChosen(null)
-    setSpaces([])
-    setSpacesError(undefined)
+    setGrants([])
+    setGrantsError(undefined)
   }
 
   const onSubmit = handleSubmit(async (values) => {
-    setSpacesError(undefined)
+    setGrantsError(undefined)
     try {
-      const result = await inviteMutation.mutateAsync({ company, ...values, spaces })
+      const result = await inviteMutation.mutateAsync({ company, ...values, grants })
       toast.success(
         result.result === 'added'
           ? t('invite.added', { name: result.user.name })
@@ -90,11 +90,14 @@ export function InviteUserDialog() {
       clear()
       setOpen(false)
     } catch (error) {
-      const spaceError = Object.entries(getErrorBody(error)?.errors ?? {}).find(([key]) =>
-        key.startsWith('spaces'),
+      const fields = getErrorBody(error)?.errors ?? {}
+      // Ошибки выдачи доступа: строки доступа и правила ролей (например, пространство осталось бы без управляющего)
+      const grantError = Object.entries(fields).find(
+        ([key]) => key.startsWith('grants') || key === 'roles' || key === 'user_id',
       )
-      if (spaceError) setSpacesError(spaceError[1][0])
-      if (!applyValidationErrors(error, setError) && !spaceError) {
+      if (grantError) setGrantsError(grantError[1][0])
+      const known = ['name', 'email', 'role'].some((key) => key in fields)
+      if (!grantError && (!applyValidationErrors(error, setError) || !known)) {
         toast.error(getErrorMessage(error, tc('errors.generic')))
       }
     }
@@ -126,7 +129,7 @@ export function InviteUserDialog() {
                 value={company}
                 onChange={(event) => {
                   setChosen(event.target.value)
-                  setSpaces([])
+                  setGrants([])
                 }}
               >
                 {companies.map((item) => (
@@ -159,12 +162,12 @@ export function InviteUserDialog() {
               {canInviteAdmin && <option value="admin">{tc('roles.admin')}</option>}
             </NativeSelect>
           </FormField>
-          <SpaceGrantsField
-            id="invite-spaces"
+          <NodeGrantsField
+            id="invite-grants"
             company={company}
-            value={spaces}
-            onChange={setSpaces}
-            error={spacesError}
+            value={grants}
+            onChange={setGrants}
+            error={grantsError}
           />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

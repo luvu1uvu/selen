@@ -44,8 +44,8 @@ it('проходит сквозной сценарий этапа 1', function (
     // A создаёт доску «Разработка», добавляет B (editor) и C (commenter)
     $boardId = $a->post('/api/v1/spaces/DEV/boards', ['name' => 'Разработка', 'template' => 'development'])
         ->assertCreated()->json('data.id');
-    $a->post('/api/v1/spaces/DEV/members', ['user_id' => $users['B']->id, 'role' => 'editor'])->assertCreated();
-    $a->post('/api/v1/spaces/DEV/members', ['user_id' => $users['C']->id, 'role' => 'commenter'])->assertCreated();
+    $a->post('/api/v1/spaces/DEV/members', ['user_id' => $users['B']->id, 'roles' => ['editor']])->assertCreated();
+    $a->post('/api/v1/spaces/DEV/members', ['user_id' => $users['C']->id, 'roles' => ['commenter']])->assertCreated();
 
     // B не может создать пространство (кнопки у B нет: в интерфейсе она только для role=admin)
     $b->post(adminPath().'spaces', ['name' => 'Своё', 'key' => 'MINE'])->assertForbidden();
@@ -99,15 +99,17 @@ it('проходит сквозной сценарий этапа 1', function (
     // --- 5. S видит DEV в админке, но не доски — пока не назначит себе роль
     $s->get(adminPath().'spaces')->assertOk()->assertJsonPath('data.0.key', 'DEV');
     $s->get("/api/v1/boards/{$boardId}")->assertNotFound();
-    $s->put(adminPath()."spaces/{$spaceId}/members/{$users['S']->id}", ['role' => 'commenter'])
-        ->assertOk()->assertJsonPath('data.my_role', 'commenter');
+    // «Доступ…» пространства в админке (П2d-1): выдать себе роль
+    $nodeId = $s->get(adminPath().'spaces')->json('data.0.node_id');
+    $s->put(adminPath()."nav-nodes/{$nodeId}/access/users/{$users['S']->id}", ['roles' => ['commenter']])->assertOk();
+    $s->get('/api/v1/spaces/DEV')->assertOk()->assertJsonPath('data.my_role', 'commenter');
     $s->get("/api/v1/boards/{$boardId}")->assertOk();
     $assignment = $s->get(adminPath().'events?event_type=space.member_added')
         ->assertOk()
         ->assertJsonPath('data.0.actor.id', $users['S']->id)
         ->json('data.0.payload');
     // toEqual: JSONB не сохраняет порядок ключей
-    expect($assignment)->toEqual(['user_id' => $users['S']->id, 'role' => 'commenter', 'via' => 'admin_panel']);
+    expect($assignment)->toEqual(['user_id' => $users['S']->id, 'roles' => ['commenter'], 'via' => 'admin_panel']);
 
     // --- 6. Вся цепочка DEV-1 в card_transitions, метрики верны ---------
     $card = Card::query()->where('number', 1)->sole();

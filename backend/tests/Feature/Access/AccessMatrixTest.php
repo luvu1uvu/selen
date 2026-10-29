@@ -37,6 +37,10 @@ use Illuminate\Support\Facades\Storage;
 | Встроенная группа «Все сотрудники» (состав вычисляется): commenter и editor — как лично, «только свои» — чужая
 | карточка 404, деактивированный — 404.
 |
+| Через папку (П2d-1): роль на папке над пространством и на папке выше по дереву действует как лично (каждая роль) —
+| для человека, группы и «Все сотрудники»; «только свои» через папку — чужая карточка 404; после перемещения пространства
+| из папки доступ через неё пропадает — 404 на всех маршрутах.
+|
 | Другая компания (ADR-0024): её участник и администратор получают 404 на всех маршрутах (полная проверка изоляции —
 | CompanyIsolationTest).
 |
@@ -450,6 +454,67 @@ it('через «Все сотрудники» в режиме «только с
 
     ($this->call)($method, $path)->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
 })->with(cardEndpoints());
+
+it('через папку (П2d-1): роль на папке над пространством и на папке выше — как лично', function (string $method, string $path, string $level) {
+    $outer = makeFolder('Внешняя');
+    $inner = makeFolder('Вложенная', $outer);
+    placeIn(nodeOf($this->space), $inner);
+    // Порядок важен: admin последним — его изменения (исключение участника, отзыв группы) не мешают остальным
+    foreach ([[SpaceRole::Commenter, $outer], [SpaceRole::Editor, $inner], [SpaceRole::Commenter, $inner], [SpaceRole::Editor, $outer], [SpaceRole::Admin, $outer]] as [$role, $folder]) {
+        $user = member();
+        grantAccess($folder, $user, StandardRole::fromLegacy($role));
+        $this->actingAs($user);
+
+        expectByLevel(($this->call)($method, $path), $level, $role, "через папку {$folder->name}: {$role->value}");
+    }
+})->with(spaceEndpoints());
+
+it('через папку группой и «Все сотрудники» — как лично (П2d-1)', function (string $method, string $path, string $level) {
+    $folder = makeFolder('Папка');
+    placeIn(nodeOf($this->space), makeFolder('Вложенная', $folder));
+    $everyone = grantAccess($folder, Group::everyone(company()), StandardRole::Commenter);
+    $user = member();
+    $this->actingAs($user);
+    expectByLevel(($this->call)($method, $path), $level, SpaceRole::Commenter, '«Все сотрудники» через папку');
+    $everyone->delete();
+
+    foreach ([SpaceRole::Commenter, SpaceRole::Editor, SpaceRole::Admin] as $role) {
+        $user = member();
+        grantAccess($folder, addToGroup(makeGroup(), $user), StandardRole::fromLegacy($role));
+        $this->actingAs($user);
+
+        expectByLevel(($this->call)($method, $path), $level, $role, "группа через папку: {$role->value}");
+    }
+})->with(spaceEndpoints());
+
+it('через папку в режиме «только свои карточки»: чужая карточка — 404, своя — по роли (П2d-1)', function (string $method, string $path, string $level) {
+    $folder = makeFolder('Папка');
+    placeIn(nodeOf($this->space), $folder);
+    $user = member();
+    grantAccess($folder, $user, StandardRole::EditorOwnCards);
+    $this->actingAs($user);
+
+    ($this->call)($method, $path)->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
+
+    Card::query()->whereKey($this->card->id)->update(['responsible_id' => $user->id]);
+    expectByLevel(($this->call)($method, $path), $level, SpaceRole::Editor, 'своя карточка через папку');
+})->with(cardEndpoints());
+
+it('пространство перемещено из папки — доступ через неё пропадает: 404 (П2d-1)', function (string $method, string $path) {
+    $folder = makeFolder('Папка');
+    placeIn(nodeOf($this->space), $folder);
+    $user = member();
+    grantAccess($folder, $user, StandardRole::Admin);
+    addToGroup($group = makeGroup(), $viaGroup = member());
+    grantAccess($folder, $group, StandardRole::Editor);
+
+    placeIn(nodeOf($this->space), null);
+
+    foreach ([$user, $viaGroup] as $who) {
+        $this->actingAs($who);
+        ($this->call)($method, $path)->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
+    }
+})->with(spaceEndpoints());
 
 it('архивная группа и исключение из группы доступа не дают', function (string $method, string $path) {
     $archived = member();

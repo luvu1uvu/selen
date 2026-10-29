@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
+import { hasCompanyPermission, useAdminCompany } from '@/features/admin/company'
 import { useArchiveSpace, useDeleteSpace } from '@/features/admin/queries'
 import type { AdminNavNode } from '@/shared/types/api'
 import { FolderDialog, type FolderDialogTarget } from './components/FolderDialog'
 import { MoveNodeDialog } from './components/MoveNodeDialog'
+import { NodeAccessDialog, type NodeAccessTarget } from './components/NodeAccessDialog'
 import {
   useAdminNavigation,
   useDeleteFolder,
@@ -17,7 +19,7 @@ import { activeStructure } from './tree'
 
 /**
  * Действия «Структуры» над узлами дерева — одни для админки «Структура» и для меню «⋯»/«+» в дереве
- * сайдбара: те же запросы, проверки и сообщения (ADR-0013). Диалоги (папка, иконка, «Переместить в…»,
+ * сайдбара: те же запросы, проверки и сообщения (ADR-0013). Диалоги (папка, иконка, «Переместить в…», «Доступ…»,
  * подтверждение архива и удаления навсегда — папки и пространства, LATER-43) отрисовывает вызывающий
  * компонент — `dialogs`. Что пустое, а что нет, решает сервер: непустое — ошибка с объяснением.
  */
@@ -34,6 +36,9 @@ export function useStructureActions(enabled = true) {
   const [moving, setMoving] = useState<AdminNavNode | null>(null)
   const [archiving, setArchiving] = useState<AdminNavNode | null>(null)
   const [deleting, setDeleting] = useState<AdminNavNode | null>(null)
+  const [accessOf, setAccessOf] = useState<NodeAccessTarget | null>(null)
+  // «Доступ…» — право компании «управлять доступом» (П2d-1); структуру ведёт право «управлять структурой»
+  const canManageAccess = hasCompanyPermission(useAdminCompany(), 'company.manage_access')
 
   const all = useMemo(() => query.data?.data ?? [], [query.data])
   const maxDepth = query.data?.meta.max_depth ?? 4
@@ -82,10 +87,12 @@ export function useStructureActions(enabled = true) {
   const dialogs = (
     <>
       <FolderDialog target={editing} onClose={() => setEditing(null)} />
+      <NodeAccessDialog node={accessOf} onClose={() => setAccessOf(null)} />
       <MoveNodeDialog
         node={moving}
         nodes={active}
         maxDepth={maxDepth}
+        canManageAccess={canManageAccess}
         onClose={() => setMoving(null)}
       />
       <ConfirmDialog
@@ -157,6 +164,14 @@ export function useStructureActions(enabled = true) {
     nodeById: (id: string) => all.find((node) => node.id === id),
     edit: setEditing,
     move: setMoving,
+    /** «Доступ…» папки или пространства — есть ли право и открыть окно. */
+    canManageAccess,
+    access: (node: AdminNavNode) =>
+      setAccessOf({
+        id: node.id,
+        type: node.type,
+        name: node.name ?? node.space?.name ?? '',
+      }),
     archive: setArchiving,
     /** Удалить навсегда (только пустое — проверяет сервер). */
     remove: setDeleting,

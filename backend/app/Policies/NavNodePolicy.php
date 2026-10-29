@@ -11,8 +11,8 @@ use Illuminate\Auth\Access\Response;
 
 /**
  * Дерево навигации компании ведёт тот, у кого право компании «управлять структурой» — администратор компании
- * и Владелец (ADR-0013, ADR-0024; права на папки ролью — П2d). Своё дерево (GET /navigation) видит каждый — оно
- * строится по его правам, политика для него не нужна.
+ * и Владелец (ADR-0013, ADR-0024; права на папки ролью — П2d-2), «Доступ…» узлов — право компании «управлять доступом»
+ * (П2d-1). Своё дерево (GET /navigation) видит каждый — оно строится по его правам, политика для него не нужна.
  */
 class NavNodePolicy
 {
@@ -26,6 +26,15 @@ class NavNodePolicy
     public function update(User $actor, NavNode $node): Response
     {
         return $this->allowCompany($actor, $node->company, Permission::CompanyManageStructure);
+    }
+
+    /**
+     * «Доступ…» папки и пространства в админке (П2d-1): право компании «управлять доступом». Права «Администратора» на
+     * папки ролью — П2d-2 (В11).
+     */
+    public function manageAccess(User $actor, NavNode $node): Response
+    {
+        return $this->allowCompany($actor, $node->company, Permission::CompanyManageAccess);
     }
 
     /** Удалить пустую папку навсегда (LATER-43). */

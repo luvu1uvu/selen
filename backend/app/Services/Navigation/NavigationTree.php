@@ -7,7 +7,6 @@ use App\Enums\Permission;
 use App\Models\Board;
 use App\Models\Company;
 use App\Models\NavNode;
-use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use App\Services\Access\SpaceAccess;
@@ -16,13 +15,14 @@ use Illuminate\Support\Collection;
 /**
  * Дерево навигации (docs/adr/0013-navigation-tree.md).
  *
- * Для пользователя: папки не дают доступа — видна только папка, в которой на любой глубине есть доступное ему
- * активное пространство; каждое доступное активное пространство видно всегда (даже без досок), под ним —
- * активные доски. Названия прочих папок в ответ не попадают — правило одно для всех, включая системного
- * администратора: полная структура со всеми названиями — только в «Структуре» (forAdmin). Единственное
- * дополнение — Владельцу (ADR-0017) видны ещё и по-настоящему пустые папки (на любой глубине нет ни одного
- * пространства — ни активного, ни архивного), с пометкой `empty`; пустая папка внутри скрытой не видна и ему.
- * Число запросов не зависит от размера дерева: права — одним запросом резолвера, узлы — одним, доски — одним.
+ * Для пользователя — из итоговых прав (ADR-0024, П2d-1): видна папка, на которую у него есть право (выдача на неё или
+ * на папку выше — тогда и всё внутри), или в которой на любой глубине есть доступное ему активное пространство; каждое
+ * доступное активное пространство видно всегда (даже без досок), под ним — активные доски. Названия прочих папок в ответ
+ * не попадают — правило одно для всех, включая администратора компании: полная структура со всеми названиями — только
+ * в «Структуре» (forAdmin). Единственное дополнение — Владельцу (ADR-0017) видны ещё и по-настоящему пустые папки (на
+ * любой глубине нет ни одного пространства — ни активного, ни архивного), с пометкой `empty`; пустая папка внутри
+ * скрытой не видна и ему. Число запросов не зависит от размера дерева: права на все узлы — одним запросом резолвера,
+ * узлы — одним, доски — одним.
  * У каждой компании своё дерево (ADR-0024): в ответ попадают только узлы компаний пользователя — названия папок
  * других компаний не приходят. Ответ — деревья компаний, где пользователю есть что показать; название компании —
  * только если таких компаний несколько (заголовки в дереве): у кого компания одна, её названия нет нигде.
@@ -43,21 +43,22 @@ class NavigationTree
      */
     public function forUser(User $user): array
     {
-        $accesses = Space::accessesOf($user);
-        // Узлы компаний пользователя (ADR-0024): тех, где он «дом», и тех, где у него есть доступ к пространствам;
+        // Права на все узлы (папки и пространства) одним запросом: node_id → права
+        $accesses = $this->resolver->forUserNodes($user);
+        // Узлы компаний пользователя (ADR-0024): тех, где он «дом», и тех, где у него есть доступ к узлам;
         // Владельцу — всех (пустые папки, ADR-0017). Все узлы, включая архивные папки: пространство в архивной папке
         // тоже делает папки над ней непустыми
         $nodes = NavNode::query()
             ->with('space')
             ->when(! $user->isOwner(), fn ($q) => $q->where(fn ($q) => $q
                 ->whereIn('company_id', $this->resolver->memberCompanyIds($user))
-                ->orWhereIn('company_id', Space::query()->select('company_id')->whereIn('id', $accesses->keys()))))
+                ->orWhereIn('company_id', NavNode::query()->select('company_id')->whereIn('id', $accesses->keys()))))
             ->orderBy('position')
             ->get();
 
         $visible = $nodes
             ->filter(fn (NavNode $node) => $node->space !== null && ! $node->space->isArchived()
-                && ($accesses[$node->space_id] ?? null)?->isMember())
+                && ($accesses[$node->id] ?? null)?->isMember())
             ->pluck('space_id');
 
         $boards = Board::query()
@@ -187,7 +188,7 @@ class NavigationTree
     /**
      * Узлы одного родителя для пользователя и счётчики активных и открытых всем пространств в поддереве.
      *
-     * @param  array{children: Collection<array-key, mixed>, open: Collection<array-key, mixed>, visible: Collection<array-key, mixed>, boards: Collection<array-key, mixed>, accesses: Collection<array-key, SpaceAccess>, withSpaces: Collection<string, int>, showEmpty: bool}  $context
+     * @param  array{children: Collection<array-key, mixed>, open: Collection<array-key, mixed>, visible: Collection<array-key, mixed>, boards: Collection<array-key, mixed>, accesses: Collection<array-key, SpaceAccess>, withSpaces: Collection<string, int>, showEmpty: bool}  $context  accesses — по id узла
      * @return array{items: list<array<string, mixed>>, active: int, open: int, visible: int}
      */
     private function branch(string $parentKey, array $context): array
@@ -208,15 +209,21 @@ class NavigationTree
                 $result['visible'] += $inner['visible'];
                 $empty = ! $context['withSpaces']->has($node->id);
 
-                if ($inner['visible'] > 0 || ($empty && $context['showEmpty'])) {
+                // Видна: есть право на неё (выдача на неё или на папку выше), что-то видимое внутри, или — Владельцу —
+                // она по-настоящему пустая
+                $granted = ($context['accesses'][$node->id] ?? null)?->isMember() ?? false;
+                // Папка с правом делает видимыми и папки над ней — путь к ней
+                $result['visible'] += $granted ? 1 : 0;
+                if ($inner['visible'] > 0 || $granted || ($empty && $context['showEmpty'])) {
                     $result['items'][] = [
                         'type' => NavNodeType::Folder,
                         'id' => $node->id,
                         'name' => $node->name,
                         'icon' => $node->icon,
                         'everyone' => $inner['active'] > 0 && $inner['open'] === $inner['active'],
-                        // Только у Владельца бывает true: остальным пустые папки не приходят
-                        'empty' => $empty,
+                        // Пустая папка приходит Владельцу и тому, у кого на неё есть право (П2d-1). Папка-путь без права
+                        // на неё — не «пустая»: иначе флаг выдал бы, есть ли в ней недоступные ему пространства (аудит, S-3)
+                        'empty' => $empty && ($granted || $context['showEmpty']),
                         'children' => $inner['items'],
                     ];
                 }
@@ -242,7 +249,7 @@ class NavigationTree
                     'everyone' => $everyone,
                     // Управлять пространством (создать доску) — как BoardPolicy::create
                     // Как permissions.manage пространства (SpaceResource) — прежний флаг администратора пространства
-                    'can_manage' => $context['accesses'][$space->id]->allows(Permission::SpaceUpdate),
+                    'can_manage' => $context['accesses'][$node->id]->allows(Permission::SpaceUpdate),
                     'space' => ['id' => $space->id, 'key' => $space->key, 'name' => $space->name],
                     'boards' => $context['boards']->get($space->id, collect())
                         ->map(fn (Board $board) => ['id' => $board->id, 'name' => $board->name])

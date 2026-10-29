@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { authFile } from '../../tests/helpers'
 import { structureRow } from '../stage-3/helpers'
 import { openCardByKey } from '../stage-ux2/helpers'
-import { COMPANY_SPACE, stamp, tree, usersTabs } from './helpers'
+import { chips, chooseRoles, COMPANY_SPACE, stamp, tree, usersTabs } from './helpers'
 
 /**
  * ТК-R2.6: группы, справочники и дерево принадлежат «Компании 1» — администратор работает с ними как прежде.
@@ -10,6 +10,10 @@ import { COMPANY_SPACE, stamp, tree, usersTabs } from './helpers'
  * «Права: компания» (E2eSeeder::companies). Выбор меток и типов карточки — в RCOMP-1 «Сменить тип» и в QA-1 другого
  * пространства («любого пространства»), ничего не меняя. Названия группы, метки, типа и папки — одноразовые (тест можно
  * повторить); в конце RCOMP возвращается в корень дерева, чтобы другие тесты находили его там, где он был.
+ *
+ * П2d-1: доступ группы — раздел «Сущности» страницы группы: поле «Папка или пространство» (вместо «Пространство»),
+ * роли — чипами (вместо списка «Роль»); выданная роль — чип в строке таблицы «Сущностей» (вместо списка «Роль группы
+ * в …»).
  */
 test.use({ storageState: authFile('e2e-admin@selen.test') })
 
@@ -71,9 +75,10 @@ test('ТК-R2.6. Группы, метки, типы карточек и «Стр
   await expect(page.getByText(`${PERSON} добавлен(а) в группу`)).toBeVisible()
 
   // 2. В этой группе — доступ к пространству с ролью «Комментатор»
-  await page.getByLabel('Пространство', { exact: true }).selectOption({ label: `${COMPANY_SPACE} (RCOMP)` })
-  await page.getByLabel('Роль', { exact: true }).selectOption({ label: 'Комментатор' })
-  await page.getByRole('button', { name: 'Выдать доступ' }).click()
+  const entities = page.getByRole('region', { name: 'Сущности' })
+  await entities.getByLabel('Папка или пространство', { exact: true }).selectOption({ label: `${COMPANY_SPACE} (RCOMP)` })
+  await chooseRoles(entities.getByRole('group', { name: 'Роли', exact: true }), ['Комментатор'])
+  await entities.getByRole('button', { name: 'Выдать доступ' }).click()
   await expect(page.getByText('Доступ выдан')).toBeVisible()
 
   // Человек — в составе группы, у группы — доступ с ролью «Комментатор» (и после обновления страницы)
@@ -81,8 +86,8 @@ test('ТК-R2.6. Группы, метки, типы карточек и «Стр
   await expect(page.getByRole('heading', { name: group, level: 1 })).toBeVisible()
   await expect(page.getByRole('button', { name: `Исключить ${PERSON} из группы` })).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: PERSON })).toBeVisible()
-  const grantRole = page.getByLabel(`Роль группы в ${COMPANY_SPACE}`)
-  await expect(grantRole.locator('option:checked')).toHaveText('Комментатор')
+  const grant = entities.getByRole('row').filter({ hasText: `${COMPANY_SPACE} (RCOMP)` })
+  await expect(chips(grant.getByRole('cell').nth(1))).toHaveText(['Комментатор'])
 
   // 3. Метки компании: создать общую метку — она в списке меток
   await openAdmin(page, '/admin/labels', 'Метки компании')

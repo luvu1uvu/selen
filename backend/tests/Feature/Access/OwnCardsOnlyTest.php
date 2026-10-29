@@ -2,7 +2,6 @@
 
 use App\Enums\BoardTemplate;
 use App\Enums\SpaceRole;
-use App\Enums\StandardRole;
 use App\Models\AccessGrant;
 use App\Models\Card;
 use App\Models\EventLogEntry;
@@ -25,54 +24,59 @@ beforeEach(function () {
     addToSpace($this->space, $this->restricted, SpaceRole::Editor);
     $this->board = makeBoard($this->space, $this->admin, BoardTemplate::Simple);
 
+    // «Только свои карточки» — роль «Редактор — только свои карточки» (П2d-1: роли списком, флага нет)
     $this->restrict = fn ($user = null, bool $on = true) => $this->actingAs($this->admin)
-        ->patchJson('/api/v1/spaces/DEV/members/'.($user ?? $this->restricted)->id, ['own_cards_only' => $on]);
+        ->patchJson('/api/v1/spaces/DEV/members/'.($user ?? $this->restricted)->id, ['roles' => [$on ? 'editor_own' : 'editor']]);
 });
 
 function restrictionOf($space, $user): bool
 {
-    return AccessGrant::query()->onSpace($space)->where('user_id', $user->id)->with('role')->sole()->standardRole()->ownCardsOnly();
+    return AccessGrant::query()->onSpace($space)->where('user_id', $user->id)->with('role')->get()
+        ->every(fn (AccessGrant $grant) => $grant->standardRole()->ownCardsOnly());
 }
 
-describe('флаг на участнике', function () {
-    it('включает и выключает администратор пространства; в журнал — было/стало', function () {
-        ($this->restrict)()->assertOk()->assertJsonPath('data.personal.own_cards_only', true)->assertJsonPath('data.role', 'editor');
-        ($this->restrict)(on: false)->assertOk()->assertJsonPath('data.personal.own_cards_only', false);
+describe('«только свои карточки» — роль участника', function () {
+    it('меняет администратор пространства ролью; в журнал — роли было/стало', function () {
+        ($this->restrict)()->assertOk()->assertJsonPath('data.personal.roles', ['editor_own']);
+        expect(restrictionOf($this->space, $this->restricted))->toBeTrue();
+        ($this->restrict)(on: false)->assertOk()->assertJsonPath('data.personal.roles', ['editor']);
+        expect(restrictionOf($this->space, $this->restricted))->toBeFalse();
 
-        expect(EventLogEntry::query()->where('event_type', 'space.member_restriction_changed')->orderBy('id')->pluck('payload')->all())
+        expect(EventLogEntry::query()->where('event_type', 'space.member_role_changed')->orderBy('id')->pluck('payload')->all())
             ->toEqual([
-                ['user_id' => $this->restricted->id, 'from' => false, 'to' => true],
-                ['user_id' => $this->restricted->id, 'from' => true, 'to' => false],
+                ['user_id' => $this->restricted->id, 'from' => ['editor'], 'to' => ['editor_own']],
+                ['user_id' => $this->restricted->id, 'from' => ['editor_own'], 'to' => ['editor']],
             ]);
-        $this->actingAs($this->admin)->getJson('/api/v1/spaces/DEV/members')->assertJsonPath('data.0.personal.own_cards_only', false);
     });
 
-    it('editor флаг не меняет; к администратору пространства флаг неприменим', function () {
-        $this->actingAs($this->editor)->patchJson("/api/v1/spaces/DEV/members/{$this->restricted->id}", ['own_cards_only' => true])
+    it('editor роли не меняет; варианта «Администратор — только свои» нет', function () {
+        $this->actingAs($this->editor)->patchJson("/api/v1/spaces/DEV/members/{$this->restricted->id}", ['roles' => ['editor_own']])
             ->assertForbidden();
 
-        ($this->restrict)($this->admin)->assertUnprocessable()
-            ->assertJsonPath('errors.own_cards_only.0', __('selen.spaces.admin_not_restricted'));
+        $this->actingAs($this->admin)->patchJson("/api/v1/spaces/DEV/members/{$this->restricted->id}", ['roles' => ['admin_own']])
+            ->assertUnprocessable()->assertJsonValidationErrors('roles.0');
+        expect(restrictionOf($this->space, $this->restricted))->toBeFalse();
     });
 
-    it('назначение администратором снимает ограничение', function () {
+    it('роль «Администратор» снимает ограничение', function () {
         ($this->restrict)()->assertOk();
 
-        $this->actingAs($this->admin)->patchJson("/api/v1/spaces/DEV/members/{$this->restricted->id}", ['role' => 'admin'])
-            ->assertOk()->assertJsonPath('data.personal.own_cards_only', false);
+        $this->actingAs($this->admin)->patchJson("/api/v1/spaces/DEV/members/{$this->restricted->id}", ['roles' => ['admin']])
+            ->assertOk()->assertJsonPath('data.personal.roles', ['admin']);
 
-        expect(restrictionOf($this->space, $this->restricted))->toBeFalse()
-            ->and(EventLogEntry::query()->where('event_type', 'space.member_restriction_changed')->orderByDesc('id')->first()->payload)
-            ->toEqual(['user_id' => $this->restricted->id, 'from' => true, 'to' => false, 'via' => 'role_changed']);
+        expect(restrictionOf($this->space, $this->restricted))->toBeFalse();
     });
 
-    it('роль и флаг можно поменять одним запросом; роль admin вместе с флагом — 422 без изменений', function () {
-        $this->actingAs($this->admin)->patchJson("/api/v1/spaces/DEV/members/{$this->restricted->id}", ['role' => 'commenter', 'own_cards_only' => true])
-            ->assertOk()->assertJsonPath('data.role', 'commenter')->assertJsonPath('data.personal.own_cards_only', true);
+    it('несколько ролей: «Комментатор» и «Редактор — только свои» — видит все карточки, правит только свои', function () {
+        $this->actingAs($this->admin)->patchJson("/api/v1/spaces/DEV/members/{$this->restricted->id}", ['roles' => ['commenter', 'editor_own']])
+            ->assertOk()->assertJsonPath('data.personal.roles', ['commenter', 'editor_own']);
+        $foreign = makeCard($this->board, 'To Do', $this->editor, 'Чужая');
+        $own = makeCard($this->board, 'To Do', $this->editor, 'Своя');
+        $own->forceFill(['responsible_id' => $this->restricted->id])->save();
 
-        $this->actingAs($this->admin)->patchJson("/api/v1/spaces/DEV/members/{$this->editor->id}", ['role' => 'admin', 'own_cards_only' => true])
-            ->assertUnprocessable();
-        expect(AccessGrant::query()->where('user_id', $this->editor->id)->with('role')->sole()->standardRole())->toBe(StandardRole::Editor);
+        $this->actingAs($this->restricted)->getJson("/api/v1/cards/{$foreign->key()}")->assertOk();
+        $this->actingAs($this->restricted)->patchJson("/api/v1/cards/{$foreign->key()}", ['title' => 'Чужая, правка'])->assertForbidden();
+        $this->actingAs($this->restricted)->patchJson("/api/v1/cards/{$own->key()}", ['title' => 'Своя, правка'])->assertOk();
     });
 });
 

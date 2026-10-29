@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getErrorBody, getErrorMessage } from '@/shared/api/errors'
-import type { SpaceRole } from '@/shared/types/api'
+import type { RoleKey } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -15,12 +14,12 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
-import { Label } from '@/shared/ui/label'
 import { NativeSelect } from '@/shared/ui/select'
 import { useAddSpaceGroup, useGroupDirectory } from '../queries'
-import { RoleSelectOptions } from './RoleSelectOptions'
+import { MANAGING_ROLES } from '../roles'
+import { RolesField } from './RolesField'
 
-/** Выдать доступ группе: группа из справочника активных, роль и режим «только свои карточки». */
+/** Выдать доступ группе: группа из справочника активных и роли чипами (П2d-1: можно несколько). */
 export function AddSpaceGroupDialog({
   spaceKey,
   companyId,
@@ -35,9 +34,9 @@ export function AddSpaceGroupDialog({
   const { t: tc } = useTranslation()
   const [open, setOpen] = useState(false)
   const [groupId, setGroupId] = useState('')
-  const [role, setRole] = useState<SpaceRole>('commenter')
-  const [ownCardsOnly, setOwnCardsOnly] = useState(false)
+  const [roles, setRoles] = useState<RoleKey[]>(['commenter'])
   const [error, setError] = useState<string>()
+  const [rolesError, setRolesError] = useState<string>()
   const directory = useGroupDirectory(companyId, open)
   const add = useAddSpaceGroup(spaceKey)
   const options = (directory.data ?? []).filter((group) => !grantedIds.includes(group.id))
@@ -45,30 +44,25 @@ export function AddSpaceGroupDialog({
 
   const reset = () => {
     setGroupId('')
-    setRole('commenter')
-    setOwnCardsOnly(false)
+    setRoles(['commenter'])
     setError(undefined)
+    setRolesError(undefined)
   }
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!groupId) {
-      setError(t('addGroup.groupRequired'))
-      return
-    }
+    if (!groupId) setError(t('addGroup.groupRequired'))
+    if (roles.length === 0) setRolesError(t('rolesField.required'))
+    if (!groupId || roles.length === 0) return
     try {
-      await add.mutateAsync({
-        group_id: groupId,
-        role,
-        own_cards_only: role !== 'admin' && ownCardsOnly,
-      })
+      await add.mutateAsync({ group_id: groupId, roles })
       toast.success(t('groups.toasts.added'))
       reset()
       setOpen(false)
     } catch (err) {
       const errors = getErrorBody(err)?.errors
-      const fieldError = errors?.group_id?.[0] ?? errors?.role?.[0] ?? errors?.own_cards_only?.[0]
-      if (fieldError) setError(fieldError)
+      if (errors?.group_id?.[0]) setError(errors.group_id[0])
+      else if (errors?.roles?.[0]) setRolesError(errors.roles[0])
       else toast.error(getErrorMessage(err, tc('errors.generic')))
     }
   }
@@ -100,7 +94,8 @@ export function AddSpaceGroupDialog({
                 setError(undefined)
                 // Встроенной группе роль администратора не выдаётся
                 const next = options.find((group) => group.id === event.target.value)
-                if (next?.system && role === 'admin') setRole('commenter')
+                if (next?.system)
+                  setRoles((current) => current.filter((r) => !MANAGING_ROLES.includes(r)))
               }}
             >
               <option value="">{t('addGroup.choose')}</option>
@@ -111,32 +106,18 @@ export function AddSpaceGroupDialog({
               ))}
             </NativeSelect>
           </FormField>
-          <FormField
-            id="space-group-role"
-            label={t('addMember.role')}
-            hint={t(`roleHints.${role}`)}
-          >
-            <NativeSelect
-              id="space-group-role"
-              value={role}
-              onChange={(event) => setRole(event.target.value as SpaceRole)}
-            >
-              <RoleSelectOptions withoutAdmin={isSystem} />
-            </NativeSelect>
+          <FormField id="space-group-roles" label={t('rolesField.label')} error={rolesError}>
+            <RolesField
+              id="space-group-roles"
+              value={roles}
+              onChange={(next) => {
+                setRoles(next)
+                setRolesError(undefined)
+              }}
+              withoutManaging={isSystem}
+              invalid={!!rolesError}
+            />
           </FormField>
-          {role !== 'admin' && (
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="space-group-own"
-                checked={ownCardsOnly}
-                onCheckedChange={(checked) => setOwnCardsOnly(checked === true)}
-              />
-              <div className="grid gap-1">
-                <Label htmlFor="space-group-own">{t('members.ownCardsOnly')}</Label>
-                <p className="text-muted-foreground text-xs">{t('members.ownCardsOnlyHint')}</p>
-              </div>
-            </div>
-          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               {tc('actions.cancel')}

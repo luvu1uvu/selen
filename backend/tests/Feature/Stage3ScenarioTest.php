@@ -2,6 +2,7 @@
 
 use App\Models\AccessGrant;
 use App\Models\Invitation;
+use App\Models\NavNode;
 use App\Models\User;
 use Database\Factories\UserFactory;
 use Illuminate\Support\Carbon;
@@ -66,12 +67,15 @@ it('проходит сквозной сценарий этапа 3', function (
     $management = $group('Management');
     $analysts = $group('Analysts');
     $contractors = $group('Contractors');
+    // Доступ группы — «Доступ…» узла пространства (П2d-1)
+    $grant = fn (string $group, string $key, array $roles) => $s->put(adminPath().'nav-nodes/'.NavNode::query()->where('space_id', $spaces[$key])->value('id')
+        ."/access/groups/{$group}", ['roles' => $roles])->assertOk();
     foreach (['IOS', 'AND', 'FRONT', 'BACK'] as $key) {
-        $s->put(adminPath()."groups/{$management}/spaces/{$spaces[$key]}", ['role' => 'commenter'])->assertOk();
-        $s->put(adminPath()."groups/{$analysts}/spaces/{$spaces[$key]}", ['role' => 'commenter'])->assertOk();
+        $grant($management, $key, ['commenter']);
+        $grant($analysts, $key, ['commenter']);
     }
-    $s->put(adminPath()."groups/{$management}/spaces/{$spaces['MGMT']}", ['role' => 'admin'])->assertOk();
-    $s->put(adminPath()."groups/{$contractors}/spaces/{$spaces['FRONT']}", ['role' => 'editor', 'own_cards_only' => true])->assertOk();
+    $grant($management, 'MGMT', ['admin']);
+    $grant($contractors, 'FRONT', ['editor_own']);
 
     // --- 3. Иван: в «Management» сразу видит все пространства, исключён — со следующего запроса 404 ---
     $ivan = $login('ivan');
@@ -88,7 +92,7 @@ it('проходит сквозной сценарий этапа 3', function (
 
     // --- 4. Ольга: «Analysts» + лично editor в Backend ------------------------------------------
     $s->post(adminPath()."groups/{$analysts}/members", ['user_id' => $id('olga')])->assertOk();
-    $s->post('/api/v1/spaces/BACK/members', ['user_id' => $id('olga'), 'role' => 'editor'])->assertCreated();
+    $s->post('/api/v1/spaces/BACK/members', ['user_id' => $id('olga'), 'roles' => ['editor']])->assertCreated();
     $olga = $login('olga');
     $olga->post("/api/v1/boards/{$boards['BACK']}/cards", ['title' => 'API отчётов'] + $cell($olga, 'BACK'))->assertCreated();
     $olga->post("/api/v1/boards/{$boards['FRONT']}/cards", ['title' => 'Нельзя'] + $cell($olga, 'FRONT'))->assertForbidden();
@@ -99,7 +103,7 @@ it('проходит сквозной сценарий этапа 3', function (
 
     // --- 5. Пётр: «Contractors» (editor, только свои) + лично commenter без ограничения во Frontend ---
     $s->post(adminPath()."groups/{$contractors}/members", ['user_id' => $id('petr')])->assertOk();
-    $s->post('/api/v1/spaces/FRONT/members', ['user_id' => $id('petr'), 'role' => 'commenter'])->assertCreated();
+    $s->post('/api/v1/spaces/FRONT/members', ['user_id' => $id('petr'), 'roles' => ['commenter']])->assertCreated();
     $frontCell = $cell($s, 'FRONT');
     $s->post("/api/v1/boards/{$boards['FRONT']}/cards", ['title' => 'Чужая'] + $frontCell)->assertCreated()->assertJsonPath('data.key', 'FRONT-1');
     $s->post("/api/v1/boards/{$boards['FRONT']}/cards", ['title' => 'Своя'] + $frontCell)->assertCreated()->assertJsonPath('data.key', 'FRONT-2');
@@ -113,8 +117,8 @@ it('проходит сквозной сценарий этапа 3', function (
     $petr->post('/api/v1/cards/FRONT-2/move', ['column_id' => $frontCell['next'], 'lane_id' => $frontCell['lane_id']])->assertOk();
 
     // --- 6. Папка Mobile: только с iOS для Юли, отсутствует для Бориса --------------------------
-    $s->post('/api/v1/spaces/IOS/members', ['user_id' => $id('yulia'), 'role' => 'commenter'])->assertCreated();
-    $s->post('/api/v1/spaces/BACK/members', ['user_id' => $id('boris'), 'role' => 'commenter'])->assertCreated();
+    $s->post('/api/v1/spaces/IOS/members', ['user_id' => $id('yulia'), 'roles' => ['commenter']])->assertCreated();
+    $s->post('/api/v1/spaces/BACK/members', ['user_id' => $id('boris'), 'roles' => ['commenter']])->assertCreated();
     $yulia = $login('yulia');
     $yuliaTree = navItems($yulia->get('/api/v1/navigation'));
     expect($yuliaTree)->toHaveCount(1)
@@ -150,14 +154,14 @@ it('проходит сквозной сценарий этапа 3', function (
     $olga->get('/api/v1/cards/AND-1')->assertOk()->assertJsonPath('data.key', 'AND-1');
 
     // --- 8. Инвариант личного администратора --------------------------------------------------
-    $s->patch("/api/v1/spaces/MGMT/members/{$id('S')}", ['role' => 'editor'])->assertUnprocessable();
+    $s->patch("/api/v1/spaces/MGMT/members/{$id('S')}", ['roles' => ['editor']])->assertUnprocessable();
     $s->delete("/api/v1/spaces/MGMT/members/{$id('S')}")->assertUnprocessable();
 
     // --- 9. «Все сотрудники»: Management открыт всем ---------------------------------------
     $everyone = collect($s->get(adminPath().'groups')->assertOk()->json('data'))->firstWhere('system', 'everyone');
     expect($everyone['name'])->toBe('Все сотрудники');
-    $s->post('/api/v1/spaces/MGMT/groups', ['group_id' => $everyone['id'], 'role' => 'admin'])->assertUnprocessable();
-    $s->post('/api/v1/spaces/MGMT/groups', ['group_id' => $everyone['id'], 'role' => 'commenter'])->assertCreated();
+    $s->post('/api/v1/spaces/MGMT/groups', ['group_id' => $everyone['id'], 'roles' => ['admin']])->assertUnprocessable();
+    $s->post('/api/v1/spaces/MGMT/groups', ['group_id' => $everyone['id'], 'roles' => ['commenter']])->assertCreated();
     $s->post(adminPath()."groups/{$everyone['id']}/archive")->assertUnprocessable();
     $s->post(adminPath()."groups/{$everyone['id']}/members", ['user_id' => $id('boris')])->assertUnprocessable();
 
@@ -174,7 +178,7 @@ it('проходит сквозной сценарий этапа 3', function (
     // Значок у папки — только когда открыты все её пространства
     $mobileNode = fn () => collect($s->get(adminPath().'navigation')->assertOk()->json('data'))->firstWhere('id', $mobile);
     expect($mobileNode()['everyone'])->toBeFalse();
-    $s->post('/api/v1/spaces/IOS/groups', ['group_id' => $everyone['id'], 'role' => 'commenter'])->assertCreated();
+    $s->post('/api/v1/spaces/IOS/groups', ['group_id' => $everyone['id'], 'roles' => ['commenter']])->assertCreated();
     expect($mobileNode()['everyone'])->toBeTrue();
     expect(navItems($newcomer->get('/api/v1/navigation'))[1])->toMatchArray(['type' => 'folder', 'name' => 'Mobile', 'everyone' => true]);
 

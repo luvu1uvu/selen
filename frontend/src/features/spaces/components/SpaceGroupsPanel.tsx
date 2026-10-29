@@ -3,19 +3,20 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getErrorMessage } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
-import type { Space, SpaceGroupGrant, SpaceRole } from '@/shared/types/api'
+import type { Space, SpaceGroupGrant } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { useRemoveSpaceGroup, useSpaceGroups, useUpdateSpaceGroup } from '../queries'
 import { AddSpaceGroupDialog } from './AddSpaceGroupDialog'
-import { RoleSelectOptions } from './RoleSelectOptions'
+import { EditRolesDialog } from './EditRolesDialog'
+import { RoleChips } from './RolesField'
 
 /**
- * Вкладка «Группы»: группы с доступом к пространству (ADR-0012). Выдавать, менять и отзывать доступ —
- * администраторы пространства; состав групп ведёт системный администратор в админке.
+ * Вкладка «Группы»: группы с доступом к пространству (ADR-0012) — на само пространство и унаследованные с папок выше
+ * (пометка «через папку X», П2d-1; меняются в «Доступе…» той папки). Роли — чипами. Выдавать, менять роли и отзывать
+ * доступ на самом пространстве — те, кто управляет в нём доступом; состав групп ведёт администратор компании.
  */
 export function SpaceGroupsPanel({ space }: { space: Space }) {
   const { t } = useTranslation('spaces')
@@ -24,6 +25,7 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
   const update = useUpdateSpaceGroup(space.key)
   const remove = useRemoveSpaceGroup(space.key)
   const [toRemove, setToRemove] = useState<SpaceGroupGrant | null>(null)
+  const [editing, setEditing] = useState<SpaceGroupGrant | null>(null)
   const canManage = space.permissions.manage
 
   const run = async (action: () => Promise<unknown>, success: string) => {
@@ -36,6 +38,7 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
   }
 
   const grants = groupsQuery.data ?? []
+  const nameOf = (grant: SpaceGroupGrant) => grant.group.name ?? t('members.hiddenGroup')
 
   return (
     <div className="grid gap-4">
@@ -44,7 +47,9 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
           <AddSpaceGroupDialog
             spaceKey={space.key}
             companyId={space.company_id}
-            grantedIds={grants.map((grant) => grant.group.id)}
+            grantedIds={grants
+              .filter((grant) => !grant.inherited_from)
+              .map((grant) => grant.group.id)}
           />
         </div>
       )}
@@ -55,10 +60,9 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
         <TableHeader>
           <TableRow>
             <TableHead>{t('groups.columns.name')}</TableHead>
-            <TableHead className="w-48">{t('groups.columns.role')}</TableHead>
-            <TableHead>{t('groups.columns.restriction')}</TableHead>
+            <TableHead>{t('groups.columns.role')}</TableHead>
             {canManage && (
-              <TableHead className="w-28">
+              <TableHead>
                 <span className="sr-only">{t('groups.columns.actions')}</span>
               </TableHead>
             )}
@@ -67,17 +71,18 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
         <TableBody>
           {groupsQuery.isSuccess && grants.length === 0 && (
             <TableRow>
-              <TableCell colSpan={4} className="text-muted-foreground py-6 text-center">
+              <TableCell colSpan={3} className="text-muted-foreground py-6 text-center">
                 {t('groups.empty')}
               </TableCell>
             </TableRow>
           )}
           {grants.map((grant) => {
             // Гостю группы компании-хозяина — без названий (решение PM 28.10); управлять ими он не может
-            const group = { ...grant.group, name: grant.group.name ?? t('members.hiddenGroup') }
-            const editable = canManage && !group.archived_at
+            const group = { ...grant.group, name: nameOf(grant) }
+            const folder = grant.inherited_from
+            const editable = canManage && !group.archived_at && !folder
             return (
-              <TableRow key={group.id}>
+              <TableRow key={`${group.id}|${folder?.id ?? ''}`}>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-2 font-medium">
                     {group.name}
@@ -91,6 +96,20 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
                         {t('groups.archived')}
                       </Badge>
                     )}
+                    {folder && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span tabIndex={0} className="rounded-md">
+                            <Badge variant="outline">
+                              {t('groups.inherited', { folder: folder.name })}
+                            </Badge>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {t('groups.inheritedHint', { folder: folder.name })}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                   {/* Гостю численности и описания нет (LATER-139) — строки нет */}
                   {group.members_count !== null && (
@@ -101,73 +120,33 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
                   )}
                 </TableCell>
                 <TableCell>
-                  {editable ? (
-                    <NativeSelect
-                      className="min-w-40"
-                      aria-label={t('groups.roleLabel', { name: group.name })}
-                      value={grant.role}
-                      disabled={update.isPending}
-                      onChange={(event) =>
-                        run(
-                          () =>
-                            update.mutateAsync({
-                              groupId: group.id,
-                              role: event.target.value as SpaceRole,
-                            }),
-                          t('groups.toasts.roleChanged'),
-                        )
-                      }
-                    >
-                      <RoleSelectOptions withoutAdmin={group.system !== null} />
-                    </NativeSelect>
-                  ) : (
-                    t(`roles.${grant.role}`)
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editable && grant.role !== 'admin' ? (
-                    <div className="flex items-center gap-2" title={t('members.ownCardsOnlyHint')}>
-                      <Checkbox
-                        id={`group-own-cards-${group.id}`}
-                        aria-label={t('groups.ownCardsOnlyLabel', { name: group.name })}
-                        checked={grant.own_cards_only}
-                        disabled={update.isPending}
-                        onCheckedChange={(checked) =>
-                          run(
-                            () =>
-                              update.mutateAsync({
-                                groupId: group.id,
-                                own_cards_only: checked === true,
-                              }),
-                            checked === true
-                              ? t('members.restrictionOn')
-                              : t('members.restrictionOff'),
-                          )
-                        }
-                      />
-                      <label
-                        htmlFor={`group-own-cards-${group.id}`}
-                        className="text-sm whitespace-nowrap"
-                      >
-                        {t('members.ownCardsOnly')}
-                      </label>
-                    </div>
-                  ) : (
-                    grant.own_cards_only && (
-                      <Badge variant="secondary">{t('members.ownCardsOnly')}</Badge>
-                    )
-                  )}
+                  <RoleChips roles={grant.roles} />
                 </TableCell>
                 {canManage && (
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={t('groups.removeLabel', { name: group.name })}
-                      onClick={() => setToRemove(grant)}
-                    >
-                      {t('groups.remove')}
-                    </Button>
+                    {/* Унаследованный доступ меняется на своей папке — здесь действий нет */}
+                    {!folder && (
+                      <div className="flex justify-end gap-1">
+                        {editable && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={t('groups.editRolesLabel', { name: group.name })}
+                            onClick={() => setEditing(grant)}
+                          >
+                            {t('groups.editRoles')}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={t('groups.removeLabel', { name: group.name })}
+                          onClick={() => setToRemove(grant)}
+                        >
+                          {t('groups.remove')}
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 )}
               </TableRow>
@@ -176,12 +155,29 @@ export function SpaceGroupsPanel({ space }: { space: Space }) {
         </TableBody>
       </Table>
 
+      <EditRolesDialog
+        target={
+          editing && {
+            title: t('groups.editRolesTitle', { name: nameOf(editing) }),
+            description: t('groups.editRolesDescription'),
+            roles: editing.roles,
+            withoutManaging: editing.group.system !== null,
+          }
+        }
+        onClose={() => setEditing(null)}
+        onSave={async (roles) => {
+          if (!editing) return
+          await update.mutateAsync({ groupId: editing.group.id, roles })
+          toast.success(t('groups.toasts.roleChanged'))
+        }}
+      />
+
       <ConfirmDialog
         open={toRemove !== null}
         onOpenChange={(open) => !open && setToRemove(null)}
         pending={remove.isPending}
         title={t('groups.removeTitle')}
-        description={t('groups.removeText', { name: toRemove?.group.name ?? '' })}
+        description={t('groups.removeText', { name: toRemove ? nameOf(toRemove) : '' })}
         confirmLabel={t('groups.remove')}
         onConfirm={async () => {
           if (toRemove) {

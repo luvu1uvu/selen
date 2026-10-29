@@ -102,26 +102,29 @@ it('нельзя архивировать, переименовать и мен�
 it('выдаётся пространству ролью editor или commenter, но не admin', function () {
     $this->actingAs($this->spaceAdmin);
 
-    $this->postJson('/api/v1/spaces/MGMT/groups', ['group_id' => $this->everyone->id, 'role' => 'admin'])
-        ->assertUnprocessable()->assertJsonValidationErrors(['role' => 'только редактор или читатель']);
+    $this->postJson('/api/v1/spaces/MGMT/groups', ['group_id' => $this->everyone->id, 'roles' => ['admin']])
+        ->assertUnprocessable()->assertJsonValidationErrors(['roles' => 'только редактор или читатель']);
 
-    $this->postJson('/api/v1/spaces/MGMT/groups', ['group_id' => $this->everyone->id, 'role' => 'editor', 'own_cards_only' => true])
+    $this->postJson('/api/v1/spaces/MGMT/groups', ['group_id' => $this->everyone->id, 'roles' => ['editor_own']])
         ->assertCreated()
         ->assertJsonPath('data.group.system', 'everyone')
         ->assertJsonPath('data.group.members_count', 1)
-        ->assertJsonPath('data.own_cards_only', true);
+        ->assertJsonPath('data.roles', ['editor_own']);
 
-    $this->patchJson("/api/v1/spaces/MGMT/groups/{$this->everyone->id}", ['role' => 'admin'])
-        ->assertUnprocessable()->assertJsonValidationErrors('role');
-    $this->patchJson("/api/v1/spaces/MGMT/groups/{$this->everyone->id}", ['role' => 'commenter', 'own_cards_only' => false])
-        ->assertOk()->assertJsonPath('data.role', 'commenter');
+    $this->patchJson("/api/v1/spaces/MGMT/groups/{$this->everyone->id}", ['roles' => ['admin']])
+        ->assertUnprocessable()->assertJsonValidationErrors('roles');
+    $this->patchJson("/api/v1/spaces/MGMT/groups/{$this->everyone->id}", ['roles' => ['commenter']])
+        ->assertOk()->assertJsonPath('data.roles', ['commenter']);
 
-    // Из админки — то же правило
+    // Из админки («Доступ…» узла, П2d-1) — то же правило, и для папки
     $this->actingAs(admin());
-    $this->putJson(adminPath()."groups/{$this->everyone->id}/spaces/{$this->space->id}", ['role' => 'admin'])
-        ->assertUnprocessable()->assertJsonValidationErrors('role');
+    $this->putJson(adminPath().'nav-nodes/'.nodeOf($this->space)->id."/access/groups/{$this->everyone->id}", ['roles' => ['admin']])
+        ->assertUnprocessable()->assertJsonValidationErrors('roles');
+    $this->putJson(adminPath().'nav-nodes/'.makeFolder('Папка')->id."/access/groups/{$this->everyone->id}", ['roles' => ['commenter', 'admin']])
+        ->assertUnprocessable()->assertJsonValidationErrors('roles');
 
-    expect(loggedEventTypes())->toBe(['space.group_added', 'space.group_role_changed', 'space.group_restriction_changed']);
+    expect(loggedEventTypes())->toContain('space.group_added', 'space.group_role_changed')
+        ->not->toContain('space.group_restriction_changed', 'folder.access_granted');
     expectNoPersonalDataInEventLog();
 });
 

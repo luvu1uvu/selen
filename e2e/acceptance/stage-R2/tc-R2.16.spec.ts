@@ -3,6 +3,7 @@ import { openBoard, pageAs } from '../../tests/helpers'
 import { roleCell, userRow } from '../stage-3/helpers'
 import {
   adminRail,
+  chooseRoles,
   column,
   COMPANY_1,
   COMPANY_2,
@@ -23,6 +24,9 @@ import {
  * candidate@: «дом» в «E2E Компании 2», комментатор её RSECOND «Вторая компания: продажи»); «Разработка» → RGUEST
  * «Гостевое», доска «Задачи», карточка RGUEST-1 «Задача для гостя» (E2eSeeder::guestsAndRights, guestsAndRightsCases).
  * В конце гостя убираем — тест можно повторить.
+ *
+ * П2d-1: роль в строке пространства окна «Добавить гостя» — чипами (группа «Роли в «…»», без «Администратора») вместо
+ * списка «Роль».
  */
 
 const CANDIDATE = 'E2E Кандидат в гости'
@@ -38,7 +42,9 @@ test('ТК-R2.16. Добавить гостя — он видит только �
   await dialog.getByRole('button', { name: 'Добавить пространство' }).click()
   const grants = dialog.getByRole('group', { name: 'Доступ к пространствам' })
   await grants.getByRole('combobox', { name: 'Пространство' }).selectOption({ label: `${GUEST_SPACE} (RGUEST)` })
-  await grants.getByRole('combobox', { name: 'Роль' }).selectOption({ label: 'Комментатор' })
+  const roles = grants.getByRole('group', { name: `Роли в «${GUEST_SPACE} (RGUEST)»` })
+  await expect(roles.getByRole('button', { name: 'Администратор', exact: true })).toHaveCount(0)
+  await chooseRoles(roles, ['Комментатор'])
   await expect(dialog.getByLabel('Доступ до')).toHaveValue('')
   await dialog.getByRole('button', { name: 'Добавить', exact: true }).click()
   await expect(dialog).toBeHidden()

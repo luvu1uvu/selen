@@ -7,7 +7,8 @@ use App\Enums\SpaceRole;
 use Closure;
 
 /**
- * Итоговые права пользователя в пространстве — набор действующих источников (ADR-0012, ADR-0024).
+ * Итоговые права пользователя в пространстве (или на папке, NavNode::accessOf) — набор действующих источников:
+ * выдачи на сам узел и унаследованные с папок выше (ADR-0012, ADR-0024).
  *
  * Главное правило: действие разрешено, если его ЦЕЛИКОМ разрешает хотя бы один источник. Права роли одного
  * источника не сочетаются с областью карточек другого: личный «Комментатор» и группа «Редактор — только свои
@@ -86,16 +87,14 @@ final readonly class SpaceAccess
         return null;
     }
 
-    /** Личная выдача, если она есть. */
-    public function personal(): ?AccessSource
+    /**
+     * Личные выдачи на сам узел (не унаследованные) — у субъекта на узле может быть несколько ролей (П2d-1).
+     *
+     * @return list<AccessSource>
+     */
+    public function personalSources(): array
     {
-        foreach ($this->sources as $source) {
-            if ($source->isPersonal()) {
-                return $source;
-            }
-        }
-
-        return null;
+        return array_values(array_filter($this->sources, fn (AccessSource $source) => $source->isPersonal() && ! $source->isInherited()));
     }
 
     /** @param  callable(AccessSource): bool  $check */

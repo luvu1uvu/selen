@@ -1,5 +1,12 @@
 import { api } from '@/shared/api/client'
-import type { AdminNavigation, Collection, NavCompanyTree } from '@/shared/types/api'
+import type {
+  AdminNavigation,
+  Collection,
+  MoveImpact,
+  NavCompanyTree,
+  NodeAccess,
+  RoleKey,
+} from '@/shared/types/api'
 
 /**
  * Дерево пользователя по компаниям: только папки с доступными ему пространствами (ADR-0013, ADR-0024); название
@@ -72,4 +79,50 @@ export async function setFolderArchived(
     archived ? undefined : { restore_spaces: restoreSpaces },
   )
   return data
+}
+
+/** Что изменит перемещение узла в доступе (П2d-1): кто получит, кто потеряет, где не останется управляющего. */
+export async function fetchMoveImpact(
+  company: string,
+  id: string,
+  parentId: string | null,
+): Promise<MoveImpact> {
+  const { data } = await api.get<{ data: MoveImpact }>(
+    `/admin/companies/${company}/nav-nodes/${id}/move-impact`,
+    { params: { parent_id: parentId ?? '' } },
+  )
+  return data.data
+}
+
+/** «Доступ…» папки или пространства (П2d-1): выдачи на узел и унаследованные с папок выше. */
+export async function fetchNodeAccess(company: string, id: string): Promise<NodeAccess> {
+  const { data } = await api.get<{ data: NodeAccess }>(
+    `/admin/companies/${company}/nav-nodes/${id}/access`,
+  )
+  return data.data
+}
+
+/** Роли человека или группы на узле — набор целиком; отвечает обновлённым «Доступом…». */
+export async function setNodeAccess(
+  company: string,
+  id: string,
+  subject: { type: 'user' | 'group'; id: string },
+  roles: RoleKey[],
+): Promise<NodeAccess> {
+  const { data } = await api.put<{ data: NodeAccess }>(
+    `/admin/companies/${company}/nav-nodes/${id}/access/${subject.type}s/${subject.id}`,
+    { roles },
+  )
+  return data.data
+}
+
+/** Снять доступ человека или группы к узлу (все роли на нём; унаследованные — на своей папке). */
+export async function revokeNodeAccess(
+  company: string,
+  id: string,
+  subject: { type: 'user' | 'group'; id: string },
+): Promise<void> {
+  await api.delete(
+    `/admin/companies/${company}/nav-nodes/${id}/access/${subject.type}s/${subject.id}`,
+  )
 }

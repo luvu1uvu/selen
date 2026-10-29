@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Actions\Access\NodeGrants;
 use App\Models\AccessGrant;
 use App\Models\Group;
+use App\Models\NavNode;
 use App\Models\User;
 use App\Services\Access\AccessSource;
 use App\Services\Access\CompanyMembers;
@@ -13,13 +15,13 @@ use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
 
 /**
- * Человек с доступом к пространству (вкладка «Люди», выбор людей в карточку): откуда у него доступ —
- * лично и/или через какие группы (ADR-0012).
+ * Человек с доступом к пространству (вкладка «Люди», выбор людей в карточку): откуда у него доступ — лично и/или через
+ * какие группы, на само пространство или через папку выше (ADR-0012, П2d-1), с ролями каждого источника.
  *
  * Зрителю, у которого все источники с режимом «только свои карточки» (подрядчик), отдаётся только
  * сам пользователь: ни ролей, ни названий групп (поправка PM к этапу 3).
  *
- * @property array{user: User, access: SpaceAccess, personal: AccessGrant|null, groups: Collection<string, Group>, show_sources: bool, space_company_id: string} $resource
+ * @property array{user: User, access: SpaceAccess, personal: Collection<int, AccessGrant>, groups: Collection<string, Group>, folders: Collection<string, NavNode>, show_sources: bool, space_company_id: string} $resource
  */
 class SpacePersonResource extends JsonResource
 {
@@ -51,24 +53,35 @@ class SpacePersonResource extends JsonResource
             return $person;
         }
 
+        $folders = $this->resource['folders'];
+
         return $person + [
-            // Самая сильная роль — для показа; права считаются по источникам
-            'role' => $access->highestRole(),
-            // Личная выдача в прежнем виде API: роль + «только свои карточки» (ADR-0024, П2a)
-            'personal' => $personal === null ? null : [
-                'role' => $personal->legacyRole(),
-                'own_cards_only' => $personal->ownCardsOnly(),
-                'added_at' => $personal->created_at->toIso8601ZuluString(),
+            // Личные роли на самом пространстве — их меняют здесь (П2d-1: ролей может быть несколько)
+            'personal' => $personal->isEmpty() ? null : [
+                'roles' => NodeGrants::values($personal->pluck('role')),
+                'added_at' => $personal->min('created_at')->toIso8601ZuluString(),
             ],
-            'groups' => collect($access->sources)
-                ->reject(fn (AccessSource $source) => $source->isPersonal())
-                ->map(fn (AccessSource $source) => [
-                    'id' => $source->groupId,
-                    'name' => $guestViewer ? null : $groups->get((string) $source->groupId)?->name,
-                    'role' => $source->legacyRole(),
-                    'own_cards_only' => $source->ownCardsOnly(),
-                ])
-                ->sortBy(fn (array $group) => mb_strtolower((string) $group['name']))
+            // Все источники: лично и группы, на пространство и через папки выше — каждый со своими ролями
+            'sources' => collect($access->sources)
+                ->groupBy(fn (AccessSource $source) => ($source->groupId ?? '').'|'.($source->inheritedFrom ?? ''))
+                ->map(function (Collection $same) use ($groups, $folders, $guestViewer) {
+                    /** @var AccessSource $source */
+                    $source = $same->first();
+                    $folder = $source->inheritedFrom === null ? null : $folders->get($source->inheritedFrom);
+
+                    return [
+                        'type' => $source->isPersonal() ? 'personal' : 'group',
+                        'group' => $source->isPersonal() ? null : [
+                            'id' => $source->groupId,
+                            'name' => $guestViewer ? null : $groups->get((string) $source->groupId)?->name,
+                        ],
+                        'folder' => $folder === null ? null : ['id' => $folder->id, 'name' => $folder->name],
+                        'roles' => array_values(array_unique($same->map(fn (AccessSource $s) => $s->standardRole->value ?? $s->roleId)->all())),
+                        'sort' => [$source->isPersonal() ? 0 : 1, $folder === null ? 0 : 1, mb_strtolower((string) $groups->get((string) $source->groupId)?->name), mb_strtolower((string) $folder?->name)],
+                    ];
+                })
+                ->sortBy(fn (array $row) => $row['sort'])
+                ->map(fn (array $row) => collect($row)->except('sort')->all())
                 ->values(),
         ];
     }

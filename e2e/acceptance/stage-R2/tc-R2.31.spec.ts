@@ -10,6 +10,9 @@ import { companyButton, openAdminPanel, openCompanyUsers, SECOND_SPACE, THIRD_SP
  * Шаги под Владельцем — только вручную: в базе E2E три компании (данные режима «несколько компаний»), и у e2e-owner
  * выбор компании и их названия есть — так и задумано, когда компаний в базе несколько (ADR-0026). Владельца в копии
  * одной компании закрывают Pest и Vitest (SingleCompanyMode.test.tsx).
+ *
+ * П2d-1: в приглашении доступ — к папкам и пространствам, подпись блока — «Доступ к папкам и пространствам» (вместо
+ * «Доступ к пространствам»).
  */
 test.use({ storageState: authFile('e2e-admin@selen.test') })
 
@@ -31,14 +34,15 @@ test('ТК-R2.31. Названия компании и выбора компан
   await expect(panel.getByRole('link', { name: 'Пользователи', exact: true })).toBeVisible()
   await expect(companyButton(page)).toHaveCount(0)
 
-  // «Пользователи» → «Пригласить»: «Имя и фамилия», «Рабочий email», «Роль», доступ к пространствам; поля «Компания» нет
+  // «Пользователи» → «Пригласить»: «Имя и фамилия», «Рабочий email», «Роль», доступ к папкам и пространствам; поля
+  // «Компания» нет
   await openCompanyUsers(page)
   await page.getByRole('button', { name: 'Пригласить', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Пригласить пользователя' })
   await expect(dialog.getByLabel('Имя и фамилия')).toBeVisible()
   await expect(dialog.getByLabel('Рабочий email')).toBeVisible()
   await expect(dialog.getByLabel('Роль', { exact: true })).toBeVisible()
-  await expect(dialog.getByText('Доступ к пространствам', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('Доступ к папкам и пространствам', { exact: true })).toBeVisible()
   await expect(dialog.getByLabel('Компания', { exact: true })).toHaveCount(0)
   await expect(dialog.getByText(/Компания \d/)).toHaveCount(0)
   await dialog.getByRole('button', { name: 'Отмена' }).click()

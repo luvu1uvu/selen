@@ -4,6 +4,7 @@ use App\Actions\Cards\DeleteCardAction;
 use App\Enums\BoardTemplate;
 use App\Enums\EventType;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
 use App\Models\CardType;
 use App\Models\Company;
 use App\Models\CompanyPermissionGrant;
@@ -315,8 +316,8 @@ it('(в) ссылки на объекты другой компании в те�
     $mention = ['type' => 'doc', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'mention', 'attrs' => ['id' => $b['editor']->id]]]]]];
 
     $requests = [
-        ['POST', "/api/v1/spaces/{$a['space']->key}/members", ['user_id' => $b['editor']->id, 'role' => 'editor'], 'user_id'],
-        ['POST', "/api/v1/spaces/{$a['space']->key}/groups", ['group_id' => $b['group']->id, 'role' => 'commenter'], 'group_id'],
+        ['POST', "/api/v1/spaces/{$a['space']->key}/members", ['user_id' => $b['editor']->id, 'roles' => ['editor']], 'user_id'],
+        ['POST', "/api/v1/spaces/{$a['space']->key}/groups", ['group_id' => $b['group']->id, 'roles' => ['commenter']], 'group_id'],
         ['POST', adminPath()."groups/{$a['group']->id}/members", ['user_id' => $b['editor']->id], 'user_id'],
         ['POST', adminPath().'spaces', ['name' => 'Новое', 'key' => 'NEWONE', 'admin_ids' => [$b['admin']->id]], 'admin_ids.0'],
         ['POST', adminPath().'spaces', ['name' => 'Новое', 'key' => 'NEWTWO', 'parent_id' => $b['folder']->id], 'parent_id'],
@@ -497,7 +498,7 @@ it('(д) у гостя нет ничего, кроме выданных прос
     // Люди и группы — видны, но без email и названий; свой email гость видит
     $people = collect($this->getJson('/api/v1/spaces/GUEST/members')->assertOk()->json('data'))->keyBy('user.id');
     expect($people[$host->id]['user'])->toMatchArray(['name' => 'Хозяин гостевого', 'email' => null])
-        ->and($people[$host->id]['groups'][0]['name'])->toBeNull()
+        ->and(collect($people[$host->id]['sources'])->firstWhere('type', 'group')['group']['name'])->toBeNull()
         ->and($people[$guest->id]['user']['email'])->toBe('guest@selen.test');
     // И «Все сотрудники» хозяина — просто «группа»: без пометки встроенной и численности компании (LATER-139)
     grantGroup($space, Group::everyone(company()), SpaceRole::Commenter);
@@ -526,7 +527,7 @@ it('(д) гостю истёк срок — пространства компа�
 
     $this->actingAs($this->a['admin'])->putJson(adminPath()."guests/{$guest->id}", [
         'expires_on' => now()->addDays(10)->format('Y-m-d'),
-        'spaces' => [['space_id' => $this->a['space']->id, 'role' => 'commenter']],
+        'grants' => [['node_id' => nodeOf($this->a['space'])->id, 'roles' => ['commenter']]],
     ])->assertOk();
     $this->actingAs($guest)->getJson("/api/v1/spaces/{$this->a['space']->key}")->assertOk();
 });
@@ -542,8 +543,13 @@ it('(д) гостю нельзя: группы, «Все сотрудники»,
         ->not->toContain($guest->id);
     $this->postJson(adminPath()."groups/{$this->a['group']->id}/members", ['user_id' => $guest->id])->assertUnprocessable();
     // Роль с управлением доступом — 422; права компании — 403
-    $this->patchJson("/api/v1/spaces/{$this->a['space']->key}/members/{$guest->id}", ['role' => 'admin'])
-        ->assertUnprocessable()->assertJsonValidationErrors(['role' => __('selen.guests.no_manage_access')]);
+    $this->patchJson("/api/v1/spaces/{$this->a['space']->key}/members/{$guest->id}", ['roles' => ['admin']])
+        ->assertUnprocessable()->assertJsonValidationErrors(['roles' => __('selen.guests.no_manage_access')]);
+    // Папка гостю не выдаётся (П2d-1) — ни из «Доступа…», ни в обход приложения
+    $folder = makeFolder('Папка гостя');
+    $this->putJson(adminPath()."nav-nodes/{$folder->id}/access/users/{$guest->id}", ['roles' => ['commenter']])
+        ->assertUnprocessable()->assertJsonValidationErrors(['user_id' => __('selen.guests.spaces_only')]);
+    expect(fn () => DB::transaction(fn () => grantAccess($folder, $guest, StandardRole::Commenter)))->toThrow(QueryException::class, 'a guest gets only');
     $this->putJson(adminPath()."users/{$guest->id}/permissions", ['permissions' => ['company.invite_users']])->assertForbidden();
 
     // «Все сотрудники» (Редактор) гостю не добавляет: роль — его личная (Комментатор)

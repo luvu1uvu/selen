@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { openHome, pageAs } from '../../tests/helpers'
 import { findUser, openUsers, userRow } from '../stage-3/helpers'
 import { expectHint } from '../stage-ux1/helpers'
-import { accessRow, ALL, INTERNS, openMembers, result, sources, spaceLink, tree } from './helpers'
+import { accessRow, ALL, chooseRoles, INTERNS, openMembers, result, sources, spaceLink, tree } from './helpers'
 
 /**
  * ТК-R2.4: группы и «Все сотрудники» дают доступ как раньше, сводка «Доступ к пространствам» показывает, откуда
@@ -13,6 +13,9 @@ import { accessRow, ALL, INTERNS, openMembers, result, sources, spaceLink, tree 
  * сотрудникам» тест выдаёт на время и в конце отзывает (иначе пространство увидели бы e2e-outsider и e2e-analyst
  * в других тестах). E2eSeeder::rights2. Человека в «Пользователях» тест находит полем «Поиск по имени или email» (П2c-2):
  * в списке 25 человек на странице, «E2E Руководитель» — ближе к концу алфавита.
+ *
+ * П2d-1: «только свои карточки» — роль «Редактор — только свои карточки» (источник «Лично: Редактор — только свои
+ * карточки» вместо «Лично: Редактор · Только свои карточки»); роли группы в окне «Добавить группу» — чипами.
  */
 
 /** Администрирование → Пользователи → человек: страница «Доступ к пространствам». */
@@ -37,7 +40,7 @@ async function grantEveryone(page: Page) {
   const dialog = page.getByRole('dialog', { name: 'Добавить группу' })
   const everyone = await dialog.locator('option', { hasText: 'Все сотрудники' }).getAttribute('value')
   await dialog.getByLabel('Группа').selectOption(everyone!)
-  await dialog.getByLabel('Роль').selectOption({ label: 'Комментатор' })
+  await chooseRoles(dialog.getByRole('group', { name: 'Роли', exact: true }), ['Комментатор'])
   await dialog.getByRole('button', { name: 'Выдать доступ' }).click()
   await expect(page.getByText('Группе выдан доступ')).toBeVisible()
 }
@@ -74,11 +77,11 @@ test('ТК-R2.4. Доступ через группы и «Все сотрудн
   const ownRoles = accessRow(admin, 'RROLES')
   await expect(result(ownRoles)).toContainText('Редактор')
   await expect(result(ownRoles)).toContainText('Только свои карточки')
-  await expect(sources(ownRoles)).toHaveText('Лично: Редактор · Только свои карточки')
+  await expect(sources(ownRoles)).toHaveText('Лично: Редактор — только свои карточки')
   const ownGroups = accessRow(admin, 'RGROUPS')
   await expect(result(ownGroups)).toContainText('Редактор')
   await expect(result(ownGroups)).toContainText('Только свои карточки')
-  await expect(sources(ownGroups)).toHaveText('Группа «E2E Подрядчики»: Редактор · Только свои карточки')
+  await expect(sources(ownGroups)).toHaveText('Группа «E2E Подрядчики»: Редактор — только свои карточки')
 
   // 3. Сотрудник: в дереве есть пространство, открытое всем сотрудникам; пространства архивной группы нет
   try {

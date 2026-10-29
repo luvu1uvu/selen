@@ -49,9 +49,9 @@ it('гости — 404 и Владельцу, и администратору к
 
     foreach ([$this->owner, admin()] as $actor) {
         $this->actingAs($actor);
-        $this->postJson(adminPath().'guests', ['email' => $foreign->email, 'spaces' => [['space_id' => $space->id, 'role' => 'commenter']]])
+        $this->postJson(adminPath().'guests', ['email' => $foreign->email, 'grants' => [['node_id' => nodeOf($space)->id, 'roles' => ['commenter']]]])
             ->assertNotFound()->assertExactJson(['message' => __('selen.not_found')]);
-        $this->putJson(adminPath()."guests/{$guest->id}", ['expires_on' => null, 'spaces' => []])->assertNotFound();
+        $this->putJson(adminPath()."guests/{$guest->id}", ['expires_on' => null, 'grants' => []])->assertNotFound();
         $this->deleteJson(adminPath()."guests/{$guest->id}")->assertNotFound();
     }
 
@@ -65,7 +65,7 @@ it('лимит приглашений не срабатывает раньше 4
     $foreign = member(company: otherCompany());
 
     foreach (range(1, 11) as $_) {
-        $this->postJson(adminPath().'guests', ['email' => $foreign->email, 'spaces' => [['space_id' => $space->id, 'role' => 'commenter']]])
+        $this->postJson(adminPath().'guests', ['email' => $foreign->email, 'grants' => [['node_id' => nodeOf($space)->id, 'roles' => ['commenter']]]])
             ->assertNotFound();
     }
     // Приглашение после этого не упирается в лимит (10 в минуту)

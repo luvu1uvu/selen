@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { SpaceRole } from '@/shared/types/api'
+import type { RoleKey } from '@/shared/types/api'
 import {
   addMember,
   addSpaceGroup,
@@ -75,23 +75,17 @@ export function useUpdateSpace(key: string) {
 export function useAddMember(key: string) {
   const invalidate = useInvalidateSpaces()
   return useMutation({
-    mutationFn: (payload: { user_id: string; role: SpaceRole }) => addMember(key, payload),
+    mutationFn: (payload: { user_id: string; roles: RoleKey[] }) => addMember(key, payload),
     onSuccess: invalidate,
   })
 }
 
-/** Роль участника и/или режим «только свои карточки». */
+/** Личные роли участника на пространстве (П2d-1). */
 export function useUpdateMember(key: string) {
   const invalidate = useInvalidateSpaces()
   return useMutation({
-    mutationFn: ({
-      userId,
-      ...payload
-    }: {
-      userId: string
-      role?: SpaceRole
-      own_cards_only?: boolean
-    }) => updateMember(key, userId, payload),
+    mutationFn: ({ userId, roles }: { userId: string; roles: RoleKey[] }) =>
+      updateMember(key, userId, { roles }),
     onSuccess: invalidate,
   })
 }
@@ -124,8 +118,7 @@ export function useGroupDirectory(company: string, enabled = true) {
 export function useAddSpaceGroup(key: string) {
   const invalidate = useInvalidateSpaces()
   return useMutation({
-    mutationFn: (payload: { group_id: string; role: SpaceRole; own_cards_only: boolean }) =>
-      addSpaceGroup(key, payload),
+    mutationFn: (payload: { group_id: string; roles: RoleKey[] }) => addSpaceGroup(key, payload),
     onSuccess: invalidate,
   })
 }
@@ -133,14 +126,8 @@ export function useAddSpaceGroup(key: string) {
 export function useUpdateSpaceGroup(key: string) {
   const invalidate = useInvalidateSpaces()
   return useMutation({
-    mutationFn: ({
-      groupId,
-      ...payload
-    }: {
-      groupId: string
-      role?: SpaceRole
-      own_cards_only?: boolean
-    }) => updateSpaceGroup(key, groupId, payload),
+    mutationFn: ({ groupId, roles }: { groupId: string; roles: RoleKey[] }) =>
+      updateSpaceGroup(key, groupId, { roles }),
     onSuccess: invalidate,
   })
 }

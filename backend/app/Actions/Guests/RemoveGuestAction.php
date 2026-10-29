@@ -2,10 +2,11 @@
 
 namespace App\Actions\Guests;
 
+use App\Actions\Access\NodeGrants;
 use App\Enums\EventType;
 use App\Models\AccessGrant;
 use App\Models\Company;
-use App\Models\Space;
+use App\Models\NavNode;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
 use App\Services\Access\CompanyMemberships;
@@ -34,16 +35,20 @@ class RemoveGuestAction
                 throw ValidationException::withMessages(['user' => __('selen.guests.not_guest')]);
             }
 
-            $grants = AccessGrant::query()->inCompany($company)->where('user_id', $guest->id)->with(['navNode', 'role'])->orderBy('id')->get();
-            foreach ($grants as $grant) {
-                $space = Space::query()->lockForUpdate()->findOrFail($grant->navNode->space_id);
-                $role = $grant->legacyRole();
-                $grant->delete();
-                $this->events->record(EventType::SpaceMemberRemoved, $actor, $space, array_filter([
+            // У гостя — только выдачи на пространства (П2c); несколько ролей на пространстве — одно событие (П2d-1)
+            // Сначала блокировка дерева, потом выборка: выдача, добавленная параллельно, не останется «спящей»
+            NavNode::lockTree();
+            $grants = AccessGrant::query()->inCompany($company)->where('user_id', $guest->id)->with(['navNode.space', 'role'])->orderBy('id')->get();
+            foreach ($grants->groupBy('nav_node_id') as $same) {
+                /** @var AccessGrant $first */
+                $first = $same->first();
+                $roles = NodeGrants::values($same->pluck('role'));
+                $same->each(fn (AccessGrant $grant) => $grant->delete());
+                $this->events->record(EventType::SpaceMemberRemoved, $actor, $first->navNode->space, [
                     'user_id' => $guest->id,
-                    'role' => $role?->value,
+                    'roles' => $roles,
                     'via' => AddGuestAction::VIA,
-                ]));
+                ]);
             }
 
             $this->memberships->removeGuest($company, $guest);

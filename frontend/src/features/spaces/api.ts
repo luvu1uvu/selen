@@ -7,7 +7,7 @@ import type {
   Space,
   SpaceGroupGrant,
   SpacePerson,
-  SpaceRole,
+  RoleKey,
 } from '@/shared/types/api'
 
 export async function fetchSpaces(): Promise<Space[]> {
@@ -34,19 +34,20 @@ export async function fetchMembers(key: string): Promise<SpacePerson[]> {
   return data.data
 }
 
+/** Добавить человека лично с ролями (П2d-1: можно несколько). */
 export async function addMember(
   key: string,
-  payload: { user_id: string; role: SpaceRole },
+  payload: { user_id: string; roles: RoleKey[] },
 ): Promise<SpacePerson> {
   const { data } = await api.post<Resource<SpacePerson>>(`/spaces/${key}/members`, payload)
   return data.data
 }
 
-/** Роль и/или режим «только свои карточки» личного участия. */
+/** Личные роли на пространстве — набор целиком (П2d-1). */
 export async function updateMember(
   key: string,
   userId: string,
-  payload: { role?: SpaceRole; own_cards_only?: boolean },
+  payload: { roles: RoleKey[] },
 ): Promise<SpacePerson> {
   const { data } = await api.patch<Resource<SpacePerson>>(
     `/spaces/${key}/members/${userId}`,
@@ -85,16 +86,17 @@ export async function fetchSpaceGroups(key: string): Promise<SpaceGroupGrant[]> 
 
 export async function addSpaceGroup(
   key: string,
-  payload: { group_id: string; role: SpaceRole; own_cards_only: boolean },
+  payload: { group_id: string; roles: RoleKey[] },
 ): Promise<SpaceGroupGrant> {
   const { data } = await api.post<Resource<SpaceGroupGrant>>(`/spaces/${key}/groups`, payload)
   return data.data
 }
 
+/** Роли группы на пространстве — набор целиком (П2d-1). */
 export async function updateSpaceGroup(
   key: string,
   groupId: string,
-  payload: { role?: SpaceRole; own_cards_only?: boolean },
+  payload: { roles: RoleKey[] },
 ): Promise<SpaceGroupGrant> {
   const { data } = await api.patch<Resource<SpaceGroupGrant>>(
     `/spaces/${key}/groups/${groupId}`,

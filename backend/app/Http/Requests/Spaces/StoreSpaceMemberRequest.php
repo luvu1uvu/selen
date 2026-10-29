@@ -2,16 +2,17 @@
 
 namespace App\Http\Requests\Spaces;
 
-use App\Enums\SpaceRole;
+use App\Http\Requests\Concerns\ValidatesRoles;
 use App\Models\Space;
 use App\Rules\CompanyMember;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 
 class StoreSpaceMemberRequest extends FormRequest
 {
+    use ValidatesRoles;
+
     public function authorize(): Response
     {
         return Gate::inspect('manageMembers', $this->space());
@@ -32,7 +33,8 @@ class StoreSpaceMemberRequest extends FormRequest
             // «Дом» компании пространства или Владелец — участник всех компаний (ADR-0024): человек другой компании —
             // как несуществующий
             'user_id' => ['required', 'ulid', new CompanyMember($this->space()->company_id, withOwner: true)],
-            'role' => ['required', Rule::enum(SpaceRole::class)],
+            // Несколько ролей (П2d-1)
+            ...$this->roleRules(),
         ];
     }
 }

@@ -1,7 +1,7 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import type { AdminSpace, AdminUser, Group, UserAccess } from '@/shared/types/api'
+import type { AdminUser, Group, UserAccess } from '@/shared/types/api'
 import {
   makeAdminUser,
   makeUser,
@@ -23,7 +23,7 @@ function makeGroup(overrides: Partial<Group> = {}): Group {
     archived_at: null,
     created_at: '2026-10-01T00:00:00Z',
     members_count: 1,
-    spaces_count: 1,
+    entities_count: 1,
     members: [
       {
         id: 'u-olga',
@@ -33,31 +33,21 @@ function makeGroup(overrides: Partial<Group> = {}): Group {
         added_at: '2026-10-02T09:00:00Z',
       },
     ],
-    spaces: [
+    entities: [
       {
-        space: { id: 's-ios', key: 'IOS', name: 'iOS', archived_at: null },
-        role: 'commenter',
-        own_cards_only: false,
+        node: {
+          id: 'n-ios',
+          type: 'space',
+          name: 'iOS',
+          space: { id: 's-ios', key: 'IOS' },
+          archived: false,
+        },
+        roles: ['commenter'],
       },
     ],
     ...overrides,
   }
 }
-
-const adminSpace = (id: string, key: string, name: string): AdminSpace => ({
-  id,
-  key,
-  name,
-  description: null,
-  icon: null,
-  archived_at: null,
-  created_at: '2026-10-01T00:00:00Z',
-  admins: [],
-  members_count: 1,
-  groups_count: 0,
-  has_active_admin: true,
-  my_role: null,
-})
 
 describe('Админка: группы', () => {
   beforeEach(() => {
@@ -87,7 +77,7 @@ describe('Админка: группы', () => {
       }),
       http.get('*/api/v1/admin/companies/:company/groups/g-new', () =>
         HttpResponse.json({
-          data: makeGroup({ id: 'g-new', name: 'Contractors', members: [], spaces: [] }),
+          data: makeGroup({ id: 'g-new', name: 'Contractors', members: [], entities: [] }),
         }),
       ),
     )
@@ -109,7 +99,7 @@ describe('Админка: группы', () => {
     expect(body).toEqual({ name: 'Contractors', description: null })
   })
 
-  it('страница группы: добавляет человека, выдаёт доступ к пространству и меняет роль', async () => {
+  it('страница группы: добавляет человека, выдаёт доступ к папке или пространству с ролями и меняет роли', async () => {
     const requests: { url: string; body: unknown }[] = []
     server.use(
       http.get('*/api/v1/admin/companies/:company/groups/g-1', () =>
@@ -120,9 +110,25 @@ describe('Админка: группы', () => {
           data: [{ id: 'u-ivan', name: 'Иван', email: 'ivan@selen.test', status: 'active' }],
         }),
       ),
-      http.get('*/api/v1/admin/companies/:company/spaces', () =>
+      http.get('*/api/v1/admin/companies/:company/grantable-nodes', () =>
         HttpResponse.json({
-          data: [adminSpace('s-ios', 'IOS', 'iOS'), adminSpace('s-and', 'AND', 'Android')],
+          data: [
+            { id: 'n-mobile', type: 'folder', name: 'Мобильные', depth: 1, space: null },
+            {
+              id: 'n-ios',
+              type: 'space',
+              name: 'iOS',
+              depth: 2,
+              space: { id: 's-ios', key: 'IOS' },
+            },
+            {
+              id: 'n-and',
+              type: 'space',
+              name: 'Android',
+              depth: 2,
+              space: { id: 's-and', key: 'AND' },
+            },
+          ],
         }),
       ),
       http.post('*/api/v1/admin/companies/:company/groups/g-1/members', async ({ request }) => {
@@ -130,10 +136,10 @@ describe('Админка: группы', () => {
         return HttpResponse.json({ data: makeGroup() })
       }),
       http.put(
-        '*/api/v1/admin/companies/:company/groups/g-1/spaces/:spaceId',
+        '*/api/v1/admin/companies/:company/nav-nodes/:nodeId/access/groups/g-1',
         async ({ request, params }) => {
-          requests.push({ url: `spaces/${String(params.spaceId)}`, body: await request.json() })
-          return HttpResponse.json({ data: makeGroup() })
+          requests.push({ url: `nodes/${String(params.nodeId)}`, body: await request.json() })
+          return HttpResponse.json({ data: { node: {}, grants: [] } })
         },
       ),
     )
@@ -150,20 +156,28 @@ describe('Админка: группы', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
     expect(await screen.findByText('Иван добавлен(а) в группу')).toBeInTheDocument()
 
-    // Уже выданный доступ (iOS) в списке выбора не предлагается
-    const spaceSelect = screen.getByLabelText('Пространство')
-    expect(within(spaceSelect).queryByRole('option', { name: 'iOS (IOS)' })).not.toBeInTheDocument()
-    await userEvent.selectOptions(spaceSelect, 's-and')
+    // Уже выданный доступ (iOS) в списке выбора не предлагается; папки — тоже сущности
+    const nodeSelect = await screen.findByLabelText('Папка или пространство')
+    expect(
+      within(nodeSelect).queryByRole('option', { name: /iOS \(IOS\)/ }),
+    ).not.toBeInTheDocument()
+    await userEvent.selectOptions(nodeSelect, 'n-mobile')
+    await userEvent.click(screen.getByRole('button', { name: 'Редактор' }))
     await userEvent.click(screen.getByRole('button', { name: 'Выдать доступ' }))
     expect(await screen.findByText('Доступ выдан')).toBeInTheDocument()
 
-    await userEvent.selectOptions(screen.getByLabelText('Роль группы в iOS'), 'editor')
-    expect(await screen.findByText('Доступ изменён')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Изменить роли в «iOS»' }))
+    const edit = await screen.findByRole('dialog')
+    await userEvent.click(
+      within(edit).getByRole('button', { name: 'Редактор — только свои карточки' }),
+    )
+    await userEvent.click(within(edit).getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Роли группы изменены')).toBeInTheDocument()
 
     expect(requests).toEqual([
       { url: 'members', body: { user_id: 'u-ivan' } },
-      { url: 'spaces/s-and', body: { role: 'commenter', own_cards_only: false } },
-      { url: 'spaces/s-ios', body: { role: 'editor', own_cards_only: false } },
+      { url: 'nodes/n-mobile', body: { roles: ['editor', 'commenter'] } },
+      { url: 'nodes/n-ios', body: { roles: ['commenter', 'editor_own'] } },
     ])
   })
 
@@ -239,15 +253,15 @@ describe('Админка: доступ пользователя', () => {
             {
               type: 'personal',
               group: null,
-              role: 'editor',
-              own_cards_only: false,
+              folder: null,
+              roles: ['editor', 'commenter_own'],
               inactive_reason: null,
             },
             {
               type: 'group',
               group: { id: 'g-1', name: 'Analysts' },
-              role: 'commenter',
-              own_cards_only: false,
+              folder: { id: 'f-1', name: 'Продукт' },
+              roles: ['commenter'],
               inactive_reason: null,
             },
           ],
@@ -261,8 +275,8 @@ describe('Админка: доступ пользователя', () => {
             {
               type: 'group',
               group: { id: 'g-old', name: 'Old' },
-              role: 'admin',
-              own_cards_only: false,
+              folder: null,
+              roles: ['admin'],
               inactive_reason: 'group_archived',
             },
           ],
@@ -282,8 +296,12 @@ describe('Админка: доступ пользователя', () => {
     const backend = screen.getByText('Backend').closest('tr')!
     expect(within(backend).getByText('Редактор')).toBeInTheDocument()
     expect(within(backend).getByText('Видит все карточки')).toBeInTheDocument()
-    expect(within(backend).getByText('Лично: Редактор')).toBeInTheDocument()
-    expect(within(backend).getByText('Группа «Analysts»: Комментатор')).toBeInTheDocument()
+    expect(
+      within(backend).getByText('Лично: Редактор, Комментатор — только свои карточки'),
+    ).toBeInTheDocument()
+    expect(
+      within(backend).getByText('Группа «Analysts»: Комментатор · через папку «Продукт»'),
+    ).toBeInTheDocument()
 
     const mgmt = screen.getByText('Management').closest('tr')!
     expect(within(mgmt).getByText('Нет доступа')).toBeInTheDocument()
@@ -311,7 +329,9 @@ describe('Админка: деактивация последнего админ
       http.get('*/api/v1/admin/companies/:company/users/u-anna/deactivation-impact', () =>
         HttpResponse.json({
           data: {
-            last_admin_spaces: [{ id: 's-dev', key: 'DEV', name: 'Dev', archived_at: null }],
+            last_admin_spaces: [
+              { id: 's-dev', key: 'DEV', name: 'Dev', archived_at: null, node_id: 'n-dev' },
+            ],
           },
         }),
       ),
@@ -320,11 +340,18 @@ describe('Админка: деактивация последнего админ
           data: [{ id: 'u-boris', name: 'Борис', email: 'boris@selen.test', status: 'active' }],
         }),
       ),
+      http.get('*/api/v1/admin/companies/:company/nav-nodes/n-dev/access', () =>
+        HttpResponse.json({
+          data: { node: { id: 'n-dev', type: 'space', name: 'Dev', space: null }, grants: [] },
+        }),
+      ),
       http.put(
-        '*/api/v1/admin/companies/:company/spaces/s-dev/members/u-boris',
+        '*/api/v1/admin/companies/:company/nav-nodes/n-dev/access/users/u-boris',
         async ({ request }) => {
           assigned = await request.json()
-          return HttpResponse.json({ data: adminSpace('s-dev', 'DEV', 'Dev') })
+          return HttpResponse.json({
+            data: { node: { id: 'n-dev', type: 'space', name: 'Dev', space: null }, grants: [] },
+          })
         },
       ),
       http.post('*/api/v1/admin/companies/:company/users/u-anna/deactivate', () => {
@@ -345,11 +372,18 @@ describe('Админка: деактивация последнего админ
     ).toBeInTheDocument()
     expect(screen.getByText('Dev (DEV)')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Назначить администратора' }))
-    await userEvent.click(await screen.findByRole('button', { name: /Борис/ }))
-    await userEvent.click(screen.getByRole('button', { name: 'Назначить' }))
-    expect(await screen.findByText('Роль назначена')).toBeInTheDocument()
-    expect(assigned).toEqual({ role: 'admin' })
+    // «Доступ…» пространства — сразу с ролью «Администратор» (П2d-1), фокус — в поиске сотрудника (UX-ревью, U-5)
+    const assign = screen.getByRole('button', { name: 'Назначить администратора' })
+    await userEvent.click(assign)
+    const access = await screen.findByRole('dialog', { name: 'Доступ: Dev' })
+    await waitFor(() => expect(within(access).getByLabelText('Сотрудник')).toHaveFocus())
+    await userEvent.click(await within(access).findByRole('button', { name: /Борис/ }))
+    await userEvent.click(within(access).getByRole('button', { name: 'Выдать доступ' }))
+    expect(await screen.findByText('Доступ выдан')).toBeInTheDocument()
+    expect(assigned).toEqual({ roles: ['admin'] })
+    // «Доступ…» — поверх окна деактивации: после закрытия фокус снова на «Назначить администратора» (U-4)
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(assign).toHaveFocus())
 
     await userEvent.click(await screen.findByRole('button', { name: 'Деактивировать' }))
     expect(await screen.findByText('Пользователь деактивирован')).toBeInTheDocument()

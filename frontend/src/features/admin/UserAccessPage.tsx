@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
 import { getErrorStatus } from '@/shared/api/errors'
 import { isOwner, isSystemAdmin } from '@/shared/lib/roles'
-import type { UserAccess } from '@/shared/types/api'
+import { sortRoles } from '@/features/spaces/roles'
+import type { RoleKey, UserAccess } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { useAdminUrl } from './company'
@@ -102,6 +103,10 @@ export function UserAccessPage() {
 function SpacesTable({ access }: { access: UserAccess }) {
   const { t } = useTranslation('admin')
   const { t: ts } = useTranslation('spaces')
+  const rolesText = (roles: RoleKey[]) =>
+    sortRoles(roles)
+      .map((role) => ts(`roles.${role}`))
+      .join(', ')
 
   return (
     <Table>
@@ -147,18 +152,19 @@ function SpacesTable({ access }: { access: UserAccess }) {
             </TableCell>
             <TableCell>
               <ul className="grid gap-1 text-sm">
-                {entry.sources.map((source, index) => (
+                {entry.sources.map((source) => (
                   <li
-                    key={source.group?.id ?? `personal-${index}`}
+                    key={`${source.group?.id ?? 'personal'}|${source.folder?.id ?? ''}`}
                     className={source.inactive_reason ? 'text-muted-foreground line-through' : ''}
                   >
                     {source.group
                       ? t('access.viaGroup', {
                           group: source.group.name,
-                          role: ts(`roles.${source.role}`),
+                          role: rolesText(source.roles),
                         })
-                      : t('access.personal', { role: ts(`roles.${source.role}`) })}
-                    {source.own_cards_only && ` · ${ts('members.ownCardsOnly')}`}
+                      : t('access.personal', { role: rolesText(source.roles) })}
+                    {source.folder &&
+                      ` · ${ts('members.sources.viaFolder', { folder: source.folder.name })}`}
                     {source.inactive_reason && (
                       <span className="ml-2 no-underline">
                         {t(`access.inactive.${source.inactive_reason}`)}

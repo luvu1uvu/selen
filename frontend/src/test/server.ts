@@ -156,7 +156,20 @@ export const defaultHandlers = [
     HttpResponse.json({ data: { lost_spaces: [], unmanaged_spaces: [] } }),
   ),
   // П2c: пространства, где можно выдавать доступ, и права компании — пусто, если тест не задал своё
-  http.get('*/api/v1/admin/companies/:company/grantable-spaces', () =>
+  // «Переместить в…» (П2d-1): по умолчанию доступ не меняется
+  http.get('*/api/v1/admin/companies/:company/nav-nodes/:id/move-impact', () =>
+    HttpResponse.json({
+      data: {
+        gain: [],
+        lose: [],
+        changed: [],
+        changes_access: false,
+        dormant: false,
+        unmanaged_spaces: [],
+      },
+    }),
+  ),
+  http.get('*/api/v1/admin/companies/:company/grantable-nodes', () =>
     HttpResponse.json({ data: [] }),
   ),
   http.get('*/api/v1/admin/companies/:company/users/:user/permissions', () =>

@@ -32,8 +32,8 @@ it('сводка показывает источники, в том числе �
     expect($back['has_access'])->toBeTrue()
         ->and($back['role'])->toBe('editor')
         ->and($back['sources'])->toBe([
-            ['type' => 'personal', 'group' => null, 'role' => 'editor', 'own_cards_only' => false, 'inactive_reason' => null],
-            ['type' => 'group', 'group' => ['id' => $analysts->id, 'name' => 'Analysts'], 'role' => 'commenter', 'own_cards_only' => false, 'inactive_reason' => null],
+            ['type' => 'personal', 'group' => null, 'folder' => null, 'roles' => ['editor'], 'inactive_reason' => null],
+            ['type' => 'group', 'group' => ['id' => $analysts->id, 'name' => 'Analysts'], 'folder' => null, 'roles' => ['commenter'], 'inactive_reason' => null],
         ])
         ->and($iosEntry['role'])->toBe('commenter')
         ->and($mgmtEntry['has_access'])->toBeFalse()
@@ -90,7 +90,7 @@ describe('деактивация последнего личного админ�
         addToSpace($dev, $anna, SpaceRole::Admin);
         $this->actingAs($this->admin);
 
-        $this->putJson(adminPath()."spaces/{$dev->id}/members/".member()->id, ['role' => 'admin'])->assertOk();
+        $this->putJson(adminPath().'nav-nodes/'.nodeOf($dev)->id.'/access/users/'.member()->id, ['roles' => ['admin']])->assertOk();
 
         $this->getJson(adminPath()."users/{$anna->id}/deactivation-impact")->assertJsonPath('data.last_admin_spaces', []);
     });

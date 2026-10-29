@@ -5,19 +5,25 @@ namespace App\Models;
 use App\Enums\NavNodeType;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Contracts\HasCompany;
+use App\Services\Access\AccessResolver;
+use App\Services\Access\SpaceAccess;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Узел дерева навигации: папка или пространство (позже — документ), docs/adr/0013-navigation-tree.md.
- * Папки не дают и не ограничивают доступ. У каждой компании своё дерево (ADR-0024): корень — узлы компании без
+ * Выдача доступа на папку действует на всё внутри (ADR-0024, П2d-1): права по узлу — только NavNode::accessOf() и
+ * AccessResolver. У каждой компании своё дерево (ADR-0024): корень — узлы компании без
  * родителя, родитель и пространство — той же компании (составные FK). Дерево ведёт администратор компании через
- * Actions (app/Actions/Navigation); положение пространства в дереве не трогает его ключ, карточки и доступы.
+ * Actions (app/Actions/Navigation); положение пространства в дереве не трогает его ключ, карточки и историю, но меняет
+ * унаследованный доступ — «Переместить в…» заранее показывает, кто получит и кто потеряет доступ (MoveImpact).
  *
  * @property string $id
  * @property string $company_id
@@ -42,6 +48,15 @@ class NavNode extends Model implements HasCompany
     public const MAX_FOLDER_DEPTH = 4;
 
     /**
+     * Предел шагов рекурсивных запросов по дереву (предки, поддерево) — с запасом над MAX_FOLDER_DEPTH. Страховка: если
+     * в данных окажется цикл (ошибка), запрос остановится, а не будет крутиться, держа блокировку дерева (ревью П2d-1).
+     */
+    public const RECURSION_LIMIT = 32;
+
+    /** @var array<string, SpaceAccess> user_id → права (кеш accessOf) */
+    private array $resolvedAccess = [];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -60,6 +75,26 @@ class NavNode extends Model implements HasCompany
                 $node->company_id ??= Space::query()->whereKey($node->space_id)->value('company_id');
             }
         });
+    }
+
+    /**
+     * Итоговые права пользователя на узле: выдачи на сам узел и на папки над ним (ADR-0024). Для пространства — то же,
+     * что Space::accessOf(); вычисляется один раз на экземпляр.
+     */
+    public function accessOf(User $user): SpaceAccess
+    {
+        return $this->resolvedAccess[(string) $user->getKey()]
+            ??= app(AccessResolver::class)->forNode($user, $this);
+    }
+
+    /**
+     * Права пользователя на всех узлах одним запросом (дерево): node_id → права. Узла без доступа в ответе нет.
+     *
+     * @return SupportCollection<string, SpaceAccess>
+     */
+    public static function accessesOf(User $user): SupportCollection
+    {
+        return app(AccessResolver::class)->forUserNodes($user);
     }
 
     /** @return BelongsTo<NavNode, $this> */
@@ -115,9 +150,30 @@ class NavNode extends Model implements HasCompany
                 SELECT id, parent_id, 1 AS depth FROM nav_nodes WHERE id = ?
                 UNION ALL
                 SELECT n.id, n.parent_id, up.depth + 1 FROM nav_nodes n JOIN up ON n.id = up.parent_id
+                 WHERE up.depth < ?
             )
             SELECT max(depth) AS depth FROM up
-            SQL, [$folderId])->depth;
+            SQL, [$folderId, self::RECURSION_LIMIT])->depth;
+    }
+
+    /**
+     * Путь от узла к корню: сам узел, его папка, папка над ней… (выдача на папку действует на всё внутри, ADR-0024).
+     *
+     * @return list<string>
+     */
+    public function pathIds(): array
+    {
+        $rows = DB::select(<<<'SQL'
+            WITH RECURSIVE up AS (
+                SELECT id, parent_id, 0 AS distance FROM nav_nodes WHERE id = ?
+                UNION ALL
+                SELECT n.id, n.parent_id, up.distance + 1 FROM nav_nodes n JOIN up ON n.id = up.parent_id
+                 WHERE up.distance < ?
+            )
+            SELECT id FROM up ORDER BY distance
+            SQL, [$this->id, self::RECURSION_LIMIT]);
+
+        return array_map(fn (object $row) => (string) $row->id, $rows);
     }
 
     /**
@@ -132,10 +188,11 @@ class NavNode extends Model implements HasCompany
             WITH RECURSIVE down AS (
                 SELECT id, 1 AS depth FROM nav_nodes WHERE id = ?
                 UNION ALL
-                SELECT n.id, down.depth + 1 FROM nav_nodes n JOIN down ON n.parent_id = down.id WHERE n.type = 'folder'
+                SELECT n.id, down.depth + 1 FROM nav_nodes n JOIN down ON n.parent_id = down.id
+                 WHERE n.type = 'folder' AND down.depth < ?
             )
             SELECT id, depth FROM down
-            SQL, [$this->id]);
+            SQL, [$this->id, self::RECURSION_LIMIT]);
 
         return [
             'ids' => array_map(fn (object $row) => (string) $row->id, $rows),
@@ -150,5 +207,24 @@ class NavNode extends Model implements HasCompany
     public static function lockTree(): void
     {
         DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['nav_tree']);
+    }
+
+    /**
+     * Вложенный объект адреса (admin/companies/{company}/nav-nodes/{node}/access/users/{user}, …/groups/{group}) ищется
+     * среди людей и групп компании узла — как у Company (scoped binding): человек и группа другой компании — 404.
+     *
+     * @param  string  $childType
+     * @param  mixed  $value
+     * @param  string|null  $field
+     */
+    public function resolveChildRouteBinding($childType, $value, $field): ?Model
+    {
+        // Только известные вложенные объекты (access/users/{user}, access/groups/{group}): новый вложенный маршрут — сюда
+        // осознанно
+        if (! in_array($childType, ['user', 'group'], true)) {
+            throw new LogicException("Вложенный объект {$childType} у NavNode не ограничен компанией");
+        }
+
+        return $this->company->resolveChildRouteBinding($childType, $value, $field);
     }
 }

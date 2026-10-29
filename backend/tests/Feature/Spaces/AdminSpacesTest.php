@@ -25,7 +25,7 @@ it('администратор компании создаёт простран�
 
     $added = EventLogEntry::query()->where('event_type', 'space.member_added')->sole();
     expect($added->subject_id)->toBe($space->id)
-        ->and($added->payload)->toEqual(['user_id' => $admin->id, 'role' => 'admin', 'via' => 'space_created']);
+        ->and($added->payload)->toEqual(['user_id' => $admin->id, 'roles' => ['admin'], 'via' => 'space_created']);
 });
 
 it('назначает администраторами пространства указанных пользователей', function () {
@@ -107,15 +107,16 @@ it('администратор компании не видит содержим
     $this->actingAs($admin)->getJson('/api/v1/spaces/DEV/members')->assertNotFound();
     $this->actingAs($admin)->getJson('/api/v1/spaces')->assertJsonCount(0, 'data');
 
-    $this->actingAs($admin)->putJson(adminPath()."spaces/{$space->id}/members/{$admin->id}", ['role' => 'commenter'])
-        ->assertOk()
-        ->assertJsonPath('data.my_role', 'commenter');
+    // «Доступ…» пространства (П2d-1): выдать себе роль
+    $grants = $this->actingAs($admin)->putJson(adminPath().'nav-nodes/'.nodeOf($space)->id."/access/users/{$admin->id}", ['roles' => ['commenter']])
+        ->assertOk()->json('data.grants');
+    expect(collect($grants)->firstWhere('user.id', $admin->id)['roles'])->toBe(['commenter']);
 
     $this->actingAs($admin)->getJson('/api/v1/spaces/DEV')->assertOk()->assertJsonPath('data.my_role', 'commenter');
 
     $event = EventLogEntry::query()->where('event_type', 'space.member_added')->sole();
     expect($event->actor_id)->toBe($admin->id)
-        ->and($event->payload)->toEqual(['user_id' => $admin->id, 'role' => 'commenter', 'via' => 'admin_panel']);
+        ->and($event->payload)->toEqual(['user_id' => $admin->id, 'roles' => ['commenter'], 'via' => 'admin_panel']);
 });
 
 it('из админки можно сменить роль участника, но не оставить пространство без администратора', function () {
@@ -124,17 +125,17 @@ it('из админки можно сменить роль участника, �
     $space = space();
     addToSpace($space, $anna, SpaceRole::Admin);
 
-    $this->actingAs($admin)->putJson(adminPath()."spaces/{$space->id}/members/{$anna->id}", ['role' => 'editor'])
+    $access = fn (User $user) => adminPath().'nav-nodes/'.nodeOf($space)->id."/access/users/{$user->id}";
+    $this->actingAs($admin)->putJson($access($anna), ['roles' => ['editor']])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('role');
+        ->assertJsonValidationErrors(['roles' => __('selen.spaces.last_admin')]);
 
-    $this->actingAs($admin)->putJson(adminPath()."spaces/{$space->id}/members/{$admin->id}", ['role' => 'admin'])->assertOk();
-    $this->actingAs($admin)->putJson(adminPath()."spaces/{$space->id}/members/{$anna->id}", ['role' => 'editor'])
-        ->assertOk()
-        ->assertJsonPath('data.admins.0.id', $admin->id);
+    $this->actingAs($admin)->putJson($access($admin), ['roles' => ['admin']])->assertOk();
+    $this->actingAs($admin)->putJson($access($anna), ['roles' => ['editor']])->assertOk();
+    $this->actingAs($admin)->getJson(adminPath().'spaces')->assertJsonPath('data.0.admins.0.id', $admin->id);
 
     expect(EventLogEntry::query()->where('event_type', 'space.member_role_changed')->sole()->payload)
-        ->toEqual(['user_id' => $anna->id, 'from' => 'admin', 'to' => 'editor', 'via' => 'admin_panel']);
+        ->toEqual(['user_id' => $anna->id, 'from' => ['admin'], 'to' => ['editor'], 'via' => 'admin_panel']);
 });
 
 it('архивирует и восстанавливает пространство', function () {
@@ -173,6 +174,6 @@ it('архивировать, восстанавливать и назначат
 
     $this->actingAs($user)->postJson(adminPath()."spaces/{$space->id}/archive")->assertForbidden();
     $this->actingAs($user)->postJson(adminPath()."spaces/{$space->id}/restore")->assertForbidden();
-    $this->actingAs($user)->putJson(adminPath()."spaces/{$space->id}/members/{$user->id}", ['role' => 'admin'])
+    $this->actingAs($user)->putJson(adminPath().'nav-nodes/'.nodeOf($space)->id."/access/users/{$user->id}", ['roles' => ['admin']])
         ->assertForbidden();
 });

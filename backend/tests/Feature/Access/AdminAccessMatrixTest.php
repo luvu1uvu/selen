@@ -4,9 +4,11 @@ use App\Actions\Cards\DeleteCardAction;
 use App\Enums\BoardTemplate;
 use App\Enums\Permission;
 use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
 use App\Enums\UserStatus;
 use App\Models\CardType;
 use App\Models\CompanyPermissionGrant;
+use App\Models\Group;
 use App\Models\Invitation;
 use App\Models\User;
 use Database\Factories\UserFactory;
@@ -99,10 +101,11 @@ function adminEndpoints(): array
         ['POST', 'admin/companies/{company}/invitations/{invitation-admin}/revoke', $allow, $deny, $deny],
 
         // Гости компании (П2c): право «управлять пользователями»
-        ['POST', 'admin/companies/{company}/guests', $allow, $allow, $deny, ['email' => '{foreign-email}', 'spaces' => [['space_id' => '{space}', 'role' => 'commenter']]]],
-        ['PUT', 'admin/companies/{company}/guests/{guest}', $allow, $allow, $deny, ['expires_on' => null, 'spaces' => []]],
+        ['POST', 'admin/companies/{company}/guests', $allow, $allow, $deny, ['email' => '{foreign-email}', 'grants' => [['node_id' => '{space-node}', 'roles' => ['commenter']]]]],
+        ['PUT', 'admin/companies/{company}/guests/{guest}', $allow, $allow, $deny, ['expires_on' => null, 'grants' => []]],
         ['DELETE', 'admin/companies/{company}/guests/{guest}', $allow, $allow, $deny],
-        ['GET', 'admin/companies/{company}/grantable-spaces', $allow, $allow, $deny],
+        // Папки и пространства, где можно выдать доступ (приглашение, гость, «Сущности» группы — П2d-1)
+        ['GET', 'admin/companies/{company}/grantable-nodes', $allow, $allow, $deny],
 
         // Остальная админка — администратор компании (права компании по умолчанию) и Владелец
         ['GET', 'admin/companies/{company}/groups', $allow, $allow, $deny],
@@ -115,8 +118,6 @@ function adminEndpoints(): array
         // Состав групп — доступ к пространствам, а не учётная запись: Владелец в группах — как все (ADR-0017)
         ['POST', 'admin/companies/{company}/groups/{group}/members', $allow, $allow, $deny, ['user_id' => '{owner}']],
         ['DELETE', 'admin/companies/{company}/groups/{group}/members/{member}', $allow, $allow, $deny],
-        ['PUT', 'admin/companies/{company}/groups/{group}/spaces/{space}', $allow, $allow, $deny, ['role' => 'commenter']],
-        ['DELETE', 'admin/companies/{company}/groups/{group}/spaces/{space}', $allow, $allow, $deny],
         // Права компании группы (П2c): Владелец и администратор компании
         ['GET', 'admin/companies/{company}/groups/{group}/permissions', $allow, $allow, $deny],
         ['PUT', 'admin/companies/{company}/groups/{group}/permissions', $allow, $allow, $deny, ['permissions' => ['company.invite_users']]],
@@ -128,8 +129,6 @@ function adminEndpoints(): array
         ['POST', 'admin/companies/{company}/spaces/{space}/archive', $allow, $allow, $deny],
         ['POST', 'admin/companies/{company}/spaces/{space}/restore', $allow, $allow, $deny],
         ['DELETE', 'admin/companies/{company}/spaces/{space}', $allow, $allow, $deny],
-        ['PUT', 'admin/companies/{company}/spaces/{space}/members/{member}', $allow, $allow, $deny, ['role' => 'editor']],
-        ['PUT', 'admin/companies/{company}/spaces/{space}/members/{owner}', $allow, $allow, $deny, ['role' => 'editor']],
         ['GET', 'admin/companies/{company}/navigation', $allow, $allow, $deny],
         ['POST', 'admin/companies/{company}/folders', $allow, $allow, $deny, ['name' => 'Новая папка']],
         ['POST', 'admin/companies/{company}/folders/{folder}/archive', $allow, $allow, $deny],
@@ -137,6 +136,17 @@ function adminEndpoints(): array
         ['DELETE', 'admin/companies/{company}/folders/{folder}', $allow, $allow, $deny],
         ['PATCH', 'admin/companies/{company}/nav-nodes/{folder}', $allow, $allow, $deny, ['name' => 'Другая']],
         ['POST', 'admin/companies/{company}/nav-nodes/{folder}/move', $allow, $allow, $deny, ['parent_id' => null]],
+        // «Переместить в…»: что изменится в доступе (П2d-1) — как само перемещение
+        ['GET', 'admin/companies/{company}/nav-nodes/{folder}/move-impact', $allow, $allow, $deny, ['parent_id' => '{access-node}']],
+        // «Доступ…» папки и пространства (П2d-1): право «управлять доступом»; здесь же «Сущности» группы и роль из
+        // «Пространств»; Владельцу тоже можно выдать доступ (участник всех компаний)
+        ['GET', 'admin/companies/{company}/nav-nodes/{access-node}/access', $allow, $allow, $deny],
+        ['GET', 'admin/companies/{company}/nav-nodes/{space-node}/access', $allow, $allow, $deny],
+        ['PUT', 'admin/companies/{company}/nav-nodes/{access-node}/access/users/{member}', $allow, $allow, $deny, ['roles' => ['editor', 'commenter_own']]],
+        ['PUT', 'admin/companies/{company}/nav-nodes/{space-node}/access/users/{owner}', $allow, $allow, $deny, ['roles' => ['admin']]],
+        ['DELETE', 'admin/companies/{company}/nav-nodes/{access-node}/access/users/{granted-member}', $allow, $allow, $deny],
+        ['PUT', 'admin/companies/{company}/nav-nodes/{access-node}/access/groups/{group}', $allow, $allow, $deny, ['roles' => ['commenter']]],
+        ['DELETE', 'admin/companies/{company}/nav-nodes/{access-node}/access/groups/{granted-group}', $allow, $allow, $deny],
         ['GET', 'admin/companies/{company}/trash/cards', $allow, $allow, $deny],
         ['POST', 'admin/companies/{company}/trash/cards/{trashed-card}/restore', $allow, $allow, $deny],
         ['GET', 'admin/companies/{company}/labels', $allow, $allow, $deny],
@@ -167,7 +177,8 @@ const ADMIN_PLACEHOLDERS = [
     '{member}' => '{user}', '{admin}' => '{user}', '{self-admin}' => '{user}', '{owner}' => '{user}',
     '{deactivated-member}' => '{user}', '{deactivated-admin}' => '{user}', '{guest}' => '{user}', '{blocked-member}' => '{user}',
     '{invitation-member}' => '{invitation}', '{invitation-admin}' => '{invitation}',
-    '{folder}' => '{node}', '{trashed-card}' => '{key}', '{card-type}' => '{cardType}',
+    '{folder}' => '{node}', '{access-node}' => '{node}', '{space-node}' => '{node}', '{granted-member}' => '{user}',
+    '{granted-group}' => '{group}', '{trashed-card}' => '{key}', '{card-type}' => '{cardType}',
 ];
 
 /** Маршруты только копии с несколькими компаниями (ADR-0026, middleware multi-company): в режиме «одна компания» — 404. */
@@ -213,6 +224,11 @@ beforeEach(function () {
         '{group}' => $group->id,
         '{space}' => $space->id,
         '{folder}' => makeFolder('Папка')->id,
+        // П2d-1: папка с выдачами человеку и группе («Доступ…»), узел пространства
+        '{access-node}' => ($accessNode = makeFolder('Папка с доступом'))->id,
+        '{space-node}' => nodeOf($space)->id,
+        '{granted-member}' => tap(member(), fn (User $u) => grantAccess($accessNode, $u, StandardRole::Editor))->id,
+        '{granted-group}' => tap(makeGroup(), fn (Group $g) => grantAccess($accessNode, $g, StandardRole::Commenter))->id,
         '{trashed-card}' => $card->key(),
         '{card-type}' => CardType::query()->forceCreate(['name' => 'Тип', 'color' => '#123456', 'company_id' => company()->id])->id,
         '{company}' => company()->id,
@@ -241,11 +257,11 @@ function routePermissions(string $method, string $path, array $body = []): ?arra
         (bool) preg_match('/^users\/[^\/]+\/(role|transfer-ownership|transfer-impact|block|unblock|permissions)$/', $path),
         (bool) preg_match('/^groups\/[^\/]+\/permissions$/', $path) => null,
         $path === 'users', str_starts_with($path, 'users/'), str_starts_with($path, 'guests') => [Permission::CompanyManageUsers],
-        str_starts_with($path, 'invitations'), $path === 'grantable-spaces' => [Permission::CompanyInviteUsers],
-        (bool) preg_match('/^groups\/[^\/]+\/(members|spaces|archive|restore)/', $path) => [Permission::CompanyManageGroups, Permission::CompanyManageAccess],
+        str_starts_with($path, 'invitations'), $path === 'grantable-nodes' => [Permission::CompanyInviteUsers],
+        (bool) preg_match('/^groups\/[^\/]+\/(members|archive|restore)/', $path) => [Permission::CompanyManageGroups, Permission::CompanyManageAccess],
         str_starts_with($path, 'groups') => [Permission::CompanyManageGroups],
         $path === 'events', $path === 'events/people' => [Permission::CompanyViewEventLog],
-        (bool) preg_match('/^spaces\/[^\/]+\/members\//', $path), str_contains($path, '/directory') => [Permission::CompanyManageAccess],
+        (bool) preg_match('/^nav-nodes\/[^\/]+\/access/', $path), str_contains($path, '/directory') => [Permission::CompanyManageAccess],
         str_starts_with($path, 'spaces'), $path === 'navigation', str_starts_with($path, 'folders'), str_starts_with($path, 'nav-nodes') => [Permission::CompanyManageStructure],
         str_starts_with($path, 'trash') => [Permission::CompanyManageTrash],
         str_starts_with($path, 'labels'), str_starts_with($path, 'card-types') => [Permission::CompanyManageDictionaries],
@@ -311,7 +327,8 @@ it('с одним правом «управлять группами» дост�
     $this->actingAs($granted);
     $group = $this->objects['{group}'];
 
-    $this->putJson(adminPath()."groups/{$group}/spaces/{$this->objects['{space}']}", ['role' => 'admin'])->assertForbidden();
+    // Доступ группы к папке или пространству («Доступ…», «Сущности») — право «управлять доступом»
+    $this->putJson(adminPath()."nav-nodes/{$this->objects['{space-node}']}/access/groups/{$group}", ['roles' => ['editor']])->assertForbidden();
     $this->postJson(adminPath()."groups/{$group}/members", ['user_id' => $granted->id])->assertForbidden();
     // Группа без доступа и прав компании — её состав он ведёт
     $plain = makeGroup();

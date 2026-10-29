@@ -1,4 +1,6 @@
-import { expect, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Browser, type Locator, type Page } from '@playwright/test'
+import { pageAs, type User } from '../../tests/helpers'
+import { findUser, userRow } from '../stage-3/helpers'
 
 /**
  * Общие шаги приёмочных автотестов «Права 2.0», П2a (docs/stages/rights-2.md, «Как проверить руками (П2a…)»,
@@ -202,3 +204,138 @@ export const whoCell = (row: Locator) => row.getByRole('cell').nth(2)
 
 /** Ячейка «Подробности» строки журнала. */
 export const detailsCell = (row: Locator) => row.getByRole('cell').nth(4)
+
+/*
+ * «Права 2.0», П2d-1 — доступ через папки и несколько ролей (docs/stages/rights-2.md, «Как проверить руками (П2d-1…)»,
+ * ТК-R2.45–R2.54). Данные — E2eSeeder::foldersAccess: Демо Участник → «E2E Ярослав Папкин» (e2e-folders@), Егор и Дина →
+ * «E2E Яков Эксплуатации» и «E2E Яна Маркетинга», папки и пространства — «E2E Продуктовые команды» (FDEV), «E2E
+ * Операции» (FOPS, FMKT) и другие; admin@ → e2e-admin (администратор «Компании 1»).
+ */
+export const FOLDERS_PERSON = 'E2E Ярослав Папкин'
+
+/** Администрирование → «Структура». */
+export async function openStructure(page: Page) {
+  await page.goto('/admin/structure')
+  await expect(page.getByRole('heading', { name: 'Структура', level: 1 })).toBeVisible()
+}
+
+/** «Структура» → «⋯» у папки или пространства → пункт меню. */
+export async function structureAction(page: Page, name: string, item: string) {
+  await page.getByRole('button', { name: `Действия с «${name}»` }).click()
+  await page.getByRole('menuitem', { name: item, exact: true }).click()
+}
+
+/** «Структура» → «⋯» → «Доступ…»: окно «Доступ: <название>» со списком выдач. */
+export async function openNodeAccess(page: Page, name: string) {
+  await structureAction(page, name, 'Доступ…')
+  const dialog = page.getByRole('dialog', { name: `Доступ: ${name}` })
+  await expect(dialog.getByRole('columnheader', { name: 'Кто' })).toBeVisible()
+  return dialog
+}
+
+/**
+ * Строки списка «Доступа…» с этим человеком или группой (выдача на сам узел и унаследованные — отдельными строками). По
+ * подстроке: рядом с именем в той же ячейке — пометки («группа», «через папку …», «Приглашён»).
+ */
+export const grantRows = (dialog: Locator, name: string) => dialog.getByRole('row').filter({ hasText: name })
+
+/** Чипы ролей (значки) в ячейке. */
+export const chips = (cell: Locator) => cell.locator('[data-slot="badge"]')
+
+/** Ячейка «Роли» строки «Доступа…»: кто, роли, действия. */
+export const grantRoles = (row: Locator) => chips(row.getByRole('cell').nth(1))
+
+/** Роли чипами (переключатели aria-pressed): включить нужные, выключить остальные. */
+export async function chooseRoles(group: Locator, roles: string[]) {
+  for (const chip of await group.getByRole('button').all()) {
+    const name = (await chip.innerText()).trim()
+    if (((await chip.getAttribute('aria-pressed')) === 'true') !== roles.includes(name)) await chip.click()
+  }
+  await expect(group.getByRole('button', { pressed: true })).toHaveText(roles)
+}
+
+/** В окне «Доступ…»: «Сотруднику» (поиск по имени) или «Группе», роли чипами → «Выдать доступ». */
+export async function grantNodeAccess(dialog: Locator, subject: { user: string } | { group: string }, roles: string[]) {
+  const page = dialog.page()
+  if ('user' in subject) {
+    await dialog.getByRole('button', { name: 'Сотруднику', exact: true }).click()
+    await dialog.getByRole('textbox', { name: 'Сотрудник' }).fill(subject.user)
+    await dialog.getByRole('button', { name: new RegExp(`^${subject.user} `) }).click()
+  } else {
+    await dialog.getByRole('button', { name: 'Группе', exact: true }).click()
+    const select = dialog.getByLabel('Группа', { exact: true })
+    const value = await select.locator('option', { hasText: subject.group }).getAttribute('value')
+    await select.selectOption(value!)
+  }
+  await chooseRoles(dialog.getByRole('group', { name: 'Роли', exact: true }), roles)
+  await dialog.getByRole('button', { name: 'Выдать доступ', exact: true }).click()
+  await expect(page.getByText('Доступ выдан').first()).toBeVisible()
+}
+
+/** В окне «Доступ…»: «Снять доступ» у человека или группы (выдача на сам узел) → подтвердить. */
+export async function revokeNodeAccess(dialog: Locator, name: string) {
+  const page = dialog.page()
+  await dialog.getByRole('button', { name: `Снять доступ: ${name}` }).click()
+  await page.getByRole('dialog', { name: 'Снять доступ?' }).getByRole('button', { name: 'Снять доступ' }).click()
+}
+
+/** Закрыть окно «Доступ…» (крестик). */
+export async function closeDialog(dialog: Locator) {
+  await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click()
+  await expect(dialog).toBeHidden()
+}
+
+/** Пространство по адресу → вкладка «Участники» (пространство в папке: в дереве папка может быть свёрнута). */
+export async function openMembersByKey(page: Page, key: string, name: string) {
+  await page.goto(`/spaces/${key}`)
+  await expect(page.getByRole('heading', { name }).first()).toBeVisible()
+  await page.getByRole('tab', { name: 'Участники', exact: true }).click()
+  await expect(page.getByRole('tab', { name: 'Участники', exact: true })).toHaveAttribute('aria-selected', 'true')
+}
+
+/**
+ * Папка в дереве с содержимым — пункт списка, в котором её кнопка (по точному названию). Внутренний локатор filter({ has })
+ * ищется внутри пункта — от страницы, а не от дерева.
+ */
+export const treeFolderItem = (page: Page, name: string) =>
+  tree(page).getByRole('listitem').filter({ has: page.getByRole('button', { name, exact: true }) })
+
+/**
+ * pageAs, чьи страницы закрываются после каждого теста файла (test.afterEach). Контексты pageAs без закрытия живут до
+ * конца прогона: к ТК-R2.45 их открыто полсотни, браузер тормозит, и тесты рядом не укладываются во время (полный
+ * make e2e, П2d-1). Вызывать на уровне файла: `const openAs = pagesClosedAfterEach()`.
+ */
+export function pagesClosedAfterEach() {
+  const opened: Page[] = []
+  test.afterEach(async () => {
+    for (const page of opened.splice(0)) await page.context().close()
+  })
+  return async (browser: Browser, user: User) => {
+    const page = await pageAs(browser, user)
+    opened.push(page)
+    return page
+  }
+}
+
+/**
+ * «Пользователи» → «E2E Ярослав Папкин» → «Права компании» → «Управлять структурой (пространства и папки)»: отметить или
+ * снять (ТК-R2.55, R2.56 — шаг 1: Демо Участнику дают право на структуру без права на доступ).
+ */
+export async function setStructureRight(admin: Page, checked: boolean) {
+  await openCompanyUsers(admin)
+  await findUser(admin, FOLDERS_PERSON)
+  await userRow(admin, FOLDERS_PERSON).getByRole('link', { name: FOLDERS_PERSON, exact: true }).click()
+  await expect(admin.getByRole('heading', { name: FOLDERS_PERSON })).toBeVisible()
+  const right = admin
+    .getByRole('region', { name: 'Права компании' })
+    .getByRole('checkbox', { name: 'Управлять структурой (пространства и папки)' })
+  await expect(right).toBeChecked({ checked: !checked })
+  await right.click()
+  await expect(admin.getByText('Права сохранены').last()).toBeVisible()
+  await expect(right).toBeChecked({ checked })
+}
+
+/** Текст отказа в «Переместить в…» тому, у кого есть «Управлять структурой», но нет «Управлять доступом». */
+export const MOVE_NEEDS_ACCESS =
+  'Перемещение изменит доступ или роли — для этого нужно ещё право «Управлять доступом ко всем пространствам ' +
+  'компании». Обратитесь к администратору компании.'

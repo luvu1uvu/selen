@@ -89,10 +89,12 @@ describe('деактивация в компании', function () {
             ->postJson(adminPath()."users/{$leaving->id}/deactivate", ['successor_id' => $successor->id])
             ->assertOk();
 
-        $role = fn ($space) => AccessGrant::query()->onSpace($space)->where('user_id', $successor->id)->sole()->standardRole();
-        expect($role($dev))->toBe(StandardRole::Admin)
-            ->and($role($ops))->toBe(StandardRole::Editor)
-            ->and($role($mkt))->toBe(StandardRole::EditorOwnCards)
+        // Несколько ролей (П2d-1): у преемника остаются его роли, роль уходящего с «управлением доступом» — добавляется
+        $roles = fn ($space) => AccessGrant::query()->onSpace($space)->where('user_id', $successor->id)->with('role')->orderBy('id')->get()
+            ->map(fn (AccessGrant $grant) => $grant->standardRole())->all();
+        expect($roles($dev))->toBe([StandardRole::Editor, StandardRole::Admin])
+            ->and($roles($ops))->toBe([StandardRole::Editor])
+            ->and($roles($mkt))->toBe([StandardRole::EditorOwnCards])
             ->and($group->members()->whereKey($successor->id)->exists())->toBeTrue()
             ->and(company()->permissionsOf($successor)->permissions())->toBe(['company.invite_users'])
             // Копирование: у ушедшего всё остаётся «спящим» — вернётся, и права вернутся
@@ -200,7 +202,7 @@ describe('приглашение существующего сотрудника
 
         $this->actingAs($this->admin)->postJson(adminPath().'invitations', [
             'name' => 'Другое имя', 'email' => 'OLEG@selen.test', 'role' => 'member',
-            'spaces' => [['space_id' => $dev->id, 'role' => 'editor']],
+            'grants' => [['node_id' => nodeOf($dev)->id, 'roles' => ['editor']]],
         ])->assertCreated()
             ->assertJsonPath('data.result', 'added')
             ->assertJsonPath('data.user.name', 'Олег')
@@ -256,14 +258,14 @@ describe('приглашение существующего сотрудника
         $other = space(['key' => 'OTHER']);
 
         $this->actingAs($inviter);
-        expect(collect($this->getJson(adminPath().'grantable-spaces')->assertOk()->json('data'))->pluck('key')->all())->toBe(['MINE']);
+        expect(collect($this->getJson(adminPath().'grantable-nodes')->assertOk()->json('data'))->pluck('space.key')->all())->toBe(['MINE']);
         $this->postJson(adminPath().'invitations', [
             'name' => 'Новый', 'email' => 'new@selen.test', 'role' => 'member',
-            'spaces' => [['space_id' => $other->id, 'role' => 'editor']],
-        ])->assertJsonValidationErrors(['spaces.0.space_id' => __('selen.spaces.not_found')]);
+            'grants' => [['node_id' => nodeOf($other)->id, 'roles' => ['editor']]],
+        ])->assertJsonValidationErrors(['grants.0.node_id' => __('selen.access.node_not_found')]);
         $this->postJson(adminPath().'invitations', [
             'name' => 'Новый', 'email' => 'new@selen.test', 'role' => 'member',
-            'spaces' => [['space_id' => $mine->id, 'role' => 'editor']],
+            'grants' => [['node_id' => nodeOf($mine)->id, 'roles' => ['editor']]],
         ])->assertCreated();
         expect(AccessGrant::query()->onSpace($mine)->whereHas('user', fn ($q) => $q->where('email', 'new@selen.test'))->exists())->toBeTrue();
     });

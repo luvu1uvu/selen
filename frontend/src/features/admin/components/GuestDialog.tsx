@@ -8,7 +8,7 @@ import { useAdminCompanyId } from '@/features/admin/company'
 import { useCurrentUser } from '@/features/auth/queries'
 import { emailSchema } from '@/features/auth/schemas'
 import { applyValidationErrors, getErrorBody, getErrorMessage } from '@/shared/api/errors'
-import type { AdminUser, SpaceGrantInput, SpaceRole, UserAccess } from '@/shared/types/api'
+import type { AdminUser, NodeGrantInput, RoleKey, UserAccess } from '@/shared/types/api'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -20,8 +20,8 @@ import {
 } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
-import { useAddGuest, useGrantableSpaces, useUpdateGuest, useUserAccess } from '../queries'
-import { SpaceGrantsField } from './SpaceGrantsField'
+import { useAddGuest, useGrantableNodes, useUpdateGuest, useUserAccess } from '../queries'
+import { NodeGrantsField } from './NodeGrantsField'
 
 /** День YYYY-MM-DD в часовом поясе профиля (поле type="date"; сервер считает срок по нему же). */
 function localDay(iso: string | null, timeZone?: string): string {
@@ -51,24 +51,25 @@ export function GuestDialog({
   const { t } = useTranslation('admin')
   const { t: tc } = useTranslation()
   const access = useUserAccess(guest?.id ?? '', guest !== null && open)
-  const grantable = useGrantableSpaces(company, open)
+  const grantable = useGrantableNodes(company, open)
   const ready = grantable.isSuccess && (guest === null || access.isSuccess)
 
-  // Личные выдачи гостя: в пространствах, где автор выдаёт доступ, — меняются; остальные — только показываются
-  const grantableIds = new Set(grantable.data?.map((space) => space.id) ?? [])
+  // Личные выдачи гостя (только на пространства): где автор выдаёт доступ, — меняются; остальные — только показываются
+  const nodeOfSpace = new Map(
+    (grantable.data ?? []).flatMap((node) =>
+      node.space ? [[node.space.id, node.id] as const] : [],
+    ),
+  )
   const personal =
     access.data?.spaces.flatMap((entry) =>
       entry.sources
-        .filter((source) => source.type === 'personal')
+        .filter((source) => source.type === 'personal' && source.folder === null)
         .map((source) => ({ entry, source })),
     ) ?? []
-  const editable: SpaceGrantInput[] = personal
-    .filter(({ entry }) => grantableIds.has(entry.space.id))
-    .map(({ entry, source }) => ({
-      space_id: entry.space.id,
-      role: source.role,
-      own_cards_only: source.own_cards_only,
-    }))
+  const editable: NodeGrantInput[] = personal.flatMap(({ entry, source }) => {
+    const nodeId = nodeOfSpace.get(entry.space.id)
+    return nodeId ? [{ node_id: nodeId, roles: source.roles }] : []
+  })
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
@@ -91,8 +92,8 @@ export function GuestDialog({
             company={company}
             guest={guest}
             editable={editable}
-            readOnly={personal.filter(({ entry }) => !grantableIds.has(entry.space.id))}
-            nothingToGrant={grantableIds.size === 0}
+            readOnly={personal.filter(({ entry }) => !nodeOfSpace.has(entry.space.id))}
+            nothingToGrant={nodeOfSpace.size === 0}
             onClose={onClose}
           />
         ) : access.isError || grantable.isError ? (
@@ -116,7 +117,7 @@ function GuestForm({
   company: string
   guest: AdminUser | null
   /** Выдачи гостя, которые автор может менять, — начальные строки формы. */
-  editable: SpaceGrantInput[]
+  editable: NodeGrantInput[]
   readOnly: {
     entry: UserAccess['spaces'][number]
     source: UserAccess['spaces'][number]['sources'][number]
@@ -139,17 +140,16 @@ function GuestForm({
       z.object({
         email: guest === null ? emailSchema(ta) : z.string(),
         expires_on: z.string(),
-        spaces: z
+        grants: z
           .array(
             z.object({
-              space_id: z.string(),
-              role: z.custom<SpaceRole>(),
-              own_cards_only: z.boolean().optional(),
+              node_id: z.string(),
+              roles: z.array(z.custom<RoleKey>()).min(1, ts('rolesField.required')),
             }),
           )
           .min(guest === null ? 1 : 0, t('guests.spacesRequired')),
       }),
-    [guest, t, ta],
+    [guest, t, ta, ts],
   )
   type FormValues = z.infer<typeof schema>
 
@@ -164,7 +164,7 @@ function GuestForm({
     defaultValues: {
       email: '',
       expires_on: localDay(guest?.guest?.expires_at ?? null, me?.timezone),
-      spaces: editable,
+      grants: editable,
     },
   })
 
@@ -176,7 +176,7 @@ function GuestForm({
   }, [])
 
   const onSubmit = handleSubmit(async (values) => {
-    const payload = { expires_on: values.expires_on || null, spaces: values.spaces }
+    const payload = { expires_on: values.expires_on || null, grants: values.grants }
     try {
       if (guest === null) {
         await add.mutateAsync({ email: values.email, ...payload })
@@ -188,8 +188,8 @@ function GuestForm({
       onClose()
     } catch (error) {
       const fields = getErrorBody(error)?.errors ?? {}
-      const spaceError = Object.entries(fields).find(([key]) => key.startsWith('spaces'))
-      if (spaceError) setError('spaces', { message: spaceError[1][0] })
+      const spaceError = Object.entries(fields).find(([key]) => key.startsWith('grants'))
+      if (spaceError) setError('grants', { message: spaceError[1][0] })
       const known = ['email', 'expires_on'].some((key) => key in fields)
       if (!applyValidationErrors(error, setError) || (!known && !spaceError)) {
         // Ошибка не о поле формы (гостя уже убрали и т. п.) — сообщением
@@ -212,16 +212,19 @@ function GuestForm({
       )}
       <Controller
         control={control}
-        name="spaces"
+        name="grants"
         render={({ field }) => (
-          <SpaceGrantsField
+          <NodeGrantsField
             id="guest-spaces"
             company={company}
             value={field.value}
             onChange={field.onChange}
-            withoutAdmin
+            forGuest
             emptyText={guest === null ? t('guests.spacesEmpty') : t('guests.spacesEmptyEdit')}
-            error={errors.spaces?.message}
+            error={
+              errors.grants?.message ??
+              errors.grants?.find?.((grant) => grant?.roles)?.roles?.message
+            }
           />
         )}
       />
@@ -234,7 +237,7 @@ function GuestForm({
                 {t('guests.otherSpace', {
                   name: entry.space.name,
                   key: entry.space.key,
-                  role: ts(`roles.${source.role}`),
+                  role: source.roles.map((role) => ts(`roles.${role}`)).join(', '),
                 })}
               </li>
             ))}

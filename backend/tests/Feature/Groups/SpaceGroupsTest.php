@@ -19,28 +19,33 @@ beforeEach(function () {
 });
 
 describe('вкладка «Группы»', function () {
-    it('админ пространства выдаёт, меняет и отзывает доступ группы', function () {
+    it('админ пространства выдаёт, меняет и отзывает доступ группы — с несколькими ролями', function () {
         $group = addToGroup(makeGroup(['name' => 'Contractors']), member(), member());
         $this->actingAs($this->owner);
 
-        $this->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $group->id, 'role' => 'editor', 'own_cards_only' => true])
+        $this->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $group->id, 'roles' => ['editor_own']])
             ->assertCreated()
             ->assertJsonPath('data.group.name', 'Contractors')
             ->assertJsonPath('data.group.members_count', 2)
-            ->assertJsonPath('data.role', 'editor')
-            ->assertJsonPath('data.own_cards_only', true);
-        $this->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $group->id, 'role' => 'editor'])
+            ->assertJsonPath('data.roles', ['editor_own'])
+            ->assertJsonPath('data.inherited_from', null);
+        $this->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $group->id, 'roles' => ['editor']])
             ->assertJsonValidationErrors(['group_id' => __('selen.groups.already_granted')]);
 
         $this->getJson('/api/v1/spaces/FRONT/groups')->assertOk()->assertJsonCount(1, 'data');
-        $this->patchJson("/api/v1/spaces/FRONT/groups/{$group->id}", ['own_cards_only' => false])
-            ->assertOk()->assertJsonPath('data.own_cards_only', false)->assertJsonPath('data.role', 'editor');
-        $this->patchJson("/api/v1/spaces/FRONT/groups/{$group->id}", ['role' => 'admin', 'own_cards_only' => true])->assertUnprocessable();
+        $this->patchJson("/api/v1/spaces/FRONT/groups/{$group->id}", ['roles' => ['editor', 'commenter']])
+            ->assertOk()->assertJsonPath('data.roles', ['editor', 'commenter']);
+        $this->patchJson("/api/v1/spaces/FRONT/groups/{$group->id}", ['roles' => []])->assertUnprocessable();
         $this->deleteJson("/api/v1/spaces/FRONT/groups/{$group->id}")->assertNoContent();
         $this->deleteJson("/api/v1/spaces/FRONT/groups/{$group->id}")->assertNotFound();
 
-        expect(EventLogEntry::query()->where('event_type', 'like', 'space.group_%')->orderBy('id')->pluck('event_type')->all())
-            ->toBe(['space.group_added', 'space.group_restriction_changed', 'space.group_removed']);
+        expect(EventLogEntry::query()->where('event_type', 'like', 'space.group_%')->orderBy('id')->get(['event_type', 'payload'])
+            ->map(fn (EventLogEntry $e) => [$e->event_type, $e->payload])->all())
+            ->toEqual([
+                ['space.group_added', ['group_id' => $group->id, 'roles' => ['editor_own']]],
+                ['space.group_role_changed', ['group_id' => $group->id, 'from' => ['editor_own'], 'to' => ['editor', 'commenter']]],
+                ['space.group_removed', ['group_id' => $group->id, 'roles' => ['editor', 'commenter']]],
+            ]);
     });
 
     it('архивную группу добавить нельзя, а её доступ остаётся в списке с пометкой', function () {
@@ -49,7 +54,7 @@ describe('вкладка «Группы»', function () {
         $kept->forceFill(['archived_at' => now()])->save();
         $this->actingAs($this->owner);
 
-        $this->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $archived->id, 'role' => 'editor'])
+        $this->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $archived->id, 'roles' => ['editor']])
             ->assertJsonValidationErrors(['group_id' => __('selen.groups.archived')]);
         $this->getJson('/api/v1/spaces/FRONT/groups')->assertJsonPath('data.0.group.archived_at', fn ($v) => $v !== null);
     });
@@ -61,9 +66,9 @@ describe('вкладка «Группы»', function () {
         addToSpaceViaGroup($this->space, $editor, SpaceRole::Editor);
         $other = makeGroup();
 
-        $this->actingAs($editor)->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $other->id, 'role' => 'commenter'])->assertForbidden();
-        $this->actingAs($viaGroup)->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $other->id, 'role' => 'commenter'])->assertCreated();
-        $this->actingAs($viaGroup)->postJson('/api/v1/spaces/FRONT/members', ['user_id' => member()->id, 'role' => 'editor'])->assertCreated();
+        $this->actingAs($editor)->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $other->id, 'roles' => ['commenter']])->assertForbidden();
+        $this->actingAs($viaGroup)->postJson('/api/v1/spaces/FRONT/groups', ['group_id' => $other->id, 'roles' => ['commenter']])->assertCreated();
+        $this->actingAs($viaGroup)->postJson('/api/v1/spaces/FRONT/members', ['user_id' => member()->id, 'roles' => ['editor']])->assertCreated();
         // Справочники для выбора — тоже доступны администратору через группу
         $this->actingAs($viaGroup)->getJson('/api/v1/companies/'.company()->id.'/groups/directory')->assertOk();
         $this->actingAs($viaGroup)->getJson('/api/v1/companies/'.company()->id.'/users/directory')->assertOk();
@@ -78,13 +83,13 @@ describe('инвариант личного администратора', funct
         $this->actingAs($viaGroup);
 
         $this->deleteJson("/api/v1/spaces/FRONT/members/{$this->owner->id}")
-            ->assertJsonValidationErrors(['role' => __('selen.spaces.last_admin')]);
-        $this->patchJson("/api/v1/spaces/FRONT/members/{$this->owner->id}", ['role' => 'editor'])
-            ->assertJsonValidationErrors(['role' => __('selen.spaces.last_admin')]);
+            ->assertJsonValidationErrors(['roles' => __('selen.spaces.last_admin')]);
+        $this->patchJson("/api/v1/spaces/FRONT/members/{$this->owner->id}", ['roles' => ['editor']])
+            ->assertJsonValidationErrors(['roles' => __('selen.spaces.last_admin')]);
 
         // Второй личный администратор — и первого уже можно понизить
-        $this->postJson('/api/v1/spaces/FRONT/members', ['user_id' => $second = member()->id, 'role' => 'admin'])->assertCreated();
-        $this->patchJson("/api/v1/spaces/FRONT/members/{$this->owner->id}", ['role' => 'editor'])->assertOk();
+        $this->postJson('/api/v1/spaces/FRONT/members', ['user_id' => $second = member()->id, 'roles' => ['admin']])->assertCreated();
+        $this->patchJson("/api/v1/spaces/FRONT/members/{$this->owner->id}", ['roles' => ['editor']])->assertOk();
     });
 
     it('операции с группами инвариант не нарушают: отзыв группы-администратора разрешён', function () {
@@ -147,11 +152,13 @@ describe('вкладка «Люди»', function () {
             ->keyBy('user.name');
 
         expect($people->keys()->all())->toBe(['Анна', 'Борис', 'Ольга'])
-            ->and($people['Ольга']['role'])->toBe('editor')
-            ->and($people['Ольга']['personal']['role'])->toBe('editor')
-            ->and($people['Ольга']['groups'])->toBe([['id' => $olga->groups()->first()->id, 'name' => 'Analysts', 'role' => 'commenter', 'own_cards_only' => false]])
+            ->and($people['Ольга']['personal']['roles'])->toBe(['editor'])
+            ->and($people['Ольга']['sources'])->toBe([
+                ['type' => 'personal', 'group' => null, 'folder' => null, 'roles' => ['editor']],
+                ['type' => 'group', 'group' => ['id' => $olga->groups()->first()->id, 'name' => 'Analysts'], 'folder' => null, 'roles' => ['commenter']],
+            ])
             ->and($people['Борис']['personal'])->toBeNull()
-            ->and($people['Борис']['groups'])->toHaveCount(1);
+            ->and($people['Борис']['sources'])->toHaveCount(1);
     });
 
     it('человека, у которого доступ только через группу, можно назначить в карточку и упомянуть', function () {

@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
-use App\Models\AccessGrant;
+use App\Actions\Access\NodeGrants;
+use App\Enums\NavNodeType;
 use App\Models\Group;
+use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\CompanyMembers;
@@ -11,9 +13,11 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
- * Группа в админке. Состав и доступы к пространствам — только если загружены (страница группы).
+ * Группа в админке. Состав и «Сущности» (папки и пространства с ролями группы, П2d-1) — только если загружены (страница
+ * группы).
  *
  * @mixin Group
  */
@@ -33,7 +37,8 @@ class GroupResource extends JsonResource
             'archived_at' => $this->archived_at?->toIso8601ZuluString(),
             'created_at' => $this->created_at->toIso8601ZuluString(),
             'members_count' => $this->whenCounted('members', fn () => $this->membersCount()),
-            'spaces_count' => $this->whenCounted('spaceGrants'),
+            // Сколько папок и пространств с доступом группы (П2d-1)
+            'entities_count' => $this->whenHas('entities_count', fn () => (int) $this->getAttribute('entities_count')),
             // Страница группы: что текущий пользователь может менять (состав и доступ — выдача доступа, П2c)
             'permissions' => $this->whenLoaded('members', fn () => [
                 'manage_members' => $request->user()?->can('manageMembers', $this->resource) ?? false,
@@ -52,33 +57,34 @@ class GroupResource extends JsonResource
                     'status' => CompanyMembers::statusOf($user, $this->company_id),
                     'added_at' => $this->addedAt($user),
                 ])),
-            'spaces' => $this->whenLoaded('spaceGrants', fn () => $this->spaceGrants
-                ->sortBy(fn (AccessGrant $grant) => mb_strtolower((string) $grant->space?->name))
-                ->values()
-                ->map(fn (AccessGrant $grant) => [
-                    'space' => $this->space($grant),
-                    // Прежний вид API: роль + «только свои карточки» (ADR-0024, П2a)
-                    'role' => $grant->legacyRole(),
-                    'own_cards_only' => $grant->ownCardsOnly(),
-                ])),
+            // Вкладка «Сущности» (П2d-1): папки и пространства с ролями группы на каждом
+            'entities' => $this->whenLoaded('accessGrants', fn () => $this->accessGrants
+                ->groupBy('nav_node_id')
+                ->map(fn (Collection $grants) => [
+                    'node' => $this->node($grants->first()->navNode),
+                    'roles' => NodeGrants::values($grants->pluck('role')),
+                ])
+                ->sortBy(fn (array $entity) => [$entity['node']['type'] === NavNodeType::Folder ? 0 : 1, mb_strtolower($entity['node']['name'])])
+                ->values()),
         ];
     }
 
     /**
-     * Пространство выдачи (в П2a выдачи — только на пространства).
+     * Папка или пространство выдачи (ссылка — по ключу пространства, архивное — с пометкой).
      *
-     * @return array<string, mixed>
+     * @return array{id: string, type: NavNodeType, name: string, space: array{id: string, key: string}|null, archived: bool}
      */
-    private function space(AccessGrant $grant): array
+    private function node(NavNode $node): array
     {
-        /** @var Space $space */
-        $space = $grant->space;
+        /** @var Space|null $space */
+        $space = $node->space;
 
         return [
-            'id' => $space->id,
-            'key' => $space->key,
-            'name' => $space->name,
-            'archived_at' => $space->archived_at?->toIso8601ZuluString(),
+            'id' => $node->id,
+            'type' => $node->type,
+            'name' => $space->name ?? (string) $node->name,
+            'space' => $space === null ? null : ['id' => $space->id, 'key' => $space->key],
+            'archived' => $space?->isArchived() ?? $node->isArchived(),
         ];
     }
 

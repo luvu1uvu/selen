@@ -2,8 +2,10 @@
 
 namespace App\Actions\Users;
 
+use App\Actions\Access\NodeGrants;
 use App\Enums\EventType;
 use App\Models\AccessGrant;
+use App\Models\NavNode;
 use App\Models\Space;
 use App\Models\User;
 use App\Services\Access\AccessResolver;
@@ -16,7 +18,7 @@ use Illuminate\Database\Eloquent\Collection;
  * и там, где он не сотрудник. После передачи владения такие выдачи перестали бы действовать, а при добавлении ему
  * «дома» или гостевого доступа ожили бы молча — поэтому при передаче они снимаются (каждая — событием снятия
  * участника). Окно передачи заранее показывает, к чему он потеряет доступ и какие пространства останутся без
- * администратора (предупреждение; отказ по инварианту — П2d).
+ * администратора (предупреждение; отказ по инварианту — только при нескольких компаниях, отложено в П2d-1).
  */
 class FormerOwnerGrants
 {
@@ -36,7 +38,7 @@ class FormerOwnerGrants
     public function impact(User $owner): array
     {
         $lost = Space::query()
-            ->whereIn('id', $this->grants($owner)->with('navNode')->get()->pluck('navNode.space_id'))
+            ->whereIn('id', $this->grants($owner)->with('navNode')->get()->pluck('navNode.space_id')->filter())
             ->orderByRaw('lower(name)')
             ->get();
         $last = $this->resolver->lastManagerSpaces($owner)->modelKeys();
@@ -44,18 +46,23 @@ class FormerOwnerGrants
         return ['lost' => $lost, 'unmanaged' => $lost->filter(fn (Space $space) => in_array($space->id, $last, true))->values()];
     }
 
-    /** Снять их (внутри транзакции передачи владения). */
+    /**
+     * Снять их (внутри транзакции передачи владения): выдачи на пространства и на папки (П2d-1) — по узлу, все роли
+     * одним событием. Инвариант «есть кто управляет доступом» здесь — предупреждение окна передачи (отказ 422 — только
+     * при нескольких компаниях, отложено, ADR-0026).
+     */
     public function revoke(?User $actor, User $formerOwner): void
     {
-        foreach ($this->grants($formerOwner)->with(['navNode', 'role'])->orderBy('id')->get() as $grant) {
-            $space = Space::query()->lockForUpdate()->findOrFail($grant->navNode->space_id);
-            $role = $grant->legacyRole();
-            $grant->delete();
-            $this->events->record(EventType::SpaceMemberRemoved, $actor, $space, array_filter([
-                'user_id' => $formerOwner->id,
-                'role' => $role?->value,
-                'via' => self::VIA,
-            ]));
+        NavNode::lockTree();
+        $grants = $this->grants($formerOwner)->with(['navNode.space', 'role'])->orderBy('id')->get();
+        foreach ($grants->groupBy('nav_node_id') as $same) {
+            /** @var AccessGrant $first */
+            $first = $same->first();
+            $payload = ['user_id' => $formerOwner->id, 'roles' => NodeGrants::values($same->pluck('role')), 'via' => self::VIA];
+            $same->each(fn (AccessGrant $grant) => $grant->delete());
+            $first->navNode->space !== null
+                ? $this->events->record(EventType::SpaceMemberRemoved, $actor, $first->navNode->space, $payload)
+                : $this->events->record(EventType::FolderAccessRevoked, $actor, $first->navNode, $payload);
         }
     }
 
@@ -65,7 +72,6 @@ class FormerOwnerGrants
         return AccessGrant::query()
             ->where('user_id', $owner->getKey())
             // Где он «дом» или гость — его выдачи законны и остаются
-            ->whereNotIn('company_id', $this->resolver->membershipCompanyIds($owner))
-            ->whereHas('navNode', fn ($q) => $q->whereNotNull('space_id'));
+            ->whereNotIn('company_id', $this->resolver->membershipCompanyIds($owner));
     }
 }

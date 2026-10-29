@@ -33,14 +33,14 @@ function addGuestRequest(array $overrides = []): array
     return $overrides + [
         'email' => 'Oleg@Selen.test',
         'expires_on' => null,
-        'spaces' => [['space_id' => test()->dev->id, 'role' => 'commenter']],
+        'grants' => [['node_id' => nodeOf(test()->dev)->id, 'roles' => ['commenter']]],
     ];
 }
 
 it('добавляет сотрудника другой компании гостем: доступ к выбранному пространству, письмо без названия компании', function () {
     $this->postJson(adminPath().'guests', addGuestRequest([
         'expires_on' => now()->addDays(10)->format('Y-m-d'),
-        'spaces' => [['space_id' => $this->dev->id, 'role' => 'editor', 'own_cards_only' => true]],
+        'grants' => [['node_id' => nodeOf($this->dev)->id, 'roles' => ['editor_own']]],
     ]))->assertCreated()
         ->assertJsonPath('data.id', $this->employee->id)
         ->assertJsonPath('data.guest.expired', false)
@@ -49,7 +49,7 @@ it('добавляет сотрудника другой компании гос
 
     $this->actingAs($this->employee)->getJson('/api/v1/spaces/DEV')->assertOk()->assertJsonPath('data.my_role', 'editor');
     $this->getJson('/api/v1/spaces/OPS')->assertNotFound();
-    expect(AccessGrant::query()->where('user_id', $this->employee->id)->sole()->ownCardsOnly())->toBeTrue();
+    expect(AccessGrant::query()->where('user_id', $this->employee->id)->with('role')->sole()->ownCardsOnly())->toBeTrue();
 
     Notification::assertSentTo($this->employee, AccessOpenedNotification::class, function (AccessOpenedNotification $n) {
         $rendered = (string) $n->toMail($this->employee)->render();
@@ -89,11 +89,16 @@ it('свой сотрудник, Владелец и уже гость — по�
 it('гостю — только роли без «Администратора» и только пространства этой компании', function () {
     $foreign = space(['key' => 'SALES', 'company_id' => $this->home->id]);
 
-    $this->postJson(adminPath().'guests', addGuestRequest(['spaces' => [['space_id' => $this->dev->id, 'role' => 'admin']]]))
-        ->assertJsonValidationErrors('spaces.0.role');
-    $this->postJson(adminPath().'guests', addGuestRequest(['spaces' => [['space_id' => $foreign->id, 'role' => 'commenter']]]))
-        ->assertJsonValidationErrors(['spaces.0.space_id' => __('selen.spaces.not_found')]);
-    $this->postJson(adminPath().'guests', addGuestRequest(['spaces' => []]))->assertJsonValidationErrors('spaces');
+    $this->postJson(adminPath().'guests', addGuestRequest(['grants' => [['node_id' => nodeOf($this->dev)->id, 'roles' => ['admin']]]]))
+        ->assertJsonValidationErrors('grants.0.roles.0');
+    $this->postJson(adminPath().'guests', addGuestRequest(['grants' => [['node_id' => nodeOf($foreign)->id, 'roles' => ['commenter']]]]))
+        ->assertJsonValidationErrors(['grants.0.node_id' => __('selen.spaces.not_found')]);
+    $this->postJson(adminPath().'guests', addGuestRequest(['grants' => []]))->assertJsonValidationErrors('grants');
+    // Гостю — только пространства, не папки (П2d-1)
+    $folder = makeFolder('Папка');
+    placeIn(nodeOf($this->dev), $folder);
+    $this->postJson(adminPath().'guests', addGuestRequest(['grants' => [['node_id' => $folder->id, 'roles' => ['commenter']]]]))
+        ->assertJsonValidationErrors(['grants.0.node_id' => __('selen.spaces.not_found')]);
 });
 
 it('изменить гостя: срок и пространства — список заменяет прежний; событие срока', function () {
@@ -101,7 +106,7 @@ it('изменить гостя: срок и пространства — спи
 
     $this->putJson(adminPath()."guests/{$this->employee->id}", [
         'expires_on' => now()->addDays(5)->format('Y-m-d'),
-        'spaces' => [['space_id' => $this->ops->id, 'role' => 'editor']],
+        'grants' => [['node_id' => nodeOf($this->ops)->id, 'roles' => ['editor']]],
     ])->assertOk()->assertJsonPath('data.guest.expired', false);
 
     $this->actingAs($this->employee)->getJson('/api/v1/spaces/DEV')->assertNotFound();
@@ -121,9 +126,9 @@ it('срок — до конца выбранного дня по часовом
 });
 
 it('«Убрать гостя» снимает его выдачи: при новом добавлении прежние не оживают (решение PM 28.10, п. 6)', function () {
-    $this->postJson(adminPath().'guests', addGuestRequest(['spaces' => [
-        ['space_id' => $this->dev->id, 'role' => 'commenter'],
-        ['space_id' => $this->ops->id, 'role' => 'editor'],
+    $this->postJson(adminPath().'guests', addGuestRequest(['grants' => [
+        ['node_id' => nodeOf($this->dev)->id, 'roles' => ['commenter']],
+        ['node_id' => nodeOf($this->ops)->id, 'roles' => ['editor']],
     ]]))->assertCreated();
 
     $this->deleteJson(adminPath()."guests/{$this->employee->id}")->assertNoContent();

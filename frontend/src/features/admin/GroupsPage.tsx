@@ -79,7 +79,7 @@ export function GroupsPage() {
                 )}
               </TableCell>
               <TableCell>{group.members_count}</TableCell>
-              <TableCell>{group.spaces_count}</TableCell>
+              <TableCell>{group.entities_count}</TableCell>
             </TableRow>
           ))}
         </TableBody>

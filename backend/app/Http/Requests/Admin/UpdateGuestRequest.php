@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Enums\SpaceRole;
+use App\Enums\StandardRole;
 use App\Http\Requests\Admin\Concerns\ParsesGuestExpiry;
-use App\Http\Requests\Admin\Concerns\ValidatesSpaceGrants;
+use App\Http\Requests\Admin\Concerns\ValidatesNodeGrants;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
@@ -14,7 +14,7 @@ use Illuminate\Validation\Validator;
 /** Изменить гостя: срок и пространства (список заменяет прежний там, где автор выдаёт доступ). */
 class UpdateGuestRequest extends FormRequest
 {
-    use ParsesGuestExpiry, ValidatesSpaceGrants;
+    use ParsesGuestExpiry, ValidatesNodeGrants;
 
     public function authorize(): Response
     {
@@ -26,8 +26,9 @@ class UpdateGuestRequest extends FormRequest
      */
     public function rules(): array
     {
-        $rules = $this->spaceGrantRules([SpaceRole::Editor, SpaceRole::Commenter]);
-        $rules['spaces'] = ['present', 'array', 'max:50'];
+        // Гостю — роли без «управления доступом» (ADR-0024)
+        $rules = $this->nodeGrantRules(array_values(array_filter(StandardRole::cases(), fn (StandardRole $role) => $role !== StandardRole::Admin)));
+        $rules['grants'] = ['present', 'array', 'max:50'];
 
         return [...$this->guestExpiryRules(), ...$rules];
     }
@@ -35,6 +36,6 @@ class UpdateGuestRequest extends FormRequest
     /** @return list<callable(Validator): void> */
     public function after(): array
     {
-        return [fn (Validator $validator) => $validator->errors()->isEmpty() ? $this->validateSpaceGrants($validator) : null];
+        return [fn (Validator $validator) => $validator->errors()->isEmpty() ? $this->validateNodeGrants($validator, spacesOnly: true) : null];
     }
 }

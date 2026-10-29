@@ -2,16 +2,14 @@
 
 namespace App\Actions\Invitations;
 
-use App\Actions\Spaces\AddSpaceMemberAction;
-use App\Actions\Spaces\SpaceGrants;
-use App\Actions\Spaces\UpdateSpaceMemberAction;
+use App\Actions\Access\SetNodeAccessAction;
 use App\Enums\CompanyRole;
 use App\Enums\EventType;
-use App\Enums\SpaceRole;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\Company;
-use App\Models\Space;
+use App\Models\NavNode;
+use App\Models\Role;
 use App\Models\User;
 use App\Notifications\AccessOpenedNotification;
 use App\Notifications\InvitationNotification;
@@ -47,25 +45,23 @@ class InviteUserAction
         private readonly AccessResolver $resolver,
         private readonly CompanyMemberships $memberships,
         private readonly AccountStatus $accountStatus,
-        private readonly SpaceGrants $grants,
-        private readonly AddSpaceMemberAction $addMember,
-        private readonly UpdateSpaceMemberAction $updateMember,
+        private readonly SetNodeAccessAction $setAccess,
     ) {}
 
     /**
-     * @param  list<array{space: Space, role: SpaceRole, own_cards_only: bool}>  $spaces
+     * @param  list<array{node: NavNode, roles: list<Role>}>  $grants  доступ к папкам и пространствам (П2d-1)
      */
-    public function handle(User $inviter, Company $company, string $name, string $email, CompanyRole $role, array $spaces = []): InviteResult
+    public function handle(User $inviter, Company $company, string $name, string $email, CompanyRole $role, array $grants = []): InviteResult
     {
         /** @var array{InviteResult, IssuedInvitation|null} $outcome */
-        $outcome = DB::transaction(function () use ($inviter, $company, $name, $email, $role, $spaces) {
+        $outcome = DB::transaction(function () use ($inviter, $company, $name, $email, $role, $grants) {
             $user = User::query()->where('email', mb_strtolower(trim($email)))->lockForUpdate()->first();
 
             [$result, $issued] = $user === null
                 ? $this->inviteNew($inviter, $company, $name, $email, $role)
                 : $this->addExisting($inviter, $company, $user, $role);
 
-            $this->grantSpaces($inviter, $result->user, $spaces);
+            $this->grantAccess($inviter, $result->user, $grants);
 
             return [$result, $issued];
         });
@@ -148,14 +144,15 @@ class InviteUserAction
         return $issued;
     }
 
-    /** @param  list<array{space: Space, role: SpaceRole, own_cards_only: bool}>  $spaces */
-    private function grantSpaces(User $inviter, User $user, array $spaces): void
+    /**
+     * Роли на папках и пространствах — ровно выбранные (где у него уже были роли — заменяются, как прежде).
+     *
+     * @param  list<array{node: NavNode, roles: list<Role>}>  $grants
+     */
+    private function grantAccess(User $inviter, User $user, array $grants): void
     {
-        foreach ($spaces as $grant) {
-            $existing = $this->grants->personal($grant['space'], $user);
-            $existing === null
-                ? $this->addMember->handle($inviter, $grant['space'], $user, $grant['role'], self::VIA, $grant['own_cards_only'])
-                : $this->updateMember->handle($inviter, $grant['space'], $user, $grant['role'], $grant['role']->canManageSpace() ? null : $grant['own_cards_only']);
+        foreach ($grants as $grant) {
+            $this->setAccess->handle($inviter, $grant['node'], $user, $grant['roles'], self::VIA);
         }
     }
 }

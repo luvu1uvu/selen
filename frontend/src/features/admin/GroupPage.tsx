@@ -3,17 +3,19 @@ import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
-import { RoleSelectOptions } from '@/features/spaces/components/RoleSelectOptions'
 import { useAdminCompanyId, useAdminUrl } from '@/features/admin/company'
+import { useRevokeNodeAccess, useSetNodeAccess } from '@/features/navigation/queries'
+import { EditRolesDialog } from '@/features/spaces/components/EditRolesDialog'
+import { RoleChips, RolesField } from '@/features/spaces/components/RolesField'
 import { UserPicker } from '@/features/spaces/components/UserPicker'
-import { getErrorMessage, getErrorStatus } from '@/shared/api/errors'
+import { getErrorBody, getErrorMessage, getErrorStatus } from '@/shared/api/errors'
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog'
 import { formatDateTime } from '@/shared/lib/dates'
 import { useCurrentUser } from '@/features/auth/queries'
-import type { DirectoryUser, Group, SpaceRole } from '@/shared/types/api'
+import type { DirectoryUser, Group, RoleKey } from '@/shared/types/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
+import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
 import { NativeSelect } from '@/shared/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
@@ -22,18 +24,19 @@ import { GroupDialog } from './components/GroupDialog'
 import { UserStatusBadge } from './components/UserStatusBadge'
 import {
   useAddGroupMember,
-  useAdminSpaces,
-  useAssignGroupSpace,
+  useGrantableNodes,
   useGroup,
   useRemoveGroupMember,
-  useRevokeGroupSpace,
   useSetGroupArchived,
 } from './queries'
 
 type Confirm =
   { kind: 'member'; id: string; name: string } | { kind: 'space'; id: string; name: string } | null
 
-/** Страница группы: состав и доступы к пространствам. Архивная группа — только для чтения. */
+/**
+ * Страница группы: состав, «Сущности» (папки и пространства с ролями группы, П2d-1) и права компании. Архивная группа —
+ * только для чтения.
+ */
 export function GroupPage() {
   const { t } = useTranslation('admin')
   const url = useAdminUrl()
@@ -42,7 +45,7 @@ export function GroupPage() {
   const groupQuery = useGroup(groupId)
   const archive = useSetGroupArchived()
   const removeMember = useRemoveGroupMember(groupId)
-  const revokeSpace = useRevokeGroupSpace(groupId)
+  const revokeAccess = useRevokeNodeAccess()
   const [editing, setEditing] = useState<Group | null>(null)
   const [confirm, setConfirm] = useState<Confirm>(null)
 
@@ -194,8 +197,8 @@ export function GroupPage() {
           </h2>
           <p className="text-muted-foreground text-sm">{t('groups.spaces.description')}</p>
         </div>
-        {editableSpaces && <SpaceAccessForm group={group} />}
-        <SpaceAccessTable
+        {editableSpaces && <EntityAccessForm group={group} />}
+        <EntityAccessTable
           group={group}
           editable={editableSpaces}
           onRevoke={(id, name) => setConfirm({ kind: 'space', id, name })}
@@ -208,7 +211,7 @@ export function GroupPage() {
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
-        pending={removeMember.isPending || revokeSpace.isPending}
+        pending={removeMember.isPending || revokeAccess.isPending}
         title={
           confirm?.kind === 'space'
             ? t('groups.spaces.revokeTitle')
@@ -228,7 +231,11 @@ export function GroupPage() {
             await run(() => removeMember.mutateAsync(id), t('groups.toasts.memberRemoved'))
           } else if (confirm?.kind === 'space') {
             const id = confirm.id
-            await run(() => revokeSpace.mutateAsync(id), t('groups.toasts.spaceRevoked'))
+            await run(
+              () =>
+                revokeAccess.mutateAsync({ nodeId: id, subject: { type: 'group', id: groupId } }),
+              t('groups.toasts.spaceRevoked'),
+            )
           }
           setConfirm(null)
         }}
@@ -282,193 +289,187 @@ function AddMemberForm({ group }: { group: Group }) {
   )
 }
 
-function SpaceAccessForm({ group }: { group: Group }) {
+/** Выдать группе доступ к папке или пространству с ролями чипами (П2d-1). */
+function EntityAccessForm({ group }: { group: Group }) {
   const { t } = useTranslation('admin')
   const { t: ts } = useTranslation('spaces')
   const { t: tc } = useTranslation()
-  const spacesQuery = useAdminSpaces()
-  const assign = useAssignGroupSpace(group.id)
-  const [spaceId, setSpaceId] = useState('')
-  const [role, setRole] = useState<SpaceRole>('commenter')
-  const [ownCardsOnly, setOwnCardsOnly] = useState(false)
-  const granted = new Set((group.spaces ?? []).map((grant) => grant.space.id))
-  const options = (spacesQuery.data ?? []).filter(
-    (space) => !space.archived_at && !granted.has(space.id),
-  )
+  const company = useAdminCompanyId()
+  const nodes = useGrantableNodes(company)
+  const setAccess = useSetNodeAccess()
+  const [nodeId, setNodeId] = useState('')
+  const [roles, setRoles] = useState<RoleKey[]>(['commenter'])
+  const [error, setError] = useState<string>()
+  const [rolesError, setRolesError] = useState<string>()
+  const granted = new Set((group.entities ?? []).map((entity) => entity.node.id))
+  // Активные папки и пространства в порядке дерева, с отступом по уровню
+  const options = (nodes.data ?? []).filter((node) => !granted.has(node.id))
+  const isSystem = group.system !== null
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!spaceId) return
+    if (!nodeId) setError(t('groups.spaces.required'))
+    if (roles.length === 0) setRolesError(ts('rolesField.required'))
+    if (!nodeId || roles.length === 0) return
     try {
-      await assign.mutateAsync({ spaceId, role, own_cards_only: role !== 'admin' && ownCardsOnly })
+      await setAccess.mutateAsync({ nodeId, subject: { type: 'group', id: group.id }, roles })
       toast.success(t('groups.toasts.spaceGranted'))
-      setSpaceId('')
-      setOwnCardsOnly(false)
-    } catch (error) {
-      toast.error(getErrorMessage(error, tc('errors.generic')))
+      setNodeId('')
+      setRoles(['commenter'])
+    } catch (err) {
+      const errors = getErrorBody(err)?.errors
+      if (errors?.roles?.[0]) setRolesError(errors.roles[0])
+      else if (errors?.group_id?.[0]) setError(errors.group_id[0])
+      else toast.error(getErrorMessage(err, tc('errors.generic')))
     }
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-      <div className="grid gap-1">
-        <Label htmlFor="group-space">{t('groups.spaces.space')}</Label>
+    <form onSubmit={submit} className="grid max-w-2xl gap-4" noValidate>
+      <FormField id="group-entity" label={t('groups.spaces.space')} error={error}>
         <NativeSelect
-          id="group-space"
-          value={spaceId}
-          onChange={(event) => setSpaceId(event.target.value)}
-          className="sm:w-64"
+          id="group-entity"
+          value={nodeId}
+          aria-invalid={!!error}
+          onChange={(event) => {
+            setNodeId(event.target.value)
+            setError(undefined)
+          }}
         >
           <option value="">{t('groups.spaces.choose')}</option>
-          {options.map((space) => (
-            <option key={space.id} value={space.id}>
-              {t('groups.spaces.option', { name: space.name, key: space.key })}
+          {options.map((node) => (
+            <option key={node.id} value={node.id}>
+              {`${'  '.repeat(node.depth - 1)}${
+                node.space
+                  ? t('groups.spaces.option', { name: node.name, key: node.space.key })
+                  : t('groups.spaces.folderOption', { name: node.name })
+              }`}
             </option>
           ))}
         </NativeSelect>
-      </div>
-      <div className="grid gap-1">
-        <Label htmlFor="group-space-role">{t('groups.spaces.role')}</Label>
-        <NativeSelect
-          id="group-space-role"
-          value={role}
-          onChange={(event) => setRole(event.target.value as SpaceRole)}
-          className="sm:w-48"
-        >
-          <RoleSelectOptions withoutAdmin={group.system !== null} />
-        </NativeSelect>
-      </div>
-      {role !== 'admin' && (
-        <div className="flex h-9 items-center gap-2">
-          <Checkbox
-            id="group-space-own"
-            checked={ownCardsOnly}
-            onCheckedChange={(checked) => setOwnCardsOnly(checked === true)}
-          />
-          <Label htmlFor="group-space-own" title={ts('members.ownCardsOnlyHint')}>
-            {ts('members.ownCardsOnly')}
-          </Label>
-        </div>
-      )}
-      <Button type="submit" disabled={!spaceId || assign.isPending}>
+      </FormField>
+      <FormField id="group-entity-roles" label={ts('rolesField.label')} error={rolesError}>
+        <RolesField
+          id="group-entity-roles"
+          value={roles}
+          onChange={(next) => {
+            setRoles(next)
+            setRolesError(undefined)
+          }}
+          withoutManaging={isSystem}
+          invalid={!!rolesError}
+        />
+      </FormField>
+      <Button type="submit" className="justify-self-start" disabled={setAccess.isPending}>
         {t('groups.spaces.grant')}
       </Button>
     </form>
   )
 }
 
-function SpaceAccessTable({
+/** Папки и пространства группы с ролями (П2d-1): изменить роли, отозвать доступ. */
+function EntityAccessTable({
   group,
   editable,
   onRevoke,
 }: {
   group: Group
   editable: boolean
-  onRevoke: (spaceId: string, name: string) => void
+  onRevoke: (id: string, name: string) => void
 }) {
   const { t } = useTranslation('admin')
-  const { t: ts } = useTranslation('spaces')
-  const { t: tc } = useTranslation()
-  const assign = useAssignGroupSpace(group.id)
-  const grants = group.spaces ?? []
-
-  const change = async (spaceId: string, role: SpaceRole, ownCardsOnly: boolean) => {
-    try {
-      await assign.mutateAsync({ spaceId, role, own_cards_only: role !== 'admin' && ownCardsOnly })
-      toast.success(t('groups.toasts.spaceChanged'))
-    } catch (error) {
-      toast.error(getErrorMessage(error, tc('errors.generic')))
-    }
-  }
+  const setAccess = useSetNodeAccess()
+  const entities = group.entities ?? []
+  const [editing, setEditing] = useState<(typeof entities)[number] | null>(null)
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t('groups.spaces.space')}</TableHead>
-          <TableHead className="w-48">{t('groups.spaces.role')}</TableHead>
-          <TableHead>{t('groups.spaces.restriction')}</TableHead>
-          {editable && (
-            <TableHead className="w-28">
-              <span className="sr-only">{t('groups.spaces.actions')}</span>
-            </TableHead>
-          )}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {grants.length === 0 && (
+    <>
+      <Table>
+        <TableHeader>
           <TableRow>
-            <TableCell colSpan={4} className="text-muted-foreground py-6 text-center">
-              {t('groups.spaces.empty')}
-            </TableCell>
-          </TableRow>
-        )}
-        {grants.map((grant) => (
-          <TableRow key={grant.space.id}>
-            <TableCell>
-              <div className="flex flex-wrap items-center gap-2 font-medium">
-                {grant.space.name}
-                <Badge variant="secondary" className="tabular-nums">
-                  {grant.space.key}
-                </Badge>
-                {grant.space.archived_at && (
-                  <Badge variant="warning">{t('spaces.archivedBadge')}</Badge>
-                )}
-              </div>
-            </TableCell>
-            <TableCell>
-              {editable ? (
-                <NativeSelect
-                  aria-label={t('groups.spaces.roleLabel', { name: grant.space.name })}
-                  value={grant.role}
-                  disabled={assign.isPending}
-                  onChange={(event) =>
-                    change(grant.space.id, event.target.value as SpaceRole, grant.own_cards_only)
-                  }
-                >
-                  <RoleSelectOptions withoutAdmin={group.system !== null} />
-                </NativeSelect>
-              ) : (
-                ts(`roles.${grant.role}`)
-              )}
-            </TableCell>
-            <TableCell>
-              {editable && grant.role !== 'admin' ? (
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id={`group-space-own-${grant.space.id}`}
-                    aria-label={t('groups.spaces.ownCardsOnlyLabel', { name: grant.space.name })}
-                    checked={grant.own_cards_only}
-                    disabled={assign.isPending}
-                    onCheckedChange={(checked) =>
-                      change(grant.space.id, grant.role, checked === true)
-                    }
-                  />
-                  <label htmlFor={`group-space-own-${grant.space.id}`} className="text-sm">
-                    {ts('members.ownCardsOnly')}
-                  </label>
-                </div>
-              ) : (
-                grant.own_cards_only && (
-                  <Badge variant="secondary">{ts('members.ownCardsOnly')}</Badge>
-                )
-              )}
-            </TableCell>
+            <TableHead>{t('groups.spaces.space')}</TableHead>
+            <TableHead>{t('groups.spaces.role')}</TableHead>
             {editable && (
-              <TableCell>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={t('groups.spaces.revokeLabel', { name: grant.space.name })}
-                  onClick={() => onRevoke(grant.space.id, grant.space.name)}
-                >
-                  {t('groups.spaces.revoke')}
-                </Button>
-              </TableCell>
+              <TableHead>
+                <span className="sr-only">{t('groups.spaces.actions')}</span>
+              </TableHead>
             )}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {entities.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={3} className="text-muted-foreground py-6 text-center">
+                {t('groups.spaces.empty')}
+              </TableCell>
+            </TableRow>
+          )}
+          {entities.map((entity) => (
+            <TableRow key={entity.node.id}>
+              <TableCell>
+                <div className="flex flex-wrap items-center gap-2 font-medium">
+                  {entity.node.space
+                    ? t('groups.spaces.option', {
+                        name: entity.node.name,
+                        key: entity.node.space.key,
+                      })
+                    : t('groups.spaces.folderOption', { name: entity.node.name })}
+                  {entity.node.archived && (
+                    <Badge variant="warning">{t('spaces.archivedBadge')}</Badge>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <RoleChips roles={entity.roles} />
+              </TableCell>
+              {editable && (
+                <TableCell>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t('groups.spaces.editRolesLabel', { name: entity.node.name })}
+                      onClick={() => setEditing(entity)}
+                    >
+                      {t('groups.spaces.editRoles')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t('groups.spaces.revokeLabel', { name: entity.node.name })}
+                      onClick={() => onRevoke(entity.node.id, entity.node.name)}
+                    >
+                      {t('groups.spaces.revoke')}
+                    </Button>
+                  </div>
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <EditRolesDialog
+        target={
+          editing && {
+            title: t('groups.spaces.editRolesTitle', {
+              name: editing.node.name,
+              group: group.name,
+            }),
+            roles: editing.roles,
+            withoutManaging: group.system !== null,
+          }
+        }
+        onClose={() => setEditing(null)}
+        onSave={async (roles) => {
+          if (!editing) return
+          await setAccess.mutateAsync({
+            nodeId: editing.node.id,
+            subject: { type: 'group', id: group.id },
+            roles,
+          })
+          toast.success(t('groups.toasts.spaceChanged'))
+        }}
+      />
+    </>
   )
 }

@@ -128,13 +128,15 @@ class UserPolicy
     }
 
     /**
-     * Пространства, где можно выдать доступ приглашённому и гостю: тому, кто приглашает или ведёт гостей (сами
-     * пространства — по праву выдавать доступ в них, GrantableSpaces).
+     * Папки и пространства, где можно выдать доступ: тому, кто приглашает, ведёт гостей или управляет доступом ко всем
+     * сущностям компании («Сущности» группы, П2d-1); сами папки и пространства — по праву выдавать доступ в них
+     * (GrantableNodes).
      */
     public function viewGrantableSpaces(User $actor, Company $company): Response
     {
         return $this->allowCompanyMemberIf($actor, $company, fn () => $company->permissionsOf($actor)->allows(Permission::CompanyInviteUsers)
-            || $company->permissionsOf($actor)->allows(Permission::CompanyManageUsers));
+            || $company->permissionsOf($actor)->allows(Permission::CompanyManageUsers)
+            || $company->permissionsOf($actor)->allows(Permission::CompanyManageAccess));
     }
 
     /** Может ли участник компании менять учётную запись её человека (роль в компании, статус). */

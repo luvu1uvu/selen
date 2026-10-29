@@ -1,24 +1,22 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import type { Space, SpacePerson, SpaceRole } from '@/shared/types/api'
+import type { RoleKey, Space, SpacePerson } from '@/shared/types/api'
 import { makeNavSpace, makeSpace, makeUser, navTree, server, signedInAs } from '@/test/server'
 import { renderApp } from '@/test/render'
 
 const me = makeUser({ id: 'me', name: 'Анна', role: 'member' })
 
-const personal = (role: SpaceRole, ownCardsOnly = false) => ({
-  role,
-  own_cards_only: ownCardsOnly,
-  added_at: '2026-10-01T00:00:00Z',
-})
+const personal = (...roles: RoleKey[]) => ({ roles, added_at: '2026-10-01T00:00:00Z' })
+const sources = (...roles: RoleKey[]) => [
+  { type: 'personal' as const, group: null, folder: null, roles },
+]
 
 const members: SpacePerson[] = [
   {
     user: { id: 'me', name: 'Анна', email: 'anna@selen.test', status: 'active', guest: false },
-    role: 'admin',
     personal: personal('admin'),
-    groups: [],
+    sources: sources('admin'),
   },
   {
     user: {
@@ -28,9 +26,8 @@ const members: SpacePerson[] = [
       status: 'deactivated',
       guest: false,
     },
-    role: 'editor',
     personal: personal('editor'),
-    groups: [],
+    sources: sources('editor'),
   },
 ]
 
@@ -68,11 +65,13 @@ describe('Страница пространства', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Добавить участника' }))
     await userEvent.click(await screen.findByRole('button', { name: /Вера/ }))
-    await userEvent.selectOptions(screen.getByLabelText('Роль'), 'commenter')
+    const roles = within(screen.getByRole('group', { name: 'Роли' }))
+    await userEvent.click(roles.getByRole('button', { name: 'Редактор' }))
+    await userEvent.click(roles.getByRole('button', { name: 'Комментатор' }))
     await userEvent.click(screen.getByRole('button', { name: 'Добавить' }))
 
     expect(await screen.findByText('Участник добавлен')).toBeInTheDocument()
-    expect(body).toEqual({ user_id: 'u-3', role: 'commenter' })
+    expect(body).toEqual({ user_id: 'u-3', roles: ['commenter'] })
   })
 
   it('не даёт добавить участника без выбора сотрудника', async () => {
@@ -174,32 +173,31 @@ describe('Страница пространства', () => {
     ).toBeInTheDocument()
   })
 
-  it('администратор включает режим «только свои карточки» участнику', async () => {
+  it('администратор меняет личные роли участника чипами — «только свои карточки» тоже роль', async () => {
     let body: unknown
     serve(makeSpace())
     server.use(
       http.patch('*/api/v1/spaces/DEV/members/u-2', async ({ request }) => {
         body = await request.json()
-        return HttpResponse.json({ data: { ...members[1], personal: personal('editor', true) } })
+        return HttpResponse.json({ data: { ...members[1], personal: personal('editor_own') } })
       }),
     )
     renderApp('/spaces/DEV')
 
     await userEvent.click(await screen.findByRole('tab', { name: 'Участники' }))
-    // Администратору пространства ограничение неприменимо — переключателя нет
-    expect(
-      await screen.findByRole('checkbox', { name: 'Только свои карточки: Борис' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('checkbox', { name: 'Только свои карточки: Анна' }),
-    ).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Только свои карточки: Борис' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Изменить роли Борис' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Роли: Борис' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Редактор', pressed: true }))
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Редактор — только свои карточки' }),
+    )
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
 
-    expect(await screen.findByText('Режим «только свои карточки» включён')).toBeInTheDocument()
-    expect(body).toEqual({ own_cards_only: true })
+    expect(await screen.findByText('Роли изменены')).toBeInTheDocument()
+    expect(body).toEqual({ roles: ['editor_own'] })
   })
 
-  it('участник видит пометку «только свои карточки» без переключателя', async () => {
+  it('участник видит роли участников («— только свои карточки») без действий', async () => {
     serve(
       makeSpace({
         my_role: 'editor',
@@ -209,7 +207,10 @@ describe('Страница пространства', () => {
     server.use(
       http.get('*/api/v1/spaces/DEV/members', () =>
         HttpResponse.json({
-          data: [members[0], { ...members[1], personal: personal('editor', true) }],
+          data: [
+            members[0],
+            { ...members[1], personal: personal('editor_own'), sources: sources('editor_own') },
+          ],
         }),
       ),
     )
@@ -217,7 +218,7 @@ describe('Страница пространства', () => {
 
     await userEvent.click(await screen.findByRole('tab', { name: 'Участники' }))
     const row = (await screen.findByText('Борис')).closest('tr')!
-    expect(within(row).getByText(/Только свои карточки/)).toBeInTheDocument()
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(within(row).getByText('Лично: Редактор — только свои карточки')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Изменить роли/ })).not.toBeInTheDocument()
   })
 })

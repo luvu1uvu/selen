@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openHome, pageAs } from '../../tests/helpers'
-import { GUEST_SPACE, openMembers } from './helpers'
+import { chooseRoles, GUEST_SPACE, openMembers } from './helpers'
 
 /**
  * ТК-R2.28: гость не узнаёт лишнего о компании-хозяине — людей видит только по имени, группы — без названий (решение PM
@@ -11,6 +11,8 @@ import { GUEST_SPACE, openMembers } from './helpers'
  * одного пространства; своя группа вместо встроенной не показала бы пометку «Все сотрудники». Лариса, Ирина → e2e-admin
  * (лично администратор RGUEST и сотрудник «Компании 1»). Регрессионный тест бага LATER-139: во вкладке «Группы» гостю
  * видна пометка «Все сотрудники» встроенной группы (и численность группы) — падает до исправления.
+ *
+ * П2d-1: роль в окне «Добавить группу» — чипами (вместо списка «Роль»).
  */
 
 /** «Гостевое» → «Участники» → «Группы». */
@@ -27,7 +29,7 @@ async function grantEveryone(admin: Page) {
   const dialog = admin.getByRole('dialog', { name: 'Добавить группу' })
   const everyone = await dialog.locator('option', { hasText: 'Все сотрудники' }).getAttribute('value')
   await dialog.getByLabel('Группа').selectOption(everyone!)
-  await dialog.getByLabel('Роль').selectOption({ label: 'Комментатор' })
+  await chooseRoles(dialog.getByRole('group', { name: 'Роли', exact: true }), ['Комментатор'])
   await dialog.getByRole('button', { name: 'Выдать доступ' }).click()
   await expect(admin.getByText('Группе выдан доступ')).toBeVisible()
 }

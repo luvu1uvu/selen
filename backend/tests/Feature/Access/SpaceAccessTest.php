@@ -35,7 +35,7 @@ it('личный источник и группы складываются, ит
     $access = $this->resolver->forSpace($this->user, $this->space);
 
     expect($access->sources)->toHaveCount(2)
-        ->and($access->personal()?->legacyRole())->toBe(SpaceRole::Commenter)
+        ->and($access->personalSources()[0]->legacyRole())->toBe(SpaceRole::Commenter)
         ->and($access->sources[1]->groupId)->toBe($group->id)
         ->and($access->highestRole())->toBe(SpaceRole::Editor)
         ->and($access->canSeeAllCards())->toBeTrue()
