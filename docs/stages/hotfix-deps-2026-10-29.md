@@ -18,11 +18,42 @@ Security упал на PR #42 («П2c-2») на коммите только с �
 - **symfony/mime v8.1.7** — **CVE-2026-45070** / **GHSA-vqc8-7275-q272** (PKSA-wtxr-p26d-nn42), «Email Header Injection
   via Non-Token Characters in Mime Parameter Names», опубликована 2026-10-28 18:08 UTC. Уровень — **medium** (GitHub:
   CVSS 4.0 — 4.9). Затронуты 8.1.0–8.1.9; **исправлено в 8.1.10** (ветки 5.4.55, 6.4.49, 7.4.22 — у других линеек).
-- **Почему проверка упала на medium.** `scripts/deps-audit.sh` вызывает `composer audit … --ignore-severity=low
-  --ignore-severity=medium --format=summary`. Composer 2.10.3 с `--format=summary` завершается кодом 1, даже когда
-  единственная уязвимость пропущена по уровню; с `--format=table` и `--format=json` тот же вызов — код 0 («Ignore reason:
-  medium severity is ignored»). То есть проверка сейчас роняет CI и на medium. В этом хотфиксе скрипт не менялся (задание
-  — только обновление пакета); вопрос PM — в отчёте.
+- **Почему проверка упала на medium — поведение Composer 2.10.3** (дополнение PM к заданию 29.10: скрипт верит коду
+  выхода `composer audit`, а версия Composer не зафиксирована — `composer:v2` в CI, `composer:2` в Dockerfile).
+  - Версия: `Composer version 2.10.3 2026-08-27 13:34:23` (образ `selen-php:dev`; в CI — та же 2.10.3 из `setup-php`).
+  - Команда (как в прежнем `scripts/deps-audit.sh`, `composer.lock` с одной medium-уязвимостью — `symfony/mime` 8.1.7):
+    `composer audit --locked --no-interaction --abandoned=ignore --ignore-severity=low --ignore-severity=medium
+    --format=summary` → «Found 1 security vulnerability advisory affecting 1 package.», **код выхода 1**.
+  - Тот же вызов с `--format=table` и `--format=json` — **код 0**, уязвимость — в «ignored-advisories» с причиной
+    «medium severity is ignored».
+  - Причина — в исходнике Composer 2.10.3 (`src/Composer/Advisory/Auditor.php`, метод `audit()`): в формате `summary`
+    он загружает «неполные» записи уязвимостей (`PartialSecurityAdvisory`, без уровня) и догружает полные
+    (`needsCompleteAdvisoryLoad`) только если в списке игнорируемых есть ID не вида `PKSA-…`; игнорируемые уровни
+    (`--ignore-severity`) при этом не учитываются. В `processAdvisories()` фильтр по уровню применяется только к полной
+    записи (`SecurityAdvisory`), неполная остаётся «активной» — отсюда код 1.
+  - Issue в composer/composer по этому поведению поиском (`gh search issues`, API поиска: «ignore-severity», «audit
+    summary», «summary severity») **не нашёл**. Есть 2.11.0-RC1 (22.10) — исправлено ли там, не проверял.
+
+## Скрипт проверки — без кода выхода composer audit
+
+- `scripts/deps-audit.sh`: проверка composer (high/critical) — `composer audit --locked --no-interaction
+  --abandoned=ignore --format=json`, код выхода composer не смотрится; уязвимости отбирает сам скрипт (`php -r`: в CI —
+  `setup-php`, локально — образ `selen-php:dev`): провал — high, critical и уязвимость без уровня (как прежнее
+  `--ignore-severity=low --ignore-severity=medium`); пустой или неразбираемый ответ (composer не запустился, битый
+  `composer.lock`) — провал с сообщением «Ответ composer audit не разобрать…». Найденные high/critical выводятся
+  строками «пакет: CVE, уровень — название». Версия Composer не фиксируется. Справочный вывод (все уязвимости и
+  заброшенные пакеты) и npm — без изменений. ADR-0020, «Изменения».
+- **Проверка** (подменный `backend/composer.lock`, после каждого прогона — `git checkout backend/composer.lock`;
+  временная папка `.deps-probe/` в копии — Docker не видит `/private/tmp`, удалена):
+
+  | Случай | `composer.lock` | Скрипт | Код выхода | Вывод проверки composer |
+  |---|---|---|---|---|
+  | A0 | из main: `symfony/mime` 8.1.7 (одна medium) | прежний (из main) | 1 | «Found 1 security vulnerability advisory…» |
+  | A | то же | новый | **0** | «Уязвимостей high и critical нет.» |
+  | B | хотфикса + `guzzlehttp/guzzle` 7.4.4 | новый | **1** | CVE-2026-69246, CVE-2022-31091, CVE-2022-31090 — high |
+  | C | битый (`{ это не JSON`) | новый | **1** | «Ответ composer audit не разобрать…» |
+  | D | хотфикса (`symfony/mime` 8.1.10) | новый | **0** | «Уязвимостей high и critical нет.» |
+
 
 ## Сделано
 
