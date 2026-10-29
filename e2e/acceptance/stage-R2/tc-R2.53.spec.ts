@@ -86,7 +86,7 @@ test('ТК-R2.53. Пространство не остаётся без того
     const move = page.getByRole('dialog', { name: `Переместить «${MKT}»` })
     await move.getByLabel('Куда').selectOption({ label: 'Корень дерева' })
     await expect(move.getByRole('alert')).toHaveText(
-      `Перемещение невозможно: в пространствах «${MKT}» не останется никого, кто лично управляет доступом. Сначала ` +
+      `Перемещение невозможно: в пространстве «${MKT}» не останется никого, кто лично управляет доступом. Сначала ` +
         'назначьте администратора на самом пространстве или на новом месте.',
     )
     await expect(move.getByRole('button', { name: 'Переместить', exact: true })).toBeDisabled()

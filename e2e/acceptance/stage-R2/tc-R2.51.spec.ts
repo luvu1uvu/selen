@@ -61,7 +61,7 @@ test('ТК-R2.51. «Сущности» группы: папки и простр�
     await expect(roles(page, 'Права: группы (RGROUPS)')).toHaveText([OWN])
   } finally {
     // Вернуть как было: доступ группы к папке отозван
-    await section.getByRole('button', { name: `Отозвать доступ к ${FOLDER}` }).click()
+    await section.getByRole('button', { name: `Отозвать доступ к «${FOLDER}»` }).click()
     await page.getByRole('dialog', { name: 'Отозвать доступ группы?' }).getByRole('button', { name: 'Отозвать' }).click()
     await expect(entityRow(page, FOLDER_ROW)).toHaveCount(0)
   }

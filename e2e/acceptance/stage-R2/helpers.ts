@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test'
 import { pageAs, type User } from '../../tests/helpers'
+import { findUser, userRow } from '../stage-3/helpers'
 
 /**
  * Общие шаги приёмочных автотестов «Права 2.0», П2a (docs/stages/rights-2.md, «Как проверить руками (П2a…)»,
@@ -315,3 +316,26 @@ export function pagesClosedAfterEach() {
     return page
   }
 }
+
+/**
+ * «Пользователи» → «E2E Ярослав Папкин» → «Права компании» → «Управлять структурой (пространства и папки)»: отметить или
+ * снять (ТК-R2.55, R2.56 — шаг 1: Демо Участнику дают право на структуру без права на доступ).
+ */
+export async function setStructureRight(admin: Page, checked: boolean) {
+  await openCompanyUsers(admin)
+  await findUser(admin, FOLDERS_PERSON)
+  await userRow(admin, FOLDERS_PERSON).getByRole('link', { name: FOLDERS_PERSON, exact: true }).click()
+  await expect(admin.getByRole('heading', { name: FOLDERS_PERSON })).toBeVisible()
+  const right = admin
+    .getByRole('region', { name: 'Права компании' })
+    .getByRole('checkbox', { name: 'Управлять структурой (пространства и папки)' })
+  await expect(right).toBeChecked({ checked: !checked })
+  await right.click()
+  await expect(admin.getByText('Права сохранены').last()).toBeVisible()
+  await expect(right).toBeChecked({ checked })
+}
+
+/** Текст отказа в «Переместить в…» тому, у кого есть «Управлять структурой», но нет «Управлять доступом». */
+export const MOVE_NEEDS_ACCESS =
+  'Перемещение изменит доступ или роли — для этого нужно ещё право «Управлять доступом ко всем пространствам ' +
+  'компании». Обратитесь к администратору компании.'

@@ -1,15 +1,15 @@
-import { expect, test, type Page } from '@playwright/test'
-import { findUser, structureRow, userRow } from '../stage-3/helpers'
+import { expect, test } from '@playwright/test'
+import { structureRow } from '../stage-3/helpers'
 import {
   closeDialog,
-  FOLDERS_PERSON,
   grantNodeAccess,
+  MOVE_NEEDS_ACCESS,
   openAdminPanel,
-  openCompanyUsers,
   openNodeAccess,
   openStructure,
   pagesClosedAfterEach,
   revokeNodeAccess,
+  setStructureRight,
 } from './helpers'
 
 /**
@@ -26,20 +26,6 @@ const FROM = 'E2E Структура: откуда'
 const TO = 'E2E Структура: куда'
 const NO_GRANTS = 'E2E Новые направления'
 const GROUP = 'E2E Подрядчики'
-const STRUCTURE = 'Управлять структурой (пространства и папки)'
-
-/** «Пользователи» → сотрудник → «Права компании» → «Управлять структурой»: отметить или снять. */
-async function setStructureRight(admin: Page, checked: boolean) {
-  await openCompanyUsers(admin)
-  await findUser(admin, FOLDERS_PERSON)
-  await userRow(admin, FOLDERS_PERSON).getByRole('link', { name: FOLDERS_PERSON, exact: true }).click()
-  await expect(admin.getByRole('heading', { name: FOLDERS_PERSON })).toBeVisible()
-  const right = admin.getByRole('region', { name: 'Права компании' }).getByRole('checkbox', { name: STRUCTURE })
-  await expect(right).toBeChecked({ checked: !checked })
-  await right.click()
-  await expect(admin.getByText('Права сохранены').last()).toBeVisible()
-  await expect(right).toBeChecked({ checked })
-}
 
 /** Страницы сотрудников закрываются после теста. */
 const openAs = pagesClosedAfterEach()
@@ -71,10 +57,7 @@ test('ТК-R2.55. Перемещение, которое меняет досту
     const dialog = person.getByRole('dialog', { name: `Переместить «${SPACE}»` })
     await dialog.getByLabel('Куда').selectOption({ label: TO })
     await expect(dialog.getByText(`Получат доступ: группа «${GROUP}»`)).toBeVisible()
-    await expect(dialog.getByRole('alert')).toHaveText(
-      'Перемещение изменит, у кого есть доступ, — для этого нужно ещё право «Управлять доступом». Обратитесь ' +
-        'к администратору компании.',
-    )
+    await expect(dialog.getByRole('alert')).toHaveText(MOVE_NEEDS_ACCESS)
     await expect(dialog.getByRole('button', { name: 'Переместить', exact: true })).toBeDisabled()
 
     // 4. Там же «Куда» — папка без выдач: «Доступ не изменится.», красного сообщения нет, «Переместить» доступна
