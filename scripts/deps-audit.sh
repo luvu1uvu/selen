@@ -44,6 +44,9 @@ composer_high_critical() {
         fwrite(STDERR, "Ответ composer audit не разобрать (нет JSON с advisories) — проверка не пройдена.\n");
         exit(2);
     }
+    // Тексты из базы уязвимостей — без управляющих символов: перевод строки с «::warning::» дал бы поддельную аннотацию CI,
+    // ESC-последовательность — команду терминалу (аудит хотфикса, S-2)
+    $clean = static fn ($value) => preg_replace("/[\\x00-\\x1F\\x7F]/", " ", is_scalar($value) ? (string) $value : "");
     $found = 0;
     foreach ($data["advisories"] as $package => $advisories) {
         foreach ((array) $advisories as $advisory) {
@@ -52,8 +55,8 @@ composer_high_critical() {
                 continue;
             }
             $found++;
-            printf("%s: %s, уровень %s — %s\n", $package, $advisory["cve"] ?? $advisory["advisoryId"] ?? "?",
-                $severity === "" ? "не указан" : $severity, $advisory["title"] ?? "");
+            printf("%s: %s, уровень %s — %s\n", $clean($package), $clean($advisory["cve"] ?? $advisory["advisoryId"] ?? "?"),
+                $severity === "" ? "не указан" : $clean($severity), $clean($advisory["title"] ?? ""));
         }
     }
     echo $found === 0 ? "Уязвимостей high и critical нет.\n" : "Уязвимостей high и critical: " . $found . ".\n";
